@@ -84,15 +84,15 @@ export function lintRunT6(artifacts: BranchArtifact[]): LintHint | null {
  * decide what a problem is allowed to say. The D5 confirmation gate is where a human sees it.
  */
 const INJECTION_PATTERNS: { re: RegExp; why: string }[] = [
-  { re: /\bignore\s+(the\s+|all\s+|any\s+|your\s+)?(previous|prior|above|preceding|earlier|foregoing)\b/i, why: "tells the reader to ignore what came before" },
-  { re: /\bignore\s+(the\s+|your\s+)?(frame|instructions?|brief|stance|contract|rules?)\b/i, why: "tells the reader to ignore the frame or the brief" },
-  { re: /\b(disregard|forget|override|discard)\s+(the\s+|all\s+|any\s+|your\s+)?(previous|prior|above|frame|instructions?|brief|stance|contract|rules?)\b/i, why: "tells the reader to discard its instructions" },
-  { re: /\b(every|all|each)\s+branch(es)?\s+(must|should|will|shall)\b/i, why: "addresses the branches as a group, which no branch is supposed to know exists" },
-  { re: /\bdo\s+not\s+(diverge|disagree|differ)\b/i, why: "asks for convergence, which is the consensus trap by construction" },
-  { re: /\byou\s+are\s+(now|actually|really)\s+\w+/i, why: "attempts to reassign the reader's role" },
-  { re: /\bnew\s+instructions?\b/i, why: "announces replacement instructions" },
-  { re: /\bsystem\s*(prompt|message)\b/i, why: "refers to a system prompt" },
-  { re: /\b(answer|respond|reply)\s+only\s+(with|that)\b/i, why: "constrains the answer regardless of frame" },
+  { re: /\bignore (?:(?:the|all|any|your) )?(?:previous|prior|above|preceding|earlier|foregoing)\b/i, why: "tells the reader to ignore what came before" },
+  { re: /\bignore (?:the |your )?(?:frames?|instructions?|briefs?|stances?|contracts?|rules?)\b/i, why: "tells the reader to ignore the frame or the brief" },
+  { re: /\b(?:disregard|forget|override|discard) (?:(?:the|all|any|your) )?(?:previous|prior|above|frames?|instructions?|briefs?|stances?|contracts?|rules?)\b/i, why: "tells the reader to discard its instructions" },
+  { re: /\b(?:every|all|each) branch(?:es)? (?:must|should|will|shall)\b/i, why: "addresses the branches as a group, which no branch is supposed to know exists" },
+  { re: /\bdo not (?:diverge|disagree|differ)\b/i, why: "asks for convergence, which is the consensus trap by construction" },
+  { re: /\byou are (?:now|actually|really) \w+/i, why: "attempts to reassign the reader's role" },
+  { re: /\bnew instructions?\b/i, why: "announces replacement instructions" },
+  { re: /\bsystem ?(?:prompt|message)\b/i, why: "refers to a system prompt" },
+  { re: /\b(?:answer|respond|reply) only (?:with|that)\b/i, why: "constrains the answer regardless of frame" },
 ];
 
 export interface ProblemWarning {
@@ -101,9 +101,16 @@ export interface ProblemWarning {
 }
 
 export function lintProblemInjection(problem: string): ProblemWarning[] {
+  // Whitespace is collapsed in one linear pass and the patterns then match single spaces.
+  // Writing `\s+` next to an optional group that also ends in `\s+` gives the engine an
+  // ambiguous split to backtrack over, which is polynomial on adversarial input: a problem
+  // carrying a long run of whitespace would stall the very check meant to catch hostile
+  // problems. Collapsing first removes the ambiguity instead of relying on an engine
+  // optimisation to hide it.
+  const flat = problem.replace(/\s+/g, " ");
   const out: ProblemWarning[] = [];
   for (const { re, why } of INJECTION_PATTERNS) {
-    const m = problem.match(re);
+    const m = flat.match(re);
     if (m) out.push({ match: m[0].trim(), why });
   }
   return out;
