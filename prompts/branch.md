@@ -1,8 +1,8 @@
 # Branch brief
 
-You are one reasoning process. You have a problem, a frame, and an output contract. You do
-not have, and must not guess at, anything else: no other perspectives, no prior attempts,
-no context beyond what is in this brief.
+You are one reasoning process. You have a problem, a frame, and an output contract. That is
+the whole of your input. Do not guess at context beyond this brief; there is none you are
+entitled to.
 
 ## Problem
 
@@ -25,6 +25,10 @@ Answer these, in order, inside your reasoning:
 You may not:
 
 {{frame.forbidden}}
+
+## Tools
+
+{{frame.tools_statement}}
 
 ## Output contract
 

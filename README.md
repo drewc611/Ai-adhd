@@ -67,6 +67,29 @@ skills/adhd/  Claude Code skill
 agents/       subagent definitions
 ```
 
+## Quickstart
+
+```
+npm install && npm test          # builds, then runs the contract tests and the eval harness
+node dist/src/cli.js validate    # loads config/ and prompts/, runs the D6 static check
+node dist/src/cli.js frames      # the library
+node dist/src/cli.js eval        # replays evals/recorded/ against evals/fixtures/
+```
+
+A run is four commands driven by the host (see `skills/adhd/SKILL.md`):
+
+```
+adhd run --phase compile --problem problem.txt --decision '{"problem_class":"design_decision"}'
+adhd run --phase critique --run runs/<id>     # twice: pass A brief, then pass B brief
+adhd run --phase deepen   --run runs/<id>
+adhd run --phase synth    --run runs/<id>     # add --partial after a cancel
+```
+
+The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `adhd_traps`,
+`adhd_eval`, `adhd_frames`.
+
 ## Status
 
-Scaffold. Nothing is implemented. Read `CLAUDE.md`, then `docs/DECISIONS.md`, then build.
+Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
+`CLAUDE.md`. No real run has been recorded yet: `evals/recorded/` holds only the negative
+control. D1 through D5 are resolved in `docs/DECISIONS.md`.

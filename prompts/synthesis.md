@@ -1,29 +1,36 @@
-# Synthesis (rendered by code, not by a model)
+# ADHD synthesis
 
-This template is filled by the scorer from pass A, pass B, and deepen artifacts. No model
-writes the synthesis. The pruned block is always present.
-
----
+Rendered by code from the run artifacts. No model wrote this page. The pruned block is always
+present.
 
 ## Recommendation
 
-{{recommendation.position}}
+{{#if recommendation}}
+**{{recommendation.position}}**
 
-**Decision this forces:** {{recommendation.forces}}
+**Decision this forces:** {{recommendation.action}}
 
 **Falsifier:** {{recommendation.falsifier}}
+
+Held by: {{recommendation.members}}. {{#if recommendation.deepen}}Under the strongest objection it **{{recommendation.deepen.verdict}}**: {{recommendation.deepen.summary}}{{/if}}
+{{/if}}
+{{#if no_recommendation}}
+No recommendation. {{no_recommendation}}
+{{/if}}
 
 ## Corroborated findings
 
 {{#each corroborated}}
-- **{{action}}** (frames: {{members}}) {{#if deepen}}{{deepen.verdict}} under objection: {{deepen.summary}}{{/if}}
+- **{{action}}** (frames: {{members}}){{#if deepen}}. Deepen: {{deepen.verdict}}. {{deepen.summary}}{{/if}}
 {{/each}}
+{{#if no_corroborated}}(none: no two frames landed on the same action){{/if}}
 
 ## Live singletons (unverified)
 
 {{#each singletons}}
-- **{{frame}}**: {{position}} {{#if deepen}}({{deepen.verdict}}){{/if}}
+- **{{frame}}**: {{position}}{{#if deepen}} ({{deepen.verdict}}: {{deepen.summary}}){{/if}}
 {{/each}}
+{{#if no_singletons}}(none){{/if}}
 
 ## Pruned, with reason
 
@@ -31,18 +38,23 @@ writes the synthesis. The pruned block is always present.
 - **{{frame}}**: {{position}}
   - traps: {{traps}}
   - detector output: {{evidence}}
-  {{#if lint_disagreement}}- lint disagreed: {{lint_disagreement}}{{/if}}
-{{/each}}
+{{#if violations}}  - contract: {{violations}}
+{{/if}}{{#if lint_disagreement}}  - lint disagreed: {{lint_disagreement}}
+{{/if}}{{/each}}
+{{#if no_pruned}}(none pruned){{/if}}
 
 ## Run level
 
-{{run_level}}
+{{#each run_level}}
+- {{this}}
+{{/each}}
 
 ## What this forecloses
 
 {{#each forecloses}}
 - {{this}}
 {{/each}}
+{{#if no_forecloses}}(nothing recorded){{/if}}
 
 ## Cost
 
@@ -51,3 +63,4 @@ writes the synthesis. The pruned block is always present.
 | {{cost.branches}} | {{cost.tokens}} | {{cost.wall}} |
 
 problem_hash: `{{problem_hash}}`
+seed: {{seed}}
