@@ -107,6 +107,15 @@ section here can reach because none of them do network or model work. Every brea
 as `lock_broken`, since a stolen lock is the kind of event that explains a corrupted run an
 hour later.
 
+**An artifact answers the task it was returned for.** A worker holds several subagents at once
+and maps task ids to them; the worker skill says so explicitly. One wrong entry in that map
+returns the right YAML under the wrong task, and the artifact lands in another frame's file.
+Nothing downstream can catch that: the run continues and attributes a position to a frame that
+never held it, which is precisely what the isolation contract exists to guarantee. So `return`
+compares what the artifact declares about itself, its `frame` for a branch or deepen task and
+its `pass` for a critic task, against what the task asked for, and rejects a mismatch before
+writing anything.
+
 **A lease is ownership.** Returning a task requires naming the worker that holds it. Omitting
 the worker id used to skip the check, so any process could return work it did not do; a lease
 means one subagent owns one brief, and a return from anyone else silently breaks that.

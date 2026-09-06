@@ -460,3 +460,39 @@ test("a lock held by a live process is not broken, and the caller times out inst
   writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, host: hostname(), at: new Date().toISOString() }));
   assert.throws(() => k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true }), /lock held for more than 10s/);
 });
+
+test("an artifact returned under the wrong task is rejected, not filed under the wrong frame", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const t1 = k.claim("w")!;
+  const t2 = k.claim("w")!;
+  assert.notEqual(t1.label, t2.label);
+  // The worker's task-to-subagent map is wrong by one, so t2's output comes back under t1.
+  assert.throws(
+    () => k.return_(t1.id, yaml(artifact(t2.label, hash)), "w"),
+    new RegExp(`asked for frame ${t1.label} but the artifact declares frame ${t2.label}`),
+  );
+  // The task is untouched and still claimable work, and nothing was written to t1's file.
+  assert.equal(existsSync(join(k.root, "r1", t1.artifact_path)), false);
+  k.return_(t1.id, yaml(artifact(t1.label, hash)), "w");
+  assert.equal(k.status("r1").tasks.done, 1);
+});
+
+test("a critic pass returned for the other pass's task is rejected", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w");
+  }
+  const blindMap = JSON.parse(readFileSync(join(k.root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  const passATask = k.claim("w")!;
+  assert.equal(passATask.id.includes("critique_a"), true);
+  const framesInRun = Object.values(blindMap);
+  const passBDoc = passB(hash, [{ id: "one", members: framesInRun.slice(0, 3) }, { id: "two", members: framesInRun.slice(3) }]);
+  assert.throws(() => k.return_(passATask.id, yaml(passBDoc), "w"), /is critic pass A but the artifact declares pass B/);
+  k.return_(passATask.id, yaml(passA(hash, Object.keys(blindMap))), "w");
+  assert.equal(k.status("r1").state, "critique_b");
+});

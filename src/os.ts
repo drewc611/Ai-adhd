@@ -12,6 +12,7 @@
 // (tmp + rename) and serialised through a directory lock so several hosts can share a root.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, appendFileSync } from "node:fs";
 import { hostname } from "node:os";
+import { parse as parseYaml } from "yaml";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import type { Config } from "./config.js";
@@ -187,6 +188,29 @@ export class Kernel {
     }
   }
 
+  /**
+   * Does this artifact answer the task it was returned for? Compares the labels the artifact
+   * declares about itself against what the task asked for. A parse failure is not decided here:
+   * the phase validator reports malformed YAML far better than this can.
+   */
+  private static misdirected(task: Task, text: string): string[] {
+    let doc: unknown;
+    try {
+      doc = parseYaml(text);
+    } catch {
+      return [];
+    }
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return [];
+    const d = doc as Record<string, unknown>;
+    const problems: string[] = [];
+    if (typeof d.frame === "string" && (task.phase === "diverge" || task.phase === "deepen") && d.frame !== task.label)
+      problems.push(`task ${task.id} asked for frame ${task.label} but the artifact declares frame ${d.frame}; a worker returned one subagent's output under another's task`);
+    const wantPass = task.phase === "critique_a" ? "A" : task.phase === "critique_b" ? "B" : null;
+    if (wantPass && typeof d.pass === "string" && d.pass.toUpperCase() !== wantPass)
+      problems.push(`task ${task.id} is critic pass ${wantPass} but the artifact declares pass ${d.pass}`);
+    return problems;
+  }
+
   private recordPath(runId: string) {
     return join(this.root, runId, "os.json");
   }
@@ -354,6 +378,12 @@ export class Kernel {
       // anything outside the fence (a sources line, a sign off), the message is kept whole
       // beside it so nothing a subagent said is lost.
       const clean = unfence(output);
+      // A worker holds several subagents at once and maps task ids to them. One wrong entry in
+      // that map returns the right YAML under the wrong task, and the artifact lands in another
+      // frame's file. Nothing downstream can catch it: the run keeps going and attributes a
+      // position to a frame that never held it, which is the one thing the isolation contract
+      // is supposed to guarantee. The task knows what it asked for, so check it here.
+      for (const p of Kernel.misdirected(task, clean)) throw new ContractError("return", [p]);
       writeFileSync(join(this.runDir(runId), task.artifact_path), clean.endsWith("\n") ? clean : clean + "\n");
       if (clean !== output) writeFileSync(join(this.runDir(runId), task.artifact_path + ".raw.md"), output);
       task.status = "done";
