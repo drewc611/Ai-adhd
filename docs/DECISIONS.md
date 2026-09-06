@@ -97,9 +97,16 @@ branch inline in the spawn instruction, the branch returns its YAML as its final
 the host writes it to the artifact path. The `problem_hash` echo catches host paraphrase.
 
 Mechanism: Claude Code loads agent definitions from fixed directories, so per run generation
-is not available. Instead there is one static agent per tool profile (`agents/adhd-branch.md`
-with no tools, `agents/adhd-branch-search.md` with the two web tools) and `plan.json` names
-which one each brief needs. The brief also states its grant so a mismatch is visible.
+is not available. Instead there is one static agent per tool profile (`agents/adhd-branch.md`,
+`agents/adhd-branch-search.md` with the two web tools) and `plan.json` names which one each
+brief needs. The brief also states its grant so a mismatch is visible.
+
+One wrinkle, found against the Claude Code docs after the first real run: the host refuses to
+launch an agent with zero tools, and `tools: []` is treated as zero. So `adhd-branch`,
+`adhd-critic`, and `adhd-deepen` carry exactly one tool, `TaskList`, which is read only,
+touches no file, reaches no network, and spawns nothing. It is a launch permit, not a
+capability. A test in `test/agents.test.ts` fails if any agent file grants a filesystem tool,
+a network tool other than the two allowed on `adhd-branch-search`, or nothing at all.
 
 ---
 
