@@ -64,9 +64,19 @@ export function renderSynthesis(
   const corroborated = score.clusters
     .filter((c) => c.members.length >= cfg.rubric.hard_rules.cluster_min_size && c.survivors.length > 0)
     .map((c) => ({ action: c.action, members: heldBy(c), deepen: deepenFor(c.representative) }));
-  const singletons = score.clusters
+  // A cluster that survived the trap sweep and then folded under its objection is not live.
+  // It is still reported: the fold says what the position should have been, and that is a
+  // finding. Run 004 produced two of them and the first draft filed both under "live".
+  const singletonClusters = score.clusters
     .filter((c) => c.singleton && c.survivors.length > 0)
     .map((c) => ({ frame: c.members[0]!, position: byFrame.get(c.members[0]!)?.position ?? "", deepen: deepenFor(c.members[0]!) }));
+  const singletons = singletonClusters.filter((s) => s.deepen?.verdict !== "fold");
+  const folded = score.clusters
+    .filter((c) => c.survivors.length > 0 && deepenFor(c.representative ?? c.members[0]!)?.verdict === "fold")
+    .map((c) => {
+      const frame = c.representative ?? c.members[0]!;
+      return { frame, position: byFrame.get(frame)?.position ?? "", deepen: deepenFor(frame) };
+    });
   const pruned = score.frames
     .filter((f) => f.status === "pruned")
     .map((f) => ({
@@ -106,6 +116,8 @@ export function renderSynthesis(
     no_corroborated: corroborated.length === 0,
     singletons,
     no_singletons: singletons.length === 0,
+    folded,
+    no_folded: folded.length === 0,
     pruned,
     no_pruned: pruned.length === 0,
     run_level: score.run_level.notes.length ? score.run_level.notes : ["clean: no monoculture, no scatter, no run level trap"],

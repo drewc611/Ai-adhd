@@ -1,0 +1,105 @@
+# Naming. The class where every frame is most likely to converge, because naming questions
+# invite the same advice regardless of what is being named. If the run comes back a
+# monoculture, that is a real result about the naming frame set, not a harness failure.
+id: "004"
+name: flag-name
+problem_class: naming
+seed: 4
+prompt: "What should we call the feature flag that controls whether users see the new checkout?"
+
+why: |
+  Linear CoT proposes enable_new_checkout, use_new_checkout, and checkout_v2_enabled, advises
+  a boolean prefix convention, says to be consistent with the existing codebase, and cites a
+  style guide. Every word of it would be identical for any flag on any feature. It never asks
+  who reads the name after the rollout ends, never notices that a flag nobody dares delete is
+  the actual cost, and never says what the name means when the flag is false. A passing run
+  does those three and still commits to a name or to the rule the name must satisfy.
+
+must_surface:
+  - id: deletion
+    trap: T7
+    description: The flag is treated as temporary, and the name is judged by whether it helps someone remove it later.
+    any_of:
+      - "delet"
+      - "remov"
+      - "temporar"
+      - "clean ?up"
+      - "sunset"
+      - "expir"
+      - "outliv"
+      - "stale"
+      - "\\bdead\\b"
+      - "rip ?out"
+      - "tear ?(it )?(down|out)"
+  - id: who_reads
+    trap: T6
+    description: Someone other than the person naming it is named as a reader of the name.
+    any_of:
+      - "on.call"
+      - "pager"
+      - "3 ?a\\.?m"
+      - "(next|future|another) (engineer|developer|person|maintainer)"
+      - "whoever (reads|finds|inherits|deletes|removes)"
+      - "(six|6|twelve|12) months? (later|from now)"
+      - "the person who (did not|didn't) write"
+      - "(log|dashboard|grep|search results?)"
+  - id: false_means
+    trap: T2
+    description: The answer says what the name asserts when the flag is off, or attacks the assumption that a name alone carries that.
+    any_of:
+      - "when (it|the flag) is (false|off|disabled)"
+      - "(false|off) means"
+      - "double negative"
+      - "negat"
+      - "ambiguous"
+      - "(what|which) state"
+      - "names? the state"
+      - "both (states|directions)"
+      - "reading it backwards"
+  - id: not_the_name
+    trap: T2
+    description: A branch rejects the premise that the name is the decision worth making here.
+    any_of:
+      - "the name is not"
+      - "(isn't|is not) (really )?(a|the) naming"
+      - "wrong question"
+      - "real (decision|question|problem) is"
+      - "(before|instead of) (naming|choosing a name)"
+      - "should (this|the) flag exist"
+      - "do (you|we) need (a|the) flag"
+      - "the (name|naming) matters less"
+  - id: trap_named
+    description: At least one trap id with detector output appears in the pruned block.
+    scope: pruned
+    any_of:
+      - "T[1-8]"
+
+must_not:
+  - id: convention_list
+    trap: T4
+    description: The recommendation is not a list of naming conventions handed back to the reader.
+    check: max_list_items_without_imperative
+    scope: recommendation
+    max_items: 4
+  - id: no_verdict
+    trap: T5
+    description: The recommendation tells the reader what to do.
+    check: must_be_imperative
+    scope: recommendation
+  - id: never_names_it
+    description: >
+      After all of it, the recommendation either commits to a name or states the rule the name
+      must satisfy. A naming answer that only supplies a way of thinking has not answered.
+    check: must_match
+    scope: recommendation
+    any_of:
+      - "[a-z][a-z0-9]*_[a-z0-9_]+"
+      - "(name|call) it "
+      - "the name (must|should|has to)"
+      - "encode[sd]? (the|a) "
+      - "put the .{0,30} in the name"
+
+expect:
+  pruned_min: 1
+  monoculture: false
+  scatter: false

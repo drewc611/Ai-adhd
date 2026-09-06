@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from kernel run 004-kernel-naming. Failing items: must_surface false_means (T2): The answer says what the name asserts when the flag is off, or attacks the assumption that a name alone carries that.. Recorded as observed, not hidden."
+}

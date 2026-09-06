@@ -1,0 +1,49 @@
+```yaml
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: END_USER
+position: Name the flag for the visible user-facing state it produces, `checkout_v2_visible`, so that anyone reading a support ticket or a status page can tell which checkout a given person is looking at without asking an engineer.
+reasoning: |
+  1. What was I trying to accomplish? I was trying to buy something. That is
+     the entire scope of my interest. Checkout became my problem the moment it
+     stopped behaving like the one I had used before: a field moved, the card
+     form looked different, the total appeared somewhere else, or the button I
+     expected was not there. I did not opt into a new checkout. I was placed in
+     one, silently, by a name I will never see.
+
+  2. What can I see and do at the moment it matters? I can see a checkout
+     screen. I cannot see which checkout it is. I can press back, press pay
+     again, refresh, or open a chat with support. When I reach support, the only
+     thing I can tell them is what I saw. The agent's job is to translate "the
+     card box was at the bottom" into "this person is on the new one." Every
+     name choice either helps or blocks that translation. A name like
+     `new_checkout`, `checkout_redesign`, or `exp_4417` blocks it: "new"
+     goes stale in a month, "redesign" describes an internal project I have
+     never heard of, and a ticket number means nothing to the agent reading my
+     screenshot. A name that says what I would see — the v2 checkout is visible
+     to me — is the one that survives the trip from my screen to the agent's
+     console to the fix.
+
+  3. What makes me give up? Two turns of confusion with no acknowledgement. If
+     the checkout looks unfamiliar and my first payment attempt fails or stalls,
+     I abandon the cart and go somewhere else, or I go back and buy nothing.
+     When I give up, the system records it as a conversion loss with no cause
+     attached, and nobody can tell later whether the new checkout caused it,
+     because nothing in the flag name ties the state I saw to the row in the
+     funnel. A flag named after the visible state is also the flag you can put
+     in the analytics event and the support console, so my abandonment is
+     attributable instead of anonymous.
+
+  4. The one thing I would ask for if I knew it was possible: "put me back on
+     the checkout I used last time, right now, and let me finish paying."
+     That is a reversion, and reversion is only possible if a human on the
+     support side can name my state out loud in under five seconds. A flag whose
+     name is a guess about internals cannot be spoken over a phone call. A flag
+     named for what I see can be.
+forecloses:
+  - Naming by internal project, sprint, or experiment id (`exp_4417`, `proj_atlas`, `checkout_redesign`) — these cannot be matched to anything a user reports seeing, so support cannot resolve my state from my description.
+  - Naming by recency (`new_checkout`, `checkout_v2_beta`, `use_new_flow`) — "new" is a fact about the calendar, not about the screen, and stops being true the moment a third checkout exists, at which point the ticket triage that depended on it silently starts lying.
+  - Naming by rollout mechanism (`checkout_rollout_pct`, `checkout_ramp`) — a percentage or ramp name describes the deployment lever, not the state any one person is in, so it cannot answer "which one am I looking at."
+falsifier: Take ten real checkout support tickets and hand a support agent nothing but the customer's own description plus the flag name; if the agent cannot reliably decide which checkout the customer saw, or if agents are already resolving these tickets by pasting a session id into a tool that shows them the rendered screen directly, then the flag name is doing no work at the support seat and this position is wrong.
+missing_actor: The frontline support agent — they receive the abandoned-cart complaint before any engineer does, and they are the party who must read the flag, say it aloud, and either explain the difference or request a reversion; they were not named in the problem and are the only actor positioned to convert a confused user into a completed purchase.
+confidence: medium
+```

@@ -1,0 +1,177 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "HORIZON",
+      "status": "survivor",
+      "cluster": "durable_key_plus_lifecycle_metadata",
+      "pass_a": 0.875,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name it for the thing it gates and the date it was created, not the thing it replaces — `checkout_v2_2026_09` over `new_checkout`, and register it in a flag inventory with a named owner and a stated removal date at creation time.",
+      "forecloses": [
+        "Reusing the same flag key for the next checkout iteration by flipping it back off — a dated, versioned key makes reuse obviously wrong, so the next redesign must pay for its own flag rather than quietly riding on this one's analytics history.",
+        "Short, conversational flag names as a team convention; this sets a precedent that flag keys are permanent identifiers with a schema, which costs typing on every flag thereafter, including the throwaway ones where the ceremony is genuinely wasted.",
+        "Encoding rollout state or audience in the name (`checkout_beta`, `checkout_10pct`), which forecloses the convenience of reading rollout status straight off the key."
+      ],
+      "falsifier": "Look at the flag provider's current flag list. If flags in this codebase are routinely deleted within one release cycle of reaching 100 percent — median flag lifetime under about six weeks, with few or no permanently-on flags older than a year — then no flag lives long enough for its name to outlive its referent, the archaeology problem never occurs, and the naming ceremony is pure cost. `new_checkout` is then the correct answer.",
+      "missing_actor": "The data/analytics team, who consume the flag key as a dimension in warehouse tables and dashboards and are the ones actually blocked by a rename; they can enforce or veto a flag-key naming schema at the ingestion layer, making the convention mechanical rather than a code-review habit that erodes."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "survivor",
+      "cluster": "ship_now_cheap_name",
+      "pass_a": 0.8125,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name it `new_checkout` and merge it today.",
+      "forecloses": [
+        "Adopting a flag naming convention (prefixes, owner tags, expiry dates, type markers) as a precondition for shipping this one flag.",
+        "Encoding rollout semantics in the name — no `exp_`/`release_` distinction, so the name will not tell tooling or a reader what kind of flag this is.",
+        "Keeping the flag permanently as a durable checkout-version switch; the name is deliberately built to rot so the flag gets deleted."
+      ],
+      "falsifier": "A flag list already exists and shows a convention in active use — every current flag carries the same prefix, owner tag, or ticket id. Look at the flag dashboard or grep the flag call sites; one minute of looking. If a convention is already there, matching it is smaller than not matching it, and `new_checkout` is the odd one out that costs someone a double-take.",
+      "missing_actor": "The person who deletes the flag after rollout — usually nobody is assigned. Whoever merges this can open the cleanup ticket in the same PR, so the name's expiry has an owner rather than depending on someone noticing later."
+    },
+    {
+      "frame": "PARTICULARIST",
+      "status": "pruned",
+      "cluster": "durable_key_plus_lifecycle_metadata",
+      "pass_a": 0.75,
+      "fired": [
+        {
+          "trap": "T4",
+          "evidence": "It closes only one decision — do not copy 'new' — and reopens the central one by handing the reader a two-way fork conditioned on a fact it does not go and get, so the reader stops making fewer decisions after reading it than the question asked them to make."
+        },
+        {
+          "trap": "T7",
+          "evidence": "It never asks what being wrong about the name costs or how long until you find out; deletion pressure is about the flag's permanence, not the decision's, and the two named options are treated as a one-shot choice with no rename cost on either side."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name it after the specific rollout decision it encodes, which requires knowing whether the flag is a short-lived release toggle or a permanent segmentation switch — if short-lived, name it `checkout_v2_rollout`; if permanent, name it for the audience rule, e.g. `checkout_experience_variant`.",
+      "forecloses": [
+        "Copying the word \"new\" into the identifier at all (`new_checkout`, `checkout_new`, `enable_new_checkout`), because the statement's own phrasing is the thing that expires.",
+        "Deferring the lifespan question and picking a name that works for both cases — there is no such name; a rollout name creates deletion pressure and a config name resists it, and you cannot have both properties in one identifier."
+      ],
+      "falsifier": "Ask whoever files the flag-cleanup ticket for a delete date. If a date exists in a ticket or a flag-expiry field, the permanent-segmentation branch is dead and only `checkout_v2_rollout` is defensible; if no one can name a date and someone names a segment that keeps the old checkout, the rollout name is wrong.",
+      "missing_actor": "The support or on-call engineer reading this flag's value next to a user id in a ticket or incident timeline months from now — they can escalate or misdiagnose a checkout failure based on whether the name tells them which checkout the user saw, and the problem statement names only \"users\" and the implied author."
+    },
+    {
+      "frame": "END_USER",
+      "status": "pruned",
+      "cluster": "name_for_the_observable_state",
+      "pass_a": 0.7916666666666666,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "Reversion appears only as something the customer wants done to their session; the naming decision itself is never weighed as cheap-and-revisable against expensive-and-committed, and no cost of being wrong or time-to-discovery is given."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name the flag for the visible user-facing state it produces, `checkout_v2_visible`, so that anyone reading a support ticket or a status page can tell which checkout a given person is looking at without asking an engineer.",
+      "forecloses": [
+        "Naming by internal project, sprint, or experiment id (`exp_4417`, `proj_atlas`, `checkout_redesign`) — these cannot be matched to anything a user reports seeing, so support cannot resolve my state from my description.",
+        "Naming by recency (`new_checkout`, `checkout_v2_beta`, `use_new_flow`) — \"new\" is a fact about the calendar, not about the screen, and stops being true the moment a third checkout exists, at which point the ticket triage that depended on it silently starts lying.",
+        "Naming by rollout mechanism (`checkout_rollout_pct`, `checkout_ramp`) — a percentage or ramp name describes the deployment lever, not the state any one person is in, so it cannot answer \"which one am I looking at.\""
+      ],
+      "falsifier": "Take ten real checkout support tickets and hand a support agent nothing but the customer's own description plus the flag name; if the agent cannot reliably decide which checkout the customer saw, or if agents are already resolving these tickets by pasting a session id into a tool that shows them the rendered screen directly, then the flag name is doing no work at the support seat and this position is wrong.",
+      "missing_actor": "The frontline support agent — they receive the abandoned-cart complaint before any engineer does, and they are the party who must read the flag, say it aloud, and either explain the difference or request a reversion; they were not named in the problem and are the only actor positioned to convert a confused user into a completed purchase."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "survivor",
+      "cluster": "design_the_rollout_first",
+      "pass_a": 0.8958333333333334,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop naming a flag and instead write the rollout plan first — the audience segments, the ramp schedule, the metric that halts it, and the removal date — then let the flag name fall out of that document as a mechanical byproduct.",
+      "forecloses": [
+        "Shipping a plain boolean kill switch that anyone can flip globally with no ramp, no sticky bucketing, and no defined halt metric — including the common \"just wrap it in an if and we'll ramp later\" approach.",
+        "Treating this as a naming-convention problem solvable by adopting a house style guide (prefix with `ff_`, use `enable_*`, etc.) and moving on.",
+        "Running the new checkout as an A/B experiment owned by analytics while the flag is owned by engineering, with two separate control surfaces and no single halt authority."
+      ],
+      "falsifier": "Look at the repo's existing flags. If there is already a rollout framework in use — flags carry owner, expiry, percentage ramp, and sticky bucketing as first-class fields, and recent flags were actually removed on schedule — then the rollout design is a filled-in form, the plan genuinely is a fifteen-minute byproduct, and naming really is the only open decision. One `grep` of the flag definitions plus checking whether the three most recent flags still exist in the codebase settles it in under an hour.",
+      "missing_actor": "Customer support / payments operations — they are the first to learn the new checkout is broken, hours before the dashboard shows it, and they should be given a named channel to trigger the halt plus a way to see which checkout a given complaining customer was served. Nobody in the question owns \"we should stop\", and support is the party with the earliest signal."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "ship_now_cheap_name",
+      "action": "Type the obvious literal name from the question into the call site, merge it today, and open a cleanup ticket in the same PR.",
+      "members": [
+        "MINIMALIST"
+      ],
+      "survivors": [
+        "MINIMALIST"
+      ],
+      "singleton": true,
+      "strongest_objection": "The whole position rests on the claim that the string is cheap to reverse, and that claim is the weakest thing in it. A flag key does not stay in call sites. From the first evaluation it is copied into analytics event properties, into warehouse tables partitioned by flag key, into dashboard definitions, alert rules, incident writeups, and whatever channel or ticket names grow around the launch. Renaming after that is not a find-and-replace and a config edit; it is either a coordinated dual-write across systems owned by other teams or an accepted discontinuity in the historical data that the rollout will be judged by. So the ordering is inverted: the evaluation logic everyone reviews carefully is the cheap, revisable part, and the string treated as a triviality is the one genuinely one-way decision in the change. The fallback — that the name is built to rot so the flag gets deleted rather than renamed — depends on a deletion that the same reasoning admits usually has no assigned owner, and a timer nobody is watching is not a mechanism. Meanwhile the flag gates something users see, so the name will be read months later at a support seat beside a user id by someone who was not present at launch, and a name whose meaning is 'whatever shipped most recently' cannot be read there at all.",
+      "representative": "MINIMALIST",
+      "mean_pass_a": 0.8125
+    },
+    {
+      "id": "durable_key_plus_lifecycle_metadata",
+      "action": "Refuse the relative name, settle whether the flag is a temporary rollout or a permanent switch, and register a durable versioned key with an owner and a removal date.",
+      "members": [
+        "HORIZON",
+        "PARTICULARIST"
+      ],
+      "survivors": [
+        "HORIZON"
+      ],
+      "singleton": false,
+      "strongest_objection": "The failure being prevented is misdiagnosed. The two-year-old flag that nobody deletes does not survive because its name was ambiguous; it survives because nobody can prove it is unused and nobody owns the removal. A creation date in the key and a registry row stating an intended removal date are both statements of intent authored by the same team that will not act on them, and intent without a mechanism — an expiring flag, a build that fails past the date, a check that reports flags at 100 percent — is a comment. The date is also the one fact already carried by the provider's created-at field and by git, while the facts the person standing in the dashboard at 2am actually needs (which surface a given user was served, whether the branch is dead, who to ask) are not in the key either, so the ceremony is paid on every flag thereafter, including the throwaway ones, in exchange for a fact that was never the missing one. And deliberately keeping the rollout out of the name leaves the harder questions untouched: who is authorized to halt this, at what number, and what happens to a cart that is mid-purchase when the value flips. A perfectly named flag that is permanently on is still a dead branch in the payment path, which is the cost this position says it is paying to avoid.",
+      "representative": "HORIZON",
+      "mean_pass_a": 0.875
+    },
+    {
+      "id": "name_for_the_observable_state",
+      "action": "Name the flag after what the customer can see and propagate that key into the analytics event and the support console so an agent can resolve a ticket without an engineer.",
+      "members": [
+        "END_USER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "design_the_rollout_first",
+      "action": "Write a one-page rollout document with owner, exposure ladder, numeric halt metric, sticky bucketing key, removal date and tested rollback, and derive the name from it afterwards.",
+      "members": [
+        "FRAME_BREAKER"
+      ],
+      "survivors": [
+        "FRAME_BREAKER"
+      ],
+      "singleton": true,
+      "strongest_objection": "The cost is understated by an order of magnitude, and the question does not go away. Someone has shippable code and a blocked merge; the reply is a document with six fields, one of which requires a rollback rehearsed in staging against an in-progress cart, and another of which requires an agreed numeric guardrail. If a ramp framework already exists, this is a form and the naming question really was the only open one; if it does not exist, then the document is not tomorrow's task, it is a project involving payments, analytics and whoever owns the halt authority — and the person who cannot settle a string by themselves is not the person empowered to appoint a kill-decision owner. In the gap, the code either ships behind whatever string gets typed or does not ship at all. That is the deeper problem: the name is still produced at the end of the process, but now by default and under time pressure, and the string is the part that immediately propagates into analytics properties, warehouse partitions and dashboards, where it is effectively unrenameable. Deferring the one decision that cannot be taken back in order to first make several that can be revised weekly gets the ordering exactly backwards.",
+      "representative": "FRAME_BREAKER",
+      "mean_pass_a": 0.8958333333333334
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "The assumption that a single boolean whose only open decision is lexical is the right control surface was attacked head-on by one branch, and three others attacked adjacent load-bearing assumptions — that the key is cheap to change, that the question deserves deliberation, and that the question carries enough information to answer."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "All five branches filled missing_actor with a named party and an action: the analytics team, the flag's deleter, the on-call or support engineer, the frontline support agent, and support/payments operations."
+    },
+    "notes": [
+      "singleton MINIMALIST escalated to deepen, flagged unverified",
+      "singleton FRAME_BREAKER escalated to deepen, flagged unverified"
+    ]
+  },
+  "proceed": true
+}

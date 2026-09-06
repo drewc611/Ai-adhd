@@ -32,6 +32,13 @@ No recommendation. {{no_recommendation}}
 {{/each}}
 {{#if no_singletons}}(none){{/if}}
 
+## Folded under objection
+
+{{#each folded}}- **{{frame}}** gave up: {{position}}
+  - {{deepen.summary}} Full concession in `deepen/{{frame}}.yaml`.
+{{/each}}
+{{#if no_folded}}(none){{/if}}
+
 ## Pruned, with reason
 
 {{#each pruned}}- **{{frame}}**: {{position}}
