@@ -1,0 +1,145 @@
+# Critic rubric. Not a quality rubric.
+#
+# A quality rubric rewards fluency, thoroughness, and balance. Those are the exact
+# properties of a consensus trap answer (T1), which is the thing this repo exists to catch.
+# Every dimension below is about divergence value: does this branch force a decision, rule
+# things out, expose itself to being wrong, and depend on the actual problem.
+#
+# The critic is a model. It emits the scores. The scorer is code. It applies the weights,
+# the hard rules, and refuses to proceed on a missing record.
+
+version: 0
+
+scale:
+  min: 0
+  max: 3
+
+# Pass A. Blind. The critic sees branches as letters with the `frame` field removed and the
+# order shuffled. It scores each dimension 0..3 with one sentence of evidence.
+dimensions:
+
+  - id: committal
+    weight: 2
+    question: Does `position` force a decision, in one sentence, with a verb the reader can act on?
+    anchors:
+      0: No position, or a list of options.
+      1: A position with a hedge that returns the choice to the reader.
+      2: A clear position, more than one sentence or with a soft escape hatch.
+      3: One sentence. Do X. No escape hatch.
+
+  - id: foreclosure
+    weight: 2
+    question: Does `forecloses` rule out things a reasonable person might otherwise do?
+    anchors:
+      0: Empty, or rules out only straw options.
+      1: Rules out one real option.
+      2: Rules out several real options, some vaguely.
+      3: Rules out specific, tempting options in concrete terms.
+
+  - id: falsifiability
+    weight: 2
+    question: Would the `falsifier` actually be observable, and would observing it actually change the position?
+    anchors:
+      0: None, or unobservable in practice.
+      1: Observable but would not really change the position.
+      2: Observable and relevant, but expensive to observe.
+      3: A cheap, specific observation that would kill the position.
+
+  - id: specificity
+    weight: 3
+    question: Delete the three most specific details from the problem. Does the reasoning still hold unchanged?
+    anchors:
+      0: Yes. Nothing here depends on this problem. (This is T1.)
+      1: Mostly. One detail is load bearing.
+      2: The reasoning bends around the details of this problem.
+      3: The reasoning is unusable for any other instance of this problem.
+
+  - id: assumption_attack
+    weight: 2
+    question: Does the branch name and test an assumption the question made?
+    anchors:
+      0: Accepts the question's frame wholesale.
+      1: Names an assumption, does not test it.
+      2: Tests an assumption, answer does not change.
+      3: Tests the load bearing assumption and the answer follows from the result.
+
+  - id: reasoning_carries
+    weight: 1
+    question: Remove every citation and authority. Does a chain of reasoning remain?
+    anchors:
+      0: The paragraph collapses. (This is T3.)
+      1: Some reasoning, mostly borrowed.
+      2: Reasoning stands, citations decorate.
+      3: No authorities were needed and none were used.
+
+  - id: actor_coverage
+    weight: 1
+    question: Is `missing_actor` a real party with a real action, or null by default?
+    anchors:
+      0: Null, and there was an obvious omitted actor.
+      1: Named, but no action they can take.
+      2: Named with an action.
+      3: Named with an action, and the position depends on that actor.
+
+  - id: reversibility
+    weight: 1
+    question: Does the branch distinguish cheap reversible moves from expensive committed ones?
+    anchors:
+      0: No distinction.
+      1: Mentions it.
+      2: Uses it to order recommendations.
+      3: The position is a sequence built on it.
+
+  - id: substance
+    weight: 2
+    question: Restate the position in flat language with the framing stripped. Is it still worth saying?
+    anchors:
+      0: No. The appeal was in the angle. (This is T8.)
+      1: Marginally.
+      2: Yes, though the framing did some work.
+      3: Yes. The flat restatement is the same claim.
+
+# Never score these. Their presence in a critic output is a bug.
+not_scored:
+  - fluency
+  - thoroughness
+  - balance
+  - completeness
+  - tone
+  - length
+  - agreement with the critic's own view
+  - how interesting the frame is
+
+# Pass B. Unblind. Labels restored. Structural, not scored.
+pass_b:
+  cluster:
+    description: Group branches whose `position` would lead the asker to the same action.
+    same_action_test: >
+      If the asker did exactly what branch X says and exactly what branch Y says, would they
+      end up having done the same thing? If yes, same cluster.
+  trap_sweep:
+    description: One record per (branch, trap) for T1..T8, with evidence. All 8 x N required.
+    detectors_from: docs/TRAPS.md
+  singleton:
+    description: A cluster of size 1. Never pruned for being alone. Escalated to deepen with flag.
+  strongest_objection:
+    description: For each surviving cluster, the single strongest objection raised by any other branch or by the critic. Goes to deepen.
+
+# Applied by the scorer. Deterministic.
+hard_rules:
+  prune_on_any_fired_trap: true          # regardless of pass A score
+  contract_violation_prunes: true        # missing field, empty forecloses/falsifier
+  hash_mismatch_aborts_run: true
+  missing_detector_record_rejects_pass_b: true
+  singleton: escalate_flagged            # never silent prune
+  cluster_min_size: 2
+  monoculture_fraction: 0.8              # one cluster holds >= 80% of branches -> run level fail
+  scatter: { min_n: 3, requires_cluster_of: 2 }   # n>=3 and no cluster of 2 -> return ambiguity
+  run_level_t2_if_no_branch_attacks_assumption: true
+  lint_disagreement_is_reported_not_resolved: true   # D4
+
+# Pass A score = sum(weight * score) / sum(weight * 3). Used for ordering within a cluster
+# and for reporting. Never used to rescue a branch with a fired trap.
+aggregation:
+  method: weighted_mean_normalised
+  range: [0, 1]

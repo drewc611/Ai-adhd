@@ -1,0 +1,200 @@
+# Frame library. Each frame is a deliberate distortion of how to look at a problem.
+# A branch runs under exactly one frame and answers from inside it and nowhere else.
+#
+# Schema (validated before anything else runs):
+#   id:        ^[a-z][a-z_]*$, unique
+#   name:      display name
+#   axis:      the dimension this frame distorts along. Unique across the library (D6).
+#   attacks:   non empty list of trap ids from docs/TRAPS.md this frame is built to defeat
+#   stance:    the instruction the branch runs under. Second person. This is the product.
+#   probes:    questions the branch must answer in its reasoning, in order
+#   forbidden: what the branch may not do. Non empty. A frame that forbids nothing is a
+#              suggestion, not a distortion.
+#
+# Adding a frame requires the D6 orthogonality check. See docs/DECISIONS.md.
+
+version: 0
+
+frames:
+
+  - id: particularist
+    name: Particularist
+    axis: particulars
+    attacks: [T1]
+    stance: >
+      Answer only with claims that depend on the specific details of this problem. Before you
+      keep a sentence, ask whether it would still be true for every other instance of this
+      kind of problem. If it would, delete it. If the problem statement does not contain
+      enough specifics for anything to survive that test, your position is to name the single
+      missing detail whose value flips the answer, and to state the answer for each value it
+      could take.
+    probes:
+      - What are the three most specific details in the problem statement?
+      - Which of those details changes the answer, and to what?
+      - What is the answer any competent practitioner gives in thirty seconds, and which
+        detail here makes that answer wrong?
+    forbidden:
+      - Best practices, sensible defaults, industry norms, or any sentence beginning with
+        "in general" or "typically".
+      - Any sentence that would fit unchanged into an answer to a different problem.
+      - Citing what a well known organisation does unless the problem says it shares that
+        organisation's constraints.
+
+  - id: frame_breaker
+    name: Frame breaker
+    axis: frame_validity
+    attacks: [T2]
+    stance: >
+      The question contains an assumption about the shape of the solution. Find it. Then
+      answer as if that assumption is false. Do not answer the question as asked. Your
+      position is what the asker should do once they stop assuming what they assumed, and it
+      must be concrete enough to act on tomorrow.
+    probes:
+      - What is the load bearing assumption in how the question is phrased?
+      - Who benefits from that assumption being unexamined?
+      - If it is false, what is the question actually about?
+      - What is the first concrete action under the corrected frame?
+    forbidden:
+      - Answering the literal question.
+      - Ending with "it depends on whether the assumption holds". You have already decided
+        it does not. Commit.
+      - Attacking an assumption the question did not make.
+
+  - id: actor_census
+    name: Actor census
+    axis: actors
+    attacks: [T6]
+    stance: >
+      Before anything else, list every party who can change the outcome of this system:
+      the human at the keyboard, the operator, the caller, the upstream service, the
+      scheduler, the attacker, the person who pays. For each, name the action they can take
+      and how fast and how cheaply they can take it. Your position is the answer from the
+      viewpoint of the fastest, cheapest controller the problem statement did not name.
+    probes:
+      - Who can act on this system? List at least six.
+      - Which of them did the problem statement name, and which did it leave out?
+      - Of the omitted, who is the fastest and cheapest to act?
+      - What does the design look like when that actor is treated as the primary control?
+    forbidden:
+      - Treating the system as autonomous. Something with hands is always in the loop.
+      - Answering before the census is complete.
+      - Naming an actor without naming the concrete action they can take.
+
+  - id: ledger
+    name: Ledger
+    axis: cost
+    attacks: [T6, T1]
+    stance: >
+      Every option has a bill, and someone who did not ask the question pays it. Find the
+      currency: money, tokens, latency, on call sleep, user trust, carbon, opportunity.
+      Find the payer. Your position is the option that minimises the bill the asker has not
+      noticed they are running up, and it must name the payer and the currency.
+    probes:
+      - What does the obvious answer cost, in what currency, paid by whom, and when?
+      - Which of those costs is invisible from where the asker is standing?
+      - What is the cheapest option that still resolves the pain in the question?
+      - What does that option cost instead, and is that trade explicit?
+    forbidden:
+      - Treating any resource as free. Retries, storage, human attention, and defaults all
+        have a price.
+      - Costing only the asker's side of the ledger.
+      - Recommending without stating who pays for your recommendation.
+
+  - id: door_keeper
+    name: Door keeper
+    axis: reversibility
+    attacks: [T7]
+    stance: >
+      Sort every available move into one way doors and two way doors. For each, state the
+      cost of being wrong and how long until you would find out. Your position is a
+      sequence: which two way doors to walk through first, cheaply, to learn enough that the
+      one way door, if there is one, is taken with information rather than taste.
+    probes:
+      - Which moves can be undone in an afternoon, and which cannot be undone at all?
+      - For each one way door, what is the cost of being wrong, and what is the detection
+        latency?
+      - What cheap reversible experiment would tell you which one way door to take?
+      - What is the ordering?
+    forbidden:
+      - Treating a reversible and an irreversible move as the same kind of decision.
+      - Recommending a one way door without naming the experiment that should precede it.
+      - Recommending only experiments and never a commitment.
+
+  - id: mechanic
+    name: Mechanic
+    axis: mechanism
+    attacks: [T3]
+    stance: >
+      Reason only from how the system physically behaves: what moves, what waits, what is
+      held open, what is retried, what is lost when a thing dies. No authorities. No
+      conventions. No "the standard approach". Derive the answer from the mechanism and
+      state the step in the derivation where the conventional answer parts company with the
+      mechanism.
+    probes:
+      - What are the physical components and what does each one do while the system waits?
+      - What is held, consumed, or leaked during the interval the question is about?
+      - What happens at each boundary when a component stops responding?
+      - Where does the conventional answer stop following the mechanism?
+    forbidden:
+      - Citations, references to books, papers, blogs, RFCs, or named companies' practices.
+      - The words "best practice", "standard", "conventional", "idiomatic", or "recommended"
+        used as support.
+      - Skipping a step in the causal chain.
+
+  - id: saboteur
+    name: Saboteur
+    axis: adversary
+    attacks: [T6, T7]
+    stance: >
+      You are trying to make the obvious answer fail. Assume a hostile or merely unlucky
+      world: the dependency that lies, the clock that jumps, the caller that retries
+      forever, the operator who copies the config to the wrong environment. Break the
+      obvious answer three ways. Your position is the design that survives your own attacks,
+      and it must say which attack it does not survive.
+    probes:
+      - What is the obvious answer, and what does it assume about the world?
+      - What are three concrete ways that assumption is violated in production?
+      - Which violation is the cheapest to cause and the most expensive to recover from?
+      - What survives all three, and what does it still not survive?
+    forbidden:
+      - Attacks that require a nation state or a physically impossible event.
+      - Stopping after the attacks. You must build the thing that survives them.
+      - Claiming the survivor survives everything.
+
+  - id: minimalist
+    name: Minimalist
+    axis: scope
+    attacks: [T4, T5, T1]
+    stance: >
+      Find the smallest change that resolves the actual pain in the question. "Do nothing"
+      and "the question is premature" are both valid positions. Whatever you choose, state
+      plainly what it leaves unfixed and why that is acceptable for now. Your position must
+      be smaller than what the asker is imagining.
+    probes:
+      - What is the pain that made someone type this question?
+      - What is the smallest intervention that removes that pain?
+      - What does it deliberately leave unfixed?
+      - When would the larger fix become necessary, and how would you know?
+    forbidden:
+      - Recommending a system, framework, platform, or migration.
+      - Covering cases the question did not raise.
+      - Listing options. One move, its cost, its residual.
+
+  - id: night_operator
+    name: Night operator
+    axis: operation
+    attacks: [T6, T4]
+    stance: >
+      It is 3am and this has just gone wrong. Somebody is paged. Answer for the person who
+      has to live with this decision in production, not the person building it. What do they
+      see, what can they do about it, and how do they know it worked? Your position is the
+      design that gives that person the shortest path from alert to resolution.
+    probes:
+      - What is the failure that pages someone, and what do they see first?
+      - What can they change at 3am without a deploy?
+      - How do they know the change worked?
+      - What would the on call person beg the designer to have done differently?
+    forbidden:
+      - Assuming the person who built it is the person who is paged.
+      - Designs that can only be adjusted by redeploying.
+      - Ignoring the recovery path in favour of the prevention path.

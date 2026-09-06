@@ -1,0 +1,10 @@
+{
+  "name": "adhd",
+  "version": "0.0.1",
+  "description": "Anchoring Defeat by Heterogeneous Divergence. A reasoning architecture for Claude Code: N isolated subagents under distorted frames, blind critic, trap pruning, adversarial deepening.",
+  "author": { "name": "drewc611" },
+  "license": "UNLICENSED",
+  "keywords": ["reasoning", "divergence", "subagents", "critic"],
+  "skills": ["./skills/adhd"],
+  "agents": ["./agents"]
+}
