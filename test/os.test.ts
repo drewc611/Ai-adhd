@@ -297,3 +297,51 @@ test("record promotes a finished run with provenance and an expectation that mat
   assert.match(readme, /Eval outcome as recorded: (PASS|FAIL)/);
   assert.throws(() => recordRun(cfg2, k, "r1", { fixtureId: "001", name: "kernel-test" }), /exists/);
 });
+
+test("a fenced return is stored as bare YAML, and a message with text outside the fence is kept whole beside it", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const t = k.claim("w")!;
+  const body = yaml(artifact(t.label, hash));
+  k.return_(t.id, "```yaml\n" + body + "```\n\nSources: [one](https://example.invalid)\n", "w");
+  const stored = readFileSync(join(k.root, "r1", t.artifact_path), "utf8");
+  assert.ok(!stored.includes("```"), "artifact must not carry the fence");
+  assert.ok(!stored.includes("Sources:"), "artifact must hold only the YAML");
+  const raw = readFileSync(join(k.root, "r1", t.artifact_path + ".raw.md"), "utf8");
+  assert.match(raw, /Sources: \[one\]/);
+  const t2 = k.claim("w")!;
+  k.return_(t2.id, yaml(artifact(t2.label, hash)), "w");
+  assert.equal(existsSync(join(k.root, "r1", t2.artifact_path + ".raw.md")), false, "no sidecar when nothing was outside the fence");
+});
+
+test("a pruned cluster member corroborates the action but does not hold the recommendation", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const frames: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w")!;
+    frames.push(t.label);
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w");
+  }
+  const blindMap = JSON.parse(readFileSync(join(k.root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  k.return_(k.claim("w")!.id, yaml(passA(hash, Object.keys(blindMap))), "w");
+  const [a, b, c, d, e] = frames as [string, string, string, string, string];
+  k.return_(
+    k.claim("w")!.id,
+    yaml(passB(hash, [{ id: "one", members: [a, b, c] }, { id: "two", members: [d, e] }], { [c]: { T1: "would be the same answer for any client" } })),
+    "w",
+  );
+  for (let i = 0; i < 2; i++) {
+    const t = k.claim("w")!;
+    k.return_(t.id, yaml({ problem_hash: hash, frame: t.label, verdict: "defend", response: "Holds.", revised_position: "Do it.", revised_falsifier: null, confidence: "high" }), "w");
+  }
+  assert.equal(k.status("r1").state, "done");
+  const s = k.result("r1").synthesis!;
+  const held = s.match(/^Held by: (.*)$/m)![1]!;
+  assert.match(held, new RegExp(`\\(pruned after corroborating: ${c}\\)`));
+  assert.ok(!held.split("(")[0]!.includes(c), `pruned ${c} must not be listed as holding the recommendation`);
+  assert.match(s, /it \*\*defended\*\*:/);
+  assert.match(s, new RegExp(`- \\*\\*${c}\\*\\*:[\\s\\S]*traps: T1`), "the pruned member still ships in the pruned block");
+});

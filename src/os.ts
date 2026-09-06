@@ -15,7 +15,7 @@ import { join, resolve } from "node:path";
 import { z } from "zod";
 import type { Config } from "./config.js";
 import { compile, previewText } from "./compile.js";
-import { parseDecision } from "./validate.js";
+import { parseDecision, unfence } from "./validate.js";
 import { loadPlan, phaseCritique, phaseDeepen, phaseSynth, type PhaseResult } from "./run.js";
 import { ContractError, HashMismatch, RunAbort } from "./errors.js";
 import { problemHash } from "./hash.js";
@@ -301,7 +301,12 @@ export class Kernel {
       if (!task) throw new ContractError("return", [`no task ${taskId}`]);
       if (task.status !== "leased") throw new ContractError("return", [`task ${taskId} is ${task.status}, not leased`]);
       if (worker && task.worker !== worker) throw new ContractError("return", [`task ${taskId} is leased to ${task.worker}, not ${worker}`]);
-      writeFileSync(join(this.runDir(runId), task.artifact_path), output);
+      // The artifact file holds the YAML the phase will parse. If the worker's message carried
+      // anything outside the fence (a sources line, a sign off), the message is kept whole
+      // beside it so nothing a subagent said is lost.
+      const clean = unfence(output);
+      writeFileSync(join(this.runDir(runId), task.artifact_path), clean.endsWith("\n") ? clean : clean + "\n");
+      if (clean !== output) writeFileSync(join(this.runDir(runId), task.artifact_path + ".raw.md"), output);
       task.status = "done";
       task.returned_at = this.now().toISOString();
       if (tokens !== undefined && Number.isFinite(tokens)) task.tokens = Math.round(tokens);

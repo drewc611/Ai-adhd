@@ -97,11 +97,16 @@ function scopeText(run: RecordedRun, scope: string): string {
   return plain(secs[title] ?? "");
 }
 
+/**
+ * First matching pattern's match text, or null. Case insensitive, single line: `^` is the
+ * start of the scope text, so a fixture can anchor to the bold line of the recommendation.
+ * An empty match is still a match (a lookahead can match zero characters).
+ */
 function anyMatch(text: string, patterns: string[]): string | null {
   for (const p of patterns) {
-    const re = new RegExp(p, "im");
+    const re = new RegExp(p, "i");
     const m = text.match(re);
-    if (m) return m[0];
+    if (m !== null) return m[0];
   }
   return null;
 }
@@ -120,7 +125,7 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
 
   for (const ms of fixture.must_surface) {
     const text = scopeText(run, ms.scope);
-    if (!anyMatch(text, ms.any_of)) failures.push(`must_surface ${ms.id}${ms.trap ? ` (${ms.trap})` : ""}: ${ms.description.trim()}`);
+    if (anyMatch(text, ms.any_of) === null) failures.push(`must_surface ${ms.id}${ms.trap ? ` (${ms.trap})` : ""}: ${ms.description.trim()}`);
   }
   for (const mn of fixture.must_not) {
     const text = scopeText(run, mn.scope);
@@ -129,7 +134,7 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
       const w = wordCount(stripped);
       if (w < mn.min_words) failures.push(`must_not ${mn.id}: only ${w} words outside /${mn.pattern}/ in ${mn.scope} (need ${mn.min_words})`);
     } else if (mn.check === "must_match") {
-      if (!anyMatch(text, mn.any_of)) failures.push(`must_not ${mn.id}${mn.trap ? ` (${mn.trap})` : ""}: ${mn.description.trim()}`);
+      if (anyMatch(text, mn.any_of) === null) failures.push(`must_not ${mn.id}${mn.trap ? ` (${mn.trap})` : ""}: ${mn.description.trim()}`);
     } else if (mn.check === "must_be_imperative") {
       if (!hasImperative(text)) failures.push(`must_not ${mn.id}${mn.trap ? ` (${mn.trap})` : ""}: no "do X" sentence in ${mn.scope}`);
     } else {
@@ -143,7 +148,7 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
   const prunedCount = prunedSec.split("\n").filter((l) => /^- \*\*/.test(l)).length;
   const ex = fixture.expect;
   if (ex.pruned_min !== undefined && prunedCount < ex.pruned_min) failures.push(`expect pruned_min ${ex.pruned_min}: pruned block lists ${prunedCount}`);
-  if (ex.pruned_traps_include_any && !anyMatch(prunedSec, ex.pruned_traps_include_any.map((t) => `\\b${t}\\b`)))
+  if (ex.pruned_traps_include_any && null === anyMatch(prunedSec, ex.pruned_traps_include_any.map((t) => `\\b${t}\\b`)))
     failures.push(`expect pruned_traps_include_any ${ex.pruned_traps_include_any.join(",")}: none named in pruned block`);
   if (ex.monoculture !== undefined || ex.scatter !== undefined) {
     if (run.score) {
