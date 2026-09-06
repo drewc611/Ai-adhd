@@ -27,6 +27,31 @@ export interface EvalReport {
   ok: boolean;
 }
 
+/**
+ * Fixture `any_of` entries are regular expressions on purpose: that is how an assertion says
+ * what counts as surfacing something. They are repo content, held to the same trust as the code
+ * beside them, and they are compiled here rather than at match time so a broken pattern fails
+ * once, loudly, naming the fixture and the item, instead of silently never matching. An
+ * assertion that cannot match is an assertion that cannot fail, which is worse than a missing
+ * one because the harness reports it as a pass.
+ */
+function uncompilablePatterns(fx: Fixture): string[] {
+  const problems: string[] = [];
+  const check = (where: string, patterns: string[]) => {
+    for (const p of patterns) {
+      try {
+        new RegExp(p, "i");
+      } catch (e) {
+        problems.push(`${where}: /${p}/ does not compile: ${(e as Error).message}`);
+      }
+      if (p.trim() === "" || p === ".*") problems.push(`${where}: /${p}/ matches everything, so the assertion cannot fail`);
+    }
+  };
+  for (const ms of fx.must_surface) check(`must_surface ${ms.id}`, ms.any_of);
+  for (const mn of fx.must_not) if (mn.check === "must_match") check(`must_not ${mn.id}`, mn.any_of);
+  return problems;
+}
+
 export function loadFixtures(dir: string): Fixture[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
@@ -35,6 +60,8 @@ export function loadFixtures(dir: string): Fixture[] {
     .map((f) => {
       const r = FixtureSchema.safeParse(parseYaml(readFileSync(join(dir, f), "utf8")));
       if (!r.success) throw new Error(`${join(dir, f)}: ${r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
+      const bad = uncompilablePatterns(r.data);
+      if (bad.length) throw new Error(`${join(dir, f)}: ${bad.join("; ")}`);
       return r.data;
     });
 }

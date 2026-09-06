@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
@@ -170,4 +170,34 @@ test("the audit flags an assertion the negative control also satisfies, and name
   assert.equal(byId.get("says_nothing")!.verdict, "never matched");
   assert.match(a.text, /matched on: "cron"/);
   assert.match(a.text, /do not loosen the pattern to make the report quiet/);
+});
+
+test("a fixture pattern that cannot compile, or that matches everything, fails at load", () => {
+  const dir = tmp();
+  const write = (name: string, anyOf: string) =>
+    writeFileSync(
+      join(dir, name),
+      [
+        'id: "902"',
+        "name: broken",
+        "problem_class: naming",
+        "seed: 1",
+        'prompt: "x"',
+        "must_surface:",
+        "  - id: thing",
+        "    description: a thing",
+        `    any_of: [${anyOf}]`,
+        "must_not: []",
+        "expect: {}",
+      ].join("\n"),
+    );
+  write("902-broken.yaml", "'(unclosed'");
+  assert.throws(() => loadFixtures(dir), /does not compile/, "a broken pattern must fail at load, not silently never match");
+  rmSync(join(dir, "902-broken.yaml"));
+  // An assertion that matches everything cannot fail, which the harness would report as a pass.
+  write("902-vacuous.yaml", "'.*'");
+  assert.throws(() => loadFixtures(dir), /matches everything, so the assertion cannot fail/);
+  rmSync(join(dir, "902-vacuous.yaml"));
+  write("902-fine.yaml", "'who (is|gets) paged'");
+  assert.equal(loadFixtures(dir).length, 1);
 });
