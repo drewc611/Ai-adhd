@@ -1,0 +1,68 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+pass: B
+clusters:
+  - id: measure_the_period_first
+    action: "Export the spike timestamps (from the p99 series or, more strictly, from one host's raw request log), compute the true inter-spike interval and its jitter, and let that fingerprint decide whether to grep for an internal timer, a neighbour's cron, an external scheduled actor, or a fill-and-flush accumulator, before profiling, scaling, or tuning anything."
+    members: [PARTICULARIST, FRAME_BREAKER, SABOTEUR]
+    singleton: false
+    strongest_objection: "The fingerprint this position depends on may not be resolvable from the data the asker actually has. A p99 series is computed over an aggregation window, typically one to five minutes, and spike onsets on such a series are smeared by that window; the difference between a constant 40:00, a drifting 38-to-44, and an alternating 40/20 is exactly the difference the window erases, so a day spent building the histogram can return 'somewhere between 35 and 45' and leave the fork unresolved. Meanwhile the discriminator that does survive coarse timing is available in one graph right now: split p99 by instance and see whether every instance spikes in the same bucket or whether one instance spikes per event. That answers shared-versus-in-process without any timing precision, and if it says in-process, the runtime already writes its own pause log and heap sawtooth, which can be lined up against the spikes for free. The word 'or so' also cuts the other way from how it is being read here: a human describing a dashboard says 'or so' whether the period is exact or not, so it is not evidence of jitter, and a genuinely drifting period is also exactly what a capacity-over-fill-rate mechanism inside the process produces, not only a duration timer or a chained job. A position that puts interval measurement ahead of the per-instance split and the pause log risks doing the expensive, low-resolution read before the cheap, high-resolution one."
+  - id: read_the_gc_pause_log
+    action: "Pull each instance's memory-occupancy curve and stop-the-world pause log and line the pause timestamps up against the p99 spikes, treating the period as a bucket filling at request rate rather than a schedule."
+    members: [MECHANIC]
+    singleton: true
+    strongest_objection: "The entire derivation forks on reading 'or so' as measured drift, but 'or so' from someone who has not yet pulled timestamps is a colloquialism, not data; the asker would say it whether the period is exactly 40:00 or wanders, so the position has committed to 'not a clock' on no evidence either way. That matters because the prior runs the other direction: a collector pause recurring on a 40-minute cadence requires a tenured region that takes 40 minutes of promotion to fill, which in a steady-state API is an unusually large or unusually idle heap, whereas the common producers of multi-minute periodic tail spikes are things with timers or thresholds outside the collector: a connection pool max lifetime set for every connection at boot, a token or cert refresh, a neighbour's cron, a database checkpoint or autovacuum, a client's batch job. By foreclosing the scheduler search and the database as first moves, the position forecloses most of that prior. The pause log is cheap to read and fine as a step, but the position's own falsifier (constant interval at 3 a.m. and at peak, or all instances spiking in the same second) is cheaper still and is readable from the graph the asker already has; that test should be the position, and the pause log the branch taken only if it comes back showing drift and out-of-phase instances."
+  - id: fix_user_experience_before_cause
+    action: "Sample what affected users do during a spike (succeed, wait, retry, abandon) and make requests resolve within seconds with a result, a visible wait state, or a clean failure, before investigating any cause."
+    members: [END_USER]
+    singleton: true
+    strongest_objection: null
+traps:
+  PARTICULARIST:
+    T1: { fired: false, evidence: "Delete '40 minutes', 'or so', and 'p99' and the reasoning is gone: the cron-cannot-express-40 argument, the constant-versus-alternating-versus-scattered fork, and the split-p99-by-instance test all depend on those exact details." }
+    T2: { fired: false, evidence: "It attacks the assumption that the number is exact ('or so' hides drift or not) and the assumption that the asker has a correlated signal, and builds the position on making the first one measurable." }
+    T3: { fired: false, evidence: "No citations or authorities appear; the argument is cron syntax and timer arithmetic and stands on its own." }
+    T4: { fired: false, evidence: "It forces the reader off profiling, capacity, and GC tuning and onto one measurement; the three-way branch after the histogram is conditioned on data, not left as an open menu." }
+    T5: { fired: false, evidence: "'Pull the exact timestamps of the last ten spikes and measure the gaps' is a do-X sentence." }
+    T6: { fired: false, evidence: "Names the asker's team, client libraries as a possible timer host, and the DBA/platform team with a concrete listing action; does not name the external client's batch schedule or finance, but a real actor with a real action is present." }
+    T7: { fired: false, evidence: "A free measurement is ordered ahead of GC tuning and scaling, and the falsifier is a single reversible instance restart, so cheap bets are explicitly separated from committed ones." }
+    T8: { fired: false, evidence: "Flat restatement, 'measure the intervals; constant, alternating, or scattered gaps each point somewhere different', is the same claim without any framing." }
+  FRAME_BREAKER:
+    T1: { fired: false, evidence: "The exact-40:00 versus 38-to-44 fingerprint and the reading of 'where should I look' as presupposing a place are both load bearing; delete them and the position has nothing to match against." }
+    T2: { fired: false, evidence: "It names the load bearing assumption in the question ('where' means a place inside the API), argues it is false, and makes the position a test of it (pause the matching external actor for two cycles)." }
+    T3: { fired: false, evidence: "No citations; APM vendors are mentioned as a motive for the assumption, not as an authority for the claim." }
+    T4: { fired: false, evidence: "It forces the reader to stop deciding about profilers, traces, capacity, autoscaling, and GC flags, and replaces them with one sequence ending in a confirmation." }
+    T5: { fired: false, evidence: "'Stop inspecting the API and instead pull the exact timestamps' is a do-X sentence." }
+    T6: { fired: false, evidence: "Names the largest API client (with a shift-your-schedule action) and the platform/DBA team (backup and snapshot schedule); scheduler and caller are both covered." }
+    T7: { fired: false, evidence: "Pausing the matched job for two cycles is explicitly a cheap reversible confirmation placed before any code change or capacity spend." }
+    T8: { fired: false, evidence: "Flat restatement, 'the period means a scheduled job elsewhere; measure it, find the job with that period, pause it', is the same claim; the who-benefits section is decoration the position does not need." }
+  SABOTEUR:
+    T1: { fired: false, evidence: "The ten-replicas-at-400-minutes aliasing argument and the p99-averaged-across-hosts artifact bend around this problem's numbers, and without a stated period there would be no period to verify; the three-mode template is reusable but the answer it produces is not." }
+    T2: { fired: false, evidence: "It lists four assumptions behind the obvious answer (period is real, cause is inside, clocks agree, one cause) and attacks the first two directly, with the position built on what survives." }
+    T3: { fired: false, evidence: "No citations; every violation mode is a mechanism the reader can check." }
+    T4: { fired: false, evidence: "It forces the reader off crontab, GC, heap sizing, capacity, and window widening, and onto one three-hour single-host read; the follow-on comparison list is ordered after confirmation, not offered as alternatives." }
+    T5: { fired: false, evidence: "'Pull unaggregated per-request logs from one host for three hours' is a do-X sentence." }
+    T6: { fired: false, evidence: "Names the API's callers with a concrete action (disclose or jitter their schedule) and explicitly flags that the question assumes the cause is inside 'our API'." }
+    T7: { fired: false, evidence: "Section 3 is an explicit cost-of-being-wrong and time-to-find-out analysis, ranking the measurement artifact as cheapest to cause and most expensive to recover from." }
+    T8: { fired: false, evidence: "Flat restatement, 'confirm the period from raw single-host data before chasing anything, and note which upstream slow requests wait on', is the same claim." }
+  MECHANIC:
+    T1: { fired: false, evidence: "The fork rests on 'or so' meaning drift and on p99-not-p50 meaning a short pause; delete those and the capacity-over-rate derivation loses its trigger, even though sections 1 and 3 are a generic component tour." }
+    T2: { fired: false, evidence: "It names the assumption that 40 minutes is a schedule and argues from 'or so' that the trigger is a threshold, though it asserts the reading rather than testing it before committing." }
+    T3: { fired: false, evidence: "No citations; capacity-over-fill-rate arithmetic and boundary echoes carry the argument." }
+    T4: { fired: false, evidence: "It forces the reader off the scheduler, off adding instances or raising timeouts, and off the database and network, and onto one pause-log read." }
+    T5: { fired: false, evidence: "'Pull the per-instance memory-occupancy curve and the runtime's stop-the-world pause log' is a do-X sentence." }
+    T6: { fired: false, evidence: "Names the datastore or cache operator with a reporting action; does not name callers, whose retry storms it describes in section 3 but leaves unassigned, but a real actor is present." }
+    T7: { fired: false, evidence: "It orders on cost ('the cheapest bucket to read is inside the process itself') and forecloses the expensive fixes until that read is done." }
+    T8: { fired: false, evidence: "Flat restatement, 'check the per-instance GC pause log against the spikes', is close to the conventional answer but is still a real, actionable claim once the mechanism framing is removed." }
+  END_USER:
+    T1: { fired: true, evidence: "Delete '40 minutes', 'p99', and 'API' and the reasoning is unchanged; the branch says so itself ('I did not know a 40 minute cycle existed', 'my position is not which subsystem') and the same text would answer any slow-request question." }
+    T2: { fired: false, evidence: "It attacks a real assumption in the question, that finding the cause is the job at all, and conditions the position on whether users are actually harmed; this is a different assumption from 'the cause is a place' but it is an attack on the question's frame." }
+    T3: { fired: false, evidence: "No citations; the argument is first-person mechanism throughout." }
+    T4: { fired: false, evidence: "It forces the reader off an immediate root-cause hunt, off tolerating the spike, and off silent retry; three decisions are closed even though the eventual investigation is left entirely open." }
+    T5: { fired: false, evidence: "'Look at what the slowest 1% of users experience... and make the system answer them within a few seconds' is a do-X sentence, if a long one." }
+    T6: { fired: false, evidence: "Names the client team with concrete actions (idempotency keys, visible wait state, sane timeout); the human user is the whole frame." }
+    T7: { fired: true, evidence: "The ordering (experience first, cause later) is justified by harm, and nowhere does the branch distinguish cheap reversible moves from expensive committed ones; a client-side timeout change and a server-side priority queue are treated as the same kind of bet." }
+    T8: { fired: true, evidence: "Stripped of the user's-seat voice the position is 'check whether users are harmed and make requests fail fast before chasing the cause', which is general advice that does not answer where to look; the appeal was in the angle." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "The load bearing assumption in 'where should I look' is that the cause is a place inside the API to be found by inspection; FRAME_BREAKER attacks it directly, SABOTEUR attacks it as one of four listed assumptions, and PARTICULARIST and MECHANIC attack the adjacent assumption that the stated period is exact or is a schedule." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every branch names a non-null missing_actor with an action: DBA/platform team, largest API client, API callers, datastore operator, and client team respectively." }
+lint_verdicts: []

@@ -1,0 +1,164 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "PARTICULARIST",
+      "status": "survivor",
+      "cluster": "measure_the_period_first",
+      "pass_a": 0.875,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Pull the exact timestamps of the last ten spikes and measure the gaps, because a constant 40:00 that shifts when you restart a process points at a 2400-second timer inside your own service or a client library, an alternating 40/20 gap points at a `*/40` cron on a neighbour, and a scattered 30-to-50 gap points at something filling at traffic rate and flushing, and each of those sends you to a different place.",
+      "forecloses": [
+        "Profiling the request handler or taking flame graphs under load; the spike is periodic, not load-shaped, so the hot path is not where the stall lives.",
+        "Adding capacity or autoscaling; more instances in the same phase produce the same blip.",
+        "Tuning GC flags before the gap histogram rules a timer in or out."
+      ],
+      "falsifier": "Restart one instance out of phase with the rest of the fleet; if that instance's spikes stay locked to the fleet's schedule instead of shifting by the restart offset, the cause is outside the process and the config grep is the wrong first step.",
+      "missing_actor": "The owner of the shared database or platform (DBA or platform team), who can list what runs against the same database or on the same nodes on a roughly 40-minute cadence (autovacuum on a hot table, snapshots, index maintenance, a log shipper or scanner agent) without the API team changing anything."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "survivor",
+      "cluster": "measure_the_period_first",
+      "pass_a": 0.9166666666666666,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop inspecting the API and instead pull the exact timestamps of every p99 spike from the last 48 hours, compute the true period and its jitter, and match that number against every scheduled actor that shares the API's hosts, database, or network (cron, backup snapshots, autoscaler, cert and token refresh, log rotation, and your biggest client's batch job), then pause the matching one for two cycles to confirm.",
+      "forecloses": [
+        "Starting with a profiler, flame graph, or distributed trace of the request path, since those only show where time is spent inside the API, which is the place the assumption says to look.",
+        "Adding capacity, autoscaling faster, or tuning GC settings, because a periodic external actor will still land on the same resource regardless of how much of it you have."
+      ],
+      "falsifier": "If the interval between spikes shortens at peak traffic and lengthens overnight (period correlates with request rate), the cause is load driven and internal, and this position is wrong; likewise if the spikes appear in a staging copy with all scheduled jobs disabled and no external clients.",
+      "missing_actor": "The largest API client, whose batch job or polling loop can run on a 40 minute timer and who can share their schedule or shift it by ten minutes to confirm; also the platform or DBA team that owns the backup and snapshot schedule on the shared database."
+    },
+    {
+      "frame": "SABOTEUR",
+      "status": "survivor",
+      "cluster": "measure_the_period_first",
+      "pass_a": 0.8958333333333334,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Pull unaggregated per-request logs from one host for three hours, compute the true spike period from raw timestamps, and break each slow request down by upstream dependency before you open a single crontab or touch a single config.",
+      "forecloses": [
+        "Starting with crontab, GC tuning, or heap sizing before the period is confirmed from raw per-host data.",
+        "Adding capacity or autoscaling as a first move, since it hides a scheduled cause without finding it.",
+        "Widening the p99 aggregation window until the spike disappears from the chart."
+      ],
+      "falsifier": "A scheduler listing on the service's own hosts shows a job with an exact 40 minute period whose start times match the spike timestamps to the second, meaning the obvious answer was right and the raw log pull was wasted effort.",
+      "missing_actor": "The API's callers, who can tell you whether they run a scheduled poll, batch, or token refresh on a 40 minute cycle and can add jitter to it; the problem names only \"our API\" and assumes the cause is inside it."
+    },
+    {
+      "frame": "MECHANIC",
+      "status": "survivor",
+      "cluster": "read_the_gc_pause_log",
+      "pass_a": 0.8125,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Pull the per-instance memory-occupancy curve and the runtime's stop-the-world pause log for the last several hours and line the pause timestamps up against the p99 spikes, because a period that is \"about\" 40 minutes is a bucket filling at request rate and emptying in one blocking step, not a clock.",
+      "forecloses": [
+        "Treating the spike as a scheduled job or cron and searching the job scheduler first.",
+        "Adding instances or raising client timeouts as the fix; both change the period or hide the tail without touching the pause.",
+        "Starting the investigation at the database or the network before reading the process's own pause log."
+      ],
+      "falsifier": "The spike interval stays exactly 40 minutes at 3 a.m. and at peak traffic, or every instance spikes at the same second; either one means a clock or a shared upstream, not a per-process bucket.",
+      "missing_actor": "The operator of the datastore or cache under the API, who can report that store's own flush, checkpoint, or compaction cadence and whether it lines up with the spikes."
+    },
+    {
+      "frame": "END_USER",
+      "status": "pruned",
+      "cluster": "fix_user_experience_before_cause",
+      "pass_a": 0.5833333333333334,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "Delete '40 minutes', 'p99', and 'API' and the reasoning is unchanged; the branch says so itself ('I did not know a 40 minute cycle existed', 'my position is not which subsystem') and the same text would answer any slow-request question."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The ordering (experience first, cause later) is justified by harm, and nowhere does the branch distinguish cheap reversible moves from expensive committed ones; a client-side timeout change and a server-side priority queue are treated as the same kind of bet."
+        },
+        {
+          "trap": "T8",
+          "evidence": "Stripped of the user's-seat voice the position is 'check whether users are harmed and make requests fail fast before chasing the cause', which is general advice that does not answer where to look; the appeal was in the angle."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Look at what the slowest 1% of users experience during a spike — whether their request eventually succeeds, how long they sit with nothing happening, and whether they retry — and make the system answer them within a few seconds either way (result, honest wait signal, or clean failure) before you touch a single cause.",
+      "forecloses": [
+        "Starting with a root cause hunt (GC, cron, cache expiry, connection churn) before anyone has measured what the affected users actually do during the spike.",
+        "Accepting the spike as tolerable because p99 is \"only\" the slowest 1% and the average is fine.",
+        "Silent retry or queueing logic that keeps the user staring at a spinner longer to protect the servers."
+      ],
+      "falsifier": "Sample the requests that land inside a spike window and check what the callers did next; if nearly all of those requests complete successfully with no duplicate submissions, no refreshes, and no session drop-off in the following minute, the users never noticed and this position is wrong.",
+      "missing_actor": "The client team (web or mobile app, or the integration partner calling the API), who can add request idempotency keys, a visible \"still working\" state, and a sane timeout with a clear failure message, so that the spike stops producing duplicate work and abandoned sessions even before the server side changes."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "measure_the_period_first",
+      "action": "Export the spike timestamps (from the p99 series or, more strictly, from one host's raw request log), compute the true inter-spike interval and its jitter, and let that fingerprint decide whether to grep for an internal timer, a neighbour's cron, an external scheduled actor, or a fill-and-flush accumulator, before profiling, scaling, or tuning anything.",
+      "members": [
+        "PARTICULARIST",
+        "FRAME_BREAKER",
+        "SABOTEUR"
+      ],
+      "survivors": [
+        "PARTICULARIST",
+        "FRAME_BREAKER",
+        "SABOTEUR"
+      ],
+      "singleton": false,
+      "strongest_objection": "The fingerprint this position depends on may not be resolvable from the data the asker actually has. A p99 series is computed over an aggregation window, typically one to five minutes, and spike onsets on such a series are smeared by that window; the difference between a constant 40:00, a drifting 38-to-44, and an alternating 40/20 is exactly the difference the window erases, so a day spent building the histogram can return 'somewhere between 35 and 45' and leave the fork unresolved. Meanwhile the discriminator that does survive coarse timing is available in one graph right now: split p99 by instance and see whether every instance spikes in the same bucket or whether one instance spikes per event. That answers shared-versus-in-process without any timing precision, and if it says in-process, the runtime already writes its own pause log and heap sawtooth, which can be lined up against the spikes for free. The word 'or so' also cuts the other way from how it is being read here: a human describing a dashboard says 'or so' whether the period is exact or not, so it is not evidence of jitter, and a genuinely drifting period is also exactly what a capacity-over-fill-rate mechanism inside the process produces, not only a duration timer or a chained job. A position that puts interval measurement ahead of the per-instance split and the pause log risks doing the expensive, low-resolution read before the cheap, high-resolution one.",
+      "representative": "FRAME_BREAKER",
+      "mean_pass_a": 0.8958333333333334
+    },
+    {
+      "id": "read_the_gc_pause_log",
+      "action": "Pull each instance's memory-occupancy curve and stop-the-world pause log and line the pause timestamps up against the p99 spikes, treating the period as a bucket filling at request rate rather than a schedule.",
+      "members": [
+        "MECHANIC"
+      ],
+      "survivors": [
+        "MECHANIC"
+      ],
+      "singleton": true,
+      "strongest_objection": "The entire derivation forks on reading 'or so' as measured drift, but 'or so' from someone who has not yet pulled timestamps is a colloquialism, not data; the asker would say it whether the period is exactly 40:00 or wanders, so the position has committed to 'not a clock' on no evidence either way. That matters because the prior runs the other direction: a collector pause recurring on a 40-minute cadence requires a tenured region that takes 40 minutes of promotion to fill, which in a steady-state API is an unusually large or unusually idle heap, whereas the common producers of multi-minute periodic tail spikes are things with timers or thresholds outside the collector: a connection pool max lifetime set for every connection at boot, a token or cert refresh, a neighbour's cron, a database checkpoint or autovacuum, a client's batch job. By foreclosing the scheduler search and the database as first moves, the position forecloses most of that prior. The pause log is cheap to read and fine as a step, but the position's own falsifier (constant interval at 3 a.m. and at peak, or all instances spiking in the same second) is cheaper still and is readable from the graph the asker already has; that test should be the position, and the pause log the branch taken only if it comes back showing drift and out-of-phase instances.",
+      "representative": "MECHANIC",
+      "mean_pass_a": 0.8125
+    },
+    {
+      "id": "fix_user_experience_before_cause",
+      "action": "Sample what affected users do during a spike (succeed, wait, retry, abandon) and make requests resolve within seconds with a result, a visible wait state, or a clean failure, before investigating any cause.",
+      "members": [
+        "END_USER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "The load bearing assumption in 'where should I look' is that the cause is a place inside the API to be found by inspection; FRAME_BREAKER attacks it directly, SABOTEUR attacks it as one of four listed assumptions, and PARTICULARIST and MECHANIC attack the adjacent assumption that the stated period is exact or is a schedule."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every branch names a non-null missing_actor with an action: DBA/platform team, largest API client, API callers, datastore operator, and client team respectively."
+    },
+    "notes": [
+      "singleton MECHANIC escalated to deepen, flagged unverified"
+    ]
+  },
+  "proceed": true
+}

@@ -173,6 +173,13 @@ none is in the fuzzy debugging primary set. Whether to swap one in is a routing 
 the owner; it should be made on a second run, not on this one. The recorded run is marked
 `expected: fail` so the harness verifies the miss stays recorded rather than hiding it.
 
+The second run exists: `evals/recorded/002-kernel-enduser/`, END_USER swapped in for
+NIGHT_OPERATOR via an explicit `frames` list, driven by the kernel. It passes fixture 002.
+END_USER asked who is hurt and was pruned for it (T1, T7, T8); the question reached the output
+through the pruned block. So the frame closes the gap as a question-raiser, not as a
+recommendation. Swapping it into the `fuzzy_debugging` primary set is now a decision with two
+runs behind it. Still the owner's.
+
 ---
 
 ## D7. The kernel: ADHD as an agent operating system

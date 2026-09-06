@@ -1,0 +1,11 @@
+{
+  "problem_class": "fuzzy_debugging",
+  "frames": [
+    "MECHANIC",
+    "PARTICULARIST",
+    "END_USER",
+    "FRAME_BREAKER",
+    "SABOTEUR"
+  ],
+  "seed": 2
+}
