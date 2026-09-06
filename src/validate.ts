@@ -162,7 +162,11 @@ export type BranchValidation =
  * Every reader of a subagent's final message goes through here so they agree on what it said.
  */
 export function unfence(text: string): string {
-  const fenced = text.match(/```(?:ya?ml)?\s*\n([\s\S]*?)\n```/);
+  // The info string after ``` cannot contain a newline, so `[^\n]*\n` says exactly that and
+  // is unambiguous. Writing `\s*\n` instead let `\s*` match newlines, which makes every split
+  // of a newline run a candidate the engine has to try: quadratic, on the untrusted final
+  // message of a subagent. Doubling a run of "\n " quadrupled the match time before this.
+  const fenced = text.match(/```(?:ya?ml)?[^\n]*\n([\s\S]*?)\n```/);
   return fenced ? fenced[1]! : text;
 }
 

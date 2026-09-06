@@ -123,6 +123,24 @@ yet enough to know whether they work.
 54. **Plugin agents exercised as plugin agents.** Every recorded run so far used
     general-purpose subagents; the shipped agent definitions are untested in their real role.
 
+## 9. Known CodeQL findings not fixed here
+
+Surfaced by the alert-printing step added to `.github/workflows/codeql.yml`. Three predate
+this work and live on `main`, so they are separate changes rather than PR widening. All are
+the same shape as the one that was fixed: two quantifiers that can match the same character,
+so the engine has to try every split.
+
+55. **`src/template.ts:26`, `js/polynomial-redos`** (high). Slow on `{{{{` followed by many
+    spaces. The template engine runs over prompt files, which are repo content, so the
+    exposure is small; the fix is still cheap and the query is right.
+56. **`src/synth.ts:132`, `js/polynomial-redos`** (high). `tidy()` on many repeated tabs.
+    Runs over rendered synthesis text, which contains subagent output.
+57. **`src/run.ts:122`, `js/polynomial-redos`** (high). Slow on repeated `*Detector:*`.
+    Parses `docs/TRAPS.md`, repo content.
+58. **`.github/workflows/test.yml:7`, `actions/missing-workflow-permissions`** (medium). No
+    explicit `permissions` block, so the job takes the default token scope. Add
+    `permissions: { contents: read }`.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.
