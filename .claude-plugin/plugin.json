@@ -13,7 +13,8 @@
     "critic"
   ],
   "skills": [
-    "./skills/adhd"
+    "./skills/adhd",
+    "./skills/adhd-worker"
   ],
   "agents": [
     "./agents"

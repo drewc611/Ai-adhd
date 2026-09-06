@@ -153,3 +153,9 @@ runs/<run_id>/
 N branches means N times the context. At N of 5 to 7 a run is expensive and slow. That is
 the trade. `max_branches` defaults to 5. Anything above 9 requires an explicit flag, because
 marginal frames past that point produce restatements, not new directions.
+
+## Unattended
+
+The phases above are driven by hand from the skill or the CLI. `docs/OS.md` describes the
+kernel that drives them unattended: runs as processes, tasks as leased threads, hosts as
+workers. Same phase functions, same invariants, no model call anywhere in the kernel.

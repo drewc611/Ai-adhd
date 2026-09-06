@@ -9,6 +9,7 @@ import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
 import { listFrames, orthogonality } from "./frames.js";
+import { openKernel } from "./os.js";
 
 const server = new McpServer({ name: "adhd", version: "0.0.1" });
 const text = (s: string, isError = false) => ({ content: [{ type: "text" as const, text: s }], isError });
@@ -64,6 +65,67 @@ server.registerTool(
       const cfg = loadConfig(a.root);
       return a.orthogonality ? orthogonality(cfg, a.recorded_dir).text : listFrames(cfg);
     }),
+);
+
+// ---- the kernel: ADHD as an agent operating system (docs/OS.md) -------------------------------
+const kernel = (root?: string) => openKernel(loadConfig(), root);
+const json = (v: unknown) => JSON.stringify(v, null, 2);
+
+server.registerTool(
+  "adhd_submit",
+  {
+    description: "Submit a problem to the ADHD kernel. Compiles briefs and returns the D5 preview (verbatim problem, hash, frames, token estimate) and a run_id in state awaiting_confirm. Nothing is spent until adhd_confirm. Pass confirmed=true to skip the gate for scripted use.",
+    inputSchema: {
+      problem: z.string().min(1).describe("the problem statement, verbatim; it is hashed as given"),
+      decision: z.record(z.string(), z.unknown()).describe("enum-only routing decision, e.g. {problem_class: 'design_decision'}"),
+      by: z.string().optional(),
+      seed: z.number().int().optional(),
+      confirmed: z.boolean().optional(),
+      root: z.string().optional(),
+    },
+  },
+  async (a) => wrap(() => { const r = kernel(a.root).submit(a.problem, a.decision, { by: a.by, seed: a.seed, confirmed: a.confirmed }); return `${r.preview}\n\n${json(r.kind === "plan" ? { run_id: r.run_id, state: r.state, estimate_tokens: r.estimate_tokens } : { declined: true, reason: r.reason })}`; }),
+);
+server.registerTool(
+  "adhd_confirm",
+  { description: "Confirm a submitted run. The user has seen the preview and agreed to the spend. Branch tasks become claimable.", inputSchema: { run_id: z.string(), root: z.string().optional() } },
+  async (a) => wrap(() => json(kernel(a.root).confirm(a.run_id))),
+);
+server.registerTool(
+  "adhd_claim",
+  {
+    description: "Claim the oldest pending task under a lease. Returns the brief inline, the agent type to spawn (adhd-branch, adhd-branch-search, adhd-critic, adhd-deepen), and `continues` when the task must go to an existing subagent (pass B to the pass A critic). Returns null when nothing is claimable. Spawn the agent with the brief as its ENTIRE prompt; add nothing.",
+    inputSchema: { worker: z.string().min(1), run_id: z.string().optional(), root: z.string().optional() },
+  },
+  async (a) => wrap(() => json(kernel(a.root).claim(a.worker, { runId: a.run_id }))),
+);
+server.registerTool(
+  "adhd_return",
+  {
+    description: "Return a subagent's final message for a claimed task, unedited. The kernel validates it (hash echo, contract), writes the artifact, and advances the run when the phase is complete.",
+    inputSchema: { task_id: z.string(), output: z.string(), worker: z.string().optional(), root: z.string().optional() },
+  },
+  async (a) => wrap(() => json(kernel(a.root).return_(a.task_id, a.output, a.worker))),
+);
+server.registerTool(
+  "adhd_status",
+  { description: "State, task counts, last phase text, and abort reason for a run.", inputSchema: { run_id: z.string(), root: z.string().optional() } },
+  async (a) => wrap(() => json(kernel(a.root).status(a.run_id))),
+);
+server.registerTool(
+  "adhd_result",
+  { description: "The rendered synthesis for a run, when there is one. Includes the pruned block always.", inputSchema: { run_id: z.string(), root: z.string().optional() } },
+  async (a) => wrap(() => { const r = kernel(a.root).result(a.run_id); return r.synthesis ?? `no synthesis yet (state ${r.state}${r.reason ? `: ${r.reason}` : ""})`; }),
+);
+server.registerTool(
+  "adhd_cancel",
+  { description: "Cancel a run (D5). Pending and leased tasks are dropped; branches that already returned are rendered unscored with the label UNSCORED, divergence only.", inputSchema: { run_id: z.string(), reason: z.string().optional(), root: z.string().optional() } },
+  async (a) => wrap(() => json(kernel(a.root).cancel(a.run_id, a.reason))),
+);
+server.registerTool(
+  "adhd_list",
+  { description: "Every run under the kernel root with its state and task counts.", inputSchema: { root: z.string().optional() } },
+  async (a) => wrap(() => json(kernel(a.root).list())),
 );
 
 const transport = new StdioServerTransport();

@@ -122,6 +122,25 @@ Two real runs are recorded, one per fixture, five isolated subagents each, seed 
 
 Each run's `README.md` says how it was produced and what it did not surface.
 
+## As an agent operating system
+
+The four phases can run unattended. `src/os.ts` is a kernel over run directories: it owns
+state, leases, phase advancement, the D5 gate, and cancellation, and it never calls a model.
+Hosts supply inference by claiming tasks and returning artifacts, over MCP or the CLI:
+
+```
+adhd os submit --problem p.txt --decision '{"problem_class":"design_decision"}'   # preview, awaiting_confirm
+adhd os confirm <run_id>                                                           # branch tasks claimable
+adhd os claim --worker w1        # -> {agent, brief, continues}; spawn that agent with the brief
+adhd os return <task_id> --file out.yaml --worker w1   # kernel validates and advances the run
+adhd os status <run_id> | adhd os result <run_id> | adhd os cancel <run_id>
+```
+
+The same verbs are MCP tools (`adhd_submit`, `adhd_confirm`, `adhd_claim`, `adhd_return`,
+`adhd_status`, `adhd_result`, `adhd_cancel`, `adhd_list`), so any MCP host can submit work and
+any Claude Code session running the `adhd-worker` skill can execute it. `docs/OS.md` has the
+process model and the syscall table.
+
 ## Contributing
 
 Read `CONTRIBUTING.md`. Frames are the expensive part and have a proposal process (D6 in

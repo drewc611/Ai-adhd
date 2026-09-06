@@ -172,3 +172,29 @@ ask that question (END_USER, ACTOR_CENSUS, LEDGER) are all on the actors and cos
 none is in the fuzzy debugging primary set. Whether to swap one in is a routing decision for
 the owner; it should be made on a second run, not on this one. The recorded run is marked
 `expected: fail` so the harness verifies the miss stays recorded rather than hiding it.
+
+---
+
+## D7. The kernel: ADHD as an agent operating system
+
+**Question.** Can the four-phase loop run unattended without anything in the repo calling a
+model?
+
+**Decision.** Yes, as a scheduler that hosts feed. Resolved 2026-09-06 by drewc611 (the
+owner asked for "an OS, agentic" with MCP tool calls as the work source).
+
+`src/os.ts` is a kernel over run directories: submit, confirm, claim, return, status, result,
+cancel, list, reap. Runs are processes with states; tasks are leased threads a worker claims
+and returns. The kernel calls the same phase functions the CLI does, so every invariant in
+CLAUDE.md is enforced by the same code. It never composes a prompt and never spawns anything.
+Workers (a Claude Code session running `skills/adhd-worker`, or any MCP client) supply the
+inference. `docs/OS.md` has the model and the syscall table.
+
+Consequences kept from earlier decisions: D2 (no inference client) holds because the kernel
+has no execution path; D4 holds because briefs are handed to workers inline and artifacts come
+back as text; D5 holds because `submit` stops at `awaiting_confirm`, `cancel` renders partial
+at any point, and a task cannot be leased more than three times.
+
+What the kernel does not decide: which model runs a branch, when a worker runs, or how a
+worker resumes the pass A critic for pass B (`continues` names the task; the host keeps the
+agent id).
