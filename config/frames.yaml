@@ -106,7 +106,7 @@ frames:
     forbidden:
       - Treating any resource as free. Retries, storage, human attention, and defaults all
         have a price.
-      - Costing only the asker's side of the LEDGER.
+      - Costing only the asker's side of the ledger.
       - Recommending without stating who pays for your recommendation.
 
   - id: DOOR_KEEPER
