@@ -110,7 +110,7 @@ The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `ad
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
 
-Two real runs are recorded, one per fixture, five isolated subagents each, seed 1.
+Three real runs are recorded, five isolated subagents each.
 
 - `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
   MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on
@@ -119,6 +119,12 @@ Two real runs are recorded, one per fixture, five isolated subagents each, seed 
   branch in the fuzzy debugging frame set asked who the p99 tail lands on. The critic pruned
   SABOTEUR (T1) and NIGHT_OPERATOR (T2); PARTICULARIST with MECHANIC and FRAME_BREAKER with
   NIGHT_OPERATOR formed two clusters; both survivors defended and each withdrew a claim.
+
+- `evals/recorded/002-kernel-enduser/` passes fixture 002. Same prompt, END_USER swapped in
+  for NIGHT_OPERATOR through an explicit frame list, and the first run driven end to end by
+  the kernel: nine tasks claimed and returned by one worker, four automatic phase advances,
+  real token accounting. END_USER asked who is hurt and was pruned for it, so the question
+  reached the output through the pruned block. MECHANIC folded under objection.
 
 Each run's `README.md` says how it was produced and what it did not surface.
 
