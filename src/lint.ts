@@ -72,3 +72,39 @@ export function lintRunT6(artifacts: BranchArtifact[]): LintHint | null {
     return { frame: "*", trap: "T6", evidence: "missing_actor is null in every branch" };
   return null;
 }
+
+
+/**
+ * Override language in the problem statement. The problem reaches every branch verbatim, so a
+ * single sentence telling branches to converge is the cheapest possible attack on this
+ * architecture: it manufactures the consensus trap the whole system exists to catch.
+ *
+ * This warns, it never blocks. The problem is passed through byte for byte by design, a person
+ * may legitimately be asking about prompt injection, and the orchestrator does not get to
+ * decide what a problem is allowed to say. The D5 confirmation gate is where a human sees it.
+ */
+const INJECTION_PATTERNS: { re: RegExp; why: string }[] = [
+  { re: /\bignore\s+(the\s+|all\s+|any\s+|your\s+)?(previous|prior|above|preceding|earlier|foregoing)\b/i, why: "tells the reader to ignore what came before" },
+  { re: /\bignore\s+(the\s+|your\s+)?(frame|instructions?|brief|stance|contract|rules?)\b/i, why: "tells the reader to ignore the frame or the brief" },
+  { re: /\b(disregard|forget|override|discard)\s+(the\s+|all\s+|any\s+|your\s+)?(previous|prior|above|frame|instructions?|brief|stance|contract|rules?)\b/i, why: "tells the reader to discard its instructions" },
+  { re: /\b(every|all|each)\s+branch(es)?\s+(must|should|will|shall)\b/i, why: "addresses the branches as a group, which no branch is supposed to know exists" },
+  { re: /\bdo\s+not\s+(diverge|disagree|differ)\b/i, why: "asks for convergence, which is the consensus trap by construction" },
+  { re: /\byou\s+are\s+(now|actually|really)\s+\w+/i, why: "attempts to reassign the reader's role" },
+  { re: /\bnew\s+instructions?\b/i, why: "announces replacement instructions" },
+  { re: /\bsystem\s*(prompt|message)\b/i, why: "refers to a system prompt" },
+  { re: /\b(answer|respond|reply)\s+only\s+(with|that)\b/i, why: "constrains the answer regardless of frame" },
+];
+
+export interface ProblemWarning {
+  match: string;
+  why: string;
+}
+
+export function lintProblemInjection(problem: string): ProblemWarning[] {
+  const out: ProblemWarning[] = [];
+  for (const { re, why } of INJECTION_PATTERNS) {
+    const m = problem.match(re);
+    if (m) out.push({ match: m[0].trim(), why });
+  }
+  return out;
+}

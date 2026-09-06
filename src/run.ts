@@ -9,6 +9,7 @@ import { compile, letterFor, previewText } from "./compile.js";
 import {
   checkBlind,
   checkBriefIsolation,
+  redactFrameLabels,
   parseDecision,
   validateBranchArtifact,
   validateDeepen,
@@ -176,10 +177,10 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
     const rng = mulberry32(deriveSeed(plan.seed, 2));
     const shuffled = shuffle(valid, rng);
     const blindMap: Record<string, string> = {};
-    const allIds = cfg.frames.frames.map((f) => f.id);
-    // A branch may name its own frame in prose ("from inside LEDGER"). Redact every frame id
-    // token from the text the pass A critic sees. checkBlind below is the backstop.
-    const redact = (text: string) => allIds.reduce((t, id) => t.replace(new RegExp(`\\b${id}\\b`, "g"), "[frame]"), text);
+    // A branch may name its own frame in prose ("from inside the Door keeper stance"). Redact
+    // every identifying label, id and display name alike, from the text pass A sees. Labels the
+    // problem itself uses are left alone: they cannot say which branch wrote the artifact.
+    const redact = (text: string) => redactFrameLabels(text, cfg.frames.frames, { problem });
     const blindArtifacts = shuffled.map((a, i) => {
       const L = letterFor(i);
       blindMap[L] = a.frame;
@@ -193,7 +194,7 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
       rubric: { dimensions: renderRubric(cfg) },
       artifacts_blind: blindArtifacts.join("\n\n"),
     });
-    const leaks = checkBlind(brief, cfg.frames.frames.map((f) => f.id));
+    const leaks = checkBlind(brief, cfg.frames.frames, { problem });
     if (leaks.length) throw new RunAbort(`pass A brief is not blind: ${leaks.join("; ")}`, "BLIND_LEAK");
     const briefPath = join(criticDir, "pass-a.brief.md");
     wr(briefPath, brief);
@@ -287,9 +288,11 @@ export function phaseDeepen(cfg: Config, runDir: string): PhaseResult {
     // A survivor never sees the other survivors. The critic wrote the objection with every
     // label in view and may have named them; strip every frame id but the survivor's own.
     const objection = c.strongest_objection ?? "(the critic recorded no objection; defend against the strongest one you can construct yourself)";
-    const redacted = allIds
-      .filter((id) => id !== a.frame)
-      .reduce((t, id) => t.replace(new RegExp(`\\b${id}\\b`, "g"), "another line of reasoning"), objection);
+    const redacted = redactFrameLabels(objection, cfg.frames.frames, {
+      keep: a.frame,
+      problem,
+      replacement: "another line of reasoning",
+    });
     const brief = render(cfg.prompts.deepen, {
       problem,
       problem_hash: plan.problem_hash,
@@ -297,7 +300,7 @@ export function phaseDeepen(cfg: Config, runDir: string): PhaseResult {
       survivor_artifact: yamlBlock(a),
       strongest_objection: redacted,
     });
-    const leaks = checkBriefIsolation(brief, a.frame, allIds);
+    const leaks = checkBriefIsolation(brief, a.frame, cfg.frames.frames, { problem });
     if (leaks.length) throw new RunAbort(`deepen brief for ${a.frame} is not isolated: ${leaks.join("; ")}`, "DEEPEN_LEAK");
     const briefPath = join(runDir, "deepen", `${a.frame}.brief.md`);
     const artifactPath = join(runDir, "deepen", `${a.frame}.yaml`);

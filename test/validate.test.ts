@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { artifact, cfg, passA, passB, yaml } from "./helpers.js";
-import { validateBranchArtifact, validatePassA, validatePassB, checkBlind } from "../src/validate.js";
+import { validateBranchArtifact, validatePassA, validatePassB, checkBlind, redactFrameLabels } from "../src/validate.js";
 import { HashMismatch, ContractError } from "../src/errors.js";
 
 const H = "sha256:" + "a".repeat(64);
@@ -54,8 +54,35 @@ test("pass B: every (branch, trap) record required; clusters partition the frame
   assert.throws(() => validatePassB(yaml(orphan), H, frames), /SABOTEUR is in no cluster/);
 });
 
-test("checkBlind catches frame ids and a frame field", () => {
-  const ids = cfg.frames.frames.map((f) => f.id);
-  assert.deepEqual(checkBlind("### Artifact A\nposition: do x", ids), []);
-  assert.ok(checkBlind("### Artifact A\nframe: LEDGER", ids).length >= 2);
+test("checkBlind catches frame ids, frame display names, and a frame field", () => {
+  const frames = cfg.frames.frames;
+  assert.deepEqual(checkBlind("### Artifact A\nposition: do x", frames), []);
+  assert.ok(checkBlind("### Artifact A\nframe: LEDGER", frames).length >= 2);
+  // The leak that only checking ids left open: a branch naming its frame the way a brief prints it.
+  const byName = checkBlind("### Artifact A\nreasoning: From inside the Door keeper stance, sort the moves.", frames);
+  assert.ok(byName.some((p) => /Door keeper/.test(p)), "a display name identifies the frame as surely as its id");
+  assert.ok(checkBlind("### Artifact A\nreasoning: Reading it as the Ledger, someone pays.", frames).some((p) => /Ledger/.test(p)));
+});
+
+test("a label the problem itself uses is not a leak, because every branch may echo the problem", () => {
+  const frames = cfg.frames.frames;
+  const text = "### Artifact A\nreasoning: The mechanic cannot see the dashboard from the bay.";
+  assert.ok(checkBlind(text, frames).some((p) => /Mechanic/i.test(p)), "without the problem it reads as a label");
+  assert.deepEqual(
+    checkBlind(text, frames, { problem: "How should the mechanic see the dashboard?" }),
+    [],
+    "with the problem in hand the same word discriminates nothing",
+  );
+});
+
+test("redaction strips ids and names, keeps one frame's own label, and leaves problem words alone", () => {
+  const frames = cfg.frames.frames;
+  const text = "LEDGER says the Door keeper is wrong, and the Horizon view agrees.";
+  const all = redactFrameLabels(text, frames);
+  assert.ok(!/LEDGER|Door keeper|Horizon/i.test(all), `still leaking: ${all}`);
+  const kept = redactFrameLabels(text, frames, { keep: "HORIZON" });
+  assert.match(kept, /Horizon view/, "the survivor keeps its own label");
+  assert.ok(!/Door keeper/i.test(kept), "but not a sibling's");
+  const echoed = redactFrameLabels("The ledger is already reconciled.", frames, { problem: "Is the ledger reconciled?" });
+  assert.match(echoed, /ledger is already reconciled/, "a word the problem uses survives redaction");
 });

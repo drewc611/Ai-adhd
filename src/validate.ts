@@ -77,11 +77,57 @@ const SIBLING_RE = /\b(sibling|other branch|another branch|the other (frame|bran
  * Fails if a brief carries anything a branch must not know: another frame's id, a branch
  * count, or the phrase "so far". Used in tests and at compile time.
  */
-export function checkBriefIsolation(brief: string, ownFrameId: string, allFrameIds: string[]): string[] {
+/** A frame's identifying labels: the id the schema uses and the name a brief prints. */
+export interface FrameLabel {
+  id: string;
+  name: string;
+}
+
+interface LabelToken {
+  frame: string;
+  token: string;
+  kind: "id" | "name";
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const wordRe = (t: string) => new RegExp(`\\b${escapeRe(t)}\\b`, "i");
+
+function tokensFor(frames: FrameLabel[]): LabelToken[] {
+  return frames.flatMap((f) => [
+    { frame: f.id, token: f.id, kind: "id" as const },
+    { frame: f.id, token: f.name, kind: "name" as const },
+  ]);
+}
+
+/**
+ * A label the problem statement itself uses cannot identify which frame produced a text,
+ * because every branch is free to echo the problem. Exempting those is what stops a problem
+ * about a mechanic's dashboard from aborting a run whose blindness is intact.
+ */
+function discriminating(tokens: LabelToken[], problem: string): LabelToken[] {
+  return tokens.filter((t) => !(problem && wordRe(t.token).test(problem)));
+}
+
+/** Strip every identifying label but `keep`'s. Over-redaction is the safe direction here. */
+export function redactFrameLabels(
+  text: string,
+  frames: FrameLabel[],
+  opts: { keep?: string; problem?: string; replacement?: string } = {},
+): string {
+  const replacement = opts.replacement ?? "[frame]";
+  let out = text;
+  for (const t of discriminating(tokensFor(frames), opts.problem ?? "")) {
+    if (t.frame === opts.keep) continue;
+    out = out.replace(new RegExp(`\\b${escapeRe(t.token)}\\b`, "gi"), replacement);
+  }
+  return out;
+}
+
+export function checkBriefIsolation(brief: string, ownFrameId: string, frames: FrameLabel[], opts: { problem?: string } = {}): string[] {
   const problems: string[] = [];
-  for (const id of allFrameIds) {
-    if (id === ownFrameId) continue;
-    if (new RegExp(`\\b${id}\\b`).test(brief)) problems.push(`brief for ${ownFrameId} mentions frame ${id}`);
+  for (const t of discriminating(tokensFor(frames), opts.problem ?? "")) {
+    if (t.frame === ownFrameId) continue;
+    if (wordRe(t.token).test(brief)) problems.push(`brief for ${ownFrameId} mentions frame ${t.kind} ${t.token}`);
   }
   if (SO_FAR_RE.test(brief)) problems.push(`brief for ${ownFrameId} contains "so far"`);
   const c = brief.match(COUNT_RE);
@@ -91,10 +137,15 @@ export function checkBriefIsolation(brief: string, ownFrameId: string, allFrameI
   return problems;
 }
 
-/** Pass A is blind: no frame id may appear anywhere in the brief. */
-export function checkBlind(passABrief: string, allFrameIds: string[]): string[] {
+/**
+ * Pass A is blind: no label that identifies a frame may appear in the brief. Ids and display
+ * names both count. A branch writes "from inside the Door keeper stance" far more naturally
+ * than it writes DOOR_KEEPER, and checking only ids left that leak open.
+ */
+export function checkBlind(passABrief: string, frames: FrameLabel[], opts: { problem?: string } = {}): string[] {
   const problems: string[] = [];
-  for (const id of allFrameIds) if (new RegExp(`\\b${id}\\b`).test(passABrief)) problems.push(`pass A brief leaks frame id ${id}`);
+  for (const t of discriminating(tokensFor(frames), opts.problem ?? ""))
+    if (wordRe(t.token).test(passABrief)) problems.push(`pass A brief leaks frame ${t.kind} ${t.token}`);
   if (/^\s*frame:\s*\S/m.test(passABrief)) problems.push("pass A brief contains a `frame:` field");
   return problems;
 }

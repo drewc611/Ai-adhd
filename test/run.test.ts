@@ -42,7 +42,7 @@ test("full run: critique is blind in pass A, deepen briefs isolate survivors, sy
   let r = phaseCritique(cfg, runDir);
   assert.equal(r.exitCode, 0);
   const passABrief = readFileSync(join(runDir, "critic/pass-a.brief.md"), "utf8");
-  assert.deepEqual(checkBlind(passABrief, cfg.frames.frames.map((f) => f.id)), [], "pass A brief leaked a frame id");
+  assert.deepEqual(checkBlind(passABrief, cfg.frames.frames, { problem: PROBLEM }), [], "pass A brief leaked a frame label");
   const blindMap = JSON.parse(readFileSync(join(runDir, "critic/blind-map.json"), "utf8")) as Record<string, string>;
   const letters = Object.keys(blindMap);
   assert.equal(letters.length, 4, "the contract-violating branch is not sent to the critic");

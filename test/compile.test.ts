@@ -9,8 +9,11 @@ import { ContractError } from "../src/errors.js";
 const WEIRD = "  What timeouts should I set on this HTTP client?\r\n  {{not a template}} — ünïcode ✓   \n\n";
 
 function extractProblem(brief: string): string {
-  // The brief wraps the problem in the first fenced block after "The problem, verbatim:".
-  const m = brief.match(/The problem, verbatim:\n\n```\n([\s\S]*?)\n```/);
+  // The brief wraps the problem in the first fenced block of the Problem section. Anchored on
+  // the fence rather than the prose around it, so hardening that prose cannot silently turn
+  // this test off: an unmatched fence fails loudly instead.
+  const section = brief.slice(brief.indexOf("## Problem"));
+  const m = section.match(/```\n([\s\S]*?)\n```/);
   assert.ok(m, "brief has no problem block");
   return m![1]!;
 }
@@ -39,11 +42,11 @@ test("orchestrator cannot reason: unknown keys and free text reject", () => {
 test("briefs are isolated: no other frame id, no count, no 'so far'", () => {
   const r = compile(cfg, "Name this function.", { problem_class: "naming" }, { seed: 3 });
   if (r.kind !== "plan") throw new Error("expected plan");
-  const all = cfg.frames.frames.map((f) => f.id);
-  for (const b of r.briefs) assert.deepEqual(checkBriefIsolation(b.text, b.frame, all), []);
+  const all = cfg.frames.frames;
+  for (const b of r.briefs) assert.deepEqual(checkBriefIsolation(b.text, b.frame, all, { problem: "Name this function." }), []);
   // And the checker itself catches the things it claims to.
   const poisoned = r.briefs[0]!.text + "\nHere is what has been considered so far by the 4 other branches: LEDGER said...";
-  const problems = checkBriefIsolation(poisoned, r.briefs[0]!.frame, all);
+  const problems = checkBriefIsolation(poisoned, r.briefs[0]!.frame, all, { problem: "Name this function." });
   assert.ok(problems.some((p) => /so far/.test(p)));
   assert.ok(problems.some((p) => /branch count/.test(p)));
   assert.ok(problems.some((p) => /LEDGER/.test(p)) || r.briefs[0]!.frame === "LEDGER");

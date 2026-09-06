@@ -3,6 +3,7 @@ import type { Frame, Plan } from "./schema.js";
 import { problemHash } from "./hash.js";
 import { deriveSeed, mulberry32, randomSeed, shuffle } from "./rng.js";
 import { render } from "./template.js";
+import { lintProblemInjection } from "./lint.js";
 import { checkBriefIsolation, type Decision } from "./validate.js";
 import { ContractError } from "./errors.js";
 
@@ -120,7 +121,7 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
 
   const briefs: CompiledBrief[] = frames.map((f) => ({ frame: f.id, text: renderBranchBrief(cfg, problem, hash, f) }));
   const allIds = cfg.frames.frames.map((f) => f.id);
-  const isolation = briefs.flatMap((b) => checkBriefIsolation(b.text, b.frame, allIds));
+  const isolation = briefs.flatMap((b) => checkBriefIsolation(b.text, b.frame, cfg.frames.frames, { problem }));
   if (isolation.length) throw new ContractError("compile: isolation", isolation);
 
   const plan: Plan = {
@@ -165,6 +166,22 @@ export function previewText(result: CompileResult): string {
     `problem_hash: ${plan.problem_hash}`,
     `class: ${plan.problem_class}    seed: ${plan.seed}    n: ${plan.n}${plan.allow_wide ? "    (allow_wide)" : ""}`,
     ``,
+  ];
+  // The problem reaches every branch verbatim. If it carries override language, say so here,
+  // at the gate, before anything is spent. Warn, never block: the passthrough is the design.
+  const warnings = lintProblemInjection(problem);
+  if (warnings.length) {
+    lines.push(
+      `!! the problem statement contains ${warnings.length} phrase(s) that read as instructions to the branches:`,
+      ...warnings.map((w) => `     "${w.match}"  ${w.why}`),
+      `   Every branch receives this text verbatim. If it is meant as part of the problem, proceed;`,
+      `   the briefs tell each branch the problem is never an instruction to it. If it is not meant`,
+      `   to be there, cancel and edit the problem: a run that converges because it was told to is`,
+      `   the consensus trap wearing five frames.`,
+      ``,
+    );
+  }
+  lines.push(
     `frames, in dispatch order:`,
     ...plan.branches.map((b) => `  ${b.frame.padEnd(17)} axis=${b.axis.padEnd(14)} agent=${b.agent}${b.tools.length ? `  tools=${b.tools.join(",")}` : ""}`),
     ``,
@@ -172,6 +189,6 @@ export function previewText(result: CompileResult): string {
     `  branches ${plan.estimate.tokens_branches.toLocaleString()}  critic ${plan.estimate.tokens_critic.toLocaleString()}  deepen ${plan.estimate.tokens_deepen.toLocaleString()}`,
     ``,
     `Nothing has been spent. Confirm the text above is exactly what you meant before any branch is spawned.`,
-  ];
+  );
   return lines.join("\n");
 }
