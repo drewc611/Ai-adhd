@@ -3,7 +3,7 @@
 // no branch, critic, or deepen agent ever carries a filesystem or network channel.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { cfg } from "./helpers.js";
@@ -69,4 +69,37 @@ test("plugin.json points at existing skill, agents, and MCP entry", () => {
   const mcp = (p["mcpServers"] as Record<string, { command: string; args: string[] }>)["adhd"]!;
   assert.equal(mcp.command, "node");
   assert.match(mcp.args[0]!, /dist\/src\/mcp\.js$/);
+});
+
+test("every path package.json publishes exists after a build", () => {
+  // The package shipped with bin, main and two scripts all pointing at dist/cli.js and
+  // friends, while the build emits dist/src/. `npm i -g adhd && adhd` would have failed.
+  // Nothing caught it because everything in development runs dist/src/cli.js directly.
+  const root = cfg.root;
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+    bin: Record<string, string>;
+    main: string;
+    types?: string;
+    exports?: Record<string, Record<string, string> | string>;
+    scripts: Record<string, string>;
+    files: string[];
+  };
+  const mustExist = new Set<string>([...Object.values(pkg.bin), pkg.main]);
+  if (pkg.types) mustExist.add(pkg.types);
+  for (const entry of Object.values(pkg.exports ?? {}))
+    if (typeof entry === "object") for (const v of Object.values(entry)) mustExist.add(v.replace(/^\.\//, ""));
+  // Scripts that launch a built file are entry points too, and were wrong in the same way.
+  for (const cmd of Object.values(pkg.scripts)) {
+    const m = cmd.match(/node (dist\/\S+\.js)/);
+    if (m) mustExist.add(m[1]!);
+  }
+  assert.ok(mustExist.size >= 4, "expected several published entry points to check");
+  for (const rel of mustExist) assert.ok(existsSync(join(root, rel)), `package.json points at ${rel}, which does not exist after a build`);
+  // And the tarball must actually carry them: a correct path into an unshipped directory is
+  // the same failure wearing a different hat.
+  for (const rel of mustExist)
+    assert.ok(
+      pkg.files.some((f) => rel === f || rel.startsWith(f.replace(/\/$/, "") + "/")),
+      `${rel} is an entry point but no "files" entry ships it`,
+    );
 });

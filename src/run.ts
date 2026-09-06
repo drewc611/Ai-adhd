@@ -119,8 +119,17 @@ function renderDetectors(trapsDoc: string): string {
   const re = /^## (T[1-8])\. ([^\n]+)\n([\s\S]*?)(?=^## |^---|\Z)/gm;
   for (const m of trapsDoc.matchAll(re)) {
     const body = m[3]!;
-    const det = body.match(/\*Detector:\*([\s\S]*?)(?=\n\n|$)/);
-    out.push(`   ${m[1]} ${m[2]!.trim()}. Detector:${det ? det[1]!.replace(/\s+/g, " ") : " (see docs/TRAPS.md)"}`);
+    // Index lookups rather than a lazy match with a lookahead: same result, and it cannot
+    // rescan from every position inside a run of "*Detector:*".
+    const MARK = "*Detector:*";
+    const at = body.indexOf(MARK);
+    let det: string | null = null;
+    if (at !== -1) {
+      const from = at + MARK.length;
+      const stop = body.indexOf("\n\n", from);
+      det = body.slice(from, stop === -1 ? undefined : stop);
+    }
+    out.push(`   ${m[1]} ${m[2]!.trim()}. Detector:${det !== null ? det.replace(/\s+/g, " ") : " (see docs/TRAPS.md)"}`);
   }
   return out.join("\n");
 }
@@ -280,7 +289,6 @@ export function phaseDeepen(cfg: Config, runDir: string): PhaseResult {
     };
   }
   const byFrame = new Map(validArtifacts(branches).map((a) => [a.frame, a]));
-  const allIds = cfg.frames.frames.map((f) => f.id);
   const next: PhaseResult["next"] = [];
   for (const c of score.clusters) {
     if (!c.representative) continue;

@@ -16,7 +16,20 @@ type Token =
   | { kind: "each"; path: string; body: Token[] }
   | { kind: "if"; path: string; body: Token[] };
 
-const TAG = /\{\{(#each|#if|\/each|\/if)?\s*([^{}]*?)\s*\}\}/g;
+// One quantifier, and it cannot match a brace. The previous spelling put an optional
+// directive alternation and two `\s*` around a lazy `[^{}]*?`, all of which can match the
+// same characters, so the engine had to try every split: quadratic on template text.
+// The directive is a prefix of the captured body, so code reads it instead of the pattern.
+const TAG = /\{\{([^{}]*)\}\}/g;
+const DIRECTIVES = ["#each", "#if", "/each", "/if"] as const;
+
+/** Split "{{#each xs}}" into its directive and its expression. */
+function splitTag(inner: string): { directive: string; expr: string } {
+  const t = inner.trim();
+  for (const d of DIRECTIVES)
+    if (t === d || t.startsWith(`${d} `)) return { directive: d, expr: t.slice(d.length).trim() };
+  return { directive: "", expr: t };
+}
 
 export function tokenize(tpl: string): Token[] {
   const root: Token[] = [];
@@ -27,8 +40,7 @@ export function tokenize(tpl: string): Token[] {
     const idx = m.index ?? 0;
     if (idx > last) cur.push({ kind: "text", text: tpl.slice(last, idx) });
     last = idx + m[0].length;
-    const op = m[1];
-    const arg = m[2] ?? "";
+    const { directive: op, expr: arg } = splitTag(m[1] ?? "");
     if (op === "#each" || op === "#if") {
       const frame = { kind: op.slice(1) as "each" | "if", path: arg, body: [] as Token[], parent: cur };
       stack.push(frame);

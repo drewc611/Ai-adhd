@@ -123,23 +123,32 @@ yet enough to know whether they work.
 54. **Plugin agents exercised as plugin agents.** Every recorded run so far used
     general-purpose subagents; the shipped agent definitions are untested in their real role.
 
-## 9. Known CodeQL findings not fixed here
+## 9. Hygiene, done
 
-Surfaced by the alert-printing step added to `.github/workflows/codeql.yml`. Three predate
-this work and live on `main`, so they are separate changes rather than PR widening. All are
-the same shape as the one that was fixed: two quantifiers that can match the same character,
-so the engine has to try every split.
+Findings from a full sweep, all fixed. Recorded because the first one would have shipped.
 
-55. **`src/template.ts:26`, `js/polynomial-redos`** (high). Slow on `{{{{` followed by many
-    spaces. The template engine runs over prompt files, which are repo content, so the
-    exposure is small; the fix is still cheap and the query is right.
-56. **`src/synth.ts:132`, `js/polynomial-redos`** (high). `tidy()` on many repeated tabs.
-    Runs over rendered synthesis text, which contains subagent output.
-57. **`src/run.ts:122`, `js/polynomial-redos`** (high). Slow on repeated `*Detector:*`.
-    Parses `docs/TRAPS.md`, repo content.
-58. **`.github/workflows/test.yml:7`, `actions/missing-workflow-permissions`** (medium). No
-    explicit `permissions` block, so the job takes the default token scope. Add
-    `permissions: { contents: read }`.
+55. **Every published entry point was wrong.** `bin`, `main` and the `adhd` and `mcp` scripts
+    all pointed at `dist/cli.js` and friends, while the build emits `dist/src/`. `npm i -g adhd
+    && adhd` would have failed. It survived because development runs `node dist/src/cli.js`
+    directly. Fixed, plus `types` and an `exports` map, and a test that asserts every path
+    package.json publishes exists after a build *and* is covered by a `files` entry.
+56. **`src/rng.ts` had no test.** D3 says every run is seeded and replayable, and the whole
+    guarantee rests on that module. Now seven tests: pinned stream values, range, permutation,
+    input not mutated, every element reaches every position, phase seeds distinct and pure, and
+    a compile-level replay showing a seed reproduces the dispatch order.
+57. **Two quadratic regexes.** `template.ts` put an optional directive alternation and two
+    `\s*` around a lazy `[^{}]*?`, all able to match the same characters: 15x time for 4x
+    input. `synth.ts` `tidy()` rescanned from every position inside a whitespace run. Both are
+    now linear, measured. `run.ts`'s detector parser is index-based for the same reason.
+58. **`test.yml` had no `permissions` block**, so the token took the default scope. Now
+    `contents: read`.
+59. **`noUnusedLocals` and friends were off.** Turning them on found two dead variables left by
+    an earlier refactor of mine.
+
+Left alone deliberately: `actions/checkout` is v4 here and v7 in the CodeQL workflow. CI is
+green and there is no evidence of a problem, so bumping a working action on cosmetic
+inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 requires Node
+22.12 and this package supports Node 20.
 
 ## Not doing, and why
 

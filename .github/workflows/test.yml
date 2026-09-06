@@ -2,6 +2,11 @@ name: test
 on:
   push:
   pull_request:
+# The token needs nothing but the checkout. Stated explicitly so a future step cannot
+# quietly inherit write scope.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

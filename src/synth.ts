@@ -129,7 +129,16 @@ export function renderSynthesis(
 
 /** Collapse the blank lines that block templates leave behind. */
 export function tidy(md: string): string {
-  return md.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+  // Trailing spaces and tabs are stripped by walking back from each line end. `/[ \t]+\n/g`
+  // reads better but rescans from every position inside a run, which is quadratic on a long
+  // line of whitespace, and this runs over rendered synthesis text carrying subagent output.
+  const lines = md.split("\n").map((line) => {
+    let end = line.length;
+    while (end > 0 && (line[end - 1] === " " || line[end - 1] === "\t")) end--;
+    return line.slice(0, end);
+  });
+  // A single quantifier over one character: no ambiguity, linear.
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
 /** D5: what the user gets back when they cancel mid diverge. Code lints only. */

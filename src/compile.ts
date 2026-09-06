@@ -120,7 +120,6 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
   const tokens_deepen = tpb * Math.ceil(n / 2);
 
   const briefs: CompiledBrief[] = frames.map((f) => ({ frame: f.id, text: renderBranchBrief(cfg, problem, hash, f) }));
-  const allIds = cfg.frames.frames.map((f) => f.id);
   const isolation = briefs.flatMap((b) => checkBriefIsolation(b.text, b.frame, cfg.frames.frames, { problem }));
   if (isolation.length) throw new ContractError("compile: isolation", isolation);
 
