@@ -29,8 +29,20 @@ export function renderSynthesis(
     if (!frame) return null;
     const d = deepen[frame];
     return d
-      ? { verdict: d.verdict, summary: summarise(d), revised_position: d.revised_position, revised_falsifier: d.revised_falsifier ?? null }
+      ? {
+          verdict: d.verdict,
+          verdict_past: d.verdict === "defend" ? "defended" : "folded",
+          summary: summarise(d),
+          revised_position: d.revised_position,
+          revised_falsifier: d.revised_falsifier ?? null,
+        }
       : null;
+  };
+  // A cluster is held by its survivors. A pruned member corroborated the action but does not
+  // hold the recommendation, and the reader must be able to see that from the line.
+  const heldBy = (c: { members: string[]; survivors: string[] }) => {
+    const pruned = c.members.filter((m) => !c.survivors.includes(m));
+    return c.survivors.join(", ") + (pruned.length ? ` (pruned after corroborating: ${pruned.join(", ")})` : "");
   };
 
   // Candidate order: live clusters by size, then mean pass A. A folded representative drops
@@ -51,7 +63,7 @@ export function renderSynthesis(
 
   const corroborated = score.clusters
     .filter((c) => c.members.length >= cfg.rubric.hard_rules.cluster_min_size && c.survivors.length > 0)
-    .map((c) => ({ action: c.action, members: c.members.join(", "), deepen: deepenFor(c.representative) }));
+    .map((c) => ({ action: c.action, members: heldBy(c), deepen: deepenFor(c.representative) }));
   const singletons = score.clusters
     .filter((c) => c.singleton && c.survivors.length > 0)
     .map((c) => ({ frame: c.members[0]!, position: byFrame.get(c.members[0]!)?.position ?? "", deepen: deepenFor(c.members[0]!) }));
@@ -83,7 +95,7 @@ export function renderSynthesis(
           position: recDeepen?.revised_position ?? recFrame?.position ?? rec.action,
           action: rec.action,
           falsifier: recDeepen?.revised_falsifier ?? recFrame?.falsifier ?? "",
-          members: rec.members.join(", "),
+          members: heldBy(rec),
           deepen: recDeepen,
           revised: Boolean(recDeepen?.revised_position && recDeepen.revised_position !== recFrame?.position),
           original_position: recFrame?.position ?? "",

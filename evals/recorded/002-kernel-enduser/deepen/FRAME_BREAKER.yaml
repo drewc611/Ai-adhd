@@ -1,0 +1,39 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: FRAME_BREAKER
+verdict: defend
+response: |
+  The objection wins two points outright and I take them. First, the interval fingerprint is the
+  wrong first move: a p99 series is bucketed, so 40:00 versus 38-to-44 is below its resolution,
+  and a day building a histogram that returns "35 to 45" resolves nothing. Second, "or so" is
+  how people talk about dashboards and carries no information about jitter, so the inference
+  from "or so" to "duration timer or chained job" was reading tea leaves. I withdraw both.
+
+  What the objection does not overturn is the frame's actual claim, which is that "where should
+  I look" smuggles in "inside the API" and thereby forecloses the external scheduled actor,
+  which nobody on the API team is incentivised to go looking for. The per-instance split the
+  objection proposes is not a rebuttal of that claim; it is a better instrument for it. It is
+  cheap, it survives coarse timing, and its "all instances spike in the same bucket" branch
+  lands exactly on the shared-resource, scheduled-actor hypothesis this position exists to keep
+  alive. So the correct sequencing is: split first, then correlate. The correlation step never
+  needed timing precision anyway. Pausing a suspect job for two cycles is a yes/no test, and the
+  candidate list is built from a coarse number ("roughly forty minutes") grepped against
+  crontabs, snapshot windows, token TTLs, and the top clients' batch schedules. The objection
+  attacks the histogram, which was a poor way to build the list, not the pause, which is the
+  actual test.
+
+  Two pushbacks the objection should absorb. One: "all instances together" does not prove
+  external. Instances started by the same rolling deploy with identical traffic share can run
+  phase-locked heap sawteeth and spike in the same bucket, so the split needs a second read
+  after a rolling restart; if they desynchronise, the clock is in-process. Two: the objection's
+  own in-process candidate, capacity-over-fill-rate, is precisely the case my falsifier already
+  covered (period tracks request rate), so it was not unaccounted for; the position simply
+  placed it behind a foreclosure it should not have. Foreclosing GC tuning and the pause log was
+  wrong. Foreclosing "start with a profiler" still stands: a profiler shows where the request
+  waited, not who else was on the resource, and on the shared branch it will report "waiting on
+  DB" and stop.
+
+  Net: the position keeps its thesis and its missing actors, loses its first action and one
+  foreclosure, and gains a cheaper gate. That is a defence that cost something.
+revised_position: "Split p99 by instance first: if one instance spikes per event, read that runtime's pause log and heap sawtooth and stop; if every instance spikes in the same bucket and stays synchronised after a rolling restart, the cause is a shared external clock, so stop inspecting the API and match a coarse forty minute period against every scheduled actor on the shared hosts, database, and network (cron, snapshots, token and cert refresh, autoscaler, your largest client's batch job), then pause the match for two cycles to confirm."
+revised_falsifier: "If the per-instance split shows one instance per event, or all instances together but desynchronising after a rolling restart, or the period tracks request rate, the cause is in-process and the external-actor branch is wrong; likewise if the spikes reproduce in a staging copy with all scheduled jobs disabled and no external clients."
+confidence: medium

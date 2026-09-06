@@ -64,7 +64,7 @@ test("the skill has a name and a description that says when not to use it", () =
 
 test("plugin.json points at existing skill, agents, and MCP entry", () => {
   const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
-  assert.deepEqual(p["skills"], ["./skills/adhd"]);
+  assert.deepEqual(p["skills"], ["./skills/adhd", "./skills/adhd-worker"]);
   assert.deepEqual(p["agents"], ["./agents"]);
   const mcp = (p["mcpServers"] as Record<string, { command: string; args: string[] }>)["adhd"]!;
   assert.equal(mcp.command, "node");

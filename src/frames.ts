@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { unfence } from "./validate.js";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
@@ -30,7 +31,7 @@ export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals",
     for (const d of readdirSync(recordedDir)) {
       const p = join(recordedDir, d, "critic", "pass-b.yaml");
       if (!statSync(join(recordedDir, d)).isDirectory() || !existsSync(p)) continue;
-      const r = PassBSchema.safeParse(parseYaml(readFileSync(p, "utf8")));
+      const r = PassBSchema.safeParse(parseYaml(unfence(readFileSync(p, "utf8"))));
       if (!r.success) continue;
       runs++;
       const clusterOf = new Map<string, string>();

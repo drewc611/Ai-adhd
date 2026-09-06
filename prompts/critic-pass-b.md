@@ -45,9 +45,11 @@ overrule each with evidence. Disagreement is recorded, not resolved.
 3. **Singletons.** Any cluster of size one is flagged `singleton: true`. It is not pruned for
    being alone.
 
-4. **Strongest objection.** For each cluster that has no fired trap, write the single
-   strongest objection to it, drawn from another branch's reasoning or from your own reading
-   of the problem. One paragraph. This goes to the survivor in isolation, so do not name any
+4. **Strongest objection.** For each cluster with at least one member that has no fired
+   trap, write the single strongest objection to it, drawn from another branch's reasoning
+   or from your own reading of the problem. One paragraph. A pruned member does not excuse
+   the cluster: the objection goes to whichever member survives. Leave it null only when
+   every member has a fired trap. This goes to the survivor in isolation, so do not name any
    frame, branch, or letter in it: the survivor must not learn that other branches exist.
    State the objection as an argument, not as "X said".
 
@@ -63,7 +65,7 @@ clusters:
     action: <one sentence, what the asker would do>
     members: [<frame_id>, ...]
     singleton: <true|false>
-    strongest_objection: <paragraph, or null if a member has a fired trap>
+    strongest_objection: <paragraph, or null only if every member has a fired trap>
 traps:
   <frame_id>:
     T1: { fired: <bool>, evidence: <text> }

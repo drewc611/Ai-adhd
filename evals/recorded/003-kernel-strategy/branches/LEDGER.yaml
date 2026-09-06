@@ -1,0 +1,45 @@
+problem_hash: sha256:9c7481004ba9e79b453d7ebadec695bf3c037e97d7ba13e325f72a4d897e594b
+frame: LEDGER
+position: Do not rewrite; instead spend one quarter extracting the single module whose deploy or scaling pain you can name, and stop there unless that extraction paid for itself.
+reasoning: |
+  1. The obvious answer is "yes, rewrite over a year." Its bill: roughly a year of the whole
+  team's feature output (opportunity currency, paid by product and sales, who did not ask this
+  question); a second infrastructure surface to run, whose currency is on-call sleep and cloud
+  spend, paid by whoever holds the pager and by finance, starting the month the second service
+  ships and never ending; network hops where there were function calls, paid in latency by
+  users; and the cost of two systems in flight at once, paid in bugs and user trust during the
+  entire migration window, which for a year-long rewrite is the whole year. Retries, distributed
+  tracing, service discovery, per-service CI, and the data consistency work between stores are
+  not free either, and they arrive before any benefit does.
+
+  2. What the asker cannot see from where they stand: the team's output already has a price
+  to people outside engineering, and a rewrite spends it on something that produces no visible
+  product change. The on-call bill is invisible because it is paid at 3am by individuals, not
+  in a budget line. The user-trust bill is invisible because it shows up as churn months later
+  and is attributed to something else. The carbon and cloud bill of N services idling where one
+  process idled is invisible because it lands on the finance ledger, not the engineering one.
+  And the largest invisible cost: the asker is implicitly treating the current pain as costing
+  nothing to leave alone, which lets any rewrite look cheap by comparison. It must be priced.
+
+  3. The cheapest option that resolves the pain in the question: the question does not name the
+  pain, and that is itself the finding. Whatever the actual pain is (slow deploys, one hot
+  path that needs to scale independently, one team blocked on another's release), it almost
+  always lives in one or two modules. Extract that one module behind a boundary, run it as a
+  service, keep the rest of the monolith. This costs one quarter of part of a team, not a year
+  of all of it, and it resolves the named pain rather than the abstract architectural one.
+
+  4. What that costs instead: you now run two things instead of one, so a smaller but real
+  on-call and infra bill begins, paid by the same pager holders; the boundary you draw may be
+  wrong and cost a rework; and the team gives up the clean-slate feeling of a full rewrite,
+  which is a morale currency paid by the engineers who wanted the rewrite. That trade is
+  explicit here: a bounded, reversible bill paid mostly by engineering, in exchange for not
+  spending a year of product output and a permanent operational surface on a problem nobody
+  has yet measured. My recommendation is paid for by the engineers who wanted the rewrite (in
+  morale) and by whoever is on call for the one new service (in sleep).
+forecloses:
+  - A full rewrite scheduled as a one-year program with a target end state of "microservices."
+  - Leaving the monolith exactly as it is with no boundary work at all, which lets the unnamed pain keep compounding unmeasured.
+  - Extracting more than one module before the first extraction has shown a measured improvement in the pain it was meant to fix.
+falsifier: If the team cannot, in one meeting, name a single module whose deploy time, scaling need, or ownership conflict is the concrete pain, the position is wrong because there is no module to extract and the real problem is not architectural.
+missing_actor: Finance or whoever approves cloud spend, who can require a per-service run-cost estimate before any second service is provisioned, which forces the invisible operational bill onto the asker's side of the ledger.
+confidence: medium

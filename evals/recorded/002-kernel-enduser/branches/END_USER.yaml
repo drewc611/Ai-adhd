@@ -1,0 +1,20 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: END_USER
+position: Look at what the slowest 1% of users experience during a spike — whether their request eventually succeeds, how long they sit with nothing happening, and whether they retry — and make the system answer them within a few seconds either way (result, honest wait signal, or clean failure) before you touch a single cause.
+reasoning: |
+  1. What was I trying to do? Something ordinary. I pressed a button, submitted a form, loaded a page, or my app made a call on my behalf. I did not know a 40 minute cycle existed. From my seat there is no cycle; there is one moment where the thing I always do did not happen, and it looked like it was my fault or my connection's fault.
+
+  2. What can I see and do at that moment? I see a spinner, a blank area, or a screen that looks frozen. I can wait, I can press the button again, I can refresh, or I can close the tab. That is the entire menu. I cannot see a latency graph. I cannot tell the difference between "slow" and "broken." If a second press works instantly, I learn that pressing twice is the fix, and I will do it forever.
+
+  3. What makes me give up, and what happens then? A few seconds of nothing, with no sign the system heard me. When I give up I do one of two things. I leave, and if I was in the middle of paying, ordering, or saving, that work is lost and I may not come back. Or I retry, and now the system is processing my request twice, at exactly the moment it is already struggling. Both outcomes are worse for the system than the original spike was, and it will not see the second one clearly because the retries look like traffic, not like damage.
+
+  4. What would I ask for if I knew it was possible? That the slow moment be made honest and short. Tell me you got it. Tell me it is taking longer than usual. Fail fast and let me try again cleanly instead of leaving me hanging. Better still, if some of my requests are being held behind something else, put mine through first and hold the background work back, because I am the one who is watching.
+
+  So my position is not "which subsystem," because I cannot see subsystems. It is: find out what I experience at the top of the spike, and fix that experience first. If the spike is a few seconds of delay that always resolves, I mostly never noticed, and the graph is your problem, not mine. If it is a stall that produces double submissions and abandonments, then a spike every 40 minutes is a leak of users and duplicated work every 40 minutes, and no root cause fix matters until the bleeding stops. I can observe the effect of this: I press once, something happens within a few seconds, every time, and I never learn to press twice.
+forecloses:
+  - Starting with a root cause hunt (GC, cron, cache expiry, connection churn) before anyone has measured what the affected users actually do during the spike.
+  - Accepting the spike as tolerable because p99 is "only" the slowest 1% and the average is fine.
+  - Silent retry or queueing logic that keeps the user staring at a spinner longer to protect the servers.
+falsifier: Sample the requests that land inside a spike window and check what the callers did next; if nearly all of those requests complete successfully with no duplicate submissions, no refreshes, and no session drop-off in the following minute, the users never noticed and this position is wrong.
+missing_actor: The client team (web or mobile app, or the integration partner calling the API), who can add request idempotency keys, a visible "still working" state, and a sane timeout with a clear failure message, so that the spike stops producing duplicate work and abandoned sessions even before the server side changes.
+confidence: medium

@@ -1,0 +1,68 @@
+problem_hash: sha256:9c7481004ba9e79b453d7ebadec695bf3c037e97d7ba13e325f72a4d897e594b
+pass: B
+clusters:
+  - id: extract_one_then_gate
+    action: "Refuse the year-long rewrite, extract a single service behind the existing interface within a quarter without splitting the database, and permit further extractions only if that one measurably relieves a named pain."
+    members: [LEDGER, PRIOR_ART, DOOR_KEEPER]
+    singleton: false
+    strongest_objection: null
+  - id: harden_monolith_extract_diverged_seams
+    action: "Keep the monolith as the primary deployable, enforce module boundaries mechanically in the build, and extract at most two services this year only along seams whose ownership or deploy cadence has already visibly diverged."
+    members: [HORIZON]
+    singleton: true
+    strongest_objection: "The two extractions are authorised by an already-observed divergence in ownership or deploy cadence, but divergence is not the same as pain that extraction relieves: two modules can deploy on different cadences and still be coupled through the database, so the extraction pays the full per-service tax, admitted here to be roughly a quarter of one team's year, without any measurement showing the pain moved. Nothing in the position requires the first extraction to prove itself before the second is allowed, and nothing requires the pain to be priced before either is started, so the ceiling of two is a guess about this codebase drawn from an imagined future rather than from a number. Worse, the enforced module walls that carry the whole position are acknowledged to slip the moment nobody checks the build rule, and a build rule is exactly the kind of control that gets disabled under deadline pressure, which means the position's own stated failure mode, walls agreed to in a document but not held, is the most probable outcome of following it. A cheaper sequence exists: enforce the walls, run one candidate as a shadow process against the shared database for a release cycle, and let the coupling and deploy-frequency numbers decide whether any extraction, let alone two, is justified."
+  - id: fix_named_pain_in_place
+    action: "Abandon rewrite planning, spend two weeks writing down three monolith pains with a number on each, and fix the most expensive one inside the current codebase by quarter end, extracting a service only if that fix proves impossible without a process boundary."
+    members: [FRAME_BREAKER]
+    singleton: true
+    strongest_objection: "The three pains a team writes down in a monolith of any age are rarely independent: a ninety-minute flaky deploy, two teams colliding on merges, and a query that pins the primary are usually three symptoms of one coupled module, and the cheapest in-place fix for that shared root cause is precisely the module-boundary enforcement plus a single extraction that this position defers to a later quarter. Treating them as three rows and fixing the top one buys a quarter of symptom relief, then the next row surfaces the same root cause and the structural work starts a quarter late with the same numbers in hand. Separately, the position never answers the question that was asked, so the rewrite proposal returns next quarter with the same backers and the same budget argument, because no decision about architectural direction was recorded; and the two-week numbers exercise is run by the same people who want the year of protected work, who get to choose which numbers are written down and can make the case for extraction out of the very document meant to defuse it."
+traps:
+  LEDGER:
+    T1: { fired: false, evidence: "The bill of costs (network hops replacing function calls, distributed tracing, service discovery, per-service CI, cross-store consistency) is specific to a monolith-to-services move; delete monolith and microservices from the prompt and sections 1 and 4 no longer apply." }
+    T2: { fired: false, evidence: "Names and partially tests the load bearing assumption: the question does not name the pain, and the asker treats leaving it alone as free; the position is built on pricing both." }
+    T3: { fired: false, evidence: "No citations or authorities used; the reasoning is a cost ledger with named payers." }
+    T4: { fired: false, evidence: "Forecloses three decisions (year-long program, doing nothing, second extraction before measurement) and the reader stops deciding on scope and sequencing." }
+    T5: { fired: false, evidence: "Position is a do-X sentence: extract the single module whose pain you can name, one quarter, stop unless it paid." }
+    T6: { fired: false, evidence: "Names product and sales, pager holders, finance, users, and the engineers who wanted the rewrite; missing_actor is finance with a concrete gating action." }
+    T7: { fired: false, evidence: "Distinguishes a bounded reversible extraction bill from a permanent operational surface and a year of output, though it does not itemise cost-of-being-wrong per step." }
+    T8: { fired: false, evidence: "Flat restatement, extract one module with a named pain for a quarter and evaluate, is the same claim as the framed one." }
+  PRIOR_ART:
+    T1: { fired: true, evidence: "Step 1 explicitly abstracts the prompt to 'replace a load-bearing system that cannot be paused'; with monolith, microservices, and the year deleted the position (cut over one segment at a time behind a stable interface) is unchanged, and would be the same answer for any replacement question." }
+    T2: { fired: true, evidence: "Accepts the question's frame that a replacement is happening and asks only how; step 4 notes the precedents say nothing for microservices as a topology but does not test whether the pain is architectural at all." }
+    T3: { fired: false, evidence: "Removing the Bell System, FAA, and urban renewal material thins section 3 to nothing, but a chain survives: the old system is the only complete specification, wholesale replacement destroys it before the replacement is proven, and software can run in parallel so incremental cutover is cheaper still." }
+    T4: { fired: false, evidence: "Forecloses the clean-sheet rewrite, decomposing everything, and freezing feature work; the reader stops deciding scope, cutover style, and what stays." }
+    T5: { fired: false, evidence: "Position is a do-X sentence: cut over one capability at a time behind the existing interface, only where operating cost is measurable." }
+    T6: { fired: false, evidence: "Names the on-call rotation as missing_actor with data they hold and a refusal they can exercise; users and leadership implicit in the flag-day discussion." }
+    T7: { fired: false, evidence: "Distinguishes flag-day switchover (unrecoverable, precedents show billions written off) from segment cutovers that can be rehearsed and interworked indefinitely." }
+    T8: { fired: false, evidence: "Stripped of the telephone analogy the claim, replace one piece at a time behind a stable interface and only where pain is measured, remains worth saying." }
+  DOOR_KEEPER:
+    T1: { fired: false, evidence: "The one-way-door inventory (database split, service-ownership reorg, per-service platform investment, rewrite forking away accumulated fixes) is specific to monolith-to-services; deleting those prompt details would remove the doors the sequence is built around." }
+    T2: { fired: false, evidence: "Names 'rewrite' as itself a one-way door and makes the first step naming the specific pain with one metric, so the assumption that the pain is architectural is tested by the experiment before any commitment." }
+    T3: { fired: false, evidence: "No citations; the second-system reference is a label, not load bearing." }
+    T4: { fired: false, evidence: "Forecloses big-bang rewrite, early team reorg, and early database split, and the six-step ordering removes sequencing decisions from the reader." }
+    T5: { fired: false, evidence: "Position is a do-X sentence: extract exactly one service behind a strangler seam within the next quarter." }
+    T6: { fired: false, evidence: "Names product or business owner as missing_actor with two concrete actions, plus customers, board, and per-service on-call in the reasoning." }
+    T7: { fired: false, evidence: "The entire reasoning is a reversibility taxonomy with cost-of-wrong and detection latency per door, and the position is a sequence ordered by it." }
+    T8: { fired: false, evidence: "Flat restatement, extract one service against the shared database, measure for a quarter, then decide on the data split, is the same claim." }
+  FRAME_BREAKER:
+    T1: { fired: true, evidence: "Delete monolith, microservices, and the year from the prompt and the answer, write down three pains with numbers and fix the most expensive one in place, is unchanged; the reasoning about who benefits from an unexamined rewrite applies to any rewrite proposal." }
+    T2: { fired: false, evidence: "Names 'rewrite' as the bundled diagnosis-and-cure and makes the position itself the test of whether the pain is a property of the monolith's shape." }
+    T3: { fired: false, evidence: "No authorities used; the argument is a plain chain from unstated symptom to cheapest fix." }
+    T4: { fired: false, evidence: "Forecloses the scheduled migration program, feature freeze, and 'monolith' as a problem statement; also fixes the first action and its deadline." }
+    T5: { fired: false, evidence: "Position is a do-X sentence with two dated deliverables." }
+    T6: { fired: false, evidence: "Names product owner as missing_actor with a refusal action; also names platform groups, engineering leadership, vendors, product teams, and future on-call." }
+    T7: { fired: false, evidence: "Distinguishes a quarter-sized fix inside the running system from committing to a target architecture in advance, though it does not price the cost of being wrong on the in-place fix." }
+    T8: { fired: false, evidence: "Flat restatement, measure what hurts and fix the worst thing in place, still holds without the frame-attack framing." }
+  HORIZON:
+    T1: { fired: false, evidence: "The reasoning turns on service contracts, schema migration history, per-service on-call, and the asymmetry of merging services versus splitting a monolith; deleting monolith and microservices from the prompt removes the mechanism." }
+    T2: { fired: false, evidence: "Attacks the assumption that the right boundaries can be known at decision time, and the position (enforce walls, extract only where divergence is already observed) follows from that attack." }
+    T3: { fired: false, evidence: "No citations; the argument is an imagined retrospective built from stated mechanisms." }
+    T4: { fired: false, evidence: "Explicitly separates decide-now (primary deployable, mechanical boundaries, extraction ceiling, extraction criteria) from leave-undecided, and forecloses three tempting moves." }
+    T5: { fired: false, evidence: "Position is a do-X sentence: extract at most two services along already-diverged seams, keep the rest one deployable with enforced boundaries." }
+    T6: { fired: false, evidence: "Names the platform team as missing_actor with a capping action the position depends on; also names leadership and the on-call rotations that each boundary creates." }
+    T7: { fired: false, evidence: "Uses the merge-is-harder-than-split asymmetry to justify the ceiling and accepts the carrying cost of undecided items as cheaper than an undo." }
+    T8: { fired: false, evidence: "Flat restatement, keep the monolith, enforce module walls, extract at most two already-divergent seams, is still worth saying." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "FRAME_BREAKER attacks the assumption that the pain is architectural and 'rewrite' is the remedy; HORIZON attacks the assumption that boundaries can be known now; LEDGER and DOOR_KEEPER both make naming the pain a precondition." }
+  T6_all_missing_actor_null: { fired: false, evidence: "All five branches name a missing actor with an action: finance, on-call rotation, product owner, product sponsor, platform team." }
+lint_verdicts: []

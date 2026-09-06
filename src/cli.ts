@@ -5,6 +5,8 @@ import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
 import { listFrames, orthogonality } from "./frames.js";
+import { openKernel, recordRun } from "./os.js";
+import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort } from "./errors.js";
 
 const program = new Command();
@@ -114,6 +116,70 @@ program
       fail(e);
     }
   });
+
+const os = program.command("os").description("the kernel: submit, confirm, claim, return, status, result, cancel, list, reap. Never calls a model.");
+const kernelFor = (o: { osRoot?: string; lease?: number }) => openKernel(loadConfig(program.opts().root), o.osRoot, { leaseSeconds: o.lease });
+const out = (v: unknown) => console.log(typeof v === "string" ? v : JSON.stringify(v, null, 2));
+
+os.command("submit")
+  .description("compile a problem into a run; prints the D5 preview; state awaiting_confirm")
+  .requiredOption("--problem <file>", "verbatim problem statement")
+  .requiredOption("--decision <json>", "enum-only routing decision")
+  .option("--os-root <dir>", "kernel root (default $ADHD_OS_ROOT or ./runs)")
+  .option("--seed <n>", "shuffle seed", (v) => Number.parseInt(v, 10))
+  .option("--by <who>", "who submitted")
+  .option("--run-id <id>")
+  .option("--confirmed", "skip the gate (scripted use)")
+  .action((o) => {
+    try {
+      const r = kernelFor(o).submit(readFileSync(o.problem, "utf8"), o.decision, { seed: o.seed, by: o.by, confirmed: o.confirmed, runId: o.runId });
+      out(r.preview);
+      out(r.kind === "plan" ? { run_id: r.run_id, state: r.state, estimate_tokens: r.estimate_tokens } : { declined: true, reason: r.reason });
+      process.exit(r.kind === "plan" ? 0 : 2);
+    } catch (e) {
+      fail(e);
+    }
+  });
+os.command("confirm <run_id>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).confirm(id)); } catch (e) { fail(e); } });
+os.command("claim")
+  .requiredOption("--worker <id>")
+  .option("--run <run_id>", "only from this run")
+  .option("--os-root <dir>", "kernel root")
+  .option("--lease <seconds>", "lease length", (v) => Number.parseInt(v, 10))
+  .action((o) => {
+    try {
+      const t = kernelFor(o).claim(o.worker, { runId: o.run });
+      if (!t) { console.log("null"); process.exit(3); }
+      out(t);
+    } catch (e) { fail(e); }
+  });
+os.command("return <task_id>")
+  .description("return a subagent's final message; reads it from --file or stdin")
+  .option("--file <path>")
+  .option("--worker <id>")
+  .option("--tokens <n>", "tokens the subagent reported using", (v) => Number.parseInt(v, 10))
+  .option("--os-root <dir>", "kernel root")
+  .action((id, o) => {
+    try {
+      const text = o.file ? readFileSync(o.file, "utf8") : readFileSync(0, "utf8");
+      out(kernelFor(o).return_(id, text, o.worker, o.tokens));
+    } catch (e) { fail(e); }
+  });
+os.command("log <run_id>").description("journal lines for one run").option("--os-root <dir>", "kernel root").action((id, o) => { try { for (const e of kernelFor(o).log(id)) console.log(JSON.stringify(e)); } catch (e) { fail(e); } });
+os.command("record <run_id>")
+  .description("promote a finished run into evals/recorded/<fixture>-<name>/ with generated provenance")
+  .requiredOption("--fixture <id>", "fixture id, e.g. 001")
+  .requiredOption("--name <name>", "short name, e.g. kernel-run")
+  .option("--force", "replace an existing recording")
+  .option("--os-root <dir>", "kernel root")
+  .action((id, o) => { try { out(recordRun(loadConfig(program.opts().root), kernelFor(o), id, { fixtureId: o.fixture, name: o.name, force: o.force })); } catch (e) { fail(e); } });
+os.command("status <run_id>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).status(id)); } catch (e) { fail(e); } });
+os.command("result <run_id>").option("--os-root <dir>", "kernel root").action((id, o) => {
+  try { const r = kernelFor(o).result(id); out(r.synthesis ?? `no synthesis yet (state ${r.state}${r.reason ? `: ${r.reason}` : ""})`); process.exit(r.synthesis ? 0 : 3); } catch (e) { fail(e); }
+});
+os.command("cancel <run_id>").option("--reason <text>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).cancel(id, o.reason)); } catch (e) { fail(e); } });
+os.command("list").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).list()); } catch (e) { fail(e); } });
+os.command("reap").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).reap()); } catch (e) { fail(e); } });
 
 program
   .command("validate")

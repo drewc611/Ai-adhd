@@ -110,7 +110,7 @@ The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `ad
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
 
-Two real runs are recorded, one per fixture, five isolated subagents each, seed 1.
+Four real runs are recorded, five isolated subagents each.
 
 - `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
   MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on
@@ -120,7 +120,37 @@ Two real runs are recorded, one per fixture, five isolated subagents each, seed 
   SABOTEUR (T1) and NIGHT_OPERATOR (T2); PARTICULARIST with MECHANIC and FRAME_BREAKER with
   NIGHT_OPERATOR formed two clusters; both survivors defended and each withdrew a claim.
 
+- `evals/recorded/002-kernel-enduser/` passes fixture 002. Same prompt, END_USER swapped in
+  for NIGHT_OPERATOR through an explicit frame list, and the first run driven end to end by
+  the kernel: nine tasks claimed and returned by one worker, four automatic phase advances,
+  real token accounting. END_USER asked who is hurt and was pruned for it, so the question
+  reached the output through the pruned block. MECHANIC folded under objection.
+- `evals/recorded/003-kernel-strategy/` passes fixture 003 (strategy class, monolith rewrite),
+  driven by the kernel. All five frames refused the year-long rewrite; the critic pruned
+  PRIOR_ART (T1, T2) and FRAME_BREAKER (T1) for answers that would not change if the problem
+  did, and the two survivors each gave ground under objection. The run found three bugs in
+  the plumbing, listed in its `README.md`.
+
 Each run's `README.md` says how it was produced and what it did not surface.
+
+## As an agent operating system
+
+The four phases can run unattended. `src/os.ts` is a kernel over run directories: it owns
+state, leases, phase advancement, the D5 gate, and cancellation, and it never calls a model.
+Hosts supply inference by claiming tasks and returning artifacts, over MCP or the CLI:
+
+```
+adhd os submit --problem p.txt --decision '{"problem_class":"design_decision"}'   # preview, awaiting_confirm
+adhd os confirm <run_id>                                                           # branch tasks claimable
+adhd os claim --worker w1        # -> {agent, brief, continues}; spawn that agent with the brief
+adhd os return <task_id> --file out.yaml --worker w1   # kernel validates and advances the run
+adhd os status <run_id> | adhd os result <run_id> | adhd os cancel <run_id>
+```
+
+The same verbs are MCP tools (`adhd_submit`, `adhd_confirm`, `adhd_claim`, `adhd_return`,
+`adhd_status`, `adhd_result`, `adhd_cancel`, `adhd_list`), so any MCP host can submit work and
+any Claude Code session running the `adhd-worker` skill can execute it. `docs/OS.md` has the
+process model and the syscall table.
 
 ## Contributing
 

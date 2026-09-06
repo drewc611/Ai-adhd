@@ -105,10 +105,18 @@ export type BranchValidation =
   | { ok: true; artifact: BranchArtifact }
   | { ok: false; frame: string; violations: string[]; raw: unknown };
 
-function parseYamlLoose(text: string): unknown {
-  // Subagents sometimes wrap the YAML in a fence. Strip one if present.
+/**
+ * Subagents sometimes wrap the YAML in a fence, and sometimes add prose after it (a sources
+ * line, a sign off). The artifact is the first fenced block if there is one, else the text.
+ * Every reader of a subagent's final message goes through here so they agree on what it said.
+ */
+export function unfence(text: string): string {
   const fenced = text.match(/```(?:ya?ml)?\s*\n([\s\S]*?)\n```/);
-  return parseYaml(fenced ? fenced[1]! : text);
+  return fenced ? fenced[1]! : text;
+}
+
+function parseYamlLoose(text: string): unknown {
+  return parseYaml(unfence(text));
 }
 
 /**

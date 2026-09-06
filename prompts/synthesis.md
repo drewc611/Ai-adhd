@@ -14,7 +14,7 @@ present.
 {{/if}}
 **Falsifier:** {{recommendation.falsifier}}
 
-Held by: {{recommendation.members}}. {{#if recommendation.deepen}}Under the strongest objection it **{{recommendation.deepen.verdict}}**: {{recommendation.deepen.summary}}{{/if}}
+Held by: {{recommendation.members}}. {{#if recommendation.deepen}}Under the strongest objection it **{{recommendation.deepen.verdict_past}}**: {{recommendation.deepen.summary}}{{/if}}
 {{/if}}
 {{#if no_recommendation}}
 No recommendation. {{no_recommendation}}

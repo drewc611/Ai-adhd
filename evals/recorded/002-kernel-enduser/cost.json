@@ -1,0 +1,12 @@
+{
+  "tokens": 459551,
+  "wall": "767s from confirm",
+  "reported_tasks": 9,
+  "of_tasks": 9,
+  "by_phase": {
+    "diverge": 230993,
+    "critique_a": 59072,
+    "critique_b": 75500,
+    "deepen": 93986
+  }
+}

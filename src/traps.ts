@@ -1,13 +1,13 @@
 // `adhd traps <file>`: run the contract check and the code lints over one branch artifact.
 import { readFileSync } from "node:fs";
+import { unfence } from "./validate.js";
 import { parse as parseYaml } from "yaml";
 import { BranchArtifactSchema } from "./schema.js";
 import { lintBranch } from "./lint.js";
 
 export function trapsReport(filePath: string, opts: { expectHash?: string } = {}): { text: string; exitCode: 0 | 1 } {
   const text = readFileSync(filePath, "utf8");
-  const fenced = text.match(/```(?:ya?ml)?\s*\n([\s\S]*?)\n```/);
-  const raw = parseYaml(fenced ? fenced[1]! : text);
+  const raw = parseYaml(unfence(text));
   const lines: string[] = [`artifact: ${filePath}`];
   let bad = false;
   const r = BranchArtifactSchema.safeParse(raw);

@@ -1,0 +1,41 @@
+problem_hash: sha256:9c7481004ba9e79b453d7ebadec695bf3c037e97d7ba13e325f72a4d897e594b
+frame: HORIZON
+verdict: defend
+response: |
+  The objection is right on three points and wrong on the one that would overturn the position.
+
+  Right: divergence in deploy cadence is a symptom, not a seam. Two modules can ship on different
+  days and still share a table, and extracting along that line produces exactly the lockstep pair
+  I described in point 1 of the original reasoning. My own evidence criterion was too weak to
+  prevent my own stated regret. Right also that nothing sequenced the two extractions or priced
+  the pain first, so the position permitted spending the whole quarter-of-a-team budget before
+  any number came back. And right that "at most two" reads as a forecast. It was meant as a
+  budget, the platform team's support cap flagged in missing_actor, but I did not say that zero
+  is a valid spend of that budget, and I should have.
+
+  Wrong: the build-rule objection does not distinguish the position from the alternative. The
+  objector's own cheaper sequence begins with "enforce the walls." If walls slip under deadline
+  pressure, they slip under both plans equally, so this is a shared risk, not a reason to prefer
+  one plan. And from two years on, the difference between a wall in CI and a wall in a document
+  is that the CI wall leaves a commit when it is removed. I can see who deleted it, when, and
+  what deadline they cited. A document that stopped being read leaves nothing. The failure mode
+  is the same; the visibility is not, and visibility is what the person maintaining this later
+  actually has to work with. The fix is to make removing or weakening the rule an architectural
+  decision that requires the same written evidence as an extraction, so it cannot be done in a
+  hotfix commit without a trace that someone chose it.
+
+  The shadow-process gate is not cheaper than what I proposed; it is a better-specified version
+  of it. A shadow process has a pipeline, a runtime, and an on-call, so it is most of an
+  extraction's tax with none of its benefit unless it is explicitly time-boxed. I accept it as
+  the gate, with two corrections: one release cycle is too short to observe cadence divergence
+  on a monthly release train, so the window is two cycles; and deploy frequency alone is the
+  symptom the objection just criticised, so the gate must also show that the candidate's writes
+  land only on tables no other module writes. If the shadow cannot cut the data, it does not
+  become a service, whatever its deploy numbers say.
+
+  What survives untouched: no rewrite, the monolith stays the primary deployable, walls are
+  mechanical not conventional, and extraction is rare and evidence-gated. What the objection
+  cost me is the evidence criterion, the sequencing, and the honesty that the count may be zero.
+revised_position: "Do not rewrite the monolith as microservices over the next year; enforce module boundaries in the build with rule removal treated as an architectural decision requiring written evidence, run at most one candidate module as a time-boxed shadow process over two release cycles, extract it only if its writes cut cleanly from the shared schema and its measured blocked-release count moved, and permit a second extraction only after the first has proved the same numbers in production; zero extractions is an acceptable outcome of that budget."
+revised_falsifier: "If, within two release cycles of enforcing the walls, the shadow measurement shows three or more modules whose writes already land on tables no other module touches and whose releases were blocked by another module's gate in the prior six months, the seams are already known and the one-at-a-time sequencing is delay rather than caution; extract along every seam showing both properties."
+confidence: medium

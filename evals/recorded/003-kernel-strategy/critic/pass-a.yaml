@@ -1,0 +1,53 @@
+problem_hash: sha256:9c7481004ba9e79b453d7ebadec695bf3c037e97d7ba13e325f72a4d897e594b
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence with a hard ceiling (at most two extractions) and a selection rule; no return of the choice to the reader." }
+    foreclosure: { score: 3, evidence: "Rules out the full rewrite, per-service team reorg this year, and using the migration as the answer to deploy pain, all in concrete terms." }
+    falsifiability: { score: 2, evidence: "Checking six months of release history for three or more modules blocked by each other's gates is cheap and observable, but it only raises the extraction ceiling rather than overturning the core position." }
+    specificity: { score: 2, evidence: "The reasoning turns on service boundaries, contract debt, and the one-year horizon, so it bends around monolith/microservices/year, though it invents its own instance details." }
+    assumption_attack: { score: 2, evidence: "Names the assumption that boundaries can be predicted at decision time and tests it through a retrospective scenario, but the test is imagined rather than observed." }
+    reasoning_carries: { score: 3, evidence: "No authorities cited; the argument rests entirely on the merge-versus-split asymmetry it lays out." }
+    actor_coverage: { score: 3, evidence: "Platform team is named with an action (cap the service count) and the branch states that cap is a harder constraint than any architectural argument." }
+    reversibility: { score: 2, evidence: "Uses the asymmetry that merging services is harder than splitting a monolith to justify the ceiling and the enforced-walls approach." }
+    substance: { score: 2, evidence: "Flat restatement (keep the monolith, enforce module walls, extract at most two already-divergent seams) still stands, though the future-maintainer framing carried some persuasion." }
+  B:
+    committal: { score: 3, evidence: "One sentence: extract exactly one service in one quarter, further extractions gated on that seam's metrics, no escape hatch." }
+    foreclosure: { score: 3, evidence: "Rules out big-bang parallel rewrite, team reorg before production proof, and database split as first step, all tempting and concrete." }
+    falsifiability: { score: 3, evidence: "A two-week boundary-enforcement attempt that fails on cross-boundary calls is cheap, specific, and would collapse the incremental position outright." }
+    specificity: { score: 2, evidence: "The one-way-door inventory (database split, service ownership reorg, mesh investment) is specific to a monolith-to-services move but not to any particular instance." }
+    assumption_attack: { score: 2, evidence: "Treats 'rewrite' as itself a one-way door and demands the pain be named, but designs an experiment rather than testing a stated assumption of the question." }
+    reasoning_carries: { score: 3, evidence: "No citations; the second-system reference is a label, not an authority the argument depends on." }
+    actor_coverage: { score: 2, evidence: "Product/business owner named with concrete actions (pull the team or fund a second one), but the position does not depend on them." }
+    reversibility: { score: 3, evidence: "The entire position is a six-step sequence ordered by afternoon-reversible moves before the single one-way door." }
+    substance: { score: 3, evidence: "Stripped of framing it is still 'extract one service without splitting the database, measure for a quarter, then decide', which is the same claim." }
+  C:
+    committal: { score: 3, evidence: "One sentence with two dated deliverables (three numbered pains in two weeks, one fix by quarter end) and no hedge." }
+    foreclosure: { score: 3, evidence: "Rules out a scheduled year-long program with a target architecture, feature freeze to fund it, and treating 'monolith' as the problem statement." }
+    falsifiability: { score: 3, evidence: "The two-week pain-writing exercise itself produces the observation that would kill the position if every pain turns out to be structural and boundaries have already failed." }
+    specificity: { score: 1, evidence: "Delete monolith, microservices, and the year and the reasoning (name the pain with a number, fix the cheapest one, distrust whoever benefits from the rewrite) holds unchanged for almost any rewrite question." }
+    assumption_attack: { score: 3, evidence: "Names 'rewrite' as the load-bearing bundled diagnosis-and-cure, and the position is built entirely on testing it, with the answer following from the result." }
+    reasoning_carries: { score: 3, evidence: "No authorities used; the argument is a plain chain from unstated symptom to cheapest fix." }
+    actor_coverage: { score: 2, evidence: "Product owner named with an action (refuse work items without a number, cap architecture time) but the position stands without them." }
+    reversibility: { score: 1, evidence: "Mentions that fix work is sized to a quarter inside the running system but does not use reversibility to order anything." }
+    substance: { score: 2, evidence: "Flat restatement (write down what hurts with numbers, fix the worst one in place) is worth saying, but the framing did work in making it feel like an answer to the rewrite question rather than a deferral." }
+  D:
+    committal: { score: 3, evidence: "One sentence: do not rewrite, cut over one capability at a time behind the existing interface, only where operating cost is measurable." }
+    foreclosure: { score: 3, evidence: "Rules out clean-sheet rewrite with a switchover date, decomposing everything, and freezing monolith feature work, all in concrete terms." }
+    falsifiability: { score: 2, evidence: "A two-person, one-quarter attempt to route one capability's traffic is observable and would kill the position, but costs half a person-year to run." }
+    specificity: { score: 1, evidence: "Step 1 deliberately abstracts the problem to 'replace a load-bearing system that cannot be paused', and the precedents apply identically to any such replacement; only step 4 touches microservices." }
+    assumption_attack: { score: 1, evidence: "Notes that the question names microservices as the target and that the precedents say nothing in favour of it, but does not test that assumption." }
+    reasoning_carries: { score: 1, evidence: "Strip out Bell System, FAA AAS, and urban renewal and what remains is the step 4 observation that software can run in parallel; the settled position was carried by the precedents." }
+    actor_coverage: { score: 2, evidence: "On-call rotation named with actions (supply incident data, refuse an unrehearsed cutover) that shape which piece goes first." }
+    reversibility: { score: 2, evidence: "Uses parallel running and traffic mirroring to argue the incremental path is cheaper, and the position is a sequence of proven cutovers." }
+    substance: { score: 2, evidence: "Flat restatement (replace one piece at a time behind a stable interface, only where pain is measured) still holds, though the exchange-by-exchange analogy did much of the persuading." }
+  E:
+    committal: { score: 3, evidence: "One sentence: extract the one module with nameable pain in a quarter, stop unless it paid off, no hedge." }
+    foreclosure: { score: 3, evidence: "Rules out the year-long rewrite, doing nothing at all, and extracting a second module before the first shows a measured improvement." }
+    falsifiability: { score: 3, evidence: "Failing to name one painful module in a single meeting is the cheapest possible observation and would void the position entirely." }
+    specificity: { score: 2, evidence: "The cost ledger (network hops, per-service CI, distributed tracing, pager load) is specific to a monolith-to-services move but not to any particular instance of it." }
+    assumption_attack: { score: 2, evidence: "Names the assumption that the current pain costs nothing to leave alone and that the pain is unnamed, and tests it by pricing both sides, but the answer would be the same either way." }
+    reasoning_carries: { score: 3, evidence: "No citations; the argument is a bill-of-costs chain with named payers." }
+    actor_coverage: { score: 2, evidence: "Finance named with an action (require a per-service run-cost estimate) but the position does not depend on that actor." }
+    reversibility: { score: 1, evidence: "Calls the extraction a bounded, reversible bill but does not use reversibility to structure the recommendation." }
+    substance: { score: 3, evidence: "Stripped of the who-pays framing it is still 'extract one module with a named pain for a quarter and evaluate', which is the same claim." }

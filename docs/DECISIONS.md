@@ -172,3 +172,45 @@ ask that question (END_USER, ACTOR_CENSUS, LEDGER) are all on the actors and cos
 none is in the fuzzy debugging primary set. Whether to swap one in is a routing decision for
 the owner; it should be made on a second run, not on this one. The recorded run is marked
 `expected: fail` so the harness verifies the miss stays recorded rather than hiding it.
+
+The second run exists: `evals/recorded/002-kernel-enduser/`, END_USER swapped in for
+NIGHT_OPERATOR via an explicit `frames` list, driven by the kernel. It passes fixture 002.
+END_USER asked who is hurt and was pruned for it (T1, T7, T8); the question reached the output
+through the pruned block. So the frame closes the gap as a question-raiser, not as a
+recommendation. Swapping it into the `fuzzy_debugging` primary set is now a decision with two
+runs behind it. Still the owner's.
+
+Third class run: `evals/recorded/003-kernel-strategy/`, the `strategy` set (FRAME_BREAKER,
+LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON) on fixture 003. It passes. The set was not a
+monoculture by the critic's clustering (three clusters), but every one of the five positions
+opened with "do not rewrite", and two were pruned for T1: their reasoning would serve any
+rewrite question. The frames that survived were the ones whose mechanism is specific to this
+shape of problem (one way doors, the maintainer two years on, the bill and who pays it). One
+run, one seed. `adhd frames --orthogonality` now sees four runs and flags nothing; no pair has
+three shared runs yet.
+
+---
+
+## D7. The kernel: ADHD as an agent operating system
+
+**Question.** Can the four-phase loop run unattended without anything in the repo calling a
+model?
+
+**Decision.** Yes, as a scheduler that hosts feed. Resolved 2026-09-06 by drewc611 (the
+owner asked for "an OS, agentic" with MCP tool calls as the work source).
+
+`src/os.ts` is a kernel over run directories: submit, confirm, claim, return, status, result,
+cancel, list, reap. Runs are processes with states; tasks are leased threads a worker claims
+and returns. The kernel calls the same phase functions the CLI does, so every invariant in
+CLAUDE.md is enforced by the same code. It never composes a prompt and never spawns anything.
+Workers (a Claude Code session running `skills/adhd-worker`, or any MCP client) supply the
+inference. `docs/OS.md` has the model and the syscall table.
+
+Consequences kept from earlier decisions: D2 (no inference client) holds because the kernel
+has no execution path; D4 holds because briefs are handed to workers inline and artifacts come
+back as text; D5 holds because `submit` stops at `awaiting_confirm`, `cancel` renders partial
+at any point, and a task cannot be leased more than three times.
+
+What the kernel does not decide: which model runs a branch, when a worker runs, or how a
+worker resumes the pass A critic for pass B (`continues` names the task; the host keeps the
+agent id).
