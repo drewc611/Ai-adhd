@@ -1,0 +1,118 @@
+```yaml
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+pass: B
+clusters:
+  - id: ship_now_cheap_name
+    action: "Type the obvious literal name from the question into the call site, merge it today, and open a cleanup ticket in the same PR."
+    members: [MINIMALIST]
+    singleton: true
+    strongest_objection: >-
+      The whole position rests on the claim that the string is cheap to reverse, and that claim is
+      the weakest thing in it. A flag key does not stay in call sites. From the first evaluation it
+      is copied into analytics event properties, into warehouse tables partitioned by flag key, into
+      dashboard definitions, alert rules, incident writeups, and whatever channel or ticket names
+      grow around the launch. Renaming after that is not a find-and-replace and a config edit; it is
+      either a coordinated dual-write across systems owned by other teams or an accepted
+      discontinuity in the historical data that the rollout will be judged by. So the ordering is
+      inverted: the evaluation logic everyone reviews carefully is the cheap, revisable part, and
+      the string treated as a triviality is the one genuinely one-way decision in the change. The
+      fallback — that the name is built to rot so the flag gets deleted rather than renamed —
+      depends on a deletion that the same reasoning admits usually has no assigned owner, and a
+      timer nobody is watching is not a mechanism. Meanwhile the flag gates something users see, so
+      the name will be read months later at a support seat beside a user id by someone who was not
+      present at launch, and a name whose meaning is 'whatever shipped most recently' cannot be read
+      there at all.
+  - id: durable_key_plus_lifecycle_metadata
+    action: "Refuse the relative name, settle whether the flag is a temporary rollout or a permanent switch, and register a durable versioned key with an owner and a removal date."
+    members: [HORIZON, PARTICULARIST]
+    singleton: false
+    strongest_objection: >-
+      The failure being prevented is misdiagnosed. The two-year-old flag that nobody deletes does
+      not survive because its name was ambiguous; it survives because nobody can prove it is unused
+      and nobody owns the removal. A creation date in the key and a registry row stating an intended
+      removal date are both statements of intent authored by the same team that will not act on
+      them, and intent without a mechanism — an expiring flag, a build that fails past the date, a
+      check that reports flags at 100 percent — is a comment. The date is also the one fact already
+      carried by the provider's created-at field and by git, while the facts the person standing in
+      the dashboard at 2am actually needs (which surface a given user was served, whether the branch
+      is dead, who to ask) are not in the key either, so the ceremony is paid on every flag
+      thereafter, including the throwaway ones, in exchange for a fact that was never the missing
+      one. And deliberately keeping the rollout out of the name leaves the harder questions
+      untouched: who is authorized to halt this, at what number, and what happens to a cart that is
+      mid-purchase when the value flips. A perfectly named flag that is permanently on is still a
+      dead branch in the payment path, which is the cost this position says it is paying to avoid.
+  - id: name_for_the_observable_state
+    action: "Name the flag after what the customer can see and propagate that key into the analytics event and the support console so an agent can resolve a ticket without an engineer."
+    members: [END_USER]
+    singleton: true
+    strongest_objection: null
+  - id: design_the_rollout_first
+    action: "Write a one-page rollout document with owner, exposure ladder, numeric halt metric, sticky bucketing key, removal date and tested rollback, and derive the name from it afterwards."
+    members: [FRAME_BREAKER]
+    singleton: true
+    strongest_objection: >-
+      The cost is understated by an order of magnitude, and the question does not go away. Someone
+      has shippable code and a blocked merge; the reply is a document with six fields, one of which
+      requires a rollback rehearsed in staging against an in-progress cart, and another of which
+      requires an agreed numeric guardrail. If a ramp framework already exists, this is a form and
+      the naming question really was the only open one; if it does not exist, then the document is
+      not tomorrow's task, it is a project involving payments, analytics and whoever owns the halt
+      authority — and the person who cannot settle a string by themselves is not the person
+      empowered to appoint a kill-decision owner. In the gap, the code either ships behind whatever
+      string gets typed or does not ship at all. That is the deeper problem: the name is still
+      produced at the end of the process, but now by default and under time pressure, and the string
+      is the part that immediately propagates into analytics properties, warehouse partitions and
+      dashboards, where it is effectively unrenameable. Deferring the one decision that cannot be
+      taken back in order to first make several that can be revised weekly gets the ordering exactly
+      backwards.
+traps:
+  HORIZON:
+    T1: { fired: false, evidence: "Deleting the prompt's specific details removes the reference-point failure the argument runs on — the diagnosis is that the word 'new' expired because the thing it replaced got replaced again — though the general rule about relative names is portable enough that this is the weakest anchoring of the five." }
+    T2: { fired: false, evidence: "It attacks the assumption that a flag key is a cheap revisable string, arguing the key is pinned from the first analytics event, and its recommendation follows from that being true." }
+    T3: { fired: false, evidence: "No citations, conventions or authorities appear; the chain runs from where the string ends up to who cannot move it." }
+    T4: { fired: false, evidence: "It closes six decisions — the literal key, descriptive over relative, a date in the key, a registry row in the same commit, no rollout state in the name, no key reuse — and names what it deliberately leaves open." }
+    T5: { fired: false, evidence: "The position is an imperative: name it for the thing it gates and the date, and register it with an owner and removal date." }
+    T6: { fired: false, evidence: "Names the analytics team as the party actually blocked by a rename and gives them a veto at the ingestion layer, plus the 2am maintainer and the reviewer; the buyer and the support seat are absent." }
+    T7: { fired: false, evidence: "It explicitly separates the unrenameable key string from the cheap-to-change evaluation logic and sorts the decision list into decide-now and leave-undecided on that axis." }
+    T8: { fired: false, evidence: "Flat restatement — flag keys become permanent analytics identifiers, so pick a descriptive dated key with a registered owner and expiry — is the same claim and still worth saying." }
+  MINIMALIST:
+    T1: { fired: false, evidence: "The recommended string is derived from the prompt's own words, so deleting those details changes the answer outright, even though the surrounding argument about cheap-to-reverse decisions is portable." }
+    T2: { fired: false, evidence: "It attacks the assumption that the question deserves deliberation at all, reading it as a request for permission to stop deciding, and the answer follows from that reading." }
+    T3: { fired: false, evidence: "Nothing is borrowed from authority or convention; the case is built from the cost of deliberating versus the cost of being wrong." }
+    T4: { fired: false, evidence: "It closes five decisions — the string, the merge timing, no convention as a precondition, no semantics in the name, delete rather than rename — and names the signal that would reopen them." }
+    T5: { fired: false, evidence: "The position is eight words of imperative: name it and merge it today." }
+    T6: { fired: false, evidence: "Names the flag's deleter as the omitted party with a concrete action (open the cleanup ticket in the same PR); the analytics consumer, the support seat and the buyer are not named." }
+    T7: { fired: false, evidence: "Reversibility is the load-bearing argument, used to order the recommendation — do the cheap thing now, buy a convention only when collision actually appears." }
+    T8: { fired: false, evidence: "Flat restatement — use the obvious name, ship, delete it later, renaming is trivial — is the same claim and a genuinely contested position." }
+  PARTICULARIST:
+    T1: { fired: false, evidence: "The argument turns on this statement's own phrasing — 'new' as a calendar fact and 'whether users see' implying per-user evaluation that surfaces the key in tickets — so deleting those details removes the case." }
+    T2: { fired: false, evidence: "It attacks the assumption that the question contains enough information to answer, identifying the flag's lifespan as the unstated variable that flips the answer." }
+    T3: { fired: false, evidence: "No authorities are invoked; the reasoning runs on identifier decay and where the name gets read." }
+    T4: { fired: true, evidence: "It closes only one decision — do not copy 'new' — and reopens the central one by handing the reader a two-way fork conditioned on a fact it does not go and get, so the reader stops making fewer decisions after reading it than the question asked them to make." }
+    T5: { fired: false, evidence: "The position opens with an imperative, name it after the specific rollout decision it encodes, even though the object of that imperative is conditional." }
+    T6: { fired: false, evidence: "Names the support or on-call engineer reading the flag beside a user id as the omitted party, though their listed behaviour is misdiagnosis rather than an action they can take." }
+    T7: { fired: true, evidence: "It never asks what being wrong about the name costs or how long until you find out; deletion pressure is about the flag's permanence, not the decision's, and the two named options are treated as a one-shot choice with no rename cost on either side." }
+    T8: { fired: false, evidence: "Flat restatement — decide whether the flag is temporary or permanent, never copy 'new' into the key — survives the loss of the framing and is still worth saying." }
+  END_USER:
+    T1: { fired: false, evidence: "The reasoning runs on the moved card field, the failed payment attempt, the abandoned cart and the mid-purchase reversion request, and is unusable for a flag over anything but a user-facing purchase flow." }
+    T2: { fired: false, evidence: "It relocates the name's audience from the engineer to the support seat, which is a real attack on an assumption the question made, but the assumption is only implied and never tested — the weakest of the five on this detector." }
+    T3: { fired: false, evidence: "No citations or authorities; the chain runs from what one person can see and say at the moment it matters." }
+    T4: { fired: false, evidence: "It closes four decisions — the literal key, three ruled-out naming families, and putting the key in the analytics event and support console — leaving no fork for the reader." }
+    T5: { fired: false, evidence: "The position is an imperative naming a literal key: name the flag for the visible user-facing state it produces." }
+    T6: { fired: false, evidence: "Names the buyer and the frontline support agent with a specific action — read the flag, say it aloud, request a reversion — while the analytics consumer and the operator who flips the flag are absent." }
+    T7: { fired: true, evidence: "Reversion appears only as something the customer wants done to their session; the naming decision itself is never weighed as cheap-and-revisable against expensive-and-committed, and no cost of being wrong or time-to-discovery is given." }
+    T8: { fired: false, evidence: "Flat restatement — name it so support can tell which checkout a given customer saw — is the same claim and worth saying, though the first-person voice supplies much of the force." }
+  FRAME_BREAKER:
+    T1: { fired: false, evidence: "The core plan-before-naming argument transfers to any flag, but the halt metric on checkout completion rate, the in-flight cart, and the mid-session flip are bent to this problem specifically." }
+    T2: { fired: false, evidence: "It names the load-bearing assumption directly — one boolean, one undifferentiated population, one atomic thing, only a lexical decision left — and the entire recommendation follows from rejecting it." }
+    T3: { fired: false, evidence: "No authorities or borrowed conventions; the case is built from what a boolean cannot express." }
+    T4: { fired: false, evidence: "It closes the most decisions of any branch — owner, exposure ladder, a numeric halt threshold, bucketing key, removal date, rehearsed rollback, and finally the key — though it makes the name contingent on the document existing first." }
+    T5: { fired: false, evidence: "The position is an imperative: stop naming a flag and write the rollout plan first." }
+    T6: { fired: false, evidence: "Names support and payments operations with a halt channel, plus the ramp owner, internal staff cohort and the analytics party in the foreclosed split-ownership pattern; the widest actor coverage in the run." }
+    T7: { fired: false, evidence: "The position is a sequence built on reversibility — smallest reversible increment, ordered exposure ladder, sticky bucketing so no user flips mid-purchase, and a rollback tested against an in-progress cart." }
+    T8: { fired: false, evidence: "Flat restatement — design the ramp, halt metric and removal before choosing a control, because a boolean is too weak for this job — is the same claim, though the 'you asked the wrong question' angle does some of the work." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "The assumption that a single boolean whose only open decision is lexical is the right control surface was attacked head-on by one branch, and three others attacked adjacent load-bearing assumptions — that the key is cheap to change, that the question deserves deliberation, and that the question carries enough information to answer." }
+  T6_all_missing_actor_null: { fired: false, evidence: "All five branches filled missing_actor with a named party and an action: the analytics team, the flag's deleter, the on-call or support engineer, the frontline support agent, and support/payments operations." }
+lint_verdicts: []
+```

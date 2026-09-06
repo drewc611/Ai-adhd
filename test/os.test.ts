@@ -345,3 +345,49 @@ test("a pruned cluster member corroborates the action but does not hold the reco
   assert.match(s, /it \*\*defended\*\*:/);
   assert.match(s, new RegExp(`- \\*\\*${c}\\*\\*:[\\s\\S]*traps: T1`), "the pruned member still ships in the pruned block");
 });
+
+test("a position that folds under its objection is reported as folded, never as a live singleton", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const frames: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w")!;
+    frames.push(t.label);
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w");
+  }
+  const blindMap = JSON.parse(readFileSync(join(k.root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  k.return_(k.claim("w")!.id, yaml(passA(hash, Object.keys(blindMap))), "w");
+  const [a, b, c, d, e] = frames as [string, string, string, string, string];
+  // Two singletons and one pair, so the pair holds the recommendation and both singletons deepen.
+  k.return_(k.claim("w")!.id, yaml(passB(hash, [{ id: "pair", members: [a, b] }, { id: "lone1", members: [c] }, { id: "lone2", members: [d, e] }])), "w");
+  const verdicts: Record<string, "defend" | "fold"> = {};
+  for (;;) {
+    const t = k.claim("w");
+    if (!t) break;
+    // The pair defends; every singleton folds.
+    const verdict = t.label === a || t.label === b ? "defend" : "fold";
+    verdicts[t.label] = verdict;
+    k.return_(
+      t.id,
+      yaml({
+        problem_hash: hash,
+        frame: t.label,
+        verdict,
+        response: verdict === "fold" ? "The objection was right about the cost." : "Holds.",
+        revised_position: verdict === "fold" ? null : "Do it.",
+        revised_falsifier: null,
+        confidence: "medium",
+      }),
+      "w",
+    );
+  }
+  assert.equal(verdicts[c], "fold", "the singleton must have deepened");
+  const s = k.result("r1").synthesis!;
+  const live = s.slice(s.indexOf("## Live singletons"), s.indexOf("## Folded under objection"));
+  const foldSec = s.slice(s.indexOf("## Folded under objection"), s.indexOf("## Pruned, with reason"));
+  assert.ok(!live.includes(c), `folded ${c} must not be listed as a live singleton`);
+  assert.match(live, /\(none\)/);
+  assert.match(foldSec, new RegExp(`\\*\\*${c}\\*\\* gave up:`));
+  assert.match(foldSec, new RegExp(`deepen/${c}\\.yaml`), "the fold points at its full concession");
+});

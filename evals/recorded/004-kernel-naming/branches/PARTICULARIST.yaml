@@ -1,0 +1,40 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: PARTICULARIST
+position: Name it after the specific rollout decision it encodes, which requires knowing whether the flag is a short-lived release toggle or a permanent segmentation switch — if short-lived, name it `checkout_v2_rollout`; if permanent, name it for the audience rule, e.g. `checkout_experience_variant`.
+reasoning: |
+  1. The three most specific details actually present: (a) the flag "controls whether
+     users see" something — it gates a user-visible surface, not a backend path;
+     (b) the thing gated is "the new checkout" — an existing named surface being
+     replaced, so there is a prior checkout still live behind the flag; (c) the word
+     "new" is doing all the work, and "new" is a fact about the calendar, not about
+     the code. Nothing in the statement says who flips it, how long it lives, or
+     what the two variants are called in the product.
+
+  2. The detail that changes the answer is the one whose value is missing: the flag's
+     lifespan. It is not a tiebreaker, it flips the answer outright. If this flag
+     exists to ship a replacement and then be deleted, the name should carry the
+     transition and be embarrassing to leave in the codebase — `checkout_v2_rollout`
+     — because the embarrassment is the deletion pressure, and "v2" ages into a
+     stable identifier for the version that shipped even after "new" stops meaning
+     anything. If instead this flag is going to live for years because some segment
+     keeps the old checkout permanently (a market, a payment method, a contract),
+     then it is not a rollout flag at all, it is a product configuration, and it
+     must be named for the rule it encodes rather than the event that introduced it.
+
+  3. The thirty-second answer here is `new_checkout_enabled`, and this specific
+     problem statement is what makes it wrong: the statement itself says "the new
+     checkout", which is a phrase with a shelf life. The moment the flag is fully
+     rolled out, the new checkout becomes the checkout, and the flag reads
+     `new_checkout_enabled: true` forever while nobody can tell which checkout is
+     "new" any more. The problem hands you the word "new" and the trap is copying it
+     into an identifier. The second specific reason it is wrong: "whether users see"
+     implies a per-user evaluation, so the name will appear in analytics, support
+     tickets, and incident timelines beside a user id — a name that cannot be read
+     six months later by someone who was not present for the launch fails there
+     first.
+forecloses:
+  - Copying the word "new" into the identifier at all (`new_checkout`, `checkout_new`, `enable_new_checkout`), because the statement's own phrasing is the thing that expires.
+  - Deferring the lifespan question and picking a name that works for both cases — there is no such name; a rollout name creates deletion pressure and a config name resists it, and you cannot have both properties in one identifier.
+falsifier: Ask whoever files the flag-cleanup ticket for a delete date. If a date exists in a ticket or a flag-expiry field, the permanent-segmentation branch is dead and only `checkout_v2_rollout` is defensible; if no one can name a date and someone names a segment that keeps the old checkout, the rollout name is wrong.
+missing_actor: The support or on-call engineer reading this flag's value next to a user id in a ticket or incident timeline months from now — they can escalate or misdiagnose a checkout failure based on whether the name tells them which checkout the user saw, and the problem statement names only "users" and the implied author.
+confidence: medium

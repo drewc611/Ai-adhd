@@ -1,0 +1,48 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: FRAME_BREAKER
+position: Stop naming a flag and instead write the rollout plan first — the audience segments, the ramp schedule, the metric that halts it, and the removal date — then let the flag name fall out of that document as a mechanical byproduct.
+reasoning: |
+  1. The load-bearing assumption is that a single boolean flag named once is the right
+     control surface, and that the only remaining decision is lexical. Every part of the
+     question smuggles this in: "the feature flag" (one, singular, already exists in
+     concept), "controls whether" (binary — on or off), "users see" (one undifferentiated
+     population), "the new checkout" (one atomic thing that ships whole). Naming is the
+     last decision in a rollout, not the first, and asking it first means the rollout was
+     never designed.
+
+  2. The team benefits from leaving it unexamined, in the short term. A naming question is
+     cheap, safe, and feels like progress. Everyone can have an opinion in a ten-minute
+     thread and walk away feeling the checkout rewrite is on track. Nobody has to say out
+     loud who owns the kill decision, what number would make them turn it off, or what
+     happens to in-flight carts and half-written orders when the flag flips mid-session.
+     The person who most benefits is whoever would otherwise have to own the ramp — the
+     naming debate is a comfortable place to hide from that ownership. Second beneficiary:
+     the codebase, which accretes another permanent boolean nobody dares delete.
+
+  3. If the assumption is false, the real question is: what is the smallest reversible
+     increment of the new checkout, who sees it in what order, and what observation makes
+     us stop? That is a rollout design question. The control surface it implies is not a
+     boolean at all — it is a targeting rule with a percentage, a segment allowlist, a
+     sticky bucketing key (so a user does not flip between checkouts mid-purchase), an
+     explicit owner, an expiry date, and a documented rollback that is safe to execute
+     during a live session. A boolean cannot express any of that, so the question as asked
+     is choosing a control that is already too weak for the job.
+
+  4. First concrete action, doable tomorrow: open a one-page rollout doc with six fields
+     filled in — (a) owner name, (b) the ordered exposure ladder (internal staff → 1% of
+     new-account, low-cart-value traffic → 5% → 25% → 50% → 100%), (c) the single guardrail
+     metric with a numeric halt threshold, e.g. "halt if checkout completion rate for the
+     exposed cohort drops more than 2% relative over any rolling 6-hour window with n>500",
+     (d) the bucketing key (user id, hashed, sticky, so a session never switches mid-flow),
+     (e) the removal date with a calendar entry on the owner, (f) the rollback procedure
+     tested once in staging against a cart that is already in progress. Then, and only
+     then, name the thing after what the doc says it does: `checkout_v2_rollout` if it is
+     a ramp, or a segment-scoped experiment key if it is a test. The name takes ninety
+     seconds once the doc exists.
+forecloses:
+  - Shipping a plain boolean kill switch that anyone can flip globally with no ramp, no sticky bucketing, and no defined halt metric — including the common "just wrap it in an if and we'll ramp later" approach.
+  - Treating this as a naming-convention problem solvable by adopting a house style guide (prefix with `ff_`, use `enable_*`, etc.) and moving on.
+  - Running the new checkout as an A/B experiment owned by analytics while the flag is owned by engineering, with two separate control surfaces and no single halt authority.
+falsifier: Look at the repo's existing flags. If there is already a rollout framework in use — flags carry owner, expiry, percentage ramp, and sticky bucketing as first-class fields, and recent flags were actually removed on schedule — then the rollout design is a filled-in form, the plan genuinely is a fifteen-minute byproduct, and naming really is the only open decision. One `grep` of the flag definitions plus checking whether the three most recent flags still exist in the codebase settles it in under an hour.
+missing_actor: Customer support / payments operations — they are the first to learn the new checkout is broken, hours before the dashboard shows it, and they should be given a named channel to trigger the halt plus a way to see which checkout a given complaining customer was served. Nobody in the question owns "we should stop", and support is the party with the earliest signal.
+confidence: high

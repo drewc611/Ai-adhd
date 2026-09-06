@@ -1,0 +1,57 @@
+{
+  "run_id": "004-kernel-naming",
+  "created_at": "2026-09-06T14:08:23.525Z",
+  "problem_hash": "sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102",
+  "problem_class": "naming",
+  "seed": 4,
+  "n": 5,
+  "allow_wide": false,
+  "estimate": {
+    "tokens_branches": 60000,
+    "tokens_critic": 60000,
+    "tokens_deepen": 36000,
+    "tokens_total": 156000
+  },
+  "branches": [
+    {
+      "frame": "HORIZON",
+      "axis": "operation",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/HORIZON.md",
+      "artifact_path": "branches/HORIZON.yaml"
+    },
+    {
+      "frame": "MINIMALIST",
+      "axis": "scope",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/MINIMALIST.md",
+      "artifact_path": "branches/MINIMALIST.yaml"
+    },
+    {
+      "frame": "PARTICULARIST",
+      "axis": "particulars",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/PARTICULARIST.md",
+      "artifact_path": "branches/PARTICULARIST.yaml"
+    },
+    {
+      "frame": "END_USER",
+      "axis": "actors",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/END_USER.md",
+      "artifact_path": "branches/END_USER.yaml"
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "axis": "frame_validity",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/FRAME_BREAKER.md",
+      "artifact_path": "branches/FRAME_BREAKER.yaml"
+    }
+  ]
+}
