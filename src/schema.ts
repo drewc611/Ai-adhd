@@ -291,5 +291,10 @@ export const FixtureSchema = z
 export type Fixture = z.infer<typeof FixtureSchema>;
 
 export const RecordedExpectationSchema = z
-  .object({ outcome: z.enum(["pass", "fail"]), note: z.string().optional() })
+  .object({
+    outcome: z.enum(["pass", "fail"]),
+    note: z.string().optional(),
+    /** A hand written consensus answer that exists to fail. Audited separately from real runs. */
+    control: z.boolean().default(false),
+  })
   .strict();

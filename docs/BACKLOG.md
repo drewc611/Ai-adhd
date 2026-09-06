@@ -10,6 +10,9 @@ yet enough to know whether they work.
 
 ## 1. Evidence from runs we can already do
 
+0. **Decide the four non-discriminating assertions** that `adhd eval --audit` flags
+   (`002/periodic_actor`, `003/reframe`, `003/who_pays`, `004/false_means`). Each on its own
+   argument, each with a fresh run showing the change measures something. See D6 in DECISIONS.
 1. **`adhd frames --stats`** (evidence). Per-frame rates across recorded runs: appearances,
    prune rate, which traps prune it, mean pass A, survivor rate, fold rate, how often it holds
    the recommendation. Five runs is thin but the command is what makes run six worth anything.

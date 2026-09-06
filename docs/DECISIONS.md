@@ -219,6 +219,35 @@ thing asserts in its negative case) or a badly chosen assertion (matching "doubl
 rewards reciting a rule rather than reasoning about the negative case)? Do not resolve it by
 editing the pattern until the answer is decided on its merits.
 
+### Four assertions that do not discriminate
+
+`adhd eval --audit` replays every fixture assertion against the real runs and the negative
+controls separately. An assertion the control also satisfies is not measuring divergence: the
+consensus answer already clears it. Finding `false_means` that way was luck; the audit makes it
+mechanical. On the current nine recorded runs it flags four of twenty-one assertions:
+
+| assertion | the control text that satisfied it |
+|---|---|
+| `002/periodic_actor` | "Cron" |
+| `003/reframe` | "release cadence" |
+| `003/who_pays` | "on call" |
+| `004/false_means` | "double negative" |
+
+None of these is automatically a bug in the fixture. Two readings apply to each, the same pair
+as for `false_means`: the assertion may be asking for something the consensus answer genuinely
+supplies (in which case the fixture is testing the wrong thing), or the frame set may have a
+gap the control happens to cover.
+
+`002/periodic_actor` is the clearest case for the first reading. Listing cron and GC is exactly
+what the consensus answer is good at, so requiring the words proves nothing about divergence;
+what the run should be asked for is which periodic actor and how the period was established.
+`003/who_pays` matching "on call" is close behind.
+
+**They are recorded, not fixed.** Rewriting four assertions immediately after seeing which ones
+the controls cleared is how a harness gets tuned until it always passes. Each should be changed,
+if at all, on its own argument about what the assertion is for, and with a fresh run to show the
+change measures something. That is the owner's call.
+
 Third class run: `evals/recorded/003-kernel-strategy/`, the `strategy` set (FRAME_BREAKER,
 LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON) on fixture 003. It passes. The set was not a
 monoculture by the critic's clustering (three clusters), but every one of the five positions

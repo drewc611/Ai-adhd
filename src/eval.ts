@@ -55,6 +55,7 @@ const SCOPE_TITLES: Record<string, string> = { recommendation: "Recommendation",
 
 interface RecordedRun {
   dir: string;
+  control: boolean;
   synthesis: string;
   branches: string;
   survivingBranches: string;
@@ -75,7 +76,11 @@ function loadRecorded(dir: string): RecordedRun {
     const m = synthesis.match(/problem_hash:\s*`?(sha256:[0-9a-f]+|sha256:pending)`?/);
     hash = m ? m[1]! : null;
   }
+  const control = existsSync(join(dir, "expected.json"))
+    ? RecordedExpectationSchema.parse(JSON.parse(readFileSync(join(dir, "expected.json"), "utf8"))).control
+    : false;
   return {
+    control,
     dir,
     synthesis,
     branches: branchText(branchFiles),
@@ -192,4 +197,101 @@ export function formatEvalReport(r: EvalReport): string {
   for (const f of r.fixtures_without_runs) lines.push(`--   fixture ${f}  no recorded runs`);
   lines.push(r.ok ? "eval: all recorded runs match their expected outcome" : "eval: MISMATCH");
   return lines.join("\n");
+}
+
+export interface ItemAudit {
+  fixture: string;
+  item: string;
+  kind: "must_surface" | "must_not";
+  real_matched: number;
+  real_total: number;
+  control_matched: number;
+  control_total: number;
+  /** The literal text in a control that satisfied the assertion. What makes the finding actionable. */
+  control_evidence: string | null;
+  verdict: "discriminating" | "matches a control" | "never matched" | "no evidence yet";
+}
+
+/**
+ * Fixture quality, not run quality. An assertion the consensus answer also satisfies is not
+ * measuring divergence, and an assertion nothing has ever matched cannot be told apart from
+ * one that is unreachable. Both are silent: the harness reports a clean pass either way.
+ *
+ * This exists because fixture 004's `false_means` turned out to be satisfied by a stock line
+ * in the negative control, and that was noticed by hand. Noticing it by hand does not scale.
+ */
+export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recordedDir?: string } = {}): { items: ItemAudit[]; text: string } {
+  const fixturesDir = opts.fixturesDir ?? join(cfg.root, "evals", "fixtures");
+  const recordedDir = opts.recordedDir ?? join(cfg.root, "evals", "recorded");
+  const fixtures = loadFixtures(fixturesDir);
+  const runs = existsSync(recordedDir)
+    ? readdirSync(recordedDir)
+        .filter((d) => statSync(join(recordedDir, d)).isDirectory())
+        .map((d) => loadRecorded(join(recordedDir, d)))
+    : [];
+  const items: ItemAudit[] = [];
+
+  for (const fx of fixtures) {
+    const forFixture = runs.filter((r) => r.dir.split("/").pop()!.startsWith(`${fx.id}-`));
+    const real = forFixture.filter((r) => !r.control);
+    const controls = forFixture.filter((r) => r.control);
+    const hit = (r: RecordedRun, scope: string, patterns: string[]) => anyMatch(scopeText(r, scope), patterns);
+    const hits = (r: RecordedRun, scope: string, patterns: string[]) => hit(r, scope, patterns) !== null;
+
+    for (const ms of fx.must_surface) {
+      const rm = real.filter((r) => hits(r, ms.scope, ms.any_of)).length;
+      const cm = controls.filter((r) => hits(r, ms.scope, ms.any_of)).length;
+      const cev = controls.map((r) => hit(r, ms.scope, ms.any_of)).find((x) => x !== null) ?? null;
+      items.push({
+        fixture: fx.id,
+        item: ms.id,
+        kind: "must_surface",
+        control_evidence: cev,
+        real_matched: rm,
+        real_total: real.length,
+        control_matched: cm,
+        control_total: controls.length,
+        verdict: cm > 0 ? "matches a control" : real.length === 0 ? "no evidence yet" : rm === 0 ? "never matched" : "discriminating",
+      });
+    }
+    for (const mn of fx.must_not) {
+      if (mn.check !== "must_match") continue;
+      const rm = real.filter((r) => hits(r, mn.scope, mn.any_of)).length;
+      const cm = controls.filter((r) => hits(r, mn.scope, mn.any_of)).length;
+      const cev = controls.map((r) => hit(r, mn.scope, mn.any_of)).find((x) => x !== null) ?? null;
+      items.push({
+        fixture: fx.id,
+        item: mn.id,
+        kind: "must_not",
+        control_evidence: cev,
+        real_matched: rm,
+        real_total: real.length,
+        control_matched: cm,
+        control_total: controls.length,
+        verdict: real.length === 0 ? "no evidence yet" : rm === 0 ? "never matched" : "discriminating",
+      });
+    }
+  }
+
+  const lines = [`fixture audit over ${runs.length} recorded run(s): ${runs.filter((r) => !r.control).length} real, ${runs.filter((r) => r.control).length} control`, ""];
+  lines.push(`${"fixture".padEnd(8)} ${"item".padEnd(26)} real  ctrl  verdict`);
+  for (const i of items)
+    lines.push(
+      `${i.fixture.padEnd(8)} ${i.item.padEnd(26)} ${`${i.real_matched}/${i.real_total}`.padStart(4)}  ${`${i.control_matched}/${i.control_total}`.padStart(4)}  ${i.verdict === "matches a control" ? "!! " : i.verdict === "never matched" ? " ? " : "   "}${i.verdict}`,
+    );
+
+  const bad = items.filter((i) => i.verdict === "matches a control");
+  const cold = items.filter((i) => i.verdict === "never matched");
+  lines.push("");
+  if (bad.length)
+    lines.push(
+      `${bad.length} assertion(s) the consensus answer already satisfies: ${bad.map((i) => `${i.fixture}/${i.item}`).join(", ")}.`,
+      `  A control passing an assertion means that assertion does not measure divergence. Either the`,
+      `  frame set has a real gap the control happens to cover, or the pattern rewards recitation.`,
+      `  Decide which; do not loosen the pattern to make the report quiet.`,
+      ...bad.map((i) => `    ${i.fixture}/${i.item} matched on: "${(i.control_evidence ?? "").replace(/\s+/g, " ").slice(0, 90)}"`),
+    );
+  if (cold.length) lines.push(`${cold.length} assertion(s) no real run has ever matched: ${cold.map((i) => `${i.fixture}/${i.item}`).join(", ")}. A stretch goal and an unreachable pattern look identical here.`);
+  if (!bad.length && !cold.length) lines.push("every assertion is matched by at least one real run and by no control.");
+  return { items, text: lines.join("\n") };
 }

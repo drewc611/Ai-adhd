@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
-import { formatEvalReport, runEval } from "./eval.js";
+import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { frameStats, listFrames, orthogonality } from "./frames.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
@@ -85,10 +85,16 @@ program
   .description("replay recorded runs against fixture assertions")
   .option("--fixtures <dir>")
   .option("--recorded <dir>")
+  .option("--audit", "report which assertions discriminate a real run from the negative control")
   .option("--json", "machine readable")
   .action((o) => {
     try {
       const cfg = loadConfig(program.opts().root);
+      if (o.audit) {
+        const a = auditFixtures(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded });
+        console.log(o.json ? JSON.stringify(a.items, null, 2) : a.text);
+        return;
+      }
       const r = runEval(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded });
       console.log(o.json ? JSON.stringify(r, null, 2) : formatEvalReport(r));
       process.exit(r.ok ? 0 : 1);

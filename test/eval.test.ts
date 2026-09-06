@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { runEval, loadFixtures } from "../src/eval.js";
+import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
 import { problemHash } from "../src/hash.js";
 
 test("the shipped negative control fails fixture 001 and is expected to", () => {
@@ -122,4 +122,52 @@ test("a fixture pattern anchored with ^ reads the start of the scope text, and a
   );
   assert.deepEqual(verdict.failures, []);
   assert.equal(r.pairs.every((p) => p.ok), true);
+});
+
+test("the audit flags an assertion the negative control also satisfies, and names the text that did it", () => {
+  const dir = tmp();
+  const fixtures = join(dir, "fixtures");
+  const recorded = join(dir, "recorded");
+  mkdirSync(fixtures, { recursive: true });
+  const prompt = "Where should I look?";
+  writeFileSync(
+    join(fixtures, "901-audit.yaml"),
+    [
+      'id: "901"',
+      "name: audit",
+      "problem_class: fuzzy_debugging",
+      "seed: 1",
+      `prompt: "${prompt}"`,
+      "must_surface:",
+      "  - id: says_cron",
+      "    description: names a scheduled actor",
+      "    any_of: ['cron']",
+      "  - id: says_rare",
+      "    description: names something only a real run reaches",
+      "    any_of: ['who is hurt']",
+      "  - id: says_nothing",
+      "    description: nothing has ever said this",
+      "    any_of: ['zqx-never-appears']",
+      "must_not: []",
+      "expect: {}",
+    ].join("\n"),
+  );
+  const write = (name: string, body: string, control: boolean) => {
+    const d = join(recorded, name);
+    mkdirSync(join(d, "branches"), { recursive: true });
+    writeFileSync(join(d, "plan.json"), JSON.stringify({ problem_hash: problemHash(prompt) }));
+    writeFileSync(join(d, "synthesis.md"), `# ADHD synthesis\n## Recommendation\n\n${body}\n\n## Pruned, with reason\n\n(none)\n`);
+    writeFileSync(join(d, "expected.json"), JSON.stringify({ outcome: control ? "fail" : "pass", control }));
+  };
+  write("901-real", "Check cron, and ask who is hurt by the tail.", false);
+  write("901-linear-cot", "The usual suspects: cron, GC, cache expiry.", true);
+
+  const a = auditFixtures(cfg, { fixturesDir: fixtures, recordedDir: recorded });
+  const byId = new Map(a.items.map((i) => [i.item, i]));
+  assert.equal(byId.get("says_cron")!.verdict, "matches a control", "an assertion the consensus answer satisfies is not measuring divergence");
+  assert.equal(byId.get("says_cron")!.control_evidence, "cron");
+  assert.equal(byId.get("says_rare")!.verdict, "discriminating");
+  assert.equal(byId.get("says_nothing")!.verdict, "never matched");
+  assert.match(a.text, /matched on: "cron"/);
+  assert.match(a.text, /do not loosen the pattern to make the report quiet/);
 });

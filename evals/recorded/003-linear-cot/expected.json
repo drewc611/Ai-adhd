@@ -1,1 +1,5 @@
-{ "outcome": "fail", "note": "negative control: the consensus answer to fixture 003, with real citations and a balanced case on both sides. If this passes, the fixture or the harness is broken." }
+{
+  "outcome": "fail",
+  "note": "negative control: the consensus answer to fixture 003, with real citations and a balanced case on both sides. If this passes, the fixture or the harness is broken.",
+  "control": true
+}

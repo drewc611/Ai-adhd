@@ -1,1 +1,5 @@
-{ "outcome": "fail", "note": "negative control: the consensus answer to fixture 004. It names a flag and gives sound conventions, and misses every question the fixture asks. If this passes, the fixture or the harness is broken." }
+{
+  "outcome": "fail",
+  "note": "negative control: the consensus answer to fixture 004. It names a flag and gives sound conventions, and misses every question the fixture asks. If this passes, the fixture or the harness is broken.",
+  "control": true
+}
