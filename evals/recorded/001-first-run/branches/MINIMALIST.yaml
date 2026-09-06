@@ -1,0 +1,36 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MINIMALIST
+position: Set a single overall request deadline of 10 seconds on the client and change nothing else.
+reasoning: |
+  1. The pain. Nobody asks about timeouts because they read the docs. They ask because a call
+  hung, or they are afraid one will, and the client's default is either infinite or unknown.
+  The pain is "a request can wait forever and take my process with it." Everything else in
+  the topic (connect vs read vs write, per-route tuning, retry budgets) is imagined pain.
+
+  2. The smallest intervention. One number. A total per-request deadline, set at the client
+  level so every call inherits it. 10 seconds is chosen not because it is optimal but because
+  it is long enough that a healthy dependency essentially never trips it and short enough
+  that a hung one gets noticed the same day. Distinguishing connect from read timeouts buys
+  nothing here: both failures look the same to the caller (the call did not come back) and
+  the overall deadline bounds both.
+
+  3. What it leaves unfixed. Nothing is tuned. A slow-but-alive dependency will occasionally
+  get cut off at 10s when 12s would have succeeded. Streaming or long-poll endpoints, if any
+  exist, will break; the question did not mention them, so I assume none. No retry, no
+  backoff, no circuit breaker. That is acceptable because the failure mode changes from
+  "silent hang" to "loud error with a stack trace," and loud errors are how you learn the
+  real numbers.
+
+  4. When the larger fix becomes necessary. When the timeout error appears in logs against a
+  dependency that is genuinely healthy, you now have evidence for a per-endpoint value.
+  When you see one endpoint that legitimately needs more than 10s, you split the client or
+  override that one call. Until a timeout error actually fires in production, any finer
+  setting is a guess, and the asker will know because the guess will be sitting in a config
+  file nobody can justify.
+forecloses:
+  - Separate connect, read, and write timeouts tuned per phase.
+  - Per-endpoint or per-route timeout values chosen up front.
+  - Adding retries or a circuit breaker alongside the timeout.
+falsifier: A single production timeout error fires against a dependency whose own metrics show it responded successfully in under 10 seconds, meaning the phase or route granularity actually matters and one number is wrong.
+missing_actor: The owner of the upstream service being called, who can publish an SLO or p99 latency figure that would replace the guessed 10 seconds with a derived one.
+confidence: medium

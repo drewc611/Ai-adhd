@@ -1,0 +1,73 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: B
+clusters:
+  - id: caller_owned_deadline
+    action: Change the client's call interface so every request carries a deadline supplied by the caller from its own remaining budget, keep only short fixed floors (connect, idle, hard cap) on the client as backstops, and remove the ability to call without a deadline.
+    members: [ACTOR_CENSUS, FRAME_BREAKER]
+    singleton: false
+    strongest_objection: "Requiring a deadline at every call site is the most expensive and least reversible move on the table, and neither member prices it. It changes the signature of every caller, and most callers today do not know their budget; in practice they will pass a made-up constant, which reproduces the global timeout in N places with worse observability and no single knob for the on-call operator to turn. The floors the branches keep (connect 1-2s, idle 5s, cap 30s) are exactly the unmeasured static numbers the position claims to have dissolved, so the asker still has to pick numbers, now with an API migration in front of them. The falsifier (no cancellations observed for a week) can only be checked after building the caller-side instrumentation the position presumes, so the cheap test comes after the expensive commitment. DOOR_KEEPER reaches the same per-call override as an optional door closed at zero cost today, while shipping a working default in an afternoon; the asker asked what numbers to set, and this cluster answers a question about architecture that may be right but does not need to be answered before the process stops hanging."
+  - id: semantics_first_generous_default
+    action: Enforce total-deadline semantics, forbid infinite waits, expose a per-call override, keep retries inside the deadline, then ship connect 2s and total 10s behind config and tighten per endpoint to 2-3x observed p99 after a week of elapsed-time logging.
+    members: [DOOR_KEEPER]
+    singleton: true
+    strongest_objection: "By its own argument the 10s default is not a two-way door. The branch states that whatever number ships first gets copied into other services' budgets and runbooks, and then ships 10s to every call site as the inherited default, so a week later the tightening it promises is fighting callers who have already sized to 10s. The tuning step also treats the upstream's p99 as the authority on how long to wait, which ACTOR_CENSUS forecloses directly: the party whose time is actually being spent is whoever is waiting on the caller, and a browser request with 1.3s left gains nothing from a deadline that is 2.5x some server's p99. The 2x-3x multiplier is an unjustified constant dressed as a derivation, and a week of logging is the slowest of the experiments proposed while being the only one that produces the number. MINIMALIST's point also lands: the four semantic commitments are sound but the asker cannot tell from this branch which of them is needed today versus which is design hygiene, so the answer to 'what number' arrives wrapped in an API review."
+  - id: measured_tight_static
+    action: Read the dependency's existing latency histogram, set connect to 1-2s and a total deadline just above the measured slow tail (typically 2-5s), and permit at most one jittered retry on idempotent calls inside the remaining deadline.
+    members: [LEDGER]
+    singleton: true
+    strongest_objection: null
+  - id: single_generous_deadline
+    action: Set one client-wide total request deadline of 10 seconds and change nothing else until a production timeout error provides evidence for finer settings.
+    members: [MINIMALIST]
+    singleton: true
+    strongest_objection: null
+traps:
+  LEDGER:
+    T1: { fired: false, evidence: "Removing 'HTTP' changes the answer: the TCP-handshake argument for the connect value, the socket-pool exhaustion cost, and the idempotency condition on the retry are HTTP-specific and load bearing." }
+    T2: { fired: true, evidence: "The load bearing assumption is that the timeout is a property of the client set once by the developer; LEDGER accepts it wholesale and only argues about which static number and who pays for it." }
+    T3: { fired: false, evidence: "No citations or authorities appear; the who-pays ledger is argued from first principles." }
+    T4: { fired: false, evidence: "It closes three decisions (connect value, deadline source, retry count) and deliberately leaves the total deadline value to a measurement the reader performs, so it does not pretend to have settled everything." }
+    T5: { fired: false, evidence: "Position is an imperative: set connect 1-2s, set total from measured tail, cap retries at one." }
+    T6: { fired: false, evidence: "Names the asker's users, the downstream team and its on-call, the upstream caller/end user, and the downstream service; omits operator, scheduler, and attacker but the named set covers the decision." }
+    T7: { fired: true, evidence: "Every recommendation is presented at equal weight with no statement of what it costs to be wrong about connect vs total vs retry or how long until you learn; 'one afternoon of measurement' is a cost estimate, not a reversibility distinction." }
+    T8: { fired: false, evidence: "Flat restatement 'short connect, total slightly above measured tail, one jittered retry' is the same claim and still worth saying without the ledger framing." }
+  MINIMALIST:
+    T1: { fired: true, evidence: "The branch itself states connect vs read distinction 'buys nothing' and gives a single wall-clock deadline; delete 'HTTP' and 'this client' and the answer 'one 10s total deadline' is unchanged for any blocking call." }
+    T2: { fired: true, evidence: "It accepts that the timeout lives on the client and is picked once by the developer, and explicitly labels per-call and per-route considerations 'imagined pain' rather than testing them." }
+    T3: { fired: false, evidence: "No citations; the argument is the pain-first smallest-intervention chain." }
+    T4: { fired: false, evidence: "It forces one decision and explicitly lists what it leaves unfixed, the opposite of a completeness claim." }
+    T5: { fired: false, evidence: "'Set a single overall request deadline of 10 seconds and change nothing else' is a do-X sentence." }
+    T6: { fired: true, evidence: "Only the asker and the upstream owner are named; the caller who inherits 10s, the end user waiting on it, the operator who needs a knob during an incident, the scheduler, and the attacker are all absent, and the caller in particular decides whether 10s is generous or fatal." }
+    T7: { fired: false, evidence: "It orders explicitly: the cheap one-number move first, per-endpoint splitting only after a production error provides evidence, and states the cost of being wrong (a 12s success cut at 10s)." }
+    T8: { fired: false, evidence: "Stripped of the minimalist framing, 'set a 10s total deadline' is a concrete claim the asker can act on." }
+  DOOR_KEEPER:
+    T1: { fired: false, evidence: "The slowloris read-vs-total argument, the TCP handshake justification for 2s, and the retry-multiplication case all depend on HTTP semantics; remove them and the four doors change." }
+    T2: { fired: false, evidence: "Partially attacks the assumption: it names global-only timeout as a one-way door and mandates a per-call override, though it still ships a client-owned default rather than testing whether the client should own the number at all." }
+    T3: { fired: false, evidence: "No authorities cited." }
+    T4: { fired: false, evidence: "It forces four semantic decisions and two numbers today and explicitly defers per-endpoint values to a week of data, so the reader retains a decision." }
+    T5: { fired: false, evidence: "'Set connect timeout to 2s, per-request total deadline to 10s' is a do-X sentence." }
+    T6: { fired: false, evidence: "Names the developer, the upstream owner, other services and their callers who inherit the number, and operations via runbooks and pagers; omits the end user and attacker but the slowloris case covers the hostile peer." }
+    T7: { fired: false, evidence: "The entire structure is reversibility: two-way numbers vs one-way semantics, with cost of being wrong and detection latency stated for each door." }
+    T8: { fired: false, evidence: "Flat restatement 'total deadline not read timeout, no infinite, per-call override, retries inside deadline, 2s/10s defaults, tune later' is the same claim." }
+  ACTOR_CENSUS:
+    T1: { fired: false, evidence: "The load balancer idle cutoff, liveness probe, per-read idle floor for trickling peers, and DNS-poisoning connect hang are HTTP and infrastructure specific and set the floors." }
+    T2: { fired: false, evidence: "It names the assumption that the client runs unattended with one developer-chosen number frozen in, tests it by enumerating actors, and the deadline-propagation position follows." }
+    T3: { fired: false, evidence: "No citations." }
+    T4: { fired: false, evidence: "The actor list is long but the position commits to one design plus three floors and leaves each caller's budget to the caller by design, not by omission." }
+    T5: { fired: false, evidence: "'Make every request carry a deadline handed in by the caller' is a do-X sentence." }
+    T6: { fired: false, evidence: "Names all seven detector actors (user, operator, caller, upstream, attacker, scheduler, payer) and builds on the end user." }
+    T7: { fired: false, evidence: "Distinguishes the operator's runtime knob (seconds, no redeploy) from the developer's constant edit, and reserves runtime-configurable floors for that reason, though it does not price the irreversibility of the signature change." }
+    T8: { fired: false, evidence: "Stripped of the census, 'callers pass deadlines, client keeps short defensive floors' is the claim and stands." }
+  FRAME_BREAKER:
+    T1: { fired: false, evidence: "Marginal: the position generalizes to any RPC client, but the connect-timeout backstop and the 503 Retry-After actor action are HTTP-specific, and the batch-vs-request-SLO example depends on there being multiple callers of one client." }
+    T2: { fired: false, evidence: "Names 'on this HTTP client' as the load bearing assumption, tests it with the one-client-two-correct-answers case, and derives the position from the result." }
+    T3: { fired: false, evidence: "No citations." }
+    T4: { fired: false, evidence: "It forces one decision (delete the client-wide field) and hands the reader an enumeration task rather than pretending every budget is known." }
+    T5: { fired: false, evidence: "'Stop configuring a timeout on the client at all; pass a per-call deadline' is a do-X sentence." }
+    T6: { fired: false, evidence: "Names the caller, the upstream owner, the client library author, and the end user via the user-facing SLO; omits operator, scheduler, and attacker." }
+    T7: { fired: false, evidence: "Marginal: it sequences the cheap enumeration of call sites before the committed signature change, but never states what deleting the client-wide field costs if wrong or how you would learn." }
+    T8: { fired: false, evidence: "Flat restatement 'pass per-call deadlines instead of a client timeout' is still a substantive claim without the who-benefits framing." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "ACTOR_CENSUS and FRAME_BREAKER both name and test the assumption that the timeout is a client-owned constant; DOOR_KEEPER partially attacks it via mandatory per-call override." }
+  T6_all_missing_actor_null: { fired: false, evidence: "All five branches name a missing_actor with an action; four name the upstream owner, ACTOR_CENSUS names the abandoning end user." }
+lint_verdicts: []

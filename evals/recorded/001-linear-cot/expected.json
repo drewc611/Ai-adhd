@@ -1,0 +1,1 @@
+{ "outcome": "fail", "note": "negative control: the linear CoT answer from README.md. If this passes, the fixture or the harness is broken." }

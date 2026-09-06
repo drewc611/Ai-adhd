@@ -1,0 +1,185 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "LEDGER",
+      "status": "pruned",
+      "cluster": "measured_tight_static",
+      "pass_a": 0.6875,
+      "fired": [
+        {
+          "trap": "T2",
+          "evidence": "The load bearing assumption is that the timeout is a property of the client set once by the developer; LEDGER accepts it wholesale and only argues about which static number and who pays for it."
+        },
+        {
+          "trap": "T7",
+          "evidence": "Every recommendation is presented at equal weight with no statement of what it costs to be wrong about connect vs total vs retry or how long until you learn; 'one afternoon of measurement' is a cost estimate, not a reversibility distinction."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set a short connect timeout (about 1 to 2 seconds), a per-request total deadline sized to the slowest legitimate response you have actually measured plus a small margin (typically 2 to 5 seconds for an API call), and cap retries at one with jitter, so the bill for a slow dependency is paid by the caller failing fast rather than by the downstream service and its on-call engineer absorbing a pile-up.",
+      "forecloses": [
+        "Leaving the library default timeout in place, including the common default of no timeout at all.",
+        "Setting a single generous timeout (30 seconds or more) and relying on aggressive retries to smooth over failures.",
+        "Choosing the number by intuition or convention rather than from the measured latency distribution of the actual dependency."
+      ],
+      "falsifier": "Pull the dependency's real response latency histogram for the last week; if the p99.9 of legitimate successful responses is well above the proposed total deadline and those slow responses are ones the business needs to succeed rather than fail, the deadline is too tight and this position is wrong for that endpoint.",
+      "missing_actor": "The team that owns the downstream service being called; they can publish an SLO and a documented per-request time budget, and they can enforce server-side deadlines and load shedding, which is what actually protects them from retry storms regardless of what any single client sets."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "pruned",
+      "cluster": "single_generous_deadline",
+      "pass_a": 0.7083333333333334,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The branch itself states connect vs read distinction 'buys nothing' and gives a single wall-clock deadline; delete 'HTTP' and 'this client' and the answer 'one 10s total deadline' is unchanged for any blocking call."
+        },
+        {
+          "trap": "T2",
+          "evidence": "It accepts that the timeout lives on the client and is picked once by the developer, and explicitly labels per-call and per-route considerations 'imagined pain' rather than testing them."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Only the asker and the upstream owner are named; the caller who inherits 10s, the end user waiting on it, the operator who needs a knob during an incident, the scheduler, and the attacker are all absent, and the caller in particular decides whether 10s is generous or fatal."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set a single overall request deadline of 10 seconds on the client and change nothing else.",
+      "forecloses": [
+        "Separate connect, read, and write timeouts tuned per phase.",
+        "Per-endpoint or per-route timeout values chosen up front.",
+        "Adding retries or a circuit breaker alongside the timeout."
+      ],
+      "falsifier": "A single production timeout error fires against a dependency whose own metrics show it responded successfully in under 10 seconds, meaning the phase or route granularity actually matters and one number is wrong.",
+      "missing_actor": "The owner of the upstream service being called, who can publish an SLO or p99 latency figure that would replace the guessed 10 seconds with a derived one."
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "status": "survivor",
+      "cluster": "semantics_first_generous_default",
+      "pass_a": 0.75,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set connect timeout to 2s, per-request total deadline to 10s, and no infinite anything, then ship it behind a config value and tighten from observed p99 after one week of traffic.",
+      "forecloses": [
+        "A single global timeout with no per-request override",
+        "Any code path that waits indefinitely on an HTTP call",
+        "Retries layered outside the deadline so the effective worst case exceeds the configured timeout",
+        "Setting tight production timeouts (sub-second) before having observed latency distribution data"
+      ],
+      "falsifier": "A week of elapsed-time logs showing a legitimate endpoint whose p99 exceeds 10s without a bug on the server side, which would mean the 10s starting default causes false failures and the generous-first ordering was not generous enough.",
+      "missing_actor": "The owners of the upstream service being called, who can publish their own latency SLO and set server-side request deadlines; without that, the client's timeout is a guess about someone else's system."
+    },
+    {
+      "frame": "ACTOR_CENSUS",
+      "status": "survivor",
+      "cluster": "caller_owned_deadline",
+      "pass_a": 0.8125,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Make every request carry a deadline handed in by the caller and propagated from whoever is waiting on it, and give the client itself only short fixed floors (connect 1-2s, per-read idle 5s, hard total cap 30s) that the caller's deadline can shorten but never lengthen.",
+      "forecloses": [
+        "A single global timeout constant (or the library's default, which is often infinite) compiled into the client and shared by every call site regardless of who is waiting.",
+        "Tuning the timeout purely to the upstream's observed p99 latency, which treats the upstream as the only actor and ignores that the person waiting may have already left.",
+        "Letting the load balancer, liveness probe, or thread-pool exhaustion be the mechanism that eventually ends a stuck request."
+      ],
+      "falsifier": "Instrument the caller side and observe that over a week no request was ever cancelled or abandoned before completion (for example, the only caller is an unattended batch job with no human or upstream deadline); then the caller-deadline plumbing buys nothing and fixed floors tuned to the upstream's p99 are the correct and simpler answer.",
+      "missing_actor": "The end user (or the caller on their behalf) who abandons the request by hitting refresh, navigating away, or killing the process; the action is cancellation, and the client should honor it immediately rather than continue waiting on the upstream."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "survivor",
+      "cluster": "caller_owned_deadline",
+      "pass_a": 0.7916666666666666,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop configuring a timeout on the client at all; pass a per-call deadline derived from each caller's remaining time budget, and make the client cancel the request when that deadline expires.",
+      "forecloses": [
+        "A single global timeout number in the client's configuration that all callers inherit.",
+        "Choosing timeouts by looking at the upstream server's p99 latency rather than the caller's budget.",
+        "Retry policies that add their own time on top of the request instead of consuming the caller's remaining deadline."
+      ],
+      "falsifier": "Enumerate the call sites; if there is exactly one caller with one fixed latency budget (for example a single batch job hitting one endpoint), then per-call deadline propagation adds nothing and a single static timeout was the right answer.",
+      "missing_actor": "The owner of the upstream service being called, who can publish a latency SLO and return 503 with Retry-After when overloaded, so callers stop guessing how long to wait."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "caller_owned_deadline",
+      "action": "Change the client's call interface so every request carries a deadline supplied by the caller from its own remaining budget, keep only short fixed floors (connect, idle, hard cap) on the client as backstops, and remove the ability to call without a deadline.",
+      "members": [
+        "ACTOR_CENSUS",
+        "FRAME_BREAKER"
+      ],
+      "survivors": [
+        "ACTOR_CENSUS",
+        "FRAME_BREAKER"
+      ],
+      "singleton": false,
+      "strongest_objection": "Requiring a deadline at every call site is the most expensive and least reversible move on the table, and neither member prices it. It changes the signature of every caller, and most callers today do not know their budget; in practice they will pass a made-up constant, which reproduces the global timeout in N places with worse observability and no single knob for the on-call operator to turn. The floors the branches keep (connect 1-2s, idle 5s, cap 30s) are exactly the unmeasured static numbers the position claims to have dissolved, so the asker still has to pick numbers, now with an API migration in front of them. The falsifier (no cancellations observed for a week) can only be checked after building the caller-side instrumentation the position presumes, so the cheap test comes after the expensive commitment. DOOR_KEEPER reaches the same per-call override as an optional door closed at zero cost today, while shipping a working default in an afternoon; the asker asked what numbers to set, and this cluster answers a question about architecture that may be right but does not need to be answered before the process stops hanging.",
+      "representative": "ACTOR_CENSUS",
+      "mean_pass_a": 0.8020833333333333
+    },
+    {
+      "id": "semantics_first_generous_default",
+      "action": "Enforce total-deadline semantics, forbid infinite waits, expose a per-call override, keep retries inside the deadline, then ship connect 2s and total 10s behind config and tighten per endpoint to 2-3x observed p99 after a week of elapsed-time logging.",
+      "members": [
+        "DOOR_KEEPER"
+      ],
+      "survivors": [
+        "DOOR_KEEPER"
+      ],
+      "singleton": true,
+      "strongest_objection": "By its own argument the 10s default is not a two-way door. The branch states that whatever number ships first gets copied into other services' budgets and runbooks, and then ships 10s to every call site as the inherited default, so a week later the tightening it promises is fighting callers who have already sized to 10s. The tuning step also treats the upstream's p99 as the authority on how long to wait, which ACTOR_CENSUS forecloses directly: the party whose time is actually being spent is whoever is waiting on the caller, and a browser request with 1.3s left gains nothing from a deadline that is 2.5x some server's p99. The 2x-3x multiplier is an unjustified constant dressed as a derivation, and a week of logging is the slowest of the experiments proposed while being the only one that produces the number. MINIMALIST's point also lands: the four semantic commitments are sound but the asker cannot tell from this branch which of them is needed today versus which is design hygiene, so the answer to 'what number' arrives wrapped in an API review.",
+      "representative": "DOOR_KEEPER",
+      "mean_pass_a": 0.75
+    },
+    {
+      "id": "measured_tight_static",
+      "action": "Read the dependency's existing latency histogram, set connect to 1-2s and a total deadline just above the measured slow tail (typically 2-5s), and permit at most one jittered retry on idempotent calls inside the remaining deadline.",
+      "members": [
+        "LEDGER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "single_generous_deadline",
+      "action": "Set one client-wide total request deadline of 10 seconds and change nothing else until a production timeout error provides evidence for finer settings.",
+      "members": [
+        "MINIMALIST"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "ACTOR_CENSUS and FRAME_BREAKER both name and test the assumption that the timeout is a client-owned constant; DOOR_KEEPER partially attacks it via mandatory per-call override."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "All five branches name a missing_actor with an action; four name the upstream owner, ACTOR_CENSUS names the abandoning end user."
+    },
+    "notes": [
+      "singleton DOOR_KEEPER escalated to deepen, flagged unverified"
+    ]
+  },
+  "proceed": true
+}

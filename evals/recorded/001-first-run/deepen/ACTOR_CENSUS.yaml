@@ -1,0 +1,50 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: ACTOR_CENSUS
+verdict: defend
+response: |
+  The objection is right about one thing and it costs the position its mandatory clause:
+  "impossible to call the client without a deadline" is a signature migration, and callers
+  who do not know their budget will invent constants, which is a global timeout smeared
+  across N sites with no operator knob. That part of the position was wrong on sequencing
+  and I drop it.
+
+  It does not overturn the rest, for three concrete reasons.
+
+  First, the floors are not "the unmeasured static numbers the position claimed to have
+  dissolved." The position never claimed to dissolve them; it claimed the per-request timeout
+  is a property of who is waiting, and the floors are a property of the actors who cannot be
+  trusted with a deadline. They are measured against those actors, not against the upstream's
+  latency: connect 1-2s because a live peer on the same network answers in tens of
+  milliseconds and anything longer is a dead route or an attacker; total cap 30s because it
+  must land under the load balancer idle cutoff and the liveness probe so the scheduler is
+  never the thing that ends the request. Those are the numbers the asker asked for, they can
+  be set this afternoon, and exposing them as runtime config gives the on-call operator the
+  single knob the objection says is missing. The objection's own preferred outcome ships
+  these same floors; it just declines to say where they come from.
+
+  Second, "optional door closed at zero cost today" undercounts what is being thrown away.
+  The census found an actor who acts on every slow request, all day, for free: the user who
+  abandons. A door nobody opens keeps discarding that signal, and the cost is real (threads
+  parked on doomed reads, retry storms against an upstream that is already struggling). The
+  cheap version is not a new parameter. Most runtimes already carry the cancellation
+  primitive on the request path (Go's request context, Node's AbortSignal, .NET's
+  CancellationToken, Python's asyncio cancellation); the client honors it where the caller
+  already has it and falls back to the floors where it does not. No signature change, no
+  made-up constants, because the fallback when no deadline is passed is the floor, not a
+  per-site guess. Callers that do know their budget (a handler with 1.3s left of a 2s SLO)
+  shorten it; nobody can lengthen it.
+
+  Third, the falsifier does not require building the instrumentation first. Client aborts
+  already show up in logs that exist today: 499s or "connection reset by client" in the load
+  balancer access log, cancelled request contexts in the framework's own metrics. If those
+  are near zero, or the only caller is an unattended batch job, the cancellation plumbing
+  buys nothing and the floors alone are the answer. That check is a query, not a migration,
+  and it runs before any commitment.
+
+  What the defence costs: the position was pitched as an architecture answer to a numbers
+  question, and the objection is right that the numbers come first. The revised position
+  leads with the floors and demotes caller deadlines from a requirement to a capability the
+  client honors wherever the runtime already provides one.
+revised_position: "Set the client's fixed floors now (connect 1-2s, per-read idle 5s, total cap 30s, chosen to sit under the load balancer and liveness-probe cutoffs and exposed as runtime config for the operator), and have the client honor an optional caller deadline or cancellation, threaded from the runtime's existing request context where one exists, that can shorten but never lengthen those floors, instead of requiring a new deadline parameter at every call site."
+revised_falsifier: "Query the load balancer access logs and framework metrics that already exist for client-side aborts (499s, connection reset by client, cancelled request contexts) over a representative week; if they are negligible or the client is only invoked from unattended jobs with no upstream deadline, skip the cancellation plumbing and ship the fixed floors alone."
+confidence: medium

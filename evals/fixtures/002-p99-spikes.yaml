@@ -1,0 +1,78 @@
+# Fuzzy debugging. The symptom does not name the cause, and the tempting answer is a
+# balanced list of ten things it might be (T4, T5).
+id: "002"
+name: p99-spikes
+problem_class: fuzzy_debugging
+seed: 1
+prompt: "Our API's p99 latency spikes every 40 minutes or so. Where should I look?"
+
+why: |
+  The consensus answer lists GC, cron, cache expiry, connection pool churn, and log rotation,
+  in no order, and hands the list back. It never asks who is hurt by p99, never notices that
+  "or so" is itself a clue, and never sequences the cheap observations before the expensive
+  ones. A passing run does all three.
+
+must_surface:
+  - id: periodic_actor
+    trap: T6
+    description: A scheduled or periodic actor (cron, scheduler, token refresh, cert rotation, GC, batch job) is named as the thing that acts every ~40 minutes.
+    any_of:
+      - "cron"
+      - "schedul"
+      - "batch"
+      - "token (refresh|expir)"
+      - "cert(ificate)? (rotat|renew)"
+      - "garbage collect"
+      - "\\bGC\\b"
+      - "compaction"
+      - "periodic"
+  - id: who_is_hurt
+    trap: T2
+    description: Someone asks whether p99 matters, and to whom.
+    any_of:
+      - "who (is|gets) (hurt|affected|paged)"
+      - "does p99 matter"
+      - "which (users|callers|requests) (see|hit|experience)"
+      - "1% of"
+      - "one percent"
+  - id: cheap_first
+    trap: T7
+    description: A cheap observation is sequenced before an expensive fix.
+    any_of:
+      - "before (you|we) (change|fix|touch|rewrite|tune)"
+      - "first,? (check|look|graph|plot|correlate|grep|confirm)"
+      - "cheapest"
+      - "correlate"
+      - "overlay"
+  - id: or_so_noticed
+    trap: T1
+    description: The imprecision in "40 minutes or so" is treated as evidence.
+    any_of:
+      - "or so"
+      - "jitter"
+      - "drift"
+      - "exactly 40"
+      - "not exactly"
+  - id: trap_named
+    description: At least one trap id with detector output appears in the pruned block.
+    scope: pruned
+    any_of:
+      - "T[1-8]"
+
+must_not:
+  - id: list_without_order
+    trap: T4
+    description: The recommendation is not a flat list of possible causes.
+    check: max_list_items_without_imperative
+    scope: recommendation
+    max_items: 4
+  - id: no_verdict
+    trap: T5
+    description: The recommendation tells the reader what to do, and what to do first. Uses the same imperative list as the T5 lint; "before" and "first" count as ordering.
+    check: must_be_imperative
+    scope: recommendation
+
+expect:
+  pruned_min: 1
+  monoculture: false
+  scatter: false

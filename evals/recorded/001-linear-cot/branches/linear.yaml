@@ -1,0 +1,12 @@
+problem_hash: "sha256:pending"
+frame: linear
+position: Set 15s first token, 30s inter token, 90s absolute, one automatic retry.
+reasoning: |
+  These are the values the Google SRE Book, chapter 22, recommends for services under load,
+  and they match common client defaults. A first token timeout catches a dead upstream, an
+  inter token timeout catches a stall mid stream, and an absolute timeout bounds total wait.
+  One retry handles transient failures without amplifying load.
+forecloses: []
+falsifier: null
+missing_actor: null
+confidence: high

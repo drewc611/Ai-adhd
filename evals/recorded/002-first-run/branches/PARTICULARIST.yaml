@@ -1,0 +1,40 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: PARTICULARIST
+position: Pull the exact timestamps of the last 24 hours of spikes and check whether the gap between them shrinks when request volume rises; if it drifts with traffic, look at whatever in the process is sized in bytes and emptied when full (old-generation heap, WAL or segment rotation, compaction), and if it holds at 40:00 regardless of load, look for a credential or token with a 60-minute lifetime that the client library refreshes at the two-thirds mark.
+reasoning: |
+  1. The three specific details: the period is about 40 minutes; the spike shows in p99 and the
+     asker did not mention p50 or error rate; the qualifier "or so" says the period is approximate.
+
+  2. The 40 is the detail that does the work. Forty minutes is not expressible as an even cron
+     interval: "*/40" fires at :00 and :40, giving alternating 40 and 20 minute gaps, which no one
+     describes as "every 40 minutes". So a clock-scheduled job is ruled out by the number itself.
+     That leaves two mechanisms that produce a genuine 40-minute period, and "or so" is the
+     detail that separates them. A fill-rate trigger (a heap generation, a log segment, an
+     index buffer that flushes when full) produces a period that stretches at 3am and compresses
+     at noon, which is exactly what "or so" describes. A 60-minute credential refreshed at two
+     thirds of its lifetime produces a period pinned at 40:00 to the second, and "or so" would
+     then be the asker's imprecision rather than the system's. The same log line that shows the
+     timestamps settles which one it is, so the answer is to read that line before reading
+     anything else.
+
+     The p99-only detail narrows further within the fill-rate branch. A flush that stalls the
+     whole process for a fraction of a second while requests take tens of milliseconds lands
+     entirely on the requests in flight during the stall, which is a tail effect and leaves p50
+     untouched. A flush that stalls for seconds moves p50 too. The asker reporting only p99
+     points at a stall shorter than the typical request, which fits a GC pause or a segment
+     fsync better than a multi-second compaction.
+
+  3. The thirty-second answer is "check for a cron job." The number 40 makes it wrong before
+     any log is opened, for the reason in probe 2: the only cron spelling that mentions 40
+     produces uneven gaps, and this asker reports even ones. The second thirty-second answer is
+     "it's GC, look at GC logs." That one is not wrong so much as premature: it is right only in
+     the drifting branch, and the asker has not yet supplied the observation that picks the
+     branch. Telling them to read GC logs first sends them down the wrong path half the time,
+     and the discriminating observation costs less than opening the GC logs does.
+forecloses:
+  - Treating a scheduled job (cron, systemd timer, scheduler tick at a fixed minute) as the first suspect.
+  - Adding replicas or raising limits before the timestamps have been read, since neither mechanism named here is fixed by capacity.
+  - Blaming a downstream dependency first; both candidate mechanisms live inside the process or its own storage, and the downstream gets looked at only after the local timestamps fail to correlate.
+falsifier: The spike gaps hold at 40:00 within a few seconds through both the overnight trough and the midday peak, and no credential, session, or lease used by the process has a 60-minute lifetime.
+missing_actor: Whoever operates the database or storage layer behind the API, who can line up their own checkpoint, compaction, or vacuum log against the spike timestamps and either claim or clear the 40-minute period without the API team touching the service.
+confidence: medium

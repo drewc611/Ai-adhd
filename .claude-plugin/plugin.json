@@ -1,0 +1,30 @@
+{
+  "name": "adhd",
+  "version": "0.0.1",
+  "description": "Anchoring Defeat by Heterogeneous Divergence. A reasoning architecture for Claude Code: N isolated subagents under distorted frames, blind critic, trap pruning, adversarial deepening.",
+  "author": {
+    "name": "drewc611"
+  },
+  "license": "MIT",
+  "keywords": [
+    "reasoning",
+    "divergence",
+    "subagents",
+    "critic"
+  ],
+  "skills": [
+    "./skills/adhd"
+  ],
+  "agents": [
+    "./agents"
+  ],
+  "mcpServers": {
+    "adhd": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/src/mcp.js"
+      ]
+    }
+  },
+  "repository": "https://github.com/drewc611/Ai-adhd"
+}

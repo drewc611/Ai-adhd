@@ -1,0 +1,58 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+position: Set connect timeout to 2s, per-request total deadline to 10s, and no infinite anything, then ship it behind a config value and tighten from observed p99 after one week of traffic.
+reasoning: |
+  1. Reversible vs irreversible. Almost every timeout number is a two way door: connect timeout,
+  read/response timeout, total deadline, idle pool timeout. Change a constant, redeploy, done in an
+  afternoon. What is not undoable in an afternoon is the shape of the decision, not the number:
+  (a) whether the client exposes a per-request deadline at all versus one global value baked into
+  a shared singleton that dozens of call sites inherit; (b) whether callers are allowed to pass
+  "no timeout" (infinite), because once a code path depends on a blocking-forever call, removing
+  that later breaks it; (c) whether the timeout is enforced on the total request or only on
+  socket reads, because a slow-trickle server defeats a read timeout and changing the semantics
+  later changes behavior for every caller at once; (d) whether retries are layered on top of the
+  timeout, because timeout times retries is the real worst case and callers upstream will have
+  sized their own budgets to whatever you ship first. Those four are the one way doors: they get
+  copied into other services' expectations and into runbooks.
+
+  2. Cost of being wrong and detection latency for each one way door. (a) Global-only timeout:
+  cost is a slow endpoint forcing the global value up for everyone, or a fast endpoint tolerating
+  a far-too-long hang; detection latency is weeks, first seen as a thread pool exhaustion incident
+  during a dependency brownout. (b) Allowing infinite: cost is a hung process during a partial
+  network partition, no error, no log, just a stalled worker; detection latency is the length of
+  the partition, and you find out from a pager, not a dashboard. (c) Read-only rather than total:
+  cost is the slowloris case, a server that sends one byte every few seconds never trips the
+  timeout; latency until detection is whenever a dependency degrades that way, could be months.
+  (d) Retries multiplying the deadline: cost is a 10s timeout becoming a 30s or 40s hang under
+  retry-with-backoff, plus retry storms amplifying load on an already sick dependency; detection
+  is at the first real outage, which is exactly the wrong time.
+
+  3. Cheap reversible experiments. Before committing to the shape: wrap the client in a config
+  driven setting, deploy with deliberately generous numbers (connect 2s, total 10s), and log
+  every request's elapsed time with the endpoint tag. One week of that tells you the p50, p99,
+  and max per endpoint, which tells you whether one global number is even plausible (answers
+  door a). Point the client at a local server that accepts TCP and never responds, and at one
+  that trickles bytes, and confirm the client actually gives up at the total deadline (answers
+  door c, in an hour). Grep for any call site that would need infinite; if none exists today,
+  door b closes cheaply now. Run a fault injection where the dependency returns 503 and watch the
+  wall clock per logical operation with retries on (answers door d).
+
+  4. Ordering. First, the free commitments that close doors at zero cost today: enforce a total
+  per-request deadline, not just read; forbid infinite by construction; expose per-call override
+  of the deadline; document that the retry budget is included inside the deadline, not on top.
+  Second, ship with connect 2s and total 10s as the defaults, because connect should fail fast
+  on an unreachable host (TCP handshake on a healthy network is tens of milliseconds, 2s is
+  already forgiving) and 10s is long enough to not cause false failures on unknown endpoints
+  while short enough that a hung worker is noticed. Third, after a week of elapsed-time data,
+  tighten the total deadline per endpoint to roughly 2x to 3x observed p99. The numbers are the
+  two way door and get walked through first, generously. The semantics are the one way door and
+  are taken now, with the detection experiments named above, because the experiments are cheap
+  and the semantics are what actually hurt when wrong.
+forecloses:
+  - A single global timeout with no per-request override
+  - Any code path that waits indefinitely on an HTTP call
+  - Retries layered outside the deadline so the effective worst case exceeds the configured timeout
+  - Setting tight production timeouts (sub-second) before having observed latency distribution data
+falsifier: A week of elapsed-time logs showing a legitimate endpoint whose p99 exceeds 10s without a bug on the server side, which would mean the 10s starting default causes false failures and the generous-first ordering was not generous enough.
+missing_actor: The owners of the upstream service being called, who can publish their own latency SLO and set server-side request deadlines; without that, the client's timeout is a guess about someone else's system.
+confidence: medium

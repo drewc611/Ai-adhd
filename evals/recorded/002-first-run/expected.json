@@ -1,0 +1,1 @@
+{ "outcome": "fail", "note": "First real run of fixture 002. Misses who_is_hurt: no frame in the fuzzy_debugging set asks who the tail latency lands on. Recorded as the baseline the frame library must beat, not hidden." }

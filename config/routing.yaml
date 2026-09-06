@@ -1,0 +1,147 @@
+# Routing. This file is the whole of what the orchestrator is allowed to decide.
+#
+# The host session (the "orchestrator") emits one routing decision object. Every field is
+# enum valued. There is no free text. The compiler rejects unknown keys and any string that
+# is not a member of the enum it belongs to. That is how "the orchestrator never reasons"
+# is enforced: it has nowhere to put reasoning.
+
+version: 0
+
+defaults:
+  max_branches: 5          # frames per run unless the class or the decision says otherwise
+  hard_cap: 9              # above this requires --allow-wide
+  min_branches: 3          # below this, clustering is meaningless
+  require_confirmation: true   # D5: preview plan, wait for the user, then spawn
+  shuffle_frames: true     # delivery order is randomised; collection is unordered
+  seed: random             # D3: every run has a seed, logged in plan.json; --seed overrides;
+                           # fixtures carry a fixed seed. Pass A's blind shuffle reuses it.
+  tokens_per_branch_estimate: 12000   # D5: the honest number shown before the spend.
+                                      # Order of magnitude. Revised from cost.json history.
+  branch_tools_allowed: [WebSearch, WebFetch]   # D4: the only grantable tools. Never filesystem.
+
+# The only object the orchestrator may produce. Validated with unknown keys rejected.
+decision_schema:
+  problem_class:
+    type: enum
+    values: [design_decision, fuzzy_debugging, naming, api_surface, strategy,
+             enumerate_options, factual_lookup, mechanical_refactor, single_correct_answer]
+    required: true
+  n:
+    type: integer
+    min: 3
+    max: 9
+    required: false
+  frames:
+    type: list
+    of: frame_id            # must exist in config/frames.yaml; axes must be distinct (D6)
+    required: false
+  allow_wide:
+    type: boolean
+    required: false
+  seed:
+    type: integer
+    required: false
+
+classes:
+
+  design_decision:
+    action: run
+    description: A choice between options where the search space, not the facts, is the problem.
+    signals:
+      - "should I"
+      - "which should"
+      - "how should we"
+      - "what should I set"
+      - "trade-off"
+    frames: [FRAME_BREAKER, ACTOR_CENSUS, LEDGER, DOOR_KEEPER, MINIMALIST]
+    alternates: [PARTICULARIST, NIGHT_OPERATOR, SABOTEUR, MECHANIC, PRIOR_ART, HORIZON,
+                 END_USER, FIRST_PRINCIPLES]
+
+  fuzzy_debugging:
+    action: run
+    description: A symptom that does not name its cause.
+    signals:
+      - "sometimes"
+      - "intermittent"
+      - "every N minutes"
+      - "where should I look"
+      - "no idea why"
+    frames: [MECHANIC, PARTICULARIST, SABOTEUR, NIGHT_OPERATOR, FRAME_BREAKER]
+    alternates: [ACTOR_CENSUS, DOOR_KEEPER, MINIMALIST, LEDGER, END_USER, PRIOR_ART,
+                 FIRST_PRINCIPLES, HORIZON]
+
+  naming:
+    action: run
+    description: Choosing a name for a thing people will read for years.
+    signals:
+      - "what should I call"
+      - "name for"
+      - "rename"
+    frames: [PARTICULARIST, FRAME_BREAKER, END_USER, HORIZON, MINIMALIST]
+    alternates: [ACTOR_CENSUS, DOOR_KEEPER, NIGHT_OPERATOR, LEDGER, PRIOR_ART, SABOTEUR,
+                 MECHANIC, FIRST_PRINCIPLES]
+
+  api_surface:
+    action: run
+    description: What to expose, to whom, in what shape.
+    signals:
+      - "API"
+      - "interface"
+      - "signature"
+      - "expose"
+      - "public"
+    frames: [END_USER, DOOR_KEEPER, SABOTEUR, MINIMALIST, FRAME_BREAKER]
+    alternates: [ACTOR_CENSUS, PARTICULARIST, NIGHT_OPERATOR, LEDGER, MECHANIC, PRIOR_ART,
+                 HORIZON, FIRST_PRINCIPLES]
+
+  strategy:
+    action: run
+    description: A direction with a long detection latency on being wrong.
+    signals:
+      - "roadmap"
+      - "should we invest"
+      - "long term"
+      - "bet"
+    frames: [FRAME_BREAKER, LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON]
+    alternates: [SABOTEUR, PARTICULARIST, ACTOR_CENSUS, MINIMALIST, NIGHT_OPERATOR,
+                 MECHANIC, END_USER, FIRST_PRINCIPLES]
+
+  enumerate_options:
+    action: run
+    description: The asker explicitly wants several directions.
+    signals:
+      - "a few ways to"
+      - "some options for"
+      - "different approaches"
+    frames: [FRAME_BREAKER, ACTOR_CENSUS, LEDGER, DOOR_KEEPER, MINIMALIST, PARTICULARIST,
+             SABOTEUR, NIGHT_OPERATOR, MECHANIC]
+    n: 7                      # wide by default; still below hard_cap. Nine listed, seven
+                              # taken in seeded shuffle order; axes stay distinct by
+                              # construction here (one frame per axis in this list).
+    alternates: [PRIOR_ART, END_USER, HORIZON, FIRST_PRINCIPLES]
+
+  factual_lookup:
+    action: decline
+    reason: One correct answer exists. Divergence costs N times the tokens and finds nothing.
+    signals:
+      - "what is the"
+      - "when was"
+      - "how many"
+      - "syntax for"
+
+  mechanical_refactor:
+    action: decline
+    reason: The change is specified. Do it, do not deliberate about it.
+    signals:
+      - "rename all"
+      - "convert to"
+      - "migrate this file"
+      - "extract into"
+
+  single_correct_answer:
+    action: decline
+    reason: The prompt has one right answer and asks for it. Answer directly.
+    signals:
+      - "does this compile"
+      - "what does this error mean"
+      - "is this valid"

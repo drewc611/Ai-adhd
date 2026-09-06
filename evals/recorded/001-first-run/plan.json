@@ -1,0 +1,57 @@
+{
+  "run_id": "001-first-run",
+  "created_at": "2026-09-06T05:34:21.546Z",
+  "problem_hash": "sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394",
+  "problem_class": "design_decision",
+  "seed": 1,
+  "n": 5,
+  "allow_wide": false,
+  "estimate": {
+    "tokens_branches": 60000,
+    "tokens_critic": 60000,
+    "tokens_deepen": 36000,
+    "tokens_total": 156000
+  },
+  "branches": [
+    {
+      "frame": "LEDGER",
+      "axis": "cost",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/LEDGER.md",
+      "artifact_path": "branches/LEDGER.yaml"
+    },
+    {
+      "frame": "MINIMALIST",
+      "axis": "scope",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/MINIMALIST.md",
+      "artifact_path": "branches/MINIMALIST.yaml"
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "axis": "reversibility",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/DOOR_KEEPER.md",
+      "artifact_path": "branches/DOOR_KEEPER.yaml"
+    },
+    {
+      "frame": "ACTOR_CENSUS",
+      "axis": "actors",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/ACTOR_CENSUS.md",
+      "artifact_path": "branches/ACTOR_CENSUS.yaml"
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "axis": "frame_validity",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/FRAME_BREAKER.md",
+      "artifact_path": "branches/FRAME_BREAKER.yaml"
+    }
+  ]
+}

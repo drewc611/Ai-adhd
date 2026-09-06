@@ -1,0 +1,51 @@
+# Deepen
+
+You hold one position. Someone has raised one objection to it. Defend it or fold. Folding is
+a valid outcome and is reported as such. A defence that does not engage the objection is a
+fold with extra words.
+
+You do not know what other positions exist. Do not speculate about them.
+
+## Problem
+
+Echo this hash exactly: `sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806`
+
+```
+Our API's p99 latency spikes every 40 minutes or so. Where should I look?
+```
+
+## Your position
+
+```yaml
+problem_hash: "sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806"
+frame: "FRAME_BREAKER"
+position: "Stop looking for the cause and start moving it — record the exact spike timestamps, then shift the schedule of every periodic process in reach (cron, cache TTL, log rotation, token refresh, backups, autoscaler cooldown) one at a time by an odd offset and see which shift drags the spike with it."
+reasoning: "1. The load-bearing assumption is in \"where should I look\": that the cause is a place inside the API, discoverable by inspection, and that the engineer's job is to observe until it reveals itself. \"Every 40 minutes or so\" is treated as a color detail rather than as the single most diagnostic fact in the sentence.\n\n2. Whoever owns the API benefits from that assumption staying unexamined, because it keeps the investigation inside their component and their dashboards. It also benefits the teams that own the scheduled machinery around the API (the cron owners, the cache operators, the backup and data pipeline people), because nobody is going to ask them anything while the API team is busy profiling request handlers. And it benefits observability tooling generally, which sells \"look harder\" as the answer to every question.\n\n3. If the assumption is false, the question is not about a location but about a clock. A clean period of roughly 40 minutes is almost never a property of request traffic; traffic is diurnal and noisy. A period is a property of a scheduler. So the real question is: which timer in this system fires on that cadence, and what does it steal (CPU, connections, disk, a lock, a warm cache) when it fires? That is answered by manipulation, not observation. You do not find a clock by staring; you find it by changing its setting and watching whether the symptom moves.\n\n4. First concrete action, tomorrow: pull the last 24 hours of p99 spikes and write down the exact timestamps, then compute the true period and phase. \"Or so\" means it has not been measured; a measured period of 37.5 minutes versus 40 versus 45 already narrows the suspect list (40 minutes is an unusual cron cadence; a slow drift points at a loop that sleeps for a fixed interval after finishing rather than a fixed-time schedule). Then take every periodic process you can touch and offset its schedule by a distinctive amount, one per hour or one per day if you must be careful. When the spike phase shifts by exactly the offset you applied, you have your cause, and you have it without reading a single line of the API.\n"
+forecloses:
+  - "Adding more tracing, dashboards, or a profiler to the API before taking any action; the position rules out \"instrument first\" as the next step."
+  - "Scaling the API horizontally or vertically as a remedy; a scheduled contention event will hit a bigger fleet on the same clock."
+  - "Treating this as a slow-endpoint investigation, i.e. sorting endpoints by p99 and optimizing the worst one."
+falsifier: "The recorded spike timestamps show no stable period or phase — intervals scatter widely (say 25 to 60 minutes) and line up with request volume rather than with any wall-clock cadence. That would mean the spike is load-driven, not clock-driven, and moving schedules will move nothing."
+missing_actor: "The platform or infrastructure team that owns the scheduled machinery around the API (cron jobs, backups, cache and CDN TTLs, certificate and token rotation, autoscaler and node maintenance windows). They can produce a list of every timer in the environment with its period and phase, and they can shift one on request, which is faster than the API team discovering the timer by reverse engineering."
+confidence: "medium"
+```
+
+## The objection
+
+The whole procedure presumes the trigger is on a schedule someone can pause or shift, and 'every 40 minutes or so' is precisely the signature of the thing that is not: an old-generation heap, a write-ahead log reaching checkpoint size, a memtable reaching flush size, or a pool whose connections age out together have periods equal to capacity divided by fill rate, which lands on odd numbers like forty and stretches at night and compresses at noon. None of those has a cron entry to offset or a kill switch to flip, so shifting every timer in reach by an odd offset, or pausing candidates one cycle at a time, would move nothing and burn a cycle per candidate while the tail keeps spiking. The cheaper first move, which the position relegates to a falsifier rather than a step, is to check whether the interval itself tracks load; if it does, the clock hunt is over before it starts and the right overlay is heap and checkpoint metrics, not the cron table. And even in the clock case, pausing backups, token refresh, or compaction in production to see what happens is not a free reversible bet: a paused rotation or refresh has its own failure mode that may arrive before the next expected spike does.
+
+## Output
+
+Return exactly this YAML and nothing else.
+
+```yaml
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: FRAME_BREAKER
+verdict: <defend | fold>
+response: |
+  <If defend: why the objection does not overturn the position, in concrete terms. If fold:
+  what the objection got right and what the position should have been.>
+revised_position: <one sentence. Unchanged if defended cleanly. Revised if the defence cost something. Null if folded.>
+revised_falsifier: <updated if the objection sharpened it>
+confidence: <low | medium | high>
+```

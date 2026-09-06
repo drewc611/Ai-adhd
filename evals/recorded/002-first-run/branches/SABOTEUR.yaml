@@ -1,0 +1,59 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: SABOTEUR
+position: Pull the raw timestamps of the last ten spikes and partition the slow requests by caller, endpoint, instance, and downstream span before touching any tuning knob; the one dimension that concentrates them is where you look.
+reasoning: |
+  1. The obvious answer is "look at your own periodic things": GC pauses, a cron or scheduled
+  job, cache TTL expiry, connection pool recycling, log rotation, token refresh. It assumes
+  three things about the world: the period is real and correctly measured, the cause lives
+  inside the process or infrastructure you can see, and the traffic hitting you is steady
+  enough that p99 means what you think it means.
+
+  2. Three production violations of those assumptions:
+  - The dependency lies. The 40 minute cadence belongs to something downstream you do not
+    run: database autovacuum or checkpoint, a DNS record whose TTL expires and forces a slow
+    resolve, a load balancer draining and re-establishing connections, an upstream auth
+    service refreshing keys. Your service's own metrics show nothing periodic because the
+    time is spent waiting, and every inward-looking check comes back clean.
+  - The clock lies. The "spike" is a measurement artifact. Histogram rollups, scrape interval
+    aliasing against a request-rate cycle, a metrics exporter flush, or simply a p99 computed
+    over a window with a few dozen samples where one slow request is the whole tail. The
+    period is in the pipeline, not the service.
+  - The caller lies, or the operator does. One client runs a scheduled batch or report on a
+    roughly 40 minute cadence against your slowest endpoint, with retries on timeout, so the
+    spike is that client's shape, not yours. Or a config was copied to the wrong environment
+    and a staging job is hitting the production database on a timer. Nothing in your deploy
+    changed, and diffing your own code will never find it.
+
+  3. Cheapest to cause and most expensive to recover from: the measurement artifact. It costs
+  one scrape interval change or one dashboard aggregation setting to create, and the recovery
+  cost is weeks of chasing ghosts, ending in "fixes" to GC or pool settings that regress real
+  behaviour while the phantom keeps its period. Close second is the external caller, cheap
+  because it is one line in someone else's cron and expensive because you cannot see it
+  without per-caller attribution.
+
+  4. What survives all three: refuse to start with a hypothesis about cause. Take the exact
+  timestamps of the last ten spikes from the dashboard, then go to raw request records
+  (traces or access logs, not aggregated histograms) at those timestamps and confirm the slow
+  requests exist. That kills the clock attack. Then partition those slow requests along four
+  axes: which caller sent them, which endpoint they hit, which instance served them, and
+  which downstream span ate the time. Concentration on one instance points at GC or the host;
+  on one caller points at their schedule; on one downstream span points at the dependency;
+  on one endpoint points at your code path. That kills the dependency attack and the caller
+  attack, because both show up as concentration you did not expect. Only after the
+  concentrating dimension is known do you open the GC logs, the cron table, or the vacuum
+  schedule.
+
+  What it still does not survive: two cases. First, if the slow requests spread uniformly
+  across all four partitions, the cause is below every axis you can see: a noisy neighbour
+  on shared hardware, a hypervisor stall, a kernel or network path event. The method gives no
+  lead and you are into host-level tooling and the platform team. Second, if you never
+  recorded per-request caller and span data, you cannot partition what you did not capture;
+  you have to add instrumentation and wait for the next several spikes before the method
+  produces anything, and during that wait the obvious answer looks attractive again.
+forecloses:
+  - Tuning GC, heap, or connection pool settings first and watching whether the spike moves.
+  - Trusting the dashboard's 40 minute period as a fact about the service rather than a claim to be checked against raw request records.
+  - Adding capacity or autoscaling as a first response to a tail latency symptom whose cause is unattributed.
+falsifier: At the ten spike timestamps, the slow requests in raw traces are spread evenly across every caller, endpoint, instance, and downstream span with no dimension holding more than its normal share; the partitioning yields no lead and the position has cost time without pointing anywhere.
+missing_actor: The team owning the largest caller of the API, who can say whether they run a scheduled batch on a roughly 40 minute cadence and can stagger, throttle, or add jitter to it without any change on the API side.
+confidence: medium
