@@ -1,0 +1,60 @@
+{
+  "run_id": "003-kernel-strategy",
+  "created_at": "2026-09-06T12:13:51.624Z",
+  "problem_hash": "sha256:9c7481004ba9e79b453d7ebadec695bf3c037e97d7ba13e325f72a4d897e594b",
+  "problem_class": "strategy",
+  "seed": 3,
+  "n": 5,
+  "allow_wide": false,
+  "estimate": {
+    "tokens_branches": 60000,
+    "tokens_critic": 60000,
+    "tokens_deepen": 36000,
+    "tokens_total": 156000
+  },
+  "branches": [
+    {
+      "frame": "LEDGER",
+      "axis": "cost",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/LEDGER.md",
+      "artifact_path": "branches/LEDGER.yaml"
+    },
+    {
+      "frame": "PRIOR_ART",
+      "axis": "precedent",
+      "agent": "adhd-branch-search",
+      "tools": [
+        "WebSearch",
+        "WebFetch"
+      ],
+      "brief_path": "briefs/PRIOR_ART.md",
+      "artifact_path": "branches/PRIOR_ART.yaml"
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "axis": "reversibility",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/DOOR_KEEPER.md",
+      "artifact_path": "branches/DOOR_KEEPER.yaml"
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "axis": "frame_validity",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/FRAME_BREAKER.md",
+      "artifact_path": "branches/FRAME_BREAKER.yaml"
+    },
+    {
+      "frame": "HORIZON",
+      "axis": "operation",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/HORIZON.md",
+      "artifact_path": "branches/HORIZON.yaml"
+    }
+  ]
+}

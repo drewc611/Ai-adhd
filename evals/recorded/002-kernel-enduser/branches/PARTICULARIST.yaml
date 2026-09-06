@@ -1,0 +1,18 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: PARTICULARIST
+position: Pull the exact timestamps of the last ten spikes and measure the gaps, because a constant 40:00 that shifts when you restart a process points at a 2400-second timer inside your own service or a client library, an alternating 40/20 gap points at a `*/40` cron on a neighbour, and a scattered 30-to-50 gap points at something filling at traffic rate and flushing, and each of those sends you to a different place.
+reasoning: |
+  1. The three most specific details: the period is "40 minutes or so" (approximate, not "exactly 40"); the metric is p99, not p50 or mean, so roughly one request in a hundred is hit and the rest are fine; and the asker has no candidate yet ("where should I look"), meaning nothing has been correlated with anything.
+
+  2. The detail that changes the answer is the 40-minute figure and how exact it is. 40 minutes is an awkward number. Cron cannot express it: `*/40 * * * *` fires at :00 and :40, so the gaps alternate 40, 20, 40, 20. A true constant 40:00 therefore is not cron; it is a timer counted from process start (a scheduler with fixed delay, a connection-pool max lifetime, a token refresh, a cache rebuild) or a dependency default that happens to be 2400 seconds. If the "or so" hides real drift, then there is no timer at all and the period is set by how fast something fills: a write buffer, a log file rotating by size, a compaction threshold, a queue that drains in a burst. So the single detail whose value flips the answer is the histogram of gaps between spikes. Constant and phase-locked to restart time: grep your service and its client libraries for 2400, 40m, or 40 * 60. Alternating 40/20: find whoever owns a cron on the same hosts or the same database. Scattered: find what accumulates at request rate and empties in one go.
+
+  The p99 detail adds one more split. If all instances were deployed in the same rollout, their per-process timers are phase-aligned and a per-instance stall shows up as one fleet-wide p99 blip. Split the p99 by instance: if every instance spikes at the same moment the cause is shared (database, cache, a node-level agent); if only one instance spikes per event and the culprit rotates, it is inside the process and the fleet just happens to be in phase.
+
+  3. The thirty-second answer is "it's GC, or it's a cron job, check the dashboards for correlated CPU." The 40-minute number makes both wrong on its face: a GC cycle that recurs on a 40-minute cadence would need a heap that takes 40 minutes of allocation to fill, which the asker would already know about, and cron cannot produce a constant 40-minute period. The competent answer also assumes the asker has a correlated signal to look at, and the problem says they do not.
+forecloses:
+  - Profiling the request handler or taking flame graphs under load; the spike is periodic, not load-shaped, so the hot path is not where the stall lives.
+  - Adding capacity or autoscaling; more instances in the same phase produce the same blip.
+  - Tuning GC flags before the gap histogram rules a timer in or out.
+falsifier: Restart one instance out of phase with the rest of the fleet; if that instance's spikes stay locked to the fleet's schedule instead of shifting by the restart offset, the cause is outside the process and the config grep is the wrong first step.
+missing_actor: The owner of the shared database or platform (DBA or platform team), who can list what runs against the same database or on the same nodes on a roughly 40-minute cadence (autovacuum on a hot table, snapshots, index maintenance, a log shipper or scanner agent) without the API team changing anything.
+confidence: medium

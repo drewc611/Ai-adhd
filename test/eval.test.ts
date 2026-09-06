@@ -65,3 +65,61 @@ test("paraphrase drift in a recorded run fails the hash check", () => {
   const pair = r.pairs.find((p) => p.fixture === "001")!;
   assert.ok(pair.failures.some((f) => /problem_hash/.test(f)));
 });
+
+test("a fixture pattern anchored with ^ reads the start of the scope text, and a lookahead that matches nothing still counts as a match", () => {
+  const dir = tmp();
+  const fixtures = join(dir, "fixtures");
+  const recorded = join(dir, "recorded");
+  mkdirSync(fixtures, { recursive: true });
+  const prompt = "Should we rewrite it?";
+  writeFileSync(
+    join(fixtures, "900-anchor.yaml"),
+    [
+      'id: "900"',
+      "name: anchor",
+      "problem_class: strategy",
+      "seed: 1",
+      `prompt: "${prompt}"`,
+      "must_surface:",
+      "  - id: says_rewrite",
+      "    description: mentions the rewrite",
+      "    any_of: [\"rewrite\"]",
+      "must_not:",
+      "  - id: no_it_depends",
+      "    description: the bold line does not open with it depends",
+      "    check: must_match",
+      "    scope: recommendation",
+      "    any_of:",
+      '      - "^\\\\s*(?!(it depends))\\\\S"',
+      "  - id: opens_with_do",
+      "    description: the bold line opens with Do",
+      "    check: must_match",
+      "    scope: recommendation",
+      "    any_of:",
+      '      - "^\\\\s*Do\\\\b"',
+      "expect: {}",
+    ].join("\n"),
+  );
+  const synth = (bold: string) =>
+    ["# ADHD synthesis", "## Recommendation", "", `**${bold}**`, "", "Do nothing else.", "## Pruned, with reason", "- none", `problem_hash: \`${problemHash(prompt)}\``].join("\n");
+  for (const [name, bold, want] of [
+    ["hedge", "It depends on whether the rewrite is worth it.", "fail"],
+    ["verdict", "Do not rewrite it this year.", "pass"],
+  ] as const) {
+    const rec = join(recorded, `900-${name}`);
+    mkdirSync(join(rec, "branches"), { recursive: true });
+    writeFileSync(join(rec, "plan.json"), JSON.stringify({ problem_hash: problemHash(prompt) }));
+    writeFileSync(join(rec, "synthesis.md"), synth(bold));
+    writeFileSync(join(rec, "expected.json"), JSON.stringify({ outcome: want }));
+  }
+  const r = runEval(cfg, { fixturesDir: fixtures, recordedDir: recorded });
+  const hedge = r.pairs.find((p) => p.recorded.endsWith("900-hedge"))!;
+  const verdict = r.pairs.find((p) => p.recorded.endsWith("900-verdict"))!;
+  // "Do nothing else." is on a later line; without the m flag ^ must not reach it.
+  assert.deepEqual(
+    hedge.failures.map((f) => f.split(":")[0]),
+    ["must_not no_it_depends", "must_not opens_with_do"],
+  );
+  assert.deepEqual(verdict.failures, []);
+  assert.equal(r.pairs.every((p) => p.ok), true);
+});

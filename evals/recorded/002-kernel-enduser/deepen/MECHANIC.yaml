@@ -1,0 +1,34 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: MECHANIC
+verdict: fold
+response: |
+  The objection is right on the point that carries the whole derivation. "Or so" from someone
+  who has not lined up timestamps is a hedge, not a measurement; the same words come out of
+  a reporter's mouth for a period of exactly 40:00 and for one that wanders between 32 and 48.
+  I treated a figure of speech as the first data point and built a fork on it. Everything
+  downstream of that fork, including the foreclosures, inherits the error.
+
+  The objection is also right about the prior. A stop-the-world pause recurring on a 40-minute
+  cadence needs a tenured region that takes 40 minutes of promotion to fill. In a steady-state
+  API that is either a very large heap or a very quiet one, and neither is the common case.
+  The common producers of multi-minute periodic tail spikes sit outside the collector: a pool
+  max-lifetime that expires every connection at once because they were all opened at boot, a
+  token or certificate refresh, a datastore checkpoint or autovacuum, a memtable flush, a
+  neighbour's cron, a client batch. Some of those are clocks and some are buckets, which means
+  the clock-versus-bucket split I cared about does not by itself point at the heap; it points
+  at a class. Foreclosing the scheduler search and the database as first moves threw away most
+  of the probability mass to protect a specific mechanism I had no evidence for.
+
+  What the position should have been is the thing I filed under falsifier. The reporter already
+  has a p99 graph. From that graph alone you can read two bits before touching any pause log:
+  whether the interval holds constant across a traffic trough and a traffic peak, and whether
+  the spikes on different instances land in the same second or are staggered. Constant and
+  in-phase means a shared clock or a shared upstream, and the search goes to schedulers, pool
+  and credential lifetimes, and the datastore's own maintenance cadence. Drifting with load and
+  out-of-phase across instances means a per-process bucket, and only then is the runtime pause
+  log the next read. That test is cheaper than the one I proposed, discriminates between the
+  two halves of the prior instead of assuming one, and does not foreclose anything. The pause
+  log survives as a branch; it was never entitled to be the trunk.
+revised_position: null
+revised_falsifier: "If the graph shows an interval that drifts with traffic and instances that spike out of phase, and the runtime pause log then shows no stop-the-world events at the spike timestamps, the per-process-bucket branch is dead and the search moves to a per-instance bucket outside the runtime such as a local cache or pool; if the graph shows a constant interval with in-phase instances, the bucket branch is not taken at all."
+confidence: medium

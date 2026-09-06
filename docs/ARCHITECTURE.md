@@ -137,7 +137,8 @@ runs/<run_id>/
   decision.json            the orchestrator's enum-only routing decision
   plan.json                frames selected, shuffled order, seed, agent per brief, problem_hash
   briefs/<frame>.md        one per branch, compiled; pasted inline into the spawn prompt
-  branches/<frame>.yaml    the subagent's final message, written by the host
+  branches/<frame>.yaml    the YAML from the subagent's final message, written by the host
+  branches/<frame>.yaml.raw.md   the whole message, only when it carried text outside the fence
   critic/pass-a.brief.md   blind pack: letters for ids, frame field stripped
   critic/pass-a.yaml       rubric scores per letter
   critic/pass-b.brief.md   unblind pack
@@ -153,3 +154,9 @@ runs/<run_id>/
 N branches means N times the context. At N of 5 to 7 a run is expensive and slow. That is
 the trade. `max_branches` defaults to 5. Anything above 9 requires an explicit flag, because
 marginal frames past that point produce restatements, not new directions.
+
+## Unattended
+
+The phases above are driven by hand from the skill or the CLI. `docs/OS.md` describes the
+kernel that drives them unattended: runs as processes, tasks as leased threads, hosts as
+workers. Same phase functions, same invariants, no model call anywhere in the kernel.

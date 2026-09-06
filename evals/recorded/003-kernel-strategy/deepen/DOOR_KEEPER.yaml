@@ -1,0 +1,35 @@
+problem_hash: sha256:9c7481004ba9e79b453d7ebadec695bf3c037e97d7ba13e325f72a4d897e594b
+frame: DOOR_KEEPER
+verdict: defend
+response: |
+  The strongest objection: the experiment is rigged to say "stay." Two mechanisms. First, the
+  first extracted service carries the entire platform fixed cost (CI pipeline, observability,
+  on-call rotation, service discovery) while producing only one service's worth of benefit, so
+  "pays its own way in the seam's operational metrics" is a bar service #1 can never clear, and
+  the position collapses to "never rewrite" dressed as "incrementally." Second, the pains that
+  actually drive rewrite conversations are usually cross-cutting, not modular: a single database
+  hitting its write ceiling, one deploy queue shared by sixty engineers, a framework at end of
+  life. A shadow process against a shared database cannot move any of those numbers, so the
+  measurement returns "no effect" regardless of whether microservices would help.
+
+  The first mechanism is a real defect in the wording and costs a revision, not a fold. The fix
+  is accounting, not strategy: platform setup is booked as a fixed investment evaluated against
+  the number of services the roadmap plausibly reaches, and the seam is judged only on its
+  marginal numbers (cross-boundary calls cut, deploy frequency delta for that module with no
+  drop elsewhere, incident hours attributable to the seam itself). The pass criterion is written
+  down before the shadow run starts so it cannot be moved afterward in either direction. That
+  preserves the mechanism the position depends on: the one way door (database split, team
+  reorganization) is taken on a quarter of production evidence, not on a vision document.
+
+  The second mechanism does not overturn the position because the position's own first step is
+  to name the pain and pick one metric for it. If the named pain is a shared database write
+  ceiling, then module extraction against a shared database is not the cheap experiment and the
+  position should say so explicitly: that pain gets its own reversible experiment (read replicas,
+  partitioning inside the monolith, a write-path shadow) and extraction is not the instrument.
+  What the objection gets right is that the original text implied extraction is always the
+  experiment. It is not. The claim that survives is narrower and stronger: whatever the named
+  pain, there exists a reversible probe that costs weeks, and the year-long commitment is never
+  taken ahead of that probe's result. The objection sharpens which probe, not whether to probe.
+revised_position: Do not commit to a year-long microservices rewrite; name the specific pain and its metric first, run the cheapest reversible probe that can actually move that metric (module extraction behind a strangler seam if the pain is coupling or deploy cadence, a database-level probe if the pain is the shared data store) within one quarter, book platform setup as a separate fixed investment rather than charging it to the first seam, and take each one way door only after its preceding probe shows the named metric moved on real traffic.
+revised_falsifier: If the named pain is one that no reversible probe can inform within a quarter, either because module boundaries cannot be isolated in under two weeks in any direction or because the pain is a whole-system property (shared database write ceiling, framework end of life) whose relief demands the database split or the rewrite itself as the first move, then incremental extraction is not viable and the choice is genuinely binary between staying monolithic and a full rewrite, which this position assumed away.
+confidence: medium
