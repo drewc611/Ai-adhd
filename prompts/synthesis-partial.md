@@ -7,14 +7,12 @@ recommendation. Treat every position below as one unverified angle, not a findin
 problem_hash: `{{problem_hash}}`
 branches returned: {{returned}} of {{planned}}
 
-{{#each branches}}
-## {{frame}}
+{{#each branches}}## {{frame}}
 
 **Position:** {{position}}
 
 **Forecloses:**
-{{#each forecloses}}
-- {{this}}
+{{#each forecloses}}- {{this}}
 {{/each}}
 
 **Falsifier:** {{falsifier}}
@@ -24,13 +22,11 @@ branches returned: {{returned}} of {{planned}}
 **Confidence:** {{confidence}}
 
 {{#if lints}}**Lint hints (unconfirmed):**
-{{#each lints}}
-- {{trap}}: {{evidence}}
+{{#each lints}}- {{trap}}: {{evidence}}
 {{/each}}
 {{/if}}
 {{#if violations}}**Contract violations:**
-{{#each violations}}
-- {{this}}
+{{#each violations}}- {{this}}
 {{/each}}
 {{/if}}
 <details><summary>reasoning</summary>
@@ -42,8 +38,7 @@ branches returned: {{returned}} of {{planned}}
 {{/each}}
 ## Not returned
 
-{{#each missing}}
-- {{this}}
+{{#each missing}}- {{this}}
 {{/each}}
 
 ## Cost

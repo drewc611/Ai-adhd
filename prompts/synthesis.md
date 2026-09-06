@@ -9,7 +9,9 @@ present.
 **{{recommendation.position}}**
 
 **Decision this forces:** {{recommendation.action}}
-
+{{#if recommendation.revised}}
+**Revised under objection.** The decision line above is the cluster as the critic grouped it before deepening. The bold position is what survived the strongest objection. Original position: {{recommendation.original_position}}
+{{/if}}
 **Falsifier:** {{recommendation.falsifier}}
 
 Held by: {{recommendation.members}}. {{#if recommendation.deepen}}Under the strongest objection it **{{recommendation.deepen.verdict}}**: {{recommendation.deepen.summary}}{{/if}}
@@ -20,22 +22,19 @@ No recommendation. {{no_recommendation}}
 
 ## Corroborated findings
 
-{{#each corroborated}}
-- **{{action}}** (frames: {{members}}){{#if deepen}}. Deepen: {{deepen.verdict}}. {{deepen.summary}}{{/if}}
+{{#each corroborated}}- **{{action}}** (frames: {{members}}){{#if deepen}}. Deepen: {{deepen.verdict}}. {{deepen.summary}}{{/if}}
 {{/each}}
 {{#if no_corroborated}}(none: no two frames landed on the same action){{/if}}
 
 ## Live singletons (unverified)
 
-{{#each singletons}}
-- **{{frame}}**: {{position}}{{#if deepen}} ({{deepen.verdict}}: {{deepen.summary}}){{/if}}
+{{#each singletons}}- **{{frame}}**: {{position}}{{#if deepen}} ({{deepen.verdict}}: {{deepen.summary}}){{/if}}
 {{/each}}
 {{#if no_singletons}}(none){{/if}}
 
 ## Pruned, with reason
 
-{{#each pruned}}
-- **{{frame}}**: {{position}}
+{{#each pruned}}- **{{frame}}**: {{position}}
   - traps: {{traps}}
   - detector output: {{evidence}}
 {{#if violations}}  - contract: {{violations}}
@@ -45,14 +44,12 @@ No recommendation. {{no_recommendation}}
 
 ## Run level
 
-{{#each run_level}}
-- {{this}}
+{{#each run_level}}- {{this}}
 {{/each}}
 
 ## What this forecloses
 
-{{#each forecloses}}
-- {{this}}
+{{#each forecloses}}- {{this}}
 {{/each}}
 {{#if no_forecloses}}(nothing recorded){{/if}}
 

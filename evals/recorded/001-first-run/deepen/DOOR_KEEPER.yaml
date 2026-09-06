@@ -1,0 +1,40 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+verdict: defend
+response: |
+  The first point does not overturn the position, but it exposes a missing sentence. The
+  reason the number is a two-way door and the semantics are not is directional: a caller who
+  has sized its budget to tolerate a 10s worst case is not broken when the client starts
+  failing at 3s. It gets its failure sooner, inside the budget it already reserved. What
+  breaks callers is loosening (a 3s worst case becoming 10s) or a semantic change (read
+  timeout becoming total, infinite becoming finite). Generous-first is the only ordering
+  where the later adjustment is in the non-breaking direction. Runbook thresholds and alert
+  lines go stale when tightened, which is a cost, but stale is not broken. So the 10s default
+  being copied into upstream budgets is exactly why it is safe to tighten from and unsafe to
+  have started tight. The position should have stated the asymmetry instead of asserting
+  "two-way door" and leaving the reader to reconcile it with point (d).
+
+  The second point lands and the position gives ground on it. Deriving the deadline from the
+  upstream's p99 treats the wrong party's time as the authority. The deadline on a call is
+  bounded above by what the caller can still afford, not below by how slow the server tends
+  to be. A 2.5x-p99 deadline of 4s is worthless to a request with 1.3s left; the correct
+  deadline there is roughly 1.1s and it was known before any logging started. The 2x-3x
+  multiplier was a habit, not a derivation, and the objection is right that it was the only
+  output of the slowest experiment. The corrected rule: deadline = min(caller's remaining
+  budget minus a margin, a generous ceiling), and the week of logs serves a different
+  purpose than it was assigned: it tells you which endpoints cannot meet their callers'
+  budgets at all, which is a conversation with the upstream owners (the named missing
+  actor), not a number to tune. That is a real change and it costs the position its tuning
+  step, but the shape survives because per-call override and forbidding a global-only value
+  are precisely the mechanisms that let a caller-budget deadline exist.
+
+  The third point is fair on presentation. Of the four semantic commitments, two are needed
+  the day the client ships because they cannot be retrofitted without changing behavior for
+  every caller: the timeout must be a total per-request deadline (not read-only), and
+  infinite must be impossible by construction. The other two, per-call override and retries
+  budgeted inside the deadline, are hygiene that becomes a one-way door only once call sites
+  accumulate; they can follow in the next change if the client is new and has few callers.
+  The answer to "what number" should have been the first line, not the fourth section.
+revised_position: "Connect 2s, total per-request deadline of min(caller's remaining budget minus margin, 10s), never infinite and never read-only, shipped as config; drop the p99-multiplier tuning and instead use a week of elapsed-time logs to find endpoints that cannot meet their callers' budgets and take those to the upstream owners."
+revised_falsifier: "A caller whose upstream budget was sized to the shipped 10s worst case that breaks, rather than merely fails faster, when the client's deadline is later tightened; or a class of call sites with no knowable caller budget where the deadline has no principled ceiling other than the upstream's latency distribution, which would restore p99 as the only available authority."
+confidence: medium

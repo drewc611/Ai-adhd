@@ -12,7 +12,8 @@ export interface Cost {
 }
 
 function summarise(d: DeepenArtifact): string {
-  const first = d.response.trim().split(/(?<=[.!?])\s+/)[0] ?? "";
+  const flat = d.response.replace(/\s+/g, " ").trim();
+  const first = flat.split(/(?<=[.!?])\s+/)[0] ?? "";
   return first.length > 240 ? `${first.slice(0, 237)}...` : first;
 }
 
@@ -27,7 +28,9 @@ export function renderSynthesis(
   const deepenFor = (frame: string | null) => {
     if (!frame) return null;
     const d = deepen[frame];
-    return d ? { verdict: d.verdict, summary: summarise(d), revised_position: d.revised_position } : null;
+    return d
+      ? { verdict: d.verdict, summary: summarise(d), revised_position: d.revised_position, revised_falsifier: d.revised_falsifier ?? null }
+      : null;
   };
 
   // Candidate order: live clusters by size, then mean pass A. A folded representative drops
@@ -79,9 +82,11 @@ export function renderSynthesis(
       ? {
           position: recDeepen?.revised_position ?? recFrame?.position ?? rec.action,
           action: rec.action,
-          falsifier: recFrame?.falsifier ?? "",
+          falsifier: recDeepen?.revised_falsifier ?? recFrame?.falsifier ?? "",
           members: rec.members.join(", "),
           deepen: recDeepen,
+          revised: Boolean(recDeepen?.revised_position && recDeepen.revised_position !== recFrame?.position),
+          original_position: recFrame?.position ?? "",
         }
       : null,
     no_recommendation,

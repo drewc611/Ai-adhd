@@ -1,0 +1,35 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: FRAME_BREAKER
+position: Stop configuring a timeout on the client at all; pass a per-call deadline derived from each caller's remaining time budget, and make the client cancel the request when that deadline expires.
+reasoning: |
+  1. The load bearing assumption is in "on this HTTP client": that a timeout is a property of the
+     client object, a number you pick once and store in its config. That assumption makes the
+     timeout a fact about the transport when it is actually a fact about the caller. A 200ms wait
+     is fine inside a nightly batch job and fatal inside a request that has 150ms left before a
+     user-facing SLO is blown. One client, two correct answers, so the client cannot be the place
+     the answer lives.
+
+  2. Two parties benefit from leaving that unexamined. The client library author, because a
+     single config field is easy to ship and document. And the owner of the upstream service,
+     because a generous static timeout hides their slowness inside your latency instead of
+     surfacing it as your failures. Both are served by you picking a number and moving on.
+
+  3. If the assumption is false, the question is really: how much time does each caller of this
+     client have left when it makes the call, and what should happen when that runs out? That is a
+     question about deadline propagation and failure handling, not about the client. The client
+     just needs an interface that accepts a deadline (context, cancellation token, per-request
+     timeout argument) and honours it, plus a short connect timeout and one absurdly large total
+     cap as a backstop against bugs, not as policy.
+
+  4. First concrete action: list every call site of this client. For each one, write down where
+     its time budget comes from (an inbound request deadline, a job SLA, a UI interaction) and
+     what the caller should do on expiry (fail fast, serve stale, skip). Then change the client's
+     call signature to require a deadline and delete the client-wide timeout field so nobody can
+     fall back to it. Retries live inside the same deadline, never on top of it.
+forecloses:
+  - A single global timeout number in the client's configuration that all callers inherit.
+  - Choosing timeouts by looking at the upstream server's p99 latency rather than the caller's budget.
+  - Retry policies that add their own time on top of the request instead of consuming the caller's remaining deadline.
+falsifier: Enumerate the call sites; if there is exactly one caller with one fixed latency budget (for example a single batch job hitting one endpoint), then per-call deadline propagation adds nothing and a single static timeout was the right answer.
+missing_actor: The owner of the upstream service being called, who can publish a latency SLO and return 503 with Retry-After when overloaded, so callers stop guessing how long to wait.
+confidence: medium

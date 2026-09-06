@@ -1,0 +1,53 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 2, evidence: "One sentence with concrete numbers, but 'tighten from observed p99 after one week' defers the real value to a later decision." }
+    foreclosure: { score: 3, evidence: "Rules out global-only timeout, any infinite wait, retries outside the deadline, and premature sub-second values, all concrete and tempting." }
+    falsifiability: { score: 2, evidence: "A legitimate endpoint with p99 over 10s is observable and would move the default, but requires a week of deployed logging to see." }
+    specificity: { score: 2, evidence: "Reasoning bends around HTTP mechanics (slowloris, connect vs total, retry multiplication) but applies to any HTTP client, not this one." }
+    assumption_attack: { score: 1, evidence: "Implies the question wrongly treats timeouts as numbers rather than semantics, but never states or tests that as an assumption of the asker." }
+    reasoning_carries: { score: 3, evidence: "No authorities cited; every step is argued from failure modes." }
+    actor_coverage: { score: 2, evidence: "Upstream owners named with actions (publish SLO, server-side deadlines) but the position does not depend on them." }
+    reversibility: { score: 3, evidence: "The entire position is ordered by one-way doors first, two-way numbers second, then tuning." }
+    substance: { score: 3, evidence: "Flat restatement 'connect 2s, total 10s, no infinite, per-call override, retries inside deadline' is the same claim." }
+  B:
+    committal: { score: 2, evidence: "One sentence with a clear directive, but the floors are given as ranges (1-2s) and the sentence carries three sub-decisions." }
+    foreclosure: { score: 3, evidence: "Rules out global constant, p99-only tuning, and letting the LB or liveness probe end requests, each in concrete terms." }
+    falsifiability: { score: 2, evidence: "Observing zero cancellations over a week is relevant and would revert to fixed floors, but requires caller-side instrumentation and a week." }
+    specificity: { score: 2, evidence: "Engages HTTP and infrastructure specifics (LB idle 60s, liveness probes, trickle reads) but nothing depends on this particular client." }
+    assumption_attack: { score: 3, evidence: "Names the assumption that the timeout is a frozen client property with one actor, tests it by enumerating actors, and the deadline-propagation position follows." }
+    reasoning_carries: { score: 3, evidence: "No citations; the chain runs from actor speed and cost to the design." }
+    actor_coverage: { score: 3, evidence: "The abandoning end user is named with cancellation as the action, and the position is built on honoring it." }
+    reversibility: { score: 1, evidence: "Mentions runtime-configurable floors for operators but does not order recommendations by reversibility." }
+    substance: { score: 3, evidence: "Stripped of the actor framing, 'callers pass deadlines, client keeps short defensive floors' is still the claim." }
+  C:
+    committal: { score: 2, evidence: "One sentence with actionable numbers, but 'sized to the slowest legitimate response you have measured' hands a key value back to the reader." }
+    foreclosure: { score: 2, evidence: "Rules out library defaults and generous-plus-retries concretely, but 'intuition or convention' is vague and near straw." }
+    falsifiability: { score: 3, evidence: "Pulling last week's latency histogram and checking p99.9 against the deadline is cheap, specific, and would kill the number." }
+    specificity: { score: 2, evidence: "Reasoning uses HTTP-specific costs (socket pools, retry storms, spinners) but is generic across any HTTP dependency." }
+    assumption_attack: { score: 1, evidence: "Names the default assumption that generous timeouts are safe, but attacks the obvious answer rather than testing an assumption in the question itself." }
+    reasoning_carries: { score: 3, evidence: "No authorities; the cost-ledger argument stands alone." }
+    actor_coverage: { score: 2, evidence: "Downstream team named with SLO and load-shedding actions, but the position holds without them." }
+    reversibility: { score: 0, evidence: "No distinction between cheap reversible moves and committed ones." }
+    substance: { score: 3, evidence: "Flat version 'short connect, measured total plus margin, one jittered retry' is the same claim without the who-pays framing." }
+  D:
+    committal: { score: 3, evidence: "One sentence, 'stop configuring a client timeout, pass per-call deadlines', no hedge." }
+    foreclosure: { score: 3, evidence: "Rules out global inherited timeout, p99-based sizing, and retries on top of the deadline, each concrete and commonly chosen." }
+    falsifiability: { score: 3, evidence: "Enumerating call sites and finding exactly one fixed-budget caller is cheap, specific, and would revert to a static timeout." }
+    specificity: { score: 1, evidence: "Swap 'HTTP client' for a gRPC or database client and the deadline-propagation argument holds unchanged." }
+    assumption_attack: { score: 3, evidence: "Names 'on this HTTP client' as the load-bearing assumption, tests it with the one-client-two-correct-answers case, and the position follows." }
+    reasoning_carries: { score: 3, evidence: "No citations; the argument is entirely from the caller-budget example." }
+    actor_coverage: { score: 2, evidence: "Upstream owner named with actions (SLO, 503 with Retry-After), but the position does not depend on them." }
+    reversibility: { score: 0, evidence: "No distinction drawn; deleting the client-wide field is presented without weighing its reversibility." }
+    substance: { score: 3, evidence: "Stripped of the 'who benefits from leaving it unexamined' angle, 'pass deadlines per call' is still the claim." }
+  E:
+    committal: { score: 3, evidence: "One sentence, one number, 'change nothing else', no escape hatch." }
+    foreclosure: { score: 3, evidence: "Rules out per-phase timeouts, per-route values up front, and retries or circuit breakers, all real and tempting." }
+    falsifiability: { score: 2, evidence: "A timeout firing against a dependency that responded under 10s is cheap to observe, but the reasoning already treats such errors as the planned next step rather than a refutation." }
+    specificity: { score: 1, evidence: "Nothing depends on HTTP or this client; the same 'one generous total deadline' applies to any blocking call." }
+    assumption_attack: { score: 1, evidence: "Names that the question presumes granularity matters and assumes no streaming endpoints, but tests neither." }
+    reasoning_carries: { score: 3, evidence: "No authorities; argued from the pain and the smallest fix." }
+    actor_coverage: { score: 2, evidence: "Upstream owner named with the action of publishing an SLO or p99 figure, but the 10s stands without it." }
+    reversibility: { score: 2, evidence: "Orders the recommendation as cheap one-number-now, tune-later-on-evidence, without building a full sequence." }
+    substance: { score: 3, evidence: "Flat restatement 'set a 10 second total deadline' is exactly the claim." }

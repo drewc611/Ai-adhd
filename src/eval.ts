@@ -83,11 +83,16 @@ function loadRecorded(dir: string): RecordedRun {
   };
 }
 
+/** Markdown emphasis and code marks are stripped so "**Set x**" still reads as an imperative. */
+function plain(md: string): string {
+  return md.replace(/[*_`]/g, "");
+}
+
 function scopeText(run: RecordedRun, scope: string): string {
   const secs = sections(run.synthesis);
-  if (scope === "all") return `${run.synthesis}\n${run.survivingBranches}`;
+  if (scope === "all") return plain(`${run.synthesis}\n${run.survivingBranches}`);
   const title = SCOPE_TITLES[scope]!;
-  return secs[title] ?? "";
+  return plain(secs[title] ?? "");
 }
 
 function anyMatch(text: string, patterns: string[]): string | null {
