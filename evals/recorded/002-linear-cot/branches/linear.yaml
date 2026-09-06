@@ -1,0 +1,14 @@
+problem_hash: "sha256:pending"
+frame: linear
+position: Check GC, cron jobs, cache expiry, connection pool churn, and log rotation.
+reasoning: |
+  Periodic p99 spikes usually come from something that runs on a schedule. The usual suspects
+  are garbage collection pauses, cron jobs and batch work, cache entries expiring together,
+  connection pool recycling, log rotation, certificate or token refresh, and autoscaling
+  events. Start by pulling up your dashboards for each of these and see which one lines up
+  with the spike interval. Application performance monitoring tools will usually let you slice
+  latency by endpoint and by instance, which narrows things down quickly.
+forecloses: []
+falsifier: null
+missing_actor: null
+confidence: high

@@ -69,6 +69,12 @@ be the axis the whole class runs on.
   miss in `002-first-run`: the frame set produced five good answers to a question nobody
   asked. Recorded as `expected.json { outcome: fail }` so it stays visible. Whether to add an
   actors- or particulars-axis probe that forces the negative case is the owner's call (D6).
+
+  **The negative control passes this item.** `004-linear-cot`, added after this run, matches
+  `false_means` on "avoid negations, `disable_old_checkout` forces double negatives" — a stock
+  style-guide line. On this one assertion the consensus answer beats the divergent run. Either
+  the frame set has a real gap or the assertion rewards recitation rather than reasoning. See
+  that control's README; the choice is the owner's and is not being made by editing the fixture.
 - No branch discussed what the flag name does to someone who has to search for it, or
   collisions with an existing key. MINIMALIST came closest, naming collision as the signal
   that would justify a convention.

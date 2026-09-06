@@ -112,7 +112,8 @@ The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `ad
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
 
-Five real runs are recorded, five isolated subagents each.
+Five real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
+negative control per fixture that must fail.
 
 - `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
   MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on

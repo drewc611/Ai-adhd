@@ -203,6 +203,22 @@ saying three things, none of them yet a verdict:
 FIRST_PRINCIPLES has never been dispatched in a recorded run. It is in no primary set, only in
 `alternates`, so nothing is wrong; it simply has no evidence behind it either way.
 
+### The negative control that beat a real run
+
+Every fixture now ships a linear chain-of-thought control that must fail. Writing the one for
+fixture 004 produced the least comfortable result the repo has: **it passes `false_means`, the
+single item the real run `004-kernel-naming` failed.**
+
+It passes on a stock style-guide line about avoiding double negatives. Five isolated frames, a
+blind rubric, a full trap sweep and a deepen round did not reach the question; a memorised
+convention did. That is a real limit on what divergence buys, and it belongs in the record
+rather than in a quietly loosened fixture.
+
+The open question, which is the owner's: is this a gap in the frame set (no frame asks what a
+thing asserts in its negative case) or a badly chosen assertion (matching "double negative"
+rewards reciting a rule rather than reasoning about the negative case)? Do not resolve it by
+editing the pattern until the answer is decided on its merits.
+
 Third class run: `evals/recorded/003-kernel-strategy/`, the `strategy` set (FRAME_BREAKER,
 LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON) on fixture 003. It passes. The set was not a
 monoculture by the critic's clustering (three clusters), but every one of the five positions
