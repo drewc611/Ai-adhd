@@ -262,6 +262,7 @@ export const MustNotSchema = z.discriminatedUnion("check", [
     .object({ ...mustNotBase, check: z.literal("min_words_outside"), pattern: z.string().min(1), min_words: z.number().int().positive() })
     .strict(),
   z.object({ ...mustNotBase, check: z.literal("must_match"), any_of: z.array(z.string().min(1)).min(1) }).strict(),
+  z.object({ ...mustNotBase, check: z.literal("must_be_imperative") }).strict(),
   z
     .object({ ...mustNotBase, check: z.literal("max_list_items_without_imperative"), max_items: z.number().int().positive() })
     .strict(),

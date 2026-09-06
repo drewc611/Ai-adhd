@@ -68,13 +68,9 @@ must_not:
     max_items: 4
   - id: no_verdict
     trap: T5
-    description: The recommendation tells the reader what to do first.
-    check: must_match
+    description: The recommendation tells the reader what to do, and what to do first. Uses the same imperative list as the T5 lint; "before" and "first" count as ordering.
+    check: must_be_imperative
     scope: recommendation
-    any_of:
-      - "\\bfirst\\b"
-      - "^(check|look|graph|plot|correlate|grep|confirm|run|start|overlay|compare|turn|set|do)\\b"
-      - "\\.\\s+(check|look|graph|plot|correlate|grep|confirm|run|start|overlay|compare|turn|set|do)\\b"
 
 expect:
   pruned_min: 1

@@ -164,3 +164,11 @@ MECHANIC, SABOTEUR, MINIMALIST, NIGHT_OPERATOR, PRIOR_ART, FIRST_PRINCIPLES, END
 The last four were added at the owner's request to reach thirteen. They have not yet been
 shown to diverge on a fixture. That is a debt against this policy and `adhd frames
 --orthogonality` is how it gets paid.
+
+Run data so far (two runs, one per fixture): the `fuzzy_debugging` frame set (MECHANIC,
+PARTICULARIST, SABOTEUR, NIGHT_OPERATOR, FRAME_BREAKER) did not surface fixture 002's
+`who_is_hurt` item. No frame in that set asks who the tail latency lands on. The frames that
+ask that question (END_USER, ACTOR_CENSUS, LEDGER) are all on the actors and cost axes and
+none is in the fuzzy debugging primary set. Whether to swap one in is a routing decision for
+the owner; it should be made on a second run, not on this one. The recorded run is marked
+`expected: fail` so the harness verifies the miss stays recorded rather than hiding it.

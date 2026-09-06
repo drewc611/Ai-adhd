@@ -1,0 +1,41 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: NIGHT_OPERATOR
+position: Overlay the spike timestamps on a timeline of every periodic process the API touches (cron jobs, cache TTL expiry, GC or compaction, connection-pool max-lifetime, token or cert refresh, autovacuum, log rotation) and put a runtime kill-switch or knob on each so the on-call can pause the matching one and watch the next cycle pass clean.
+reasoning: |
+  1. What pages someone and what do they see first. The p99 alert fires. The on-call
+     opens the latency graph and sees a comb: a spike, then quiet, then a spike, at a
+     steady interval that has nothing to do with traffic shape. That regularity is the
+     whole clue. Something on a clock is firing, not something in the request path. The
+     first thing they need on that same screen is a row of annotation marks for every
+     scheduled or periodic thing in the system, so they can eyeball which mark lines up
+     with the teeth of the comb. If that overlay does not exist, they are grepping logs
+     at 3am for anything with a 40 minute period, which is exactly the slow path.
+  2. What can they change at 3am without a deploy. Whichever periodic job lines up, they
+     need a switch: pause the cron, extend the cache TTL or add jitter to it, raise the
+     pool max-lifetime, defer the compaction window, move the token refresh. Each of
+     these must be a runtime setting (feature flag, config service, scheduler UI, or a
+     database-side parameter), because at 3am the only person awake may not have deploy
+     rights, may not know the codebase, and a deploy under alert is its own outage.
+     Load shedding or scaling is the fallback if nothing lines up, but it treats the
+     symptom and the spike will still be there at 4am.
+  3. How do they know it worked. They wait one full period. The next expected spike time
+     is known to the minute, so the test is cheap and binary: does the tooth appear or
+     not. If the comb stops, the culprit is identified and the incident can be downgraded
+     to a daytime ticket. If it continues, flip the switch back and try the next
+     candidate. A single period per candidate bounds the whole triage to a handful of
+     cycles.
+  4. What the on-call would beg the designer to have done. Every timer, cron, TTL, and
+     lifecycle in the system should emit a start/stop event that lands on the latency
+     dashboard as an annotation, so the correlation is visible without thinking. Every
+     one of those should have a runtime knob and a one-line runbook entry saying where
+     the knob is. And periodic work should be jittered by default so it never lines up
+     into a synchronized stampede in the first place. Prevention is nice, but the
+     recovery path is what saves the night: see the alignment, flip the switch, wait one
+     cycle.
+forecloses:
+  - Treating this as a capacity problem and responding with autoscaling or more replicas first, which masks the comb without finding the clock.
+  - Starting with code-level profiling or a hotfix deploy as the first response, which requires the builder to be awake and puts a deploy in the middle of an incident.
+  - Assuming the fault is inside the API process itself rather than in a shared dependency (database maintenance, managed cache eviction, a sidecar refresh) that the API merely suffers from.
+falsifier: Plot the spike-to-spike intervals over several hours; if the interval drifts with request volume or time-of-day rather than staying fixed at roughly 40 minutes, the trigger is load-driven, not clock-driven, and the periodic-process overlay will show no alignment.
+missing_actor: The owner of the shared dependency or scheduler (database team, platform team, or whoever runs the cron and cache infrastructure) who can pause, reschedule, or jitter the offending job from their side without the API team touching anything.
+confidence: medium

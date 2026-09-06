@@ -1,0 +1,159 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "SABOTEUR",
+      "status": "pruned",
+      "cluster": "partition_before_hypothesis",
+      "pass_a": 0.7916666666666666,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "Delete '40 minutes', 'or so', and 'p99' and the position (pull timestamps of recent spikes, partition slow requests by caller, endpoint, instance, span) is the standard tail-latency attribution method, unchanged; only the caller-batch sub-hypothesis touches the period."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Pull the raw timestamps of the last ten spikes and partition the slow requests by caller, endpoint, instance, and downstream span before touching any tuning knob; the one dimension that concentrates them is where you look.",
+      "forecloses": [
+        "Tuning GC, heap, or connection pool settings first and watching whether the spike moves.",
+        "Trusting the dashboard's 40 minute period as a fact about the service rather than a claim to be checked against raw request records.",
+        "Adding capacity or autoscaling as a first response to a tail latency symptom whose cause is unattributed."
+      ],
+      "falsifier": "At the ten spike timestamps, the slow requests in raw traces are spread evenly across every caller, endpoint, instance, and downstream span with no dimension holding more than its normal share; the partitioning yields no lead and the position has cost time without pointing anywhere.",
+      "missing_actor": "The team owning the largest caller of the API, who can say whether they run a scheduled batch on a roughly 40 minute cadence and can stagger, throttle, or add jitter to it without any change on the API side."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "survivor",
+      "cluster": "perturb_periodic_jobs",
+      "pass_a": 0.7916666666666666,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop looking for the cause and start moving it — record the exact spike timestamps, then shift the schedule of every periodic process in reach (cron, cache TTL, log rotation, token refresh, backups, autoscaler cooldown) one at a time by an odd offset and see which shift drags the spike with it.",
+      "forecloses": [
+        "Adding more tracing, dashboards, or a profiler to the API before taking any action; the position rules out \"instrument first\" as the next step.",
+        "Scaling the API horizontally or vertically as a remedy; a scheduled contention event will hit a bigger fleet on the same clock.",
+        "Treating this as a slow-endpoint investigation, i.e. sorting endpoints by p99 and optimizing the worst one."
+      ],
+      "falsifier": "The recorded spike timestamps show no stable period or phase — intervals scatter widely (say 25 to 60 minutes) and line up with request volume rather than with any wall-clock cadence. That would mean the spike is load-driven, not clock-driven, and moving schedules will move nothing.",
+      "missing_actor": "The platform or infrastructure team that owns the scheduled machinery around the API (cron jobs, backups, cache and CDN TTLs, certificate and token rotation, autoscaler and node maintenance windows). They can produce a list of every timer in the environment with its period and phase, and they can shift one on request, which is faster than the API team discovering the timer by reverse engineering."
+    },
+    {
+      "frame": "NIGHT_OPERATOR",
+      "status": "pruned",
+      "cluster": "perturb_periodic_jobs",
+      "pass_a": 0.6875,
+      "fired": [
+        {
+          "trap": "T2",
+          "evidence": "Accepts that regularity means a clock and that the fix is finding which scheduled job lines up; the only assumption questioned is whether the fault is inside the API process, which is a foreclosure, not a test."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Overlay the spike timestamps on a timeline of every periodic process the API touches (cron jobs, cache TTL expiry, GC or compaction, connection-pool max-lifetime, token or cert refresh, autovacuum, log rotation) and put a runtime kill-switch or knob on each so the on-call can pause the matching one and watch the next cycle pass clean.",
+      "forecloses": [
+        "Treating this as a capacity problem and responding with autoscaling or more replicas first, which masks the comb without finding the clock.",
+        "Starting with code-level profiling or a hotfix deploy as the first response, which requires the builder to be awake and puts a deploy in the middle of an incident.",
+        "Assuming the fault is inside the API process itself rather than in a shared dependency (database maintenance, managed cache eviction, a sidecar refresh) that the API merely suffers from."
+      ],
+      "falsifier": "Plot the spike-to-spike intervals over several hours; if the interval drifts with request volume or time-of-day rather than staying fixed at roughly 40 minutes, the trigger is load-driven, not clock-driven, and the periodic-process overlay will show no alignment.",
+      "missing_actor": "The owner of the shared dependency or scheduler (database team, platform team, or whoever runs the cron and cache infrastructure) who can pause, reschedule, or jitter the offending job from their side without the API team touching anything."
+    },
+    {
+      "frame": "PARTICULARIST",
+      "status": "survivor",
+      "cluster": "find_the_sawtooth",
+      "pass_a": 0.875,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Pull the exact timestamps of the last 24 hours of spikes and check whether the gap between them shrinks when request volume rises; if it drifts with traffic, look at whatever in the process is sized in bytes and emptied when full (old-generation heap, WAL or segment rotation, compaction), and if it holds at 40:00 regardless of load, look for a credential or token with a 60-minute lifetime that the client library refreshes at the two-thirds mark.",
+      "forecloses": [
+        "Treating a scheduled job (cron, systemd timer, scheduler tick at a fixed minute) as the first suspect.",
+        "Adding replicas or raising limits before the timestamps have been read, since neither mechanism named here is fixed by capacity.",
+        "Blaming a downstream dependency first; both candidate mechanisms live inside the process or its own storage, and the downstream gets looked at only after the local timestamps fail to correlate."
+      ],
+      "falsifier": "The spike gaps hold at 40:00 within a few seconds through both the overnight trough and the midday peak, and no credential, session, or lease used by the process has a 60-minute lifetime.",
+      "missing_actor": "Whoever operates the database or storage layer behind the API, who can line up their own checkpoint, compaction, or vacuum log against the spike timestamps and either claim or clear the 40-minute period without the API team touching the service."
+    },
+    {
+      "frame": "MECHANIC",
+      "status": "survivor",
+      "cluster": "find_the_sawtooth",
+      "pass_a": 0.8333333333333334,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Overlay the spike timestamps on the API process's heap-in-use curve and the datastore's checkpoint/compaction log, and treat whichever sawtooth resets at the moment of the spike as the cause, because \"about 40 minutes\" is the period of a buffer filling and draining, not a clock.",
+      "forecloses": [
+        "Scaling out or adding replicas as the first move; per-instance fill-and-flush is unchanged by fleet size.",
+        "Investigating scheduled jobs, cron, or timer-driven tasks first; a wall-clock trigger does not produce a period of \"about forty minutes\".",
+        "Tuning client timeouts or retry policy; those shape how the stall is felt, not whether it happens."
+      ],
+      "falsifier": "Measure the spike period at peak traffic and at the quietest hour. If it is the same to the second in both, the trigger is a clock, not a filling buffer, and this position is wrong. Equally, if no monotonic metric (heap, WAL bytes, memtable size, connection age) resets within a few seconds of the spike, the fill-and-drain explanation is falsified.",
+      "missing_actor": "The operator of the datastore or runtime configuration, who can lower the checkpoint or compaction size threshold, cap the young-to-old promotion rate, or stagger connection max-lifetimes with jitter so the drain happens in many small steps rather than one large one."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "find_the_sawtooth",
+      "action": "Pull exact spike timestamps, check whether the interval drifts with request volume, and overlay the spikes on the heap, WAL/checkpoint, memtable, and connection-age curves to see which fill-and-drain metric resets at the spike.",
+      "members": [
+        "PARTICULARIST",
+        "MECHANIC"
+      ],
+      "survivors": [
+        "PARTICULARIST",
+        "MECHANIC"
+      ],
+      "singleton": false,
+      "strongest_objection": "The argument that a forty-minute period cannot come from a schedule and must come from a buffer filling is asserted, not shown. A loop that sleeps forty minutes after finishing, a systemd timer with a forty-minute activation interval, a managed service's maintenance cadence, or a client batch that a neighbouring team runs every forty minutes all produce 'every 40 minutes or so' with no stock filling anywhere, and a sleep-after-completion loop even drifts with load exactly the way a buffer does, because its run time is traffic-dependent. So the drift test does not discriminate as cleanly as claimed, and the position sends the asker to heap and checkpoint metrics on the strength of a number-theoretic argument about cron syntax that most schedulers do not obey. Worse, both the process-internal candidates and the falsifier presuppose that the spike is real and belongs to this service: nothing here confirms in raw traces that slow requests exist at the timestamps, nor partitions them by caller or instance, so a histogram artifact or an external caller's batch would leave every sawtooth flat and the asker with no next move except the reflex answers the position has already foreclosed.",
+      "representative": "PARTICULARIST",
+      "mean_pass_a": 0.8541666666666667
+    },
+    {
+      "id": "perturb_periodic_jobs",
+      "action": "Correlate spike timestamps against every scheduled or periodic process around the API, then pause or shift those processes one at a time and watch whether the next spike disappears or moves.",
+      "members": [
+        "NIGHT_OPERATOR",
+        "FRAME_BREAKER"
+      ],
+      "survivors": [
+        "FRAME_BREAKER"
+      ],
+      "singleton": false,
+      "strongest_objection": "The whole procedure presumes the trigger is on a schedule someone can pause or shift, and 'every 40 minutes or so' is precisely the signature of the thing that is not: an old-generation heap, a write-ahead log reaching checkpoint size, a memtable reaching flush size, or a pool whose connections age out together have periods equal to capacity divided by fill rate, which lands on odd numbers like forty and stretches at night and compresses at noon. None of those has a cron entry to offset or a kill switch to flip, so shifting every timer in reach by an odd offset, or pausing candidates one cycle at a time, would move nothing and burn a cycle per candidate while the tail keeps spiking. The cheaper first move, which the position relegates to a falsifier rather than a step, is to check whether the interval itself tracks load; if it does, the clock hunt is over before it starts and the right overlay is heap and checkpoint metrics, not the cron table. And even in the clock case, pausing backups, token refresh, or compaction in production to see what happens is not a free reversible bet: a paused rotation or refresh has its own failure mode that may arrive before the next expected spike does.",
+      "representative": "FRAME_BREAKER",
+      "mean_pass_a": 0.7916666666666666
+    },
+    {
+      "id": "partition_before_hypothesis",
+      "action": "Confirm the slow requests exist in raw traces at the last ten spike timestamps, then partition them by caller, endpoint, instance, and downstream span, and investigate only the dimension that concentrates them.",
+      "members": [
+        "SABOTEUR"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "SABOTEUR and FRAME_BREAKER attacked the assumption that the cause is a location inside the API to be found by inspection, and PARTICULARIST and MECHANIC attacked the assumption that 'every 40 minutes' is a schedule."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "All five branches named a non-null missing actor with an action; caller (SABOTEUR), platform scheduler owner (FRAME_BREAKER, NIGHT_OPERATOR), datastore operator (PARTICULARIST, MECHANIC)."
+    },
+    "notes": []
+  },
+  "proceed": true
+}

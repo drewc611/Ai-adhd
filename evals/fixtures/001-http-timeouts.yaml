@@ -69,12 +69,9 @@ must_not:
     min_words: 40
   - id: no_verdict
     trap: T5
-    description: The recommendation contains a sentence of the form "do X".
-    check: must_match
+    description: The recommendation contains a sentence of the form "do X". Uses the same imperative list as the T5 lint.
+    check: must_be_imperative
     scope: recommendation
-    any_of:
-      - "^(set|use|make|expose|give|let|fail|return|do|stop|add|remove|treat|start|drop|route)\\b"
-      - "\\.\\s+(set|use|make|expose|give|let|fail|return|do|stop|add|remove|treat|start|drop|route)\\b"
 
 expect:
   pruned_min: 1

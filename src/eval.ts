@@ -5,7 +5,7 @@ import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
 import { FixtureSchema, RecordedExpectationSchema, type Fixture } from "./schema.js";
 import { problemHash, PLACEHOLDER_HASH } from "./hash.js";
-import { IMPERATIVE_START, splitSentences, wordCount } from "./lint.js";
+import { hasImperative, IMPERATIVE_START, splitSentences, wordCount } from "./lint.js";
 import type { ScoreResult } from "./score.js";
 
 export interface PairResult {
@@ -15,6 +15,8 @@ export interface PairResult {
   expected: "pass" | "fail";
   /** outcome === expected */
   ok: boolean;
+  /** From expected.json when present. Says why a failing run is recorded as failing. */
+  expected_note?: string;
   failures: string[];
   notes: string[];
 }
@@ -107,9 +109,10 @@ function anyMatch(text: string, patterns: string[]): string | null {
 export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
   const failures: string[] = [];
   const notes: string[] = [];
-  const expected = existsSync(join(run.dir, "expected.json"))
-    ? RecordedExpectationSchema.parse(JSON.parse(readFileSync(join(run.dir, "expected.json"), "utf8"))).outcome
-    : "pass";
+  const expectation = existsSync(join(run.dir, "expected.json"))
+    ? RecordedExpectationSchema.parse(JSON.parse(readFileSync(join(run.dir, "expected.json"), "utf8")))
+    : { outcome: "pass" as const, note: undefined };
+  const expected = expectation.outcome;
 
   const want = problemHash(fixture.prompt);
   if (run.hash === PLACEHOLDER_HASH || run.hash === null) notes.push("recorded run carries no real problem_hash; hash check skipped");
@@ -127,6 +130,8 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
       if (w < mn.min_words) failures.push(`must_not ${mn.id}: only ${w} words outside /${mn.pattern}/ in ${mn.scope} (need ${mn.min_words})`);
     } else if (mn.check === "must_match") {
       if (!anyMatch(text, mn.any_of)) failures.push(`must_not ${mn.id}${mn.trap ? ` (${mn.trap})` : ""}: ${mn.description.trim()}`);
+    } else if (mn.check === "must_be_imperative") {
+      if (!hasImperative(text)) failures.push(`must_not ${mn.id}${mn.trap ? ` (${mn.trap})` : ""}: no "do X" sentence in ${mn.scope}`);
     } else {
       const items = text.split("\n").filter((l) => /^\s*([-*]|\d+\.)\s+/.test(l)).length;
       const imperative = splitSentences(text.replace(/[*_`#]/g, "")).some((s) => IMPERATIVE_START.test(s));
@@ -152,7 +157,7 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
     }
   }
   const outcome = failures.length ? "fail" : "pass";
-  return { fixture: fixture.id, recorded: run.dir, outcome, expected, ok: outcome === expected, failures, notes };
+  return { fixture: fixture.id, recorded: run.dir, outcome, expected, ok: outcome === expected, expected_note: expectation.note, failures, notes };
 }
 
 export function runEval(cfg: Config, opts: { fixturesDir?: string; recordedDir?: string } = {}): EvalReport {
@@ -174,7 +179,8 @@ export function formatEvalReport(r: EvalReport): string {
   const lines: string[] = [];
   for (const p of r.pairs) {
     const tag = p.ok ? "OK  " : "BAD ";
-    lines.push(`${tag} fixture ${p.fixture}  ${p.recorded}  -> ${p.outcome.toUpperCase()}${p.expected === "fail" ? " (expected: negative control)" : ""}`);
+    const expectedTag = p.expected === "fail" ? ` (expected to fail${p.expected_note ? `: ${p.expected_note}` : ""})` : "";
+    lines.push(`${tag} fixture ${p.fixture}  ${p.recorded}  -> ${p.outcome.toUpperCase()}${expectedTag}`);
     for (const f of p.failures) lines.push(`       x ${f}`);
     for (const n of p.notes) lines.push(`       . ${n}`);
   }

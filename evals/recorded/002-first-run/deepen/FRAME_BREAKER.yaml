@@ -1,0 +1,31 @@
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+frame: FRAME_BREAKER
+verdict: defend
+response: |
+  The objection is right about the procedure and wrong about the principle, and the procedure
+  is the part that should give.
+
+  What it gets right: "forty, or so" with jitter is a better fit for capacity divided by fill
+  rate than for a cron table. Old-gen GC, WAL checkpoints, memtable flushes, and pool max-lifetime
+  all produce odd, load-stretched periods, and none of them has a schedule entry to offset. The
+  position's own step 4 noticed this (a drifting period "points at a loop that sleeps for a fixed
+  interval after finishing") and then walked straight into a cron-shaped plan anyway. The check
+  "does the interval stretch at night and compress at noon" belongs as step two, not as the
+  falsifier, because it is a ten-minute query over data you already have and it splits the suspect
+  list in half before anything is touched. Conceded. The point about paused rotations having their
+  own failure mode is also fair as stated; the position should have said "shift by a few minutes",
+  never "pause", and should have ranked candidates by how cheaply the change reverses.
+
+  What it does not overturn: the claim that a period is found by manipulation, not inspection.
+  A fill-rate process is still a clock, just one whose dial is a capacity rather than a schedule.
+  Halve max_wal_size and the checkpoint period halves; double the heap and the GC period roughly
+  doubles; change pool max-lifetime from 40 minutes to 25 and the spike moves to 25. Each of those
+  is a single config change, reversible in one deploy, and gives a proportional signature that no
+  amount of overlaying heap metrics gives you, because an overlay shows correlation among several
+  things that all fire near the spike, while a moved period shows cause. The objection's proposed
+  alternative, "overlay heap and checkpoint metrics", is the "look harder" move the position was
+  built to refuse; it is a good way to pick which dial to turn first, not a substitute for turning
+  it. So the frame survives; the concrete first action changes shape.
+revised_position: "Record exact spike timestamps and test whether the interval stretches with low load: if it does, the clock is a capacity-over-fill-rate process (heap, WAL/checkpoint, memtable, pool max-lifetime) and you identify it by changing one capacity at a time and watching the period move in proportion; only if the interval is load-invariant do you shift scheduled timers, by small odd offsets, cheapest-to-reverse first."
+revised_falsifier: "Timestamps show no stable period under either test, i.e. intervals scatter without tracking wall clock or throughput; or changing the capacity (or schedule) of the leading candidate leaves the spike period unchanged."
+confidence: medium

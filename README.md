@@ -93,9 +93,14 @@ The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `ad
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
 
-One real run is recorded: `evals/recorded/001-first-run/`, fixture 001 with five isolated
-subagents, seed 1. It passes every `must_surface` assertion. Two branches were pruned by the
-critic (LEDGER for T2 and T7, MINIMALIST for T1, T2, and T6), ACTOR_CENSUS and FRAME_BREAKER
-converged from different axes on caller-owned deadlines, and both survivors defended under
-objection while conceding part of their position. Read its `README.md` for what the run did
-not surface.
+Two real runs are recorded, one per fixture, five isolated subagents each, seed 1.
+
+- `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
+  MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on
+  caller-owned deadlines and the cancel path; both survivors defended under objection.
+- `evals/recorded/002-first-run/` fails fixture 002 on one item and is recorded as such: no
+  branch in the fuzzy debugging frame set asked who the p99 tail lands on. The critic pruned
+  SABOTEUR (T1) and NIGHT_OPERATOR (T2); PARTICULARIST with MECHANIC and FRAME_BREAKER with
+  NIGHT_OPERATOR formed two clusters; both survivors defended and each withdrew a claim.
+
+Each run's `README.md` says how it was produced and what it did not surface.

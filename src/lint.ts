@@ -11,7 +11,12 @@ export interface LintHint {
 const CITATION = /\b(ch\.|chapter\s+\d+|et al\.?|RFC\s*\d+|https?:\/\/\S+|\bbook\b|\bpaper\b|\bstudy\b|according to|\bSRE\b|\bblog\b|\bdocs?\b\s+say)/i;
 const HEDGE = /\b(it depends|either|consider(ing)?|could|might|may be|on the other hand|perhaps|possibly|alternatively)\b/i;
 export const IMPERATIVE_START =
-  /^(set|use|make|expose|give|let|fail|return|do|stop|add|remove|treat|start|drop|route|keep|cancel|show|build|ship|pick|choose|put|run|check|look|measure|write|split|merge|move|delete|prefer|default|cap|bound|reject|accept|degrade|retry|never|don't|do not|always|first|graph|plot|correlate|grep|confirm|overlay|compare|turn|ask|tell|stream|surface|record|log|pay|bill|charge|rename|call|name)\b/i;
+  /^(set|use|make|expose|give|let|fail|return|do|stop|add|remove|treat|start|drop|route|keep|cancel|show|build|ship|pick|choose|put|run|check|look|measure|write|split|merge|move|delete|prefer|default|cap|bound|reject|accept|degrade|retry|never|don't|do not|always|first|graph|plot|correlate|grep|confirm|overlay|compare|turn|ask|tell|stream|surface|record|log|pay|bill|charge|rename|call|name|pull|read|query|list|enumerate|partition|group|shift|instrument|test|find|change|require|stay|wait|halve|double|lower|raise|open|close|flip|pause|treat|swap)\b/i;
+
+/** A "do X" sentence exists: an imperative opening, or an explicit ordering word. */
+export function hasImperative(text: string): boolean {
+  return splitSentences(text.replace(/[*_`#]/g, "")).some((s) => IMPERATIVE_START.test(s) || /\b(first|before)\b/i.test(s));
+}
 
 export function splitSentences(text: string): string[] {
   return text

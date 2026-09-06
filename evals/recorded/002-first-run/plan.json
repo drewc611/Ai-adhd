@@ -1,0 +1,57 @@
+{
+  "run_id": "002-first-run",
+  "created_at": "2026-09-06T06:01:06.817Z",
+  "problem_hash": "sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806",
+  "problem_class": "fuzzy_debugging",
+  "seed": 1,
+  "n": 5,
+  "allow_wide": false,
+  "estimate": {
+    "tokens_branches": 60000,
+    "tokens_critic": 60000,
+    "tokens_deepen": 36000,
+    "tokens_total": 156000
+  },
+  "branches": [
+    {
+      "frame": "SABOTEUR",
+      "axis": "adversary",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/SABOTEUR.md",
+      "artifact_path": "branches/SABOTEUR.yaml"
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "axis": "frame_validity",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/FRAME_BREAKER.md",
+      "artifact_path": "branches/FRAME_BREAKER.yaml"
+    },
+    {
+      "frame": "NIGHT_OPERATOR",
+      "axis": "operation",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/NIGHT_OPERATOR.md",
+      "artifact_path": "branches/NIGHT_OPERATOR.yaml"
+    },
+    {
+      "frame": "PARTICULARIST",
+      "axis": "particulars",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/PARTICULARIST.md",
+      "artifact_path": "branches/PARTICULARIST.yaml"
+    },
+    {
+      "frame": "MECHANIC",
+      "axis": "mechanism",
+      "agent": "adhd-branch",
+      "tools": [],
+      "brief_path": "briefs/MECHANIC.md",
+      "artifact_path": "branches/MECHANIC.yaml"
+    }
+  ]
+}
