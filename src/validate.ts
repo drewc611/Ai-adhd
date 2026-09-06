@@ -160,14 +160,22 @@ export type BranchValidation =
  * Subagents sometimes wrap the YAML in a fence, and sometimes add prose after it (a sources
  * line, a sign off). The artifact is the first fenced block if there is one, else the text.
  * Every reader of a subagent's final message goes through here so they agree on what it said.
+ *
+ * Deliberately not a regular expression. Every regex spelling of "fence, info string, body,
+ * fence" has two quantifiers that can match the same character, and the engine then has to try
+ * every split: quadratic on input that is, by construction, the untrusted final message of a
+ * subagent. Two rounds of patching the pattern each removed one ambiguity and left another.
+ * Three index lookups say the same thing, run in linear time, and cannot be got wrong.
  */
 export function unfence(text: string): string {
-  // The info string after ``` cannot contain a newline, so `[^\n]*\n` says exactly that and
-  // is unambiguous. Writing `\s*\n` instead let `\s*` match newlines, which makes every split
-  // of a newline run a candidate the engine has to try: quadratic, on the untrusted final
-  // message of a subagent. Doubling a run of "\n " quadrupled the match time before this.
-  const fenced = text.match(/```(?:ya?ml)?[^\n]*\n([\s\S]*?)\n```/);
-  return fenced ? fenced[1]! : text;
+  const open = text.indexOf("```");
+  if (open === -1) return text;
+  // The info string runs to the end of that line, whatever it says: yaml, yml, or nothing.
+  const bodyStart = text.indexOf("\n", open + 3);
+  if (bodyStart === -1) return text;
+  const close = text.indexOf("\n```", bodyStart);
+  if (close === -1) return text;
+  return text.slice(bodyStart + 1, close);
 }
 
 function parseYamlLoose(text: string): unknown {

@@ -122,22 +122,32 @@ test("a detector that fires on evidence too thin to be an argument rejects the p
   assert.doesNotThrow(() => validatePassB(build("yes, T1"), H, frames, 0));
 });
 
-test("unfence is linear on a hostile fence and still finds the block a subagent actually writes", () => {
-  // unfence runs on every subagent return, which is untrusted output. `\s*\n` let \s* match
-  // newlines, making every split of a newline run a candidate: quadratic. CodeQL's witness was
-  // exactly this shape, and doubling the run quadrupled the match time before the fix.
-  const hostile = "```\n" + "\n ".repeat(200_000);
-  const started = Date.now();
-  assert.equal(unfence(hostile), hostile, "no closing fence, so the text comes back whole");
-  const ms = Date.now() - started;
-  assert.ok(ms < 500, `unfence took ${ms}ms on a hostile fence; it should be linear`);
+test("unfence is linear on every fence CodeQL called out, and reads the shapes subagents write", () => {
+  // unfence runs on the final message of every subagent, so its input is untrusted by
+  // construction. Each regex spelling of this had two quantifiers that could match the same
+  // character, and CodeQL named three witnesses for it. All three are checked here.
+  for (const [name, hostile] of [
+    ["newline run", "```\n" + "\n ".repeat(200_000)],
+    ["info string", "```" + "```yml".repeat(200_000)],
+    ["unclosed body", "```\n" + "```\na".repeat(200_000)],
+  ] as const) {
+    const started = Date.now();
+    unfence(hostile);
+    const ms = Date.now() - started;
+    assert.ok(ms < 500, `unfence took ${ms}ms on the ${name} witness; it should be linear`);
+  }
   for (const [input, want] of [
     ["```yaml\nfoo: 1\n```", "foo: 1"],
     ["```yml\nfoo: 1\n```", "foo: 1"],
     ["```\nfoo: 1\n```", "foo: 1"],
     ["```yaml   \nfoo: 1\n```", "foo: 1"],
+    ["```yaml\na: 1\nb: 2\n```", "a: 1\nb: 2"],
     ["```yaml\nfoo: 1\n```\n\nSources: [one](https://example.invalid)", "foo: 1"],
+    // No fence, or an unfinished one, means the message was not fenced: hand it back whole.
     ["foo: 1", "foo: 1"],
+    ["```", "```"],
+    ["```yaml", "```yaml"],
+    ["```yaml\nno closing fence", "```yaml\nno closing fence"],
   ] as const)
     assert.equal(unfence(input), want, `unfence(${JSON.stringify(input)})`);
 });
