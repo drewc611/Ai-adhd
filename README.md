@@ -67,6 +67,23 @@ skills/adhd/  Claude Code skill
 agents/       subagent definitions
 ```
 
+## Install
+
+As a Claude Code plugin, from a checkout:
+
+```
+git clone https://github.com/drewc611/Ai-adhd.git && cd Ai-adhd
+npm install && npm run build
+claude plugin add .            # or point your plugin marketplace at this directory
+```
+
+The plugin registers the `/adhd` skill, the branch, critic, and deepen agents, and the MCP
+server. The MCP server can also be used on its own by any MCP host:
+
+```
+node dist/src/mcp.js           # stdio; tools: adhd_run, adhd_traps, adhd_eval, adhd_frames
+```
+
 ## Quickstart
 
 ```
@@ -104,3 +121,13 @@ Two real runs are recorded, one per fixture, five isolated subagents each, seed 
   NIGHT_OPERATOR formed two clusters; both survivors defended and each withdrew a claim.
 
 Each run's `README.md` says how it was produced and what it did not surface.
+
+## Contributing
+
+Read `CONTRIBUTING.md`. Frames are the expensive part and have a proposal process (D6 in
+`docs/DECISIONS.md`). Fixtures are claims about what a good run must surface; tighten them,
+never loosen them.
+
+## License
+
+MIT. See `LICENSE`.

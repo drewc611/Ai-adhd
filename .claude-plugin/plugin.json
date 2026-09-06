@@ -5,7 +5,7 @@
   "author": {
     "name": "drewc611"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "keywords": [
     "reasoning",
     "divergence",
@@ -25,5 +25,6 @@
         "${CLAUDE_PLUGIN_ROOT}/dist/src/mcp.js"
       ]
     }
-  }
+  },
+  "repository": "https://github.com/drewc611/Ai-adhd"
 }
