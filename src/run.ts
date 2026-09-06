@@ -8,6 +8,7 @@ import { PlanSchema, type BranchArtifact, type DeepenArtifact, type Plan } from 
 import { compile, letterFor, previewText } from "./compile.js";
 import {
   checkBlind,
+  checkBriefIsolation,
   parseDecision,
   validateBranchArtifact,
   validateDeepen,
@@ -278,17 +279,26 @@ export function phaseDeepen(cfg: Config, runDir: string): PhaseResult {
     };
   }
   const byFrame = new Map(validArtifacts(branches).map((a) => [a.frame, a]));
+  const allIds = cfg.frames.frames.map((f) => f.id);
   const next: PhaseResult["next"] = [];
   for (const c of score.clusters) {
     if (!c.representative) continue;
     const a = byFrame.get(c.representative)!;
+    // A survivor never sees the other survivors. The critic wrote the objection with every
+    // label in view and may have named them; strip every frame id but the survivor's own.
+    const objection = c.strongest_objection ?? "(the critic recorded no objection; defend against the strongest one you can construct yourself)";
+    const redacted = allIds
+      .filter((id) => id !== a.frame)
+      .reduce((t, id) => t.replace(new RegExp(`\\b${id}\\b`, "g"), "another line of reasoning"), objection);
     const brief = render(cfg.prompts.deepen, {
       problem,
       problem_hash: plan.problem_hash,
       frame: { id: a.frame },
       survivor_artifact: yamlBlock(a),
-      strongest_objection: c.strongest_objection ?? "(the critic recorded no objection; defend against the strongest one you can construct yourself)",
+      strongest_objection: redacted,
     });
+    const leaks = checkBriefIsolation(brief, a.frame, allIds);
+    if (leaks.length) throw new RunAbort(`deepen brief for ${a.frame} is not isolated: ${leaks.join("; ")}`, "DEEPEN_LEAK");
     const briefPath = join(runDir, "deepen", `${a.frame}.brief.md`);
     const artifactPath = join(runDir, "deepen", `${a.frame}.yaml`);
     wr(briefPath, brief);

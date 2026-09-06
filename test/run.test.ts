@@ -63,7 +63,7 @@ test("full run: critique is blind in pass A, deepen briefs isolate survivors, sy
     [
       { id: "cancel_first", members: [valid[1]!, valid[2]!], action: "Expose cancel and propagate it before any timer fires." },
       { id: "consensus", members: [valid[0]!] },
-      { id: "lone", members: [valid[3]!], action: "Fail over instead of retrying the same instance." },
+      { id: "lone", members: [valid[3]!], action: "Fail over instead of retrying the same instance.", objection: `${valid[1]} and ${valid[0]} both argue the opposite; so does MECHANIC.` },
     ],
     { [valid[0]!]: { T1: "delete the specific details and the numbers do not change" } },
   );
@@ -78,7 +78,8 @@ test("full run: critique is blind in pass A, deepen briefs isolate survivors, sy
   for (const n of r.next!) {
     const brief = readFileSync(n.brief, "utf8");
     const own = n.brief.match(/deepen\/([A-Z_]+)\.brief\.md$/)![1]!;
-    for (const f of valid) if (f !== own) assert.ok(!new RegExp(`\\b${f}\\b`).test(brief), `deepen brief for ${own} mentions ${f}`);
+    for (const f of cfg.frames.frames.map((x) => x.id)) if (f !== own) assert.ok(!new RegExp(`\\b${f}\\b`).test(brief), `deepen brief for ${own} mentions ${f}`);
+    if (own === valid[3]) assert.match(brief, /another line of reasoning and another line of reasoning both argue/, "critic-named frames are redacted from the objection");
     writeFileSync(n.artifact, yaml({ problem_hash: H, frame: own, verdict: "defend", response: "The objection assumes the user waits. Users leave.", revised_position: `Do the ${own} thing, with cancel first.`, revised_falsifier: null, confidence: "high" }));
   }
 

@@ -47,7 +47,9 @@ overrule each with evidence. Disagreement is recorded, not resolved.
 
 4. **Strongest objection.** For each cluster that has no fired trap, write the single
    strongest objection to it, drawn from another branch's reasoning or from your own reading
-   of the problem. One paragraph. This goes to the survivor in isolation.
+   of the problem. One paragraph. This goes to the survivor in isolation, so do not name any
+   frame, branch, or letter in it: the survivor must not learn that other branches exist.
+   State the objection as an argument, not as "X said".
 
 ## Output
 
