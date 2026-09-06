@@ -49,7 +49,7 @@ phase functions.
 | `adhd_submit` / `adhd os submit` | compile; return the D5 preview and `run_id`; state `awaiting_confirm`. `confirmed: true` skips the gate for scripted use. |
 | `adhd_confirm` / `adhd os confirm` | mint the branch tasks; state `diverge` |
 | `adhd_claim` / `adhd os claim` | lease the oldest pending task to `worker`; returns the brief inline, the agent type, and `continues` when the task must go to an existing subagent |
-| `adhd_return` / `adhd os return` | write the subagent's final message as the artifact; advance the run if the phase is complete |
+| `adhd_return` / `adhd os return` | write the subagent's final message as the artifact (the first fenced YAML block; if the message carried anything outside it, the whole message is kept beside the artifact as `<artifact>.raw.md`); advance the run if the phase is complete |
 | `adhd_status` / `adhd os status` | state, task counts, last phase text, reason |
 | `adhd_result` / `adhd os result` | the synthesis when there is one |
 | `adhd_cancel` / `adhd os cancel` | drop pending and leased tasks; render partial |

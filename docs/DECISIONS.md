@@ -180,6 +180,15 @@ through the pruned block. So the frame closes the gap as a question-raiser, not 
 recommendation. Swapping it into the `fuzzy_debugging` primary set is now a decision with two
 runs behind it. Still the owner's.
 
+Third class run: `evals/recorded/003-kernel-strategy/`, the `strategy` set (FRAME_BREAKER,
+LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON) on fixture 003. It passes. The set was not a
+monoculture by the critic's clustering (three clusters), but every one of the five positions
+opened with "do not rewrite", and two were pruned for T1: their reasoning would serve any
+rewrite question. The frames that survived were the ones whose mechanism is specific to this
+shape of problem (one way doors, the maintainer two years on, the bill and who pays it). One
+run, one seed. `adhd frames --orthogonality` now sees four runs and flags nothing; no pair has
+three shared runs yet.
+
 ---
 
 ## D7. The kernel: ADHD as an agent operating system

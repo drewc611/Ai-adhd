@@ -42,6 +42,10 @@ must_surface:
   - id: detection_latency
     description: The answer says how the asker would learn the bet was wrong, and when. This is what makes the class a strategy class.
     any_of:
+      # "detection latency" was added after run 003-kernel-strategy: a branch used the exact
+      # words and the first draft of this list did not include them.
+      - "detection latency"
+      - "how long until (you|we) (would )?(find out|know)"
       - "how (would|will|do) (you|we) know"
       - "(know|tell|learn|find out|discover)[^.]{0,60}(wrong|failing|not working|mistake)"
       - "kill (criteri|signal|switch)"
@@ -87,10 +91,14 @@ must_not:
     check: must_match
     scope: recommendation
     any_of:
-      - "^(?!\\s*(it depends|that depends|this depends|there is no (single|one|right) answer))"
+      - "^\\s*(?!(it depends|that depends|this depends|there is no (single|one|right) answer))\\S"
 
 expect:
   pruned_min: 1
-  pruned_traps_include_any: [T3, T5, T7]
+  # The traps a branch reproducing the consensus answer is pruned for. T5 cannot prune a
+  # branch that met the output contract (a position is "do X" by construction) and T7 is
+  # attacked by DOOR_KEEPER and HORIZON in this class, so the first draft of this fixture
+  # listed the wrong traps; run 003-kernel-strategy pruned on T1 and T2.
+  pruned_traps_include_any: [T1, T2, T3]
   monoculture: false
   scatter: false

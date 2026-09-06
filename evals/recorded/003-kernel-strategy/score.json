@@ -1,0 +1,165 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "LEDGER",
+      "status": "survivor",
+      "cluster": "extract_one_then_gate",
+      "pass_a": 0.8333333333333334,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Do not rewrite; instead spend one quarter extracting the single module whose deploy or scaling pain you can name, and stop there unless that extraction paid for itself.",
+      "forecloses": [
+        "A full rewrite scheduled as a one-year program with a target end state of \"microservices.\"",
+        "Leaving the monolith exactly as it is with no boundary work at all, which lets the unnamed pain keep compounding unmeasured.",
+        "Extracting more than one module before the first extraction has shown a measured improvement in the pain it was meant to fix."
+      ],
+      "falsifier": "If the team cannot, in one meeting, name a single module whose deploy time, scaling need, or ownership conflict is the concrete pain, the position is wrong because there is no module to extract and the real problem is not architectural.",
+      "missing_actor": "Finance or whoever approves cloud spend, who can require a per-service run-cost estimate before any second service is provisioned, which forces the invisible operational bill onto the asker's side of the ledger."
+    },
+    {
+      "frame": "PRIOR_ART",
+      "status": "pruned",
+      "cluster": "extract_one_then_gate",
+      "pass_a": 0.625,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "Step 1 explicitly abstracts the prompt to 'replace a load-bearing system that cannot be paused'; with monolith, microservices, and the year deleted the position (cut over one segment at a time behind a stable interface) is unchanged, and would be the same answer for any replacement question."
+        },
+        {
+          "trap": "T2",
+          "evidence": "Accepts the question's frame that a replacement is happening and asks only how; step 4 notes the precedents say nothing for microservices as a topology but does not test whether the pain is architectural at all."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Do not rewrite the monolith over the next year; instead cut over one capability at a time behind the existing interface, exchange-by-exchange as the telephone network did, and only for the parts whose operating cost is already measurable.",
+      "forecloses": [
+        "A one-year clean-sheet rewrite with a planned switchover date.",
+        "Decomposing everything into services; components with no measured operating pain stay in the monolith indefinitely.",
+        "Freezing feature work on the monolith during the transition; the old exchange keeps taking calls until its replacement is proven."
+      ],
+      "falsifier": "Pick the single most painful capability in the monolith and give a two-person team one quarter to route its production traffic to a separately deployed service behind the existing interface; if they cannot, the exchange-by-exchange path is closed for this codebase and this position is wrong.",
+      "missing_actor": "The on-call rotation that carries the pager for the monolith; they hold the incident and maintenance-cost data that decides which \"exchange\" is cut over first, and they can refuse a cutover that has not been rehearsed."
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "status": "survivor",
+      "cluster": "extract_one_then_gate",
+      "pass_a": 0.875,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Do not commit to a year-long microservices rewrite; instead extract exactly one service behind a strangler seam within the next quarter, and commit to further extractions only if that seam pays its own way in the seam's operational metrics.",
+      "forecloses": [
+        "A big-bang rewrite with a parallel codebase and a planned cutover date.",
+        "Reorganizing the engineering team around service ownership before any service has proven itself on production traffic.",
+        "Splitting the database as the first step of the migration."
+      ],
+      "falsifier": "If enforcing a module boundary inside the monolith reveals that the top candidate module has more than a handful of cross-boundary calls in every direction and no single module can be isolated in under two weeks, then incremental extraction is not viable and the choice is genuinely binary between staying monolithic and a full rewrite, which this position wrongly assumed away.",
+      "missing_actor": "The product or business owner who sets the roadmap; they can decide that feature velocity over the next year matters more than architecture and pull the team off the extraction entirely, or they can fund a second team so the extraction does not compete with the roadmap at all."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "fix_named_pain_in_place",
+      "pass_a": 0.7708333333333334,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "Delete monolith, microservices, and the year from the prompt and the answer, write down three pains with numbers and fix the most expensive one in place, is unchanged; the reasoning about who benefits from an unexamined rewrite applies to any rewrite proposal."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop planning any rewrite; instead spend the next two weeks writing down the three specific pains the monolith causes, with a number attached to each, and fix the single most expensive one inside the monolith by the end of the quarter.",
+      "forecloses": [
+        "A planned, scheduled, year long migration program with a target microservices architecture defined up front.",
+        "Freezing or slowing feature work to fund the rewrite, since the fix work is sized to a quarter and done inside the running system.",
+        "Treating \"monolith\" itself as the problem statement; a pain that cannot be written down with a number does not get worked on."
+      ],
+      "falsifier": "If the team tries to write the three pains with numbers and every one of them turns out to be a property of the monolith's shape that cannot be fixed in place, for example separate teams genuinely need different runtimes, scaling profiles, or release cadences and enforcing module boundaries has already been tried and failed, then the correction is wrong and the extraction question was real.",
+      "missing_actor": "The product owner or business sponsor who funds engineering time, who can refuse to approve any work item that lacks a stated pain and a number, and who can cap architecture work at one quarter per pain."
+    },
+    {
+      "frame": "HORIZON",
+      "status": "survivor",
+      "cluster": "harden_monolith_extract_diverged_seams",
+      "pass_a": 0.7916666666666666,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Do not rewrite the monolith as microservices over the next year; instead extract at most two services this year, chosen by the seams whose ownership or deployment cadence has already diverged, and keep the rest a single deployable with enforced module boundaries.",
+      "forecloses": [
+        "A full microservices rewrite completed within the year, with the organizational story and hiring narrative that comes with it.",
+        "Splitting the team into per-service ownership groups this year; the team stays organized around the monolith's modules.",
+        "Using \"we are moving to microservices\" as the answer to current deploy pain; the deploy pipeline of the monolith has to be fixed on its own terms."
+      ],
+      "falsifier": "If, in the past six months, three or more distinct modules of the monolith already needed to deploy on independent cadences and were blocked by each other's release gates, the seams are already known and the \"at most two extractions\" ceiling is wrong; extract along every seam that shows that evidence.",
+      "missing_actor": "The platform or infrastructure team that will own the per-service deploy pipeline, service mesh, and on-call tooling; they can cap the number of services they will support this year, and that cap is a harder constraint on the decision than any architectural argument."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "extract_one_then_gate",
+      "action": "Refuse the year-long rewrite, extract a single service behind the existing interface within a quarter without splitting the database, and permit further extractions only if that one measurably relieves a named pain.",
+      "members": [
+        "LEDGER",
+        "PRIOR_ART",
+        "DOOR_KEEPER"
+      ],
+      "survivors": [
+        "LEDGER",
+        "DOOR_KEEPER"
+      ],
+      "singleton": false,
+      "strongest_objection": null,
+      "representative": "DOOR_KEEPER",
+      "mean_pass_a": 0.8541666666666667
+    },
+    {
+      "id": "harden_monolith_extract_diverged_seams",
+      "action": "Keep the monolith as the primary deployable, enforce module boundaries mechanically in the build, and extract at most two services this year only along seams whose ownership or deploy cadence has already visibly diverged.",
+      "members": [
+        "HORIZON"
+      ],
+      "survivors": [
+        "HORIZON"
+      ],
+      "singleton": true,
+      "strongest_objection": "The two extractions are authorised by an already-observed divergence in ownership or deploy cadence, but divergence is not the same as pain that extraction relieves: two modules can deploy on different cadences and still be coupled through the database, so the extraction pays the full per-service tax, admitted here to be roughly a quarter of one team's year, without any measurement showing the pain moved. Nothing in the position requires the first extraction to prove itself before the second is allowed, and nothing requires the pain to be priced before either is started, so the ceiling of two is a guess about this codebase drawn from an imagined future rather than from a number. Worse, the enforced module walls that carry the whole position are acknowledged to slip the moment nobody checks the build rule, and a build rule is exactly the kind of control that gets disabled under deadline pressure, which means the position's own stated failure mode, walls agreed to in a document but not held, is the most probable outcome of following it. A cheaper sequence exists: enforce the walls, run one candidate as a shadow process against the shared database for a release cycle, and let the coupling and deploy-frequency numbers decide whether any extraction, let alone two, is justified.",
+      "representative": "HORIZON",
+      "mean_pass_a": 0.7916666666666666
+    },
+    {
+      "id": "fix_named_pain_in_place",
+      "action": "Abandon rewrite planning, spend two weeks writing down three monolith pains with a number on each, and fix the most expensive one inside the current codebase by quarter end, extracting a service only if that fix proves impossible without a process boundary.",
+      "members": [
+        "FRAME_BREAKER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": "The three pains a team writes down in a monolith of any age are rarely independent: a ninety-minute flaky deploy, two teams colliding on merges, and a query that pins the primary are usually three symptoms of one coupled module, and the cheapest in-place fix for that shared root cause is precisely the module-boundary enforcement plus a single extraction that this position defers to a later quarter. Treating them as three rows and fixing the top one buys a quarter of symptom relief, then the next row surfaces the same root cause and the structural work starts a quarter late with the same numbers in hand. Separately, the position never answers the question that was asked, so the rewrite proposal returns next quarter with the same backers and the same budget argument, because no decision about architectural direction was recorded; and the two-week numbers exercise is run by the same people who want the year of protected work, who get to choose which numbers are written down and can make the case for extraction out of the very document meant to defuse it.",
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "FRAME_BREAKER attacks the assumption that the pain is architectural and 'rewrite' is the remedy; HORIZON attacks the assumption that boundaries can be known now; LEDGER and DOOR_KEEPER both make naming the pain a precondition."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "All five branches name a missing actor with an action: finance, on-call rotation, product owner, product sponsor, platform team."
+    },
+    "notes": [
+      "singleton HORIZON escalated to deepen, flagged unverified"
+    ]
+  },
+  "proceed": true
+}

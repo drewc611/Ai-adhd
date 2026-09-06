@@ -137,7 +137,8 @@ runs/<run_id>/
   decision.json            the orchestrator's enum-only routing decision
   plan.json                frames selected, shuffled order, seed, agent per brief, problem_hash
   briefs/<frame>.md        one per branch, compiled; pasted inline into the spawn prompt
-  branches/<frame>.yaml    the subagent's final message, written by the host
+  branches/<frame>.yaml    the YAML from the subagent's final message, written by the host
+  branches/<frame>.yaml.raw.md   the whole message, only when it carried text outside the fence
   critic/pass-a.brief.md   blind pack: letters for ids, frame field stripped
   critic/pass-a.yaml       rubric scores per letter
   critic/pass-b.brief.md   unblind pack

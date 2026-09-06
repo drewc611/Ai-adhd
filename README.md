@@ -110,7 +110,7 @@ The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `ad
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
 
-Three real runs are recorded, five isolated subagents each.
+Four real runs are recorded, five isolated subagents each.
 
 - `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
   MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on
@@ -125,6 +125,11 @@ Three real runs are recorded, five isolated subagents each.
   the kernel: nine tasks claimed and returned by one worker, four automatic phase advances,
   real token accounting. END_USER asked who is hurt and was pruned for it, so the question
   reached the output through the pruned block. MECHANIC folded under objection.
+- `evals/recorded/003-kernel-strategy/` passes fixture 003 (strategy class, monolith rewrite),
+  driven by the kernel. All five frames refused the year-long rewrite; the critic pruned
+  PRIOR_ART (T1, T2) and FRAME_BREAKER (T1) for answers that would not change if the problem
+  did, and the two survivors each gave ground under objection. The run found three bugs in
+  the plumbing, listed in its `README.md`.
 
 Each run's `README.md` says how it was produced and what it did not surface.
 
