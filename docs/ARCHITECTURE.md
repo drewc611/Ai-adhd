@@ -56,7 +56,13 @@ Each branch receives none of these: sibling output, orchestrator commentary, the
 names of other branches, a count of how many branches exist, or any phrase of the form
 "here is what has been considered so far".
 
-Frames are delivered in randomised order. Branch results are collected unordered.
+Frames are delivered in randomised order under a logged seed. Branch results are collected
+unordered.
+
+Branches have no filesystem tools. The brief reaches a branch inline in the spawn prompt and
+the branch's final message is its artifact, written to disk by the host. A branch with `Read`
+could find its siblings' artifacts in the run directory, so `Read`, `Grep`, and `Glob` are
+never grantable. The only per frame grants are `WebSearch` and `WebFetch` (D4).
 
 Branches return a structured artifact, not prose:
 
@@ -129,9 +135,9 @@ Every phase reads and writes one directory so the run is inspectable and replaya
 runs/<run_id>/
   problem.txt              verbatim, hashed
   decision.json            the orchestrator's enum-only routing decision
-  plan.json                frames selected, order shuffled, problem_hash
-  briefs/<frame>.md        one per branch, compiled
-  branches/<frame>.yaml    written by the host after each subagent returns
+  plan.json                frames selected, shuffled order, seed, agent per brief, problem_hash
+  briefs/<frame>.md        one per branch, compiled; pasted inline into the spawn prompt
+  branches/<frame>.yaml    the subagent's final message, written by the host
   critic/pass-a.brief.md   blind pack: letters for ids, frame field stripped
   critic/pass-a.yaml       rubric scores per letter
   critic/pass-b.brief.md   unblind pack

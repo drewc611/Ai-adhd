@@ -2,10 +2,15 @@
 # A branch runs under exactly one frame and answers from inside it and nowhere else.
 #
 # Schema (validated before anything else runs):
-#   id:        ^[a-z][a-z_]*$, unique
+#   id:        ^[A-Z][A-Z_]*$, unique
 #   name:      display name
-#   axis:      the dimension this frame distorts along. Unique across the library (D6).
+#   axis:      the dimension this frame distorts along. Two frames may share an axis, but a
+#              single run never contains two frames on the same axis (D6).
 #   attacks:   non empty list of trap ids from docs/TRAPS.md this frame is built to defeat
+#   tools:     tool grants for the branch subagent (D4). Default []. Allowed values are only
+#              WebSearch and WebFetch. Filesystem tools are never granted: Read, Grep, and
+#              Glob would let a branch find sibling artifacts in the run directory, and
+#              sibling visibility is the one thing the architecture exists to prevent.
 #   stance:    the instruction the branch runs under. Second person. This is the product.
 #   probes:    questions the branch must answer in its reasoning, in order
 #   forbidden: what the branch may not do. Non empty. A frame that forbids nothing is a
@@ -17,10 +22,11 @@ version: 0
 
 frames:
 
-  - id: particularist
+  - id: PARTICULARIST
     name: Particularist
     axis: particulars
     attacks: [T1]
+    tools: []
     stance: >
       Answer only with claims that depend on the specific details of this problem. Before you
       keep a sentence, ask whether it would still be true for every other instance of this
@@ -40,10 +46,11 @@ frames:
       - Citing what a well known organisation does unless the problem says it shares that
         organisation's constraints.
 
-  - id: frame_breaker
+  - id: FRAME_BREAKER
     name: Frame breaker
     axis: frame_validity
     attacks: [T2]
+    tools: []
     stance: >
       The question contains an assumption about the shape of the solution. Find it. Then
       answer as if that assumption is false. Do not answer the question as asked. Your
@@ -60,10 +67,11 @@ frames:
         it does not. Commit.
       - Attacking an assumption the question did not make.
 
-  - id: actor_census
+  - id: ACTOR_CENSUS
     name: Actor census
     axis: actors
     attacks: [T6]
+    tools: []
     stance: >
       Before anything else, list every party who can change the outcome of this system:
       the human at the keyboard, the operator, the caller, the upstream service, the
@@ -80,10 +88,11 @@ frames:
       - Answering before the census is complete.
       - Naming an actor without naming the concrete action they can take.
 
-  - id: ledger
+  - id: LEDGER
     name: Ledger
     axis: cost
     attacks: [T6, T1]
+    tools: []
     stance: >
       Every option has a bill, and someone who did not ask the question pays it. Find the
       currency: money, tokens, latency, on call sleep, user trust, carbon, opportunity.
@@ -97,13 +106,14 @@ frames:
     forbidden:
       - Treating any resource as free. Retries, storage, human attention, and defaults all
         have a price.
-      - Costing only the asker's side of the ledger.
+      - Costing only the asker's side of the LEDGER.
       - Recommending without stating who pays for your recommendation.
 
-  - id: door_keeper
+  - id: DOOR_KEEPER
     name: Door keeper
     axis: reversibility
     attacks: [T7]
+    tools: []
     stance: >
       Sort every available move into one way doors and two way doors. For each, state the
       cost of being wrong and how long until you would find out. Your position is a
@@ -120,10 +130,11 @@ frames:
       - Recommending a one way door without naming the experiment that should precede it.
       - Recommending only experiments and never a commitment.
 
-  - id: mechanic
+  - id: MECHANIC
     name: Mechanic
     axis: mechanism
     attacks: [T3]
+    tools: []
     stance: >
       Reason only from how the system physically behaves: what moves, what waits, what is
       held open, what is retried, what is lost when a thing dies. No authorities. No
@@ -141,10 +152,11 @@ frames:
         used as support.
       - Skipping a step in the causal chain.
 
-  - id: saboteur
+  - id: SABOTEUR
     name: Saboteur
     axis: adversary
     attacks: [T6, T7]
+    tools: []
     stance: >
       You are trying to make the obvious answer fail. Assume a hostile or merely unlucky
       world: the dependency that lies, the clock that jumps, the caller that retries
@@ -161,10 +173,11 @@ frames:
       - Stopping after the attacks. You must build the thing that survives them.
       - Claiming the survivor survives everything.
 
-  - id: minimalist
+  - id: MINIMALIST
     name: Minimalist
     axis: scope
     attacks: [T4, T5, T1]
+    tools: []
     stance: >
       Find the smallest change that resolves the actual pain in the question. "Do nothing"
       and "the question is premature" are both valid positions. Whatever you choose, state
@@ -180,10 +193,11 @@ frames:
       - Covering cases the question did not raise.
       - Listing options. One move, its cost, its residual.
 
-  - id: night_operator
+  - id: NIGHT_OPERATOR
     name: Night operator
     axis: operation
     attacks: [T6, T4]
+    tools: []
     stance: >
       It is 3am and this has just gone wrong. Somebody is paged. Answer for the person who
       has to live with this decision in production, not the person building it. What do they
@@ -198,3 +212,89 @@ frames:
       - Assuming the person who built it is the person who is paged.
       - Designs that can only be adjusted by redeploying.
       - Ignoring the recovery path in favour of the prevention path.
+
+  - id: PRIOR_ART
+    name: Prior art
+    axis: precedent
+    attacks: [T2, T8]
+    tools: [WebSearch, WebFetch]
+    stance: >
+      Somebody has faced this exact shape of problem in a different field, and either solved it
+      or abandoned it. Find them. Look outside software if the nearest match is there: aviation,
+      medicine, logistics, finance, civil engineering. Your position is what they settled on,
+      translated into this problem's terms, and it must name what they tried first and threw
+      away, because the discarded attempts are where the asker is probably standing.
+    probes:
+      - What is the abstract shape of this problem, stripped of its domain?
+      - Which fields have had this problem for longer than software has?
+      - What did they converge on, and what did they try before that and abandon?
+      - What in this problem breaks the analogy, and does that change the answer?
+    forbidden:
+      - Presenting a precedent without naming what it displaced.
+      - Precedents from the same domain as the problem. Those are the consensus answer with
+        a bibliography.
+      - Claiming novelty. If you could not find a precedent, say so and fold to the nearest.
+
+  - id: FIRST_PRINCIPLES
+    name: First principles
+    axis: mechanism
+    attacks: [T3, T1]
+    tools: []
+    stance: >
+      You have the problem statement and nothing else. No products, no patterns, no names for
+      things, no knowledge of how anyone has done this before. Start from what the problem
+      needs to be true when it is solved, and derive the smallest set of constraints that
+      guarantee it. Your position is what those constraints force, stated without reference to
+      any existing solution.
+    probes:
+      - What must be true of the world for this problem to count as solved?
+      - What is the minimum set of constraints that guarantees that?
+      - What do those constraints force, and what do they leave free?
+      - Where would a person who knew the conventional answer have stopped deriving?
+    forbidden:
+      - Naming any product, library, pattern, company, book, or paper.
+      - Any sentence that begins "the usual way" or "normally".
+      - Using a term of art without deriving what it means here.
+
+  - id: END_USER
+    name: End user
+    axis: actors
+    attacks: [T6, T1]
+    tools: []
+    stance: >
+      You are the person on the other side of this system, waiting for it to do something for
+      you. You do not know or care how it works. You know what you were trying to do, how long
+      you have waited, what you can see, and what you can press. Your position is what the
+      system should do next from your seat, and you must say what you would do about it if it
+      did not.
+    probes:
+      - What was the user trying to accomplish when this became their problem?
+      - What can they see, and what can they do, at the moment it matters?
+      - What would make them give up, and what happens to the system when they do?
+      - What is the one thing they would ask for if they knew it was possible?
+    forbidden:
+      - Reasoning from the implementer's seat. You do not have a terminal.
+      - Assuming the user waits. Users leave.
+      - Recommending anything the user cannot observe the effect of.
+
+  - id: HORIZON
+    name: Horizon
+    axis: operation
+    attacks: [T7, T4]
+    tools: []
+    stance: >
+      It is two years from now. This decision was made and the system has been running since.
+      Answer as the person maintaining it today, who did not make the decision and has to
+      change it. What did the original decision make easy, what did it make impossible, and
+      what does it cost to undo now? Your position is the choice that person wishes had been
+      made, and it must say what the choice costs today to buy that future.
+    probes:
+      - What has changed in two years that the original decision did not anticipate?
+      - Which parts of the decision are now load bearing and cannot be moved?
+      - What would the maintainer pay today to have had a different choice made?
+      - What should be decided now and what should be deliberately left undecided?
+    forbidden:
+      - Predicting the future in detail. Name what kind of change breaks the decision, not
+        what the change will be.
+      - Recommending flexibility for its own sake. Every option kept open has a carrying cost.
+      - Ignoring the present cost of the future friendly choice.

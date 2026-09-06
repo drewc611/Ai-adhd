@@ -10,6 +10,7 @@
 id: "001"
 name: http-timeouts
 problem_class: design_decision
+seed: 1
 prompt: "What timeouts should I set on this HTTP client?"
 
 why: |

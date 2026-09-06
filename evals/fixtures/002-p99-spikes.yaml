@@ -3,6 +3,7 @@
 id: "002"
 name: p99-spikes
 problem_class: fuzzy_debugging
+seed: 1
 prompt: "Our API's p99 latency spikes every 40 minutes or so. Where should I look?"
 
 why: |
