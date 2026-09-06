@@ -32,14 +32,19 @@ must_surface:
   - id: retry_target_questioned
     trap: T2
     description: |
-      "Wait, then retry the same instance" is questioned. Fail over, degrade, or partial
-      output is named as the alternative.
+      "Wait, then retry the same instance" is questioned: either an alternative is named
+      (fail over, degraded mode, partial output) or retry amplification against the target
+      that is already struggling is called out. A bare "degrade" does not count; the first
+      real run matched "degrades that way" in an unrelated sentence.
     any_of:
       - "same (instance|host|model|endpoint|server|target)"
       - "fail ?over"
-      - "degrade"
+      - "degraded (mode|response|service)|degrade gracefully"
       - "partial (output|response|result)"
       - "different (instance|host|model|endpoint)"
+      - "retry storm"
+      - "(retry|retries|retrying)[^.]{0,80}(already|still) (sick|struggling|overloaded|degraded|down)"
+      - "(sick|struggling|overloaded) (dependency|upstream|instance|service)"
   - id: retry_cost
     trap: T6
     description: Someone pays for the retry, and the answer says who and in what currency.

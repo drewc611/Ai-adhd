@@ -91,5 +91,11 @@ The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `ad
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. No real run has been recorded yet: `evals/recorded/` holds only the negative
-control. D1 through D5 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
+
+One real run is recorded: `evals/recorded/001-first-run/`, fixture 001 with five isolated
+subagents, seed 1. It passes every `must_surface` assertion. Two branches were pruned by the
+critic (LEDGER for T2 and T7, MINIMALIST for T1, T2, and T6), ACTOR_CENSUS and FRAME_BREAKER
+converged from different axes on caller-owned deadlines, and both survivors defended under
+objection while conceding part of their position. Read its `README.md` for what the run did
+not surface.

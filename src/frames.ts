@@ -23,7 +23,7 @@ export interface PairStat {
  * D6 empirical check: across recorded runs, how often do two frames land in the same
  * cluster when both are present? Above `threshold` they are duplicates wearing different words.
  */
-export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded"), threshold = 0.6): { pairs: PairStat[]; flagged: PairStat[]; runs: number; text: string } {
+export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded"), threshold = 0.6, minTogether = 3): { pairs: PairStat[]; flagged: PairStat[]; runs: number; text: string } {
   const stats = new Map<string, PairStat>();
   let runs = 0;
   if (existsSync(recordedDir)) {
@@ -48,10 +48,14 @@ export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals",
     }
   }
   const pairs = [...stats.values()].sort((x, y) => y.rate - x.rate || y.together - x.together);
-  const flagged = pairs.filter((p) => p.rate > threshold);
-  const lines = [`orthogonality over ${runs} recorded run(s) with critic/pass-b.yaml`];
+  // One co-clustering is an anecdote. Flag only pairs observed together at least minTogether times.
+  const flagged = pairs.filter((p) => p.rate > threshold && p.together >= minTogether);
+  const lines = [`orthogonality over ${runs} recorded run(s) with critic/pass-b.yaml (flag threshold ${threshold * 100}%, min ${minTogether} shared runs)`];
   if (!pairs.length) lines.push("no pairs observed yet. Record runs to populate this.");
-  for (const p of pairs) lines.push(`${p.rate > threshold ? "!!" : "  "} ${p.a.padEnd(17)} ${p.b.padEnd(17)} co-clustered ${p.co_clustered}/${p.together} (${(p.rate * 100).toFixed(0)}%)`);
+  for (const p of pairs)
+    lines.push(
+      `${flagged.includes(p) ? "!!" : p.rate > threshold ? " ?" : "  "} ${p.a.padEnd(17)} ${p.b.padEnd(17)} co-clustered ${p.co_clustered}/${p.together} (${(p.rate * 100).toFixed(0)}%)${p.rate > threshold && p.together < minTogether ? "  too few shared runs to flag" : ""}`,
+    );
   if (flagged.length) lines.push(`${flagged.length} pair(s) above ${threshold * 100}%: candidates for removal or rewrite (D6).`);
   return { pairs, flagged, runs, text: lines.join("\n") };
 }
