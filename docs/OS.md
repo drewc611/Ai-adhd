@@ -29,6 +29,7 @@ returning artifacts.
 | process | a run directory with `os.json` |
 | process state | `awaiting_confirm`, `diverge`, `critique_a`, `critique_b`, `deepen`, `done`, `done_run_level`, `cancelled`, `aborted` |
 | thread | a task: one brief, one agent type, one artifact path |
+| mutex | `.lock`, a directory in the kernel root, stamped with the owning pid and host |
 | scheduler | `claim` hands out the oldest pending task under a lease |
 | preemption | lease expiry returns the task to the queue; the third expiry aborts the run |
 | syscall | an MCP tool or `adhd os <verb>` |
@@ -91,3 +92,21 @@ with its preview and estimate in `status` until someone confirms or cancels it, 
 before confirm spends nothing. After confirm, `cancel` at any state renders the returned
 branches unscored with the `UNSCORED, divergence only` label. Lease expiry cannot spend more
 than three attempts per task.
+
+## Two invariants the kernel enforces mechanically
+
+**One task, one worker.** `claim` and `return` both run inside a whole-root mutex built on
+`mkdir`, which is atomic, so two workers can never be handed the same task. Six processes
+racing for one run is a test, not a hope (`test/os.test.ts`).
+
+Breaking a held lock is the dangerous half. Breaking on age alone is a race: a holder that is
+merely slow, on a loaded box or a paused container, gets its lock stolen and two processes then
+run inside the mutex at once. So the lock records the owning pid and hostname, and is broken
+only when that process is known dead, or when it is older than two minutes, which no critical
+section here can reach because none of them do network or model work. Every break is journalled
+as `lock_broken`, since a stolen lock is the kind of event that explains a corrupted run an
+hour later.
+
+**A lease is ownership.** Returning a task requires naming the worker that holds it. Omitting
+the worker id used to skip the check, so any process could return work it did not do; a lease
+means one subagent owns one brief, and a return from anyone else silently breaks that.

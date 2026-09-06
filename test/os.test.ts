@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
+import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { artifact, cfg, passA, passB, tmp, yaml } from "./helpers.js";
 import { Kernel } from "../src/os.js";
@@ -390,4 +392,71 @@ test("a position that folds under its objection is reported as folded, never as 
   assert.match(live, /\(none\)/);
   assert.match(foldSec, new RegExp(`\\*\\*${c}\\*\\* gave up:`));
   assert.match(foldSec, new RegExp(`deepen/${c}\\.yaml`), "the fold points at its full concession");
+});
+
+test("two workers racing for the same run never receive the same task", async () => {
+  // Real concurrency, not a fake clock: separate processes contending for the kernel lock.
+  const root = join(tmp(), "root");
+  const { k } = kernel({ clock: { t: Date.now() } });
+  const realRoot = k.root;
+  void root;
+  k.submit(PROBLEM, { problem_class: "enumerate_options" }, { seed: 1, runId: "race", confirmed: true });
+  const pending = k.status("race").tasks.pending;
+  assert.ok(pending >= 5, `expected a wide run, got ${pending} tasks`);
+
+  const claimOnce = (worker: string) =>
+    new Promise<string | null>((resolve, reject) => {
+      execFile(
+        process.execPath,
+        [join(process.cwd(), "dist", "src", "cli.js"), "os", "claim", "--worker", worker, "--run", "race", "--os-root", realRoot],
+        (err, stdout) => {
+          if (err && !stdout) return reject(err);
+          const t = stdout.trim();
+          if (!t || t === "null") return resolve(null);
+          try {
+            resolve((JSON.parse(t) as { id: string }).id);
+          } catch {
+            resolve(null);
+          }
+        },
+      );
+    });
+
+  const workers = ["w1", "w2", "w3", "w4", "w5", "w6"];
+  const claimed = (await Promise.all(workers.map(claimOnce))).filter((x): x is string => x !== null);
+  const unique = new Set(claimed);
+  assert.equal(unique.size, claimed.length, `a task was handed to two workers: ${claimed.join(", ")}`);
+  assert.ok(claimed.length >= 5, `expected every pending task to be claimed once, got ${claimed.length}`);
+});
+
+test("a leased task cannot be returned without naming the worker that holds it", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const t = k.claim("w1")!;
+  assert.throws(() => k.return_(t.id, yaml(artifact(t.label, hash))), /pass that worker id/);
+  assert.throws(() => k.return_(t.id, yaml(artifact(t.label, hash)), "w2"), /leased to w1/);
+  k.return_(t.id, yaml(artifact(t.label, hash)), "w1");
+  assert.equal(k.status("r1").tasks.done, 1);
+});
+
+test("a lock whose owner process is gone is broken and the break is journalled", () => {
+  const { k } = kernel();
+  const lock = join(k.root, ".lock");
+  mkdirSync(lock, { recursive: true });
+  // pid 2^22 is above every default pid_max, so it names no live process.
+  writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: 4194304, host: hostname(), at: new Date().toISOString() }));
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  assert.equal(k.status("r1").state, "diverge");
+  const journal = readFileSync(join(k.root, "journal.jsonl"), "utf8");
+  assert.match(journal, /lock_broken/);
+  assert.match(journal, /owner process is gone/);
+});
+
+test("a lock held by a live process is not broken, and the caller times out instead", () => {
+  const { k } = kernel();
+  const lock = join(k.root, ".lock");
+  mkdirSync(lock, { recursive: true });
+  writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, host: hostname(), at: new Date().toISOString() }));
+  assert.throws(() => k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true }), /lock held for more than 10s/);
 });
