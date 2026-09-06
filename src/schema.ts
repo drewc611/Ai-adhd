@@ -108,6 +108,7 @@ export const HardRulesSchema = z
     scatter: z.object({ min_n: z.number().int(), requires_cluster_of: z.number().int() }).strict(),
     run_level_t2_if_no_branch_attacks_assumption: z.boolean(),
     lint_disagreement_is_reported_not_resolved: z.boolean(),
+    min_evidence_words_on_fire: z.number().int().min(0).default(0),
   })
   .strict();
 

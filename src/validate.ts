@@ -221,7 +221,7 @@ export function validatePassA(text: string, expectedHash: string, letters: strin
   return r.data;
 }
 
-export function validatePassB(text: string, expectedHash: string, frameIds: string[]): PassB {
+export function validatePassB(text: string, expectedHash: string, frameIds: string[], minEvidenceWordsOnFire = 0): PassB {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
   if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass B");
@@ -235,7 +235,21 @@ export function validatePassB(text: string, expectedHash: string, frameIds: stri
       problems.push(`no trap records for ${f}`);
       continue;
     }
-    for (const t of TRAP_IDS) if (!(t in row)) problems.push(`${f}.${t} detector record missing`);
+    for (const t of TRAP_IDS) {
+      if (!(t in row)) {
+        problems.push(`${f}.${t} detector record missing`);
+        continue;
+      }
+      // Firing removes a frame from the recommendation. An assertion with no argument behind it
+      // is not a detector result, it is a verdict, and pruning on it defeats the point of
+      // writing detectors down. Not firing is the default and may stay terse.
+      const rec = row[t]!;
+      if (rec.fired && minEvidenceWordsOnFire > 0) {
+        const words = rec.evidence.trim().split(/\s+/).filter((w) => /\w/.test(w)).length;
+        if (words < minEvidenceWordsOnFire)
+          problems.push(`${f}.${t} fired on ${words} word(s) of evidence, under the ${minEvidenceWordsOnFire} required: "${rec.evidence.trim().slice(0, 60)}"`);
+      }
+    }
   }
   for (const f of Object.keys(r.data.traps)) if (!frameIds.includes(f)) problems.push(`trap records for unknown frame ${f}`);
   // Clusters partition the frames.

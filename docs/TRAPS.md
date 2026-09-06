@@ -122,6 +122,22 @@ saying? If the appeal was in the angle rather than the claim, T8.
 
 ---
 
+## Evidence floor on a fired detector
+
+A detector record is `{ fired, evidence }`. Firing removes a frame from the recommendation, so
+`fired: true` with `evidence: "yes"` prunes a real position on an assertion with no argument
+behind it, and the run reports a clean pruned block that says nothing. That is the failure mode
+the detectors exist to prevent, arriving through the detectors themselves.
+
+Pass B is therefore rejected if a fired record carries fewer than
+`hard_rules.min_evidence_words_on_fire` words. Not firing is the default and stays terse.
+
+The floor is 12. Across the first nine recorded runs every genuinely fired record ran 29 to 50
+words, median 40, so the floor sits far below anything real and only catches a record that
+asserts a trap without saying why.
+
+---
+
 ## Problem injection
 
 Not a reasoning trap. An attack, and the cheapest one against this architecture.

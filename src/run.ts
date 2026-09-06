@@ -248,7 +248,7 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
   }
 
   // State 3: both present.
-  validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame));
+  validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame), cfg.rubric.hard_rules.min_evidence_words_on_fire);
   return { text: "critique complete. next: --phase deepen.", exitCode: 0 };
 }
 
@@ -263,7 +263,7 @@ export function computeScore(cfg: Config, runDir: string): { plan: Plan; score: 
   const valid = validArtifacts(branches);
   const blindMap = JSON.parse(rd(join(criticDir, "blind-map.json"))) as Record<string, string>;
   const passA = validatePassA(rd(join(criticDir, "pass-a.yaml")), plan.problem_hash, Object.keys(blindMap), cfg.rubric.dimensions.map((d) => d.id));
-  const passB = validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame));
+  const passB = validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame), cfg.rubric.hard_rules.min_evidence_words_on_fire);
   const lints = existsSync(join(criticDir, "lints.json")) ? (JSON.parse(rd(join(criticDir, "lints.json"))) as LintHint[]) : collectLints(branches);
   const score = scoreRun(cfg, branches, passAScores(cfg, passA, blindMap), passB, lints);
   wr(join(runDir, "score.json"), JSON.stringify(score, null, 2) + "\n");

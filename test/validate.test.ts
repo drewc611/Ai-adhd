@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { stringify } from "yaml";
 import assert from "node:assert/strict";
 import { artifact, cfg, passA, passB, yaml } from "./helpers.js";
 import { validateBranchArtifact, validatePassA, validatePassB, checkBlind, redactFrameLabels } from "../src/validate.js";
@@ -85,4 +86,38 @@ test("redaction strips ids and names, keeps one frame's own label, and leaves pr
   assert.ok(!/Door keeper/i.test(kept), "but not a sibling's");
   const echoed = redactFrameLabels("The ledger is already reconciled.", frames, { problem: "Is the ledger reconciled?" });
   assert.match(echoed, /ledger is already reconciled/, "a word the problem uses survives redaction");
+});
+
+test("a detector that fires on evidence too thin to be an argument rejects the pass", () => {
+  const H = "sha256:" + "a".repeat(64);
+  const frames = ["LEDGER", "MECHANIC"];
+  const build = (evidence: string) => {
+    const traps: Record<string, Record<string, { fired: boolean; evidence: string }>> = {};
+    for (const f of frames) {
+      traps[f] = {};
+      for (const t of ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"])
+        traps[f]![t] = f === "LEDGER" && t === "T1" ? { fired: true, evidence } : { fired: false, evidence: "not fired" };
+    }
+    return stringify({
+      problem_hash: H,
+      pass: "B",
+      clusters: [
+        { id: "a", action: "do a", members: ["LEDGER"], singleton: true, strongest_objection: null },
+        { id: "b", action: "do b", members: ["MECHANIC"], singleton: true, strongest_objection: "an objection" },
+      ],
+      traps,
+      run_level: {
+        T2_no_branch_attacked_assumption: { fired: false, evidence: "one branch did" },
+        T6_all_missing_actor_null: { fired: false, evidence: "all named an actor" },
+      },
+      lint_verdicts: [],
+    });
+  };
+  // Thin: a verdict wearing the word "evidence". Pruning a frame on this defeats the detectors.
+  assert.throws(() => validatePassB(build("yes, T1"), H, frames, 12), /fired on 2 word\(s\) of evidence/);
+  // Argued: the shape every fired record in the recorded runs actually has.
+  const real = "Delete the three most specific details from the prompt and this position is unchanged, because nothing in it depends on them.";
+  assert.doesNotThrow(() => validatePassB(build(real), H, frames, 12));
+  // The floor is opt-in: zero means the check is off, which is what an older config gets.
+  assert.doesNotThrow(() => validatePassB(build("yes, T1"), H, frames, 0));
 });

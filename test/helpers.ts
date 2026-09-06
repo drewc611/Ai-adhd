@@ -54,7 +54,13 @@ export function passB(
     traps[f] = {} as PassB["traps"][string];
     for (const t of TRAP_IDS) {
       const ev = fired[f]?.[t];
-      traps[f]![t] = { fired: ev !== undefined, evidence: ev ?? "not fired" };
+      // Real fired evidence in the recorded runs is 29 to 50 words, because firing a detector
+      // removes a frame from the recommendation and has to be argued for. The helper writes a
+      // record of that shape so tests exercise a pass B a critic could actually have produced.
+      traps[f]![t] = {
+        fired: ev !== undefined,
+        evidence: ev === undefined ? "not fired" : `${ev}, so the detector as written is recorded as fired for ${f} on ${t} rather than left open`,
+      };
     }
   }
   return {
