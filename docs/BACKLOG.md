@@ -1,5 +1,9 @@
 # Backlog
 
+The prioritised subset of `docs/FEATURES.md`, which holds the full catalogue of 97 with its
+tiers. This file is what to build next; that file is what exists.
+
+
 Everything worth building next, in priority order within each section. Each item is written
 to be implementable without further design work. An item marked **evidence** produces a fact
 about the frame library; an item marked **mechanism** changes what the system can do.
