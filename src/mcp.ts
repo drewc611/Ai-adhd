@@ -9,7 +9,7 @@ import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
 import { listFrames, orthogonality } from "./frames.js";
-import { openKernel } from "./os.js";
+import { openKernel, recordRun } from "./os.js";
 
 const server = new McpServer({ name: "adhd", version: "0.0.1" });
 const text = (s: string, isError = false) => ({ content: [{ type: "text" as const, text: s }], isError });
@@ -103,9 +103,19 @@ server.registerTool(
   "adhd_return",
   {
     description: "Return a subagent's final message for a claimed task, unedited. The kernel validates it (hash echo, contract), writes the artifact, and advances the run when the phase is complete.",
-    inputSchema: { task_id: z.string(), output: z.string(), worker: z.string().optional(), root: z.string().optional() },
+    inputSchema: { task_id: z.string(), output: z.string(), worker: z.string().optional(), tokens: z.number().int().optional().describe("tokens the subagent reported using; summed into cost.json"), root: z.string().optional() },
   },
-  async (a) => wrap(() => json(kernel(a.root).return_(a.task_id, a.output, a.worker))),
+  async (a) => wrap(() => json(kernel(a.root).return_(a.task_id, a.output, a.worker, a.tokens))),
+);
+server.registerTool(
+  "adhd_log",
+  { description: "Journal lines for one run: submitted, confirmed, claimed, returned, lease_expired, advanced, done, cancelled, aborted.", inputSchema: { run_id: z.string(), root: z.string().optional() } },
+  async (a) => wrap(() => json(kernel(a.root).log(a.run_id))),
+);
+server.registerTool(
+  "adhd_record",
+  { description: "Promote a finished run into evals/recorded/<fixture>-<name>/ with a README generated from the journal and an expected.json recording the eval outcome as observed.", inputSchema: { run_id: z.string(), fixture_id: z.string(), name: z.string(), force: z.boolean().optional(), root: z.string().optional() } },
+  async (a) => wrap(() => json(recordRun(loadConfig(), kernel(a.root), a.run_id, { fixtureId: a.fixture_id, name: a.name, force: a.force }))),
 );
 server.registerTool(
   "adhd_status",

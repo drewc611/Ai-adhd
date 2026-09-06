@@ -5,7 +5,7 @@ import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
 import { listFrames, orthogonality } from "./frames.js";
-import { openKernel } from "./os.js";
+import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort } from "./errors.js";
 
@@ -157,13 +157,22 @@ os.command("return <task_id>")
   .description("return a subagent's final message; reads it from --file or stdin")
   .option("--file <path>")
   .option("--worker <id>")
+  .option("--tokens <n>", "tokens the subagent reported using", (v) => Number.parseInt(v, 10))
   .option("--os-root <dir>", "kernel root")
   .action((id, o) => {
     try {
       const text = o.file ? readFileSync(o.file, "utf8") : readFileSync(0, "utf8");
-      out(kernelFor(o).return_(id, text, o.worker));
+      out(kernelFor(o).return_(id, text, o.worker, o.tokens));
     } catch (e) { fail(e); }
   });
+os.command("log <run_id>").description("journal lines for one run").option("--os-root <dir>", "kernel root").action((id, o) => { try { for (const e of kernelFor(o).log(id)) console.log(JSON.stringify(e)); } catch (e) { fail(e); } });
+os.command("record <run_id>")
+  .description("promote a finished run into evals/recorded/<fixture>-<name>/ with generated provenance")
+  .requiredOption("--fixture <id>", "fixture id, e.g. 001")
+  .requiredOption("--name <name>", "short name, e.g. kernel-run")
+  .option("--force", "replace an existing recording")
+  .option("--os-root <dir>", "kernel root")
+  .action((id, o) => { try { out(recordRun(loadConfig(program.opts().root), kernelFor(o), id, { fixtureId: o.fixture, name: o.name, force: o.force })); } catch (e) { fail(e); } });
 os.command("status <run_id>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).status(id)); } catch (e) { fail(e); } });
 os.command("result <run_id>").option("--os-root <dir>", "kernel root").action((id, o) => {
   try { const r = kernelFor(o).result(id); out(r.synthesis ?? `no synthesis yet (state ${r.state}${r.reason ? `: ${r.reason}` : ""})`); process.exit(r.synthesis ? 0 : 3); } catch (e) { fail(e); }

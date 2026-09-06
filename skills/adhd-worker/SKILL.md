@@ -18,14 +18,14 @@ Pick a worker id once per session, e.g. `worker-<short random>`.
    - If `continues` is null: spawn a fresh subagent of type `agent` (`adhd-branch`,
      `adhd-branch-search`, `adhd-critic`, or `adhd-deepen`) with the `brief` text as the
      entire prompt. Add nothing.
-   - If `continues` is set: this is pass B and must reach the subagent that did pass A. If
-     you still hold that subagent (you did the `continues` task in this session), send it the
-     brief text as its next message. If you do not hold it, do nothing and let the lease
-     expire; another worker that holds it will pick it up. Keep a map from task id to your
-     subagent ids for this reason.
-3. When the subagent returns, call `adhd_return` with the task `id` and the subagent's final
-   message, unedited. Do not fix YAML. Do not trim. The kernel validates and, if the message
-   is malformed, the run records a contract failure that is more useful than a silent repair.
+   - If `continues` is set: the kernel has confirmed you returned that task, so you hold the
+     subagent that did it. Send it the brief text as its next message. Keep a map from task
+     id to your subagent ids for this reason. (If you claim a pass B task and `continues` is
+     null, the kernel decided a fresh critic is fine; spawn one.)
+3. When the subagent returns, call `adhd_return` with the task `id`, the subagent's final
+   message unedited, and `tokens` if the host reported usage. Do not fix YAML. Do not trim.
+   The kernel validates and, if the message is malformed, the run records a contract failure
+   that is more useful than a silent repair.
 4. Go to 1.
 
 ## What you must not do

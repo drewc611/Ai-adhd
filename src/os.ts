@@ -42,8 +42,14 @@ export const TaskSchema = z
     label: z.string(),
     brief_path: z.string(),
     artifact_path: z.string(),
-    /** Pass B must go to the subagent that did pass A. The host maps ids to live agents. */
+    /** Pass B should go to the subagent that did pass A. The host maps ids to live agents. */
     continues: z.string().nullable(),
+    /** The worker that returned the predecessor. Only it may claim this task until others_after. */
+    prefer_worker: z.string().nullable(),
+    /** After this instant any worker may claim the task and run it as a fresh agent. */
+    others_after: z.string().nullable(),
+    /** Token usage the worker reported on return, if any. */
+    tokens: z.number().int().nullable(),
     status: z.enum(["pending", "leased", "done", "dropped"]),
     worker: z.string().nullable(),
     leased_at: z.string().nullable(),
@@ -245,6 +251,9 @@ export class Kernel {
       brief_path: briefPath,
       artifact_path: artifactPath,
       continues,
+      prefer_worker: null,
+      others_after: null,
+      tokens: null,
       status: "pending",
       worker: null,
       leased_at: null,
@@ -259,8 +268,11 @@ export class Kernel {
     return this.withLock(() => {
       this.reapLocked();
       const runs = opts.runId ? [this.load(opts.runId)] : this.listLocked().filter((r) => ["diverge", "critique_a", "critique_b", "deepen"].includes(r.state));
+      const nowMs = this.now().getTime();
       for (const rec of runs.sort((a, b) => a.created_at.localeCompare(b.created_at))) {
-        const task = rec.tasks.find((t) => t.status === "pending");
+        const task = rec.tasks.find(
+          (t) => t.status === "pending" && (t.prefer_worker === null || t.prefer_worker === worker || (t.others_after !== null && Date.parse(t.others_after) <= nowMs)),
+        );
         if (!task) continue;
         const now = this.now();
         task.status = "leased";
@@ -271,14 +283,17 @@ export class Kernel {
         this.save(rec);
         this.journal("claimed", { run_id: rec.run_id, task: task.id, worker, attempt: task.attempts });
         const brief = readFileSync(join(this.runDir(rec.run_id), task.brief_path), "utf8");
-        return { ...task, brief, problem_hash: rec.problem_hash };
+        // A continuation claimed by a different worker runs as a fresh agent: the pass B brief
+        // carries the pass A scores, so a fresh critic can do it; the preference was a saving.
+        const continues = task.continues && task.prefer_worker === worker ? task.continues : null;
+        return { ...task, continues, brief, problem_hash: rec.problem_hash };
       }
       return null;
     });
   }
 
   /** A worker returns a subagent's final message. The kernel writes it and advances the run. */
-  return_(taskId: string, output: string, worker?: string) {
+  return_(taskId: string, output: string, worker?: string, tokens?: number) {
     return this.withLock(() => {
       const runId = taskId.split(":")[0]!;
       const rec = this.load(runId);
@@ -289,8 +304,9 @@ export class Kernel {
       writeFileSync(join(this.runDir(runId), task.artifact_path), output);
       task.status = "done";
       task.returned_at = this.now().toISOString();
+      if (tokens !== undefined && Number.isFinite(tokens)) task.tokens = Math.round(tokens);
       this.save(rec);
-      this.journal("returned", { run_id: runId, task: taskId, bytes: Buffer.byteLength(output) });
+      this.journal("returned", { run_id: runId, task: taskId, bytes: Buffer.byteLength(output), tokens: task.tokens });
       this.advanceLocked(rec);
       return this.summary(rec);
     });
@@ -308,6 +324,7 @@ export class Kernel {
       rec.finished_at = this.now().toISOString();
       if (wasConfirmed) {
         try {
+          this.writeCost(rec);
           const r = phaseSynth(this.cfg, this.runDir(runId), { partial: true });
           rec.last_phase_text = r.text;
         } catch (e) {
@@ -405,7 +422,10 @@ export class Kernel {
           r = phaseCritique(this.cfg, dir); // validates pass A, writes pass B brief
           const n = r.next![0]!;
           const a = rec.tasks.find((t) => t.phase === "critique_a")!;
-          rec.tasks.push(this.newTask(rec.run_id, "critique_b", n.agent, "pass-b", rel(dir, n.brief), rel(dir, n.artifact), a.id));
+          const b = this.newTask(rec.run_id, "critique_b", n.agent, "pass-b", rel(dir, n.brief), rel(dir, n.artifact), a.id);
+          b.prefer_worker = a.worker;
+          b.others_after = new Date(this.now().getTime() + this.leaseSeconds * 1000).toISOString();
+          rec.tasks.push(b);
           rec.state = "critique_b";
           break;
         }
@@ -414,6 +434,7 @@ export class Kernel {
           r = phaseDeepen(this.cfg, dir);
           if (r.exitCode === 2) {
             // Monoculture or scatter. Render what exists and stop.
+            this.writeCost(rec);
             const s = phaseSynth(this.cfg, dir);
             rec.state = "done_run_level";
             rec.reason = r.text;
@@ -430,6 +451,7 @@ export class Kernel {
           break;
         }
         case "deepen": {
+          this.writeCost(rec);
           r = phaseSynth(this.cfg, dir);
           rec.state = "done";
           rec.finished_at = this.now().toISOString();
@@ -453,6 +475,32 @@ export class Kernel {
       this.save(rec);
       this.journal("aborted", { run_id: rec.run_id, reason: rec.reason });
     }
+  }
+
+  /** Sum reported tokens into cost.json so the synthesis shows real spend, not the estimate. */
+  private writeCost(rec: RunRecord) {
+    const reported = rec.tasks.filter((t) => t.tokens !== null);
+    if (!reported.length) return;
+    const tokens = reported.reduce((a, t) => a + (t.tokens ?? 0), 0);
+    const started = Date.parse(rec.confirmed_at ?? rec.created_at);
+    const secs = Math.max(0, Math.round((this.now().getTime() - started) / 1000));
+    const byPhase: Record<string, number> = {};
+    for (const t of reported) byPhase[t.phase] = (byPhase[t.phase] ?? 0) + (t.tokens ?? 0);
+    writeFileSync(
+      join(this.runDir(rec.run_id), "cost.json"),
+      JSON.stringify({ tokens, wall: `${secs}s from confirm`, reported_tasks: reported.length, of_tasks: rec.tasks.filter((t) => t.status === "done").length, by_phase: byPhase }, null, 2) + "\n",
+    );
+  }
+
+  /** Journal lines for one run. */
+  log(runId: string): Record<string, unknown>[] {
+    const p = join(this.root, "journal.jsonl");
+    if (!existsSync(p)) return [];
+    return readFileSync(p, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .filter((e) => e["run_id"] === runId);
   }
 
   summary(rec: RunRecord) {
@@ -482,6 +530,60 @@ function rel(dir: string, abs: string): string {
 /** Convenience for CLI and MCP: a kernel rooted at $ADHD_OS_ROOT or ./runs. */
 export function openKernel(cfg: Config, root?: string, opts: Omit<KernelOptions, "root"> = {}): Kernel {
   return new Kernel(cfg, { root: root ?? process.env.ADHD_OS_ROOT ?? "runs", ...opts });
+}
+
+
+// ---- promote a finished run to evidence ------------------------------------------------------
+import { cpSync } from "node:fs";
+import { runEval } from "./eval.js";
+
+/**
+ * Copy a finished run into evals/recorded/<fixture>-<name>/ with a README generated from the
+ * journal and an expected.json that records the eval outcome as observed. Never edits
+ * artifacts. The human adds "what it did not surface" by hand; the skeleton says so.
+ */
+export function recordRun(cfg: Config, kernel: Kernel, runId: string, opts: { fixtureId: string; name: string; force?: boolean }) {
+  const status = kernel.status(runId);
+  if (!["done", "done_run_level", "cancelled"].includes(status.state)) throw new ContractError("record", [`run ${runId} is ${status.state}; only finished runs are recorded`]);
+  const dest = join(cfg.root, "evals", "recorded", `${opts.fixtureId}-${opts.name}`);
+  if (existsSync(dest) && !opts.force) throw new ContractError("record", [`${dest} exists; pass force to replace`]);
+  cpSync(kernel["runDir"](runId), dest, { recursive: true });
+  // Evaluate as recorded, then write the expectation that matches reality.
+  const report = runEval(cfg);
+  const pair = report.pairs.find((p) => p.recorded === dest);
+  const outcome = pair?.outcome ?? "fail";
+  const log = kernel.log(runId);
+  const workers = [...new Set(log.filter((e) => e["event"] === "claimed").map((e) => String(e["worker"])))];
+  const expiries = log.filter((e) => e["event"] === "lease_expired").length;
+  const costPath = join(dest, "cost.json");
+  const cost = existsSync(costPath) ? (JSON.parse(readFileSync(costPath, "utf8")) as { tokens?: number; wall?: string }) : {};
+  writeFileSync(
+    join(dest, "expected.json"),
+    JSON.stringify({ outcome, note: outcome === "pass" ? `Recorded from kernel run ${runId}.` : `Recorded from kernel run ${runId}. Failing items: ${pair?.failures.join("; ") ?? "fixture not found"}. Recorded as observed, not hidden.` }, null, 2) + "\n",
+  );
+  const readme = [
+    `# Recorded run: ${opts.fixtureId}, ${opts.name}`,
+    "",
+    `Run \`${runId}\`, class \`${status.problem_class}\`, seed ${status.seed}, n ${status.n}, final state \`${status.state}\`. Driven by the kernel (docs/OS.md); recorded by \`adhd os record\`.`,
+    "",
+    "## Provenance, from the journal",
+    "",
+    `- Workers: ${workers.length ? workers.join(", ") : "none recorded"}.`,
+    `- Lease expiries: ${expiries}.`,
+    `- Tokens: ${cost.tokens ?? "not reported"}${cost.wall ? ` over ${cost.wall}` : ""}.`,
+    `- Eval outcome as recorded: ${outcome.toUpperCase()}${pair?.failures.length ? ` (${pair.failures.length} failing item${pair.failures.length === 1 ? "" : "s"})` : ""}.`,
+    "",
+    "## What the run surfaced",
+    "",
+    "_Fill in from synthesis.md. The kernel records provenance; a person records meaning._",
+    "",
+    "## What the run did not surface",
+    "",
+    pair?.failures.length ? pair.failures.map((f) => `- ${f}`).join("\n") : "_Nothing the fixture asked for was missed. Say what a reader should still know._",
+    "",
+  ].join("\n");
+  writeFileSync(join(dest, "README.md"), readme);
+  return { dest, outcome, failures: pair?.failures ?? [], workers, expiries };
 }
 
 export { problemHash };

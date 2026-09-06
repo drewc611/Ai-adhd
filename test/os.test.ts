@@ -204,3 +204,96 @@ test("list and status reap expired leases; several runs are scheduled oldest fir
   assert.equal(l.find((r) => r.run_id === "old")!.tasks.leased, 0, "list reaped the lease");
   assert.equal(l.length, 2);
 });
+
+test("pass B prefers the pass A worker for one lease window, then falls back to a fresh critic", () => {
+  const { k, clock } = kernel({ leaseSeconds: 60 });
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w1")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w1");
+  }
+  const a = k.claim("critic-1")!;
+  assert.equal(a.phase, "critique_a");
+  const blindMap = JSON.parse(readFileSync(join(k.root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  k.return_(a.id, yaml(passA(hash, Object.keys(blindMap))), "critic-1", 55000);
+  // Another worker cannot take pass B inside the window.
+  assert.equal(k.claim("critic-2"), null);
+  // The pass A worker can, and gets the continuation.
+  clock.t += 1000;
+  const b = k.claim("critic-1")!;
+  assert.equal(b.phase, "critique_b");
+  assert.equal(b.continues, a.id);
+  // Simulate that worker dying: lease expires, task returns to pending with the same preference.
+  clock.t += 61_000;
+  assert.equal(k.status("r1").tasks.pending, 1);
+  // Now past others_after: a different worker may take it, as a fresh critic.
+  const b2 = k.claim("critic-2")!;
+  assert.equal(b2.id, b.id);
+  assert.equal(b2.continues, null);
+});
+
+test("reported tokens are summed into cost.json by phase and surface in the synthesis", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const frames: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w")!;
+    frames.push(t.label);
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w", 40000 + i);
+  }
+  const blindMap = JSON.parse(readFileSync(join(k.root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  const a = k.claim("w")!;
+  k.return_(a.id, yaml(passA(hash, Object.keys(blindMap))), "w", 50000);
+  const b = k.claim("w")!;
+  k.return_(b.id, yaml(passB(hash, [{ id: "one", members: frames.slice(0, 3) }, { id: "two", members: frames.slice(3) }])), "w", 70000);
+  for (let i = 0; i < 2; i++) {
+    const d = k.claim("w")!;
+    k.return_(d.id, yaml({ problem_hash: hash, frame: d.label, verdict: "defend", response: "Holds.", revised_position: "Do it.", revised_falsifier: null, confidence: "high" }), "w", 45000);
+  }
+  assert.equal(k.status("r1").state, "done");
+  const cost = JSON.parse(readFileSync(join(k.root, "r1", "cost.json"), "utf8")) as { tokens: number; by_phase: Record<string, number>; reported_tasks: number };
+  assert.equal(cost.tokens, 200010 + 50000 + 70000 + 90000);
+  assert.equal(cost.reported_tasks, 9);
+  assert.equal(cost.by_phase["critique_b"], 70000);
+  assert.match(k.result("r1").synthesis!, /410010/);
+});
+
+test("record promotes a finished run with provenance and an expectation that matches the eval", async () => {
+  const { recordRun } = await import("../src/os.js");
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const frames: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w-a")!;
+    frames.push(t.label);
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w-a");
+  }
+  const blindMap = JSON.parse(readFileSync(join(k.root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  const a = k.claim("w-b")!;
+  k.return_(a.id, yaml(passA(hash, Object.keys(blindMap))), "w-b");
+  const b = k.claim("w-b")!;
+  k.return_(b.id, yaml(passB(hash, [{ id: "cancel", members: frames.slice(0, 2), action: "Expose cancel first." }, { id: "rest", members: frames.slice(2) }], { [frames[4]!]: { T1: "generic" } })), "w-b");
+  for (let i = 0; i < 2; i++) {
+    const d = k.claim("w-a")!;
+    k.return_(d.id, yaml({ problem_hash: hash, frame: d.label, verdict: "defend", response: "Users leave; cancel first.", revised_position: "Expose cancel and fail over to a different instance; the caller pays for the retry.", revised_falsifier: null, confidence: "high" }), "w-a");
+  }
+  // Record into a scratch evals tree so the repo's evals/ is untouched: point cfg.root at a copy.
+  const { mkdirSync, cpSync } = await import("node:fs");
+  const scratchRoot = join(tmp(), "repo");
+  mkdirSync(join(scratchRoot, "evals"), { recursive: true });
+  cpSync(join(cfg.root, "evals", "fixtures"), join(scratchRoot, "evals", "fixtures"), { recursive: true });
+  const cfg2 = { ...cfg, root: scratchRoot };
+  const r = recordRun(cfg2, k, "r1", { fixtureId: "001", name: "kernel-test" });
+  assert.ok(existsSync(join(r.dest, "synthesis.md")));
+  assert.ok(existsSync(join(r.dest, "critic", "pass-b.yaml")));
+  assert.deepEqual(r.workers.sort(), ["w-a", "w-b"]);
+  const expected = JSON.parse(readFileSync(join(r.dest, "expected.json"), "utf8")) as { outcome: string };
+  assert.equal(expected.outcome, r.outcome);
+  const readme = readFileSync(join(r.dest, "README.md"), "utf8");
+  assert.match(readme, /Workers: w-a, w-b/);
+  assert.match(readme, /Eval outcome as recorded: (PASS|FAIL)/);
+  assert.throws(() => recordRun(cfg2, k, "r1", { fixtureId: "001", name: "kernel-test" }), /exists/);
+});

@@ -54,7 +54,13 @@ phase functions.
 | `adhd_result` / `adhd os result` | the synthesis when there is one |
 | `adhd_cancel` / `adhd os cancel` | drop pending and leased tasks; render partial |
 | `adhd_list` / `adhd os list` | every run under the root |
+| `adhd_log` / `adhd os log` | the journal lines for one run |
+| `adhd_record` / `adhd os record` | promote a finished run into `evals/recorded/` with provenance generated from the journal and an `expected.json` recording the eval outcome as observed |
 | `adhd os reap` | expire leases (also runs on every claim, status, and list) |
+
+`return` accepts `tokens`, the usage the subagent reported. When a run finishes the kernel sums
+reported tokens by phase into `cost.json`, so the synthesis shows real spend when workers
+report it and the compile estimate when they do not.
 
 ## Workers
 
@@ -63,10 +69,13 @@ A worker is anything that can spawn an isolated subagent: a Claude Code session 
 calls: claim, spawn the named agent with the brief as its entire prompt, return the final
 message. A worker that dies mid-task loses its lease and someone else picks the task up.
 
-`continues` matters for exactly one task per run: pass B must reach the subagent that did
-pass A. A worker that claims a `critique_b` task without holding the pass A subagent should
-release it by letting the lease expire, or, if it knows how, resume the agent by id. The
-kernel does not track agent ids; that is host state.
+`continues` matters for exactly one task per run: pass B should reach the subagent that did
+pass A. The kernel enforces the preference: for one lease window after pass A returns, only
+the worker that returned it can claim pass B, and the claim carries `continues` so that
+worker resumes its critic. After the window any worker may claim it, and the claim carries
+`continues: null`: run it as a fresh critic. The pass B brief contains the pass A scores, so
+a fresh critic can do the job; the preference saves a re-read, it is not a correctness
+requirement. The kernel does not track agent ids; that is host state.
 
 ## What this is not
 
