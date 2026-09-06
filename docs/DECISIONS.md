@@ -180,6 +180,29 @@ through the pruned block. So the frame closes the gap as a question-raiser, not 
 recommendation. Swapping it into the `fuzzy_debugging` primary set is now a decision with two
 runs behind it. Still the owner's.
 
+### What five runs say about the library
+
+`adhd frames --stats` reports per-frame behaviour across every recorded run. As of five runs,
+twelve of thirteen frames have been dispatched at least once and the counts are already
+saying three things, none of them yet a verdict:
+
+- **END_USER is pruned every time it appears (2/2).** It is also the frame that closed the
+  `who_is_hurt` gap in `002-kernel-enduser`, and it did so *through the pruned block*. A frame
+  that reliably fails the rubric and reliably produces the missing question is not a bad frame;
+  it is a frame whose value the rubric does not measure. Either the rubric is incomplete or
+  END_USER belongs in a different role. Do not resolve this on two runs.
+- **DOOR_KEEPER, HORIZON and MECHANIC have never been pruned (0/2 each).** Being unprunable is
+  not obviously good. A frame no detector ever catches may be well-designed or may simply be
+  producing safe answers the critic has no grounds to reject.
+- **T3 and T5 have never fired.** T5 (no "do X" sentence) is close to structurally unable to
+  fire, because the output contract demands a committal position, so a branch that trips T5 has
+  usually already failed validation. T3 (citation trap) needs a branch that cites, and only
+  PRIOR_ART carries search tools. Both may be correct prevention rather than dead weight, and
+  the counts cannot distinguish those. Recorded so the question stays open.
+
+FIRST_PRINCIPLES has never been dispatched in a recorded run. It is in no primary set, only in
+`alternates`, so nothing is wrong; it simply has no evidence behind it either way.
+
 Third class run: `evals/recorded/003-kernel-strategy/`, the `strategy` set (FRAME_BREAKER,
 LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON) on fixture 003. It passes. The set was not a
 monoculture by the critic's clustering (three clusters), but every one of the five positions

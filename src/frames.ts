@@ -3,7 +3,8 @@ import { unfence } from "./validate.js";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
-import { PassBSchema } from "./schema.js";
+import { DeepenArtifactSchema, PassBSchema, TRAP_IDS, type TrapId } from "./schema.js";
+import type { ScoreResult } from "./score.js";
 
 export function listFrames(cfg: Config, json = false): string {
   if (json) return JSON.stringify(cfg.frames.frames.map(({ id, name, axis, attacks, tools }) => ({ id, name, axis, attacks, tools })), null, 2);
@@ -59,4 +60,164 @@ export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals",
     );
   if (flagged.length) lines.push(`${flagged.length} pair(s) above ${threshold * 100}%: candidates for removal or rewrite (D6).`);
   return { pairs, flagged, runs, text: lines.join("\n") };
+}
+
+export interface FrameStat {
+  frame: string;
+  axis: string;
+  runs: number;
+  pruned: number;
+  survived: number;
+  /** Survived the trap sweep, then folded under its objection. */
+  folded: number;
+  defended: number;
+  /** Held the recommendation: representative of the top live cluster with a non-fold verdict. */
+  recommended: number;
+  singleton: number;
+  mean_pass_a: number | null;
+  traps: Partial<Record<TrapId, number>>;
+}
+
+export interface TrapStat {
+  trap: TrapId;
+  fired: number;
+  frames: string[];
+}
+
+/**
+ * Per-frame behaviour across recorded runs. This is the D6 evidence surface: a frame pruned
+ * every time it appears and a frame never pruned are both suspicious, for opposite reasons,
+ * and neither is visible from a single run. Counts only; the judgement is the owner's.
+ */
+export function frameStats(
+  cfg: Config,
+  recordedDir = join(cfg.root, "evals", "recorded"),
+): { frames: FrameStat[]; traps: TrapStat[]; runs: number; text: string } {
+  const axisOf = new Map(cfg.frames.frames.map((f) => [f.id, f.axis]));
+  const by = new Map<string, FrameStat & { passASum: number; passAN: number }>();
+  const trapCounts = new Map<TrapId, Set<string>>();
+  const trapFires = new Map<TrapId, number>();
+  let runs = 0;
+
+  const get = (frame: string) => {
+    let s = by.get(frame);
+    if (!s) {
+      s = {
+        frame,
+        axis: axisOf.get(frame) ?? "(not in library)",
+        runs: 0,
+        pruned: 0,
+        survived: 0,
+        folded: 0,
+        defended: 0,
+        recommended: 0,
+        singleton: 0,
+        mean_pass_a: null,
+        traps: {},
+        passASum: 0,
+        passAN: 0,
+      };
+      by.set(frame, s);
+    }
+    return s;
+  };
+
+  if (existsSync(recordedDir)) {
+    for (const d of readdirSync(recordedDir).sort()) {
+      const dir = join(recordedDir, d);
+      if (!statSync(dir).isDirectory()) continue;
+      const scorePath = join(dir, "score.json");
+      if (!existsSync(scorePath)) continue;
+      let score: ScoreResult;
+      try {
+        score = JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult;
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(score.frames)) continue;
+      runs++;
+
+      // Deepen verdicts live beside the score, one file per frame that reached the phase.
+      const deepenDir = join(dir, "deepen");
+      const verdicts = new Map<string, "defend" | "fold">();
+      if (existsSync(deepenDir))
+        for (const f of readdirSync(deepenDir)) {
+          if (!f.endsWith(".yaml")) continue;
+          const r = DeepenArtifactSchema.safeParse(parseYaml(unfence(readFileSync(join(deepenDir, f), "utf8"))));
+          if (r.success) verdicts.set(r.data.frame, r.data.verdict);
+        }
+
+      // The recommendation goes to the highest-ranked live cluster whose representative defended.
+      const live = [...score.clusters]
+        .filter((c) => c.survivors.length > 0)
+        .sort((a, b) => b.survivors.length - a.survivors.length || (b.mean_pass_a ?? 0) - (a.mean_pass_a ?? 0));
+      const runFailed = score.run_level?.monoculture || score.run_level?.scatter;
+      const holder = runFailed
+        ? undefined
+        : live.find((c) => {
+            const v = c.representative ? verdicts.get(c.representative) : undefined;
+            return !v || v === "defend";
+          })?.representative;
+
+      for (const f of score.frames) {
+        const s = get(f.frame);
+        s.runs++;
+        if (f.status === "pruned") s.pruned++;
+        else s.survived++;
+        if (f.pass_a !== null && f.pass_a !== undefined) {
+          s.passASum += f.pass_a;
+          s.passAN++;
+        }
+        for (const t of f.fired ?? []) {
+          s.traps[t.trap] = (s.traps[t.trap] ?? 0) + 1;
+          trapFires.set(t.trap, (trapFires.get(t.trap) ?? 0) + 1);
+          if (!trapCounts.has(t.trap)) trapCounts.set(t.trap, new Set());
+          trapCounts.get(t.trap)!.add(f.frame);
+        }
+        const v = verdicts.get(f.frame);
+        if (v === "fold") s.folded++;
+        else if (v === "defend") s.defended++;
+        if (f.frame === holder) s.recommended++;
+      }
+      for (const c of score.clusters) if (c.singleton && c.members[0]) get(c.members[0]).singleton++;
+    }
+  }
+
+  const frames: FrameStat[] = [...by.values()]
+    .map(({ passASum, passAN, ...s }) => ({ ...s, mean_pass_a: passAN ? passASum / passAN : null }))
+    .sort((a, b) => b.runs - a.runs || b.pruned / (b.runs || 1) - a.pruned / (a.runs || 1) || a.frame.localeCompare(b.frame));
+  const traps: TrapStat[] = TRAP_IDS.map((t) => ({ trap: t, fired: trapFires.get(t) ?? 0, frames: [...(trapCounts.get(t) ?? [])].sort() }));
+
+  const lines = [`frame stats over ${runs} recorded run(s) with score.json`];
+  if (!frames.length) {
+    lines.push("no scored runs yet. Record runs to populate this.");
+    return { frames, traps, runs, text: lines.join("\n") };
+  }
+  lines.push("");
+  lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  pruned  folded  rec  meanA  traps`);
+  for (const f of frames) {
+    const t = TRAP_IDS.filter((x) => f.traps[x]).map((x) => `${x}x${f.traps[x]}`).join(",") || "-";
+    lines.push(
+      `${f.frame.padEnd(17)} ${f.axis.padEnd(15)} ${String(f.runs).padStart(4)}  ${String(f.pruned).padStart(6)}  ${String(f.folded).padStart(6)}  ${String(f.recommended).padStart(3)}  ${(f.mean_pass_a ?? 0).toFixed(2).padStart(5)}  ${t}`,
+    );
+  }
+  lines.push("");
+  lines.push("detectors:");
+  for (const t of traps)
+    lines.push(`  ${t.trap}  fired ${String(t.fired).padStart(2)}${t.fired ? `  on ${t.frames.join(", ")}` : "  never fired in any recorded run"}`);
+
+  // Only worth saying once a frame has appeared enough times for the rate to mean anything.
+  const MIN = 2;
+  const always = frames.filter((f) => f.runs >= MIN && f.pruned === f.runs);
+  const never = frames.filter((f) => f.runs >= MIN && f.pruned === 0);
+  const unused = cfg.frames.frames.filter((f) => !by.has(f.id)).map((f) => f.id);
+  lines.push("");
+  if (always.length) lines.push(`pruned in every appearance (>=${MIN} runs): ${always.map((f) => `${f.frame} ${f.pruned}/${f.runs}`).join(", ")}`);
+  if (never.length) lines.push(`never pruned (>=${MIN} runs): ${never.map((f) => `${f.frame} 0/${f.runs}`).join(", ")}`);
+  if (unused.length) lines.push(`never dispatched in a recorded run: ${unused.join(", ")}`);
+  const dead = traps.filter((t) => t.fired === 0).map((t) => t.trap);
+  if (dead.length) lines.push(`detectors that have never fired: ${dead.join(", ")}. Prevention or dead weight; the counts cannot tell you which.`);
+  lines.push("Counts, not verdicts. Changing the library on this evidence is a D6 decision.");
+
+  return { frames, traps, runs, text: lines.join("\n") };
 }

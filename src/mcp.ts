@@ -8,7 +8,7 @@ import { loadConfig } from "./config.js";
 import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
-import { listFrames, orthogonality } from "./frames.js";
+import { frameStats, listFrames, orthogonality } from "./frames.js";
 import { openKernel, recordRun } from "./os.js";
 
 const server = new McpServer({ name: "adhd", version: "0.0.1" });
@@ -59,10 +59,11 @@ server.registerTool(
 
 server.registerTool(
   "adhd_frames",
-  { description: "List the frame library, or with orthogonality=true report pairwise co-clustering across recorded runs (D6).", inputSchema: { orthogonality: z.boolean().optional(), recorded_dir: z.string().optional(), root: z.string().optional() } },
+  { description: "List the frame library; with orthogonality=true report pairwise co-clustering across recorded runs, or with stats=true report per-frame prune, fold and recommendation rates and detector fire counts (D6).", inputSchema: { orthogonality: z.boolean().optional(), stats: z.boolean().optional(), recorded_dir: z.string().optional(), root: z.string().optional() } },
   async (a) =>
     wrap(() => {
       const cfg = loadConfig(a.root);
+      if (a.stats) return frameStats(cfg, a.recorded_dir).text;
       return a.orthogonality ? orthogonality(cfg, a.recorded_dir).text : listFrames(cfg);
     }),
 );

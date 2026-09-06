@@ -91,6 +91,8 @@ npm install && npm test          # builds, then runs the contract tests and the 
 node dist/src/cli.js validate    # loads config/ and prompts/, runs the D6 static check
 node dist/src/cli.js frames      # the library
 node dist/src/cli.js eval        # replays evals/recorded/ against evals/fixtures/
+node dist/src/cli.js frames --stats          # how each frame has behaved across recorded runs
+node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates in practice
 ```
 
 A run is four commands driven by the host (see `skills/adhd/SKILL.md`):
