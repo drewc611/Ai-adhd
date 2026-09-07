@@ -5,6 +5,7 @@ import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { diffRuns, frameStats, listFrames, orthogonality } from "./frames.js";
+import { dimensionCorrelation, weightSensitivity } from "./learn.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort } from "./errors.js";
@@ -142,6 +143,42 @@ program
       // A mismatched problem_hash means the two are not runs of one problem, so the comparison
       // is meaningless rather than merely uninteresting. Say so with an exit code.
       process.exit(r.same_problem ? 0 : 1);
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("learn")
+  .description("what the recorded runs say about the rubric itself. Reads runs; never calls a model")
+  .option("--sensitivity", "do small weight changes send different positions to deepen?")
+  .option("--correlation", "do two dimensions measure the same thing?")
+  .option("--recorded <dir>")
+  .option("--delta <n>", "weight perturbation for --sensitivity", "1")
+  .option("--json")
+  .action((o: { sensitivity?: boolean; correlation?: boolean; recorded?: string; delta: string; json?: boolean }) => {
+    try {
+      const cfg = loadConfig(program.opts().root);
+      const want = { sensitivity: Boolean(o.sensitivity), correlation: Boolean(o.correlation) };
+      // Neither flag means both: the two answer one question between them, which is whether the
+      // rubric is deciding anything the weights are not.
+      if (!want.sensitivity && !want.correlation) {
+        want.sensitivity = true;
+        want.correlation = true;
+      }
+      const out: Record<string, unknown> = {};
+      const texts: string[] = [];
+      if (want.sensitivity) {
+        const r = weightSensitivity(cfg, o.recorded, Number(o.delta));
+        out.sensitivity = r;
+        texts.push(r.text);
+      }
+      if (want.correlation) {
+        const r = dimensionCorrelation(cfg, o.recorded);
+        out.correlation = r;
+        texts.push(r.text);
+      }
+      console.log(o.json ? JSON.stringify(out, null, 2) : texts.join("\n\n" + "-".repeat(72) + "\n\n"));
     } catch (e) {
       fail(e);
     }

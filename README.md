@@ -95,7 +95,12 @@ node dist/src/cli.js eval --audit            # which assertions the consensus an
 node dist/src/cli.js diff <runA> <runB>      # two runs of one fixture: what moved, and whether it was the seed
 node dist/src/cli.js frames --stats          # how each frame has behaved across recorded runs
 node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates in practice
+node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
+node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
 ```
+
+`learn` reads the recorded runs and calls nothing. It is how the frame library, the rubric and
+the fixtures get changed on evidence rather than on taste. Current findings are in D8.
 
 A run is four commands driven by the host (see `skills/adhd/SKILL.md`):
 
@@ -112,7 +117,7 @@ The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `ad
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D8 are resolved in `docs/DECISIONS.md`.
 
 Five real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail.

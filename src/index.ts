@@ -13,4 +13,5 @@ export * from "./run.js";
 export * from "./eval.js";
 export * from "./traps.js";
 export * from "./frames.js";
+export * from "./learn.js";
 export * from "./os.js";

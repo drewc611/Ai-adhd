@@ -27,10 +27,15 @@ can be wrong without saying so.
    against which every other comparison is read.
 3. **Critic inter-rater reliability.** Two fresh critics score one artifact pack; report
    per-dimension agreement. The rubric is only as good as this number and it is unmeasured.
-4. **Rubric weight sensitivity.** Re-score every recorded run under perturbed weights and list
-   the prune decisions that flip. A prune that flips under a small change was never a prune.
-5. **Dimension correlation matrix.** Two dimensions that always move together are one
-   dimension charging twice.
+4. ~~**Rubric weight sensitivity.**~~ **Built** as `adhd learn --sensitivity`. Re-decides every
+   contested cluster under each dimension's weight moved by ±1 and lists the representatives
+   that change. Corrected in the building: pass A does not prune, a fired trap does. What pass A
+   decides is which survivor represents its cluster and goes to deepen, so that is what the
+   perturbation moves.
+5. ~~**Dimension correlation matrix.**~~ **Built** as `adhd learn --correlation`. Pearson across
+   dimensions, plus per-dimension mean, sd, distinct values, and ceiling rate. The ceiling rate
+   was added after the first run: a dimension can vary, so the flat check misses it, and still
+   score the maximum almost every time, so no correlation catches it either.
 6. **Frame retirement policy**, written, with the evidence bar stated. The library has no way
    to shrink, which is how frame sets rot.
 7. **Per-frame unit fixtures.** One fixture per frame that the frame should obviously win.

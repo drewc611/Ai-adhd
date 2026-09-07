@@ -282,3 +282,51 @@ at any point, and a task cannot be leased more than three times.
 What the kernel does not decide: which model runs a branch, when a worker runs, or how a
 worker resumes the pass A critic for pass B (`continues` names the task; the host keeps the
 agent id).
+
+---
+
+## D8. Refining the rubric on recorded runs instead of on taste
+
+**Question.** The critic rubric has nine dimensions and hand-set weights. Nobody has ever
+checked whether the weights change any outcome, or whether nine dimensions measure nine things.
+Can either be answered without adding a model?
+
+**Decision.** Yes, from the runs already on disk. Resolved 2026-09-07 by drewc611, who chose a
+learning loop over recorded runs when the alternative on the table was training a transformer.
+No model, no keys, no inference client: `src/learn.ts` is pure functions over `evals/recorded`,
+and `adhd learn --sensitivity` / `--correlation` print what they find. Negative controls are
+excluded, because a control is a hand-written consensus answer, not a critic's scoring.
+
+**What the weights decide.** Pass A prunes nothing. A fired trap does that. What pass A decides
+is which survivor represents its cluster, and the representative is the position that goes to
+deepen and, if it defends, becomes the recommendation. So the perturbation moves representatives,
+not prunes. Feature 4 in `docs/FEATURES.md` was written the wrong way round and is corrected
+there.
+
+**Finding 1: the weights are not doing the choosing.** Across 5 real runs there are 4 contested
+cluster decisions (more than one survivor). Moving any single dimension's weight by ±1 changes
+0 of them. On this corpus a different weight vector ships the same answer. That is a reason to
+stop arguing about weights, not evidence that the weights are right; 4 decisions is a pointer.
+
+**Finding 2: two dimensions are pinned at the ceiling.** Over 25 scored artifacts, no pair of
+dimensions correlates above 0.47 (falsifiability and assumption_attack), so nothing is obviously
+one dimension charging twice. But `foreclosure` (mean 2.96, sd 0.20) and `reasoning_carries`
+(mean 2.92, sd 0.39) score the maximum on 96% of artifacts, two distinct values each. Both carry
+weight 2 and 1 respectively and add a near-constant to every total. They vary, so a flat-variance
+check misses them; a near-constant correlates with nothing, so the correlation matrix misses them
+too. Detecting that needed its own check, and `CEILING = 0.85` is it.
+
+Compare `specificity` (mean 1.72, 12% at ceiling, weight 3) and `reversibility` (mean 1.76, four
+distinct values). Those two are doing the separating.
+
+**What this does not settle.** Whether the ceiling means the bar is too low, or the output
+contract already guarantees what the dimension asks. `forecloses` is a required non-empty array
+and `reasoning` is a required field, so the contract does guarantee something in both cases. If
+the contract is doing the work, the dimension is scoring compliance, not divergence value, and
+that is a rubric change — deferred to the owner, not made here. Re-run `adhd learn --correlation`
+after the corpus grows past 25 artifacts before touching either anchor set.
+
+**Cost of getting this wrong.** Tuning anchors until the ceiling clears would raise the scores'
+spread without raising their meaning, and the harness would keep passing. That is the same
+failure as rewriting a fixture assertion after seeing which controls cleared it, recorded under
+D6, and it is refused for the same reason.
