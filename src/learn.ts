@@ -260,3 +260,138 @@ export function dimensionCorrelation(cfg: Config, recordedDir = join(cfg.root, "
   if (!flagged.length && !flat.length && !ceiling.length) lines.push("No pair moves together, every dimension varies, and none sits at the ceiling.");
   return { n, pairs, variance, text: lines.join("\n") };
 }
+
+export interface DimensionAgreement {
+  dimension: string;
+  exact: number;
+  within_one: number;
+  mean_abs_diff: number;
+  n: number;
+}
+
+export interface InterRaterReport {
+  artifacts: number;
+  cells: number;
+  exact: number;
+  within_one: number;
+  by_dimension: DimensionAgreement[];
+  ranking_changed: boolean;
+  representative_changes: { cluster: string; a: string; b: string }[];
+  text: string;
+}
+
+/**
+ * Two critics, one artifact pack, blind both times. The rubric is only worth its weights if two
+ * readings of the same five artifacts land in the same place, and until now nothing in the repo
+ * measured that.
+ *
+ * Cell agreement is the cheap number and the least interesting one. What decides a run is the
+ * ordering: which artifact tops its cluster and goes to deepen. Two critics can disagree on
+ * half the cells and ship the same answer, or agree on most and still send a different position
+ * forward. Both are reported, and the second is the one to read.
+ */
+export function interRater(cfg: Config, runDir: string, altPassAPath: string): InterRaterReport {
+  const dims = cfg.rubric.dimensions.map((d) => d.id);
+  const max = cfg.rubric.scale.max;
+  const weights: Record<string, number> = {};
+  for (const d of cfg.rubric.dimensions) weights[d.id] = d.weight;
+
+  const readPassA = (p: string): PassA => PassASchema.parse(parseYaml(unfence(readFileSync(p, "utf8"))));
+  const first = readPassA(join(runDir, "critic", "pass-a.yaml"));
+  const second = readPassA(altPassAPath);
+  if (first.problem_hash !== second.problem_hash)
+    throw new Error(`problem_hash mismatch: the two scorings are not of the same problem (${first.problem_hash} vs ${second.problem_hash})`);
+
+  const blindMap = JSON.parse(readFileSync(join(runDir, "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  // Both critics see the same blind pack, so a letter means the same artifact to each. If the
+  // second scoring used its own shuffle, the letters do not line up and nothing below is valid.
+  const letters = Object.keys(first.scores).filter((l) => second.scores[l]).sort();
+  const missing = Object.keys(first.scores).filter((l) => !second.scores[l]);
+  if (missing.length) throw new Error(`second scoring is missing artifact(s) ${missing.join(", ")}: an incomplete pack cannot be compared`);
+
+  const diffs = new Map<string, number[]>(dims.map((d) => [d, []]));
+  for (const l of letters)
+    for (const d of dims) {
+      const a = (first.scores[l] as Record<string, { score: number } | undefined>)[d];
+      const b = (second.scores[l] as Record<string, { score: number } | undefined>)[d];
+      if (a && b) diffs.get(d)!.push(b.score - a.score);
+    }
+
+  const by_dimension = dims
+    .map((d) => {
+      const xs = diffs.get(d)!;
+      return {
+        dimension: d,
+        exact: xs.length ? xs.filter((v) => v === 0).length / xs.length : 0,
+        within_one: xs.length ? xs.filter((v) => Math.abs(v) <= 1).length / xs.length : 0,
+        mean_abs_diff: xs.length ? xs.reduce((s, v) => s + Math.abs(v), 0) / xs.length : 0,
+        n: xs.length,
+      };
+    })
+    .sort((a, b) => a.exact - b.exact);
+
+  const all = [...diffs.values()].flat();
+  const exact = all.length ? all.filter((v) => v === 0).length / all.length : 0;
+  const within_one = all.length ? all.filter((v) => Math.abs(v) <= 1).length / all.length : 0;
+
+  const totals = (pa: PassA): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const l of letters) {
+      const frame = blindMap[l];
+      if (frame) out[frame] = weightedScore(pa.scores[l] as Record<string, { score: number }>, weights, max);
+    }
+    return out;
+  };
+  const tA = totals(first);
+  const tB = totals(second);
+  const order = (t: Record<string, number>) => Object.keys(t).sort((x, y) => (t[y] ?? 0) - (t[x] ?? 0) || x.localeCompare(y));
+  const ranking_changed = order(tA).join(",") !== order(tB).join(",");
+
+  const scorePath = join(runDir, "score.json");
+  const clusters = existsSync(scorePath) ? ((JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
+  const pick = (frames: string[], t: Record<string, number>) => [...frames].sort((x, y) => (t[y] ?? 0) - (t[x] ?? 0) || x.localeCompare(y))[0]!;
+  const representative_changes: { cluster: string; a: string; b: string }[] = [];
+  for (const c of clusters.filter((c) => c.survivors.length > 1)) {
+    const a = pick(c.survivors, tA);
+    const b = pick(c.survivors, tB);
+    if (a !== b) representative_changes.push({ cluster: c.id, a, b });
+  }
+
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const lines = [
+    `critic agreement on ${letters.length} artifact(s), ${all.length} scored cell(s)`,
+    "",
+    `exact agreement    ${pct(exact)}`,
+    `within one point   ${pct(within_one)}`,
+    "",
+    "per dimension, worst agreement first:",
+  ];
+  for (const d of by_dimension)
+    lines.push(`  ${d.dimension.padEnd(20)} exact ${pct(d.exact).padStart(4)}  within 1 ${pct(d.within_one).padStart(4)}  mean |diff| ${d.mean_abs_diff.toFixed(2)}`);
+
+  lines.push("", "what it changes:");
+  lines.push(`  ranking of artifacts by weighted total: ${ranking_changed ? "CHANGED" : "unchanged"}`);
+  lines.push(`  first critic:  ${order(tA).join(" > ")}`);
+  lines.push(`  second critic: ${order(tB).join(" > ")}`);
+  if (!clusters.length) lines.push("  no scored clusters on disk, so no representative decision to check");
+  else if (!clusters.some((c) => c.survivors.length > 1)) lines.push("  every cluster had one survivor, so no representative decision could change");
+  else if (!representative_changes.length) {
+    lines.push("  every contested cluster kept its representative: the same positions go to deepen");
+    // Clustering absorbs most rank disagreement. Two artifacts in different clusters both go to
+    // deepen whatever their order, so a swap across clusters decides nothing. Only order inside
+    // a contested cluster does, and saying so stops "CHANGED" reading as alarming when it is not.
+    if (ranking_changed)
+      lines.push("  The rank changes were across clusters, and cross-cluster order decides nothing:", "  each cluster sends its own representative regardless of how it ranks against another's.");
+  }
+  else {
+    lines.push(`  ${representative_changes.length} cluster representative(s) changed:`);
+    for (const r of representative_changes) lines.push(`    ${r.cluster}: ${r.a} -> ${r.b}`);
+    lines.push("  A different position went to deepen, so this run's recommendation depends on which critic read it.");
+  }
+  lines.push(
+    "",
+    "Cell agreement is the cheap number. Two critics can disagree on half the cells and ship the",
+    "same answer, or agree on most and send a different position forward. Read the ranking.",
+  );
+  return { artifacts: letters.length, cells: all.length, exact, within_one, by_dimension, ranking_changed, representative_changes, text: lines.join("\n") };
+}

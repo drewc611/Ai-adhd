@@ -25,8 +25,11 @@ can be wrong without saying so.
    The single most important unanswered question: are the findings the frames, or the seed?
 2. **Run-to-run variance floor.** Same fixture, same seed, repeated. Establishes the noise
    against which every other comparison is read.
-3. **Critic inter-rater reliability.** Two fresh critics score one artifact pack; report
-   per-dimension agreement. The rubric is only as good as this number and it is unmeasured.
+3. ~~**Critic inter-rater reliability.**~~ **Built** as `adhd learn --run <dir> --agreement
+   <passA.yaml>`, and run once: 84% exact over 45 cells on `003-kernel-strategy`, 100% within one
+   point, ranking changed, outcome unchanged. Reports per-dimension agreement, the ranking, and
+   whether any contested cluster changed representative. The third is the one that matters and
+   the other two overstate it. Still one run and one second critic; repeat on 001, 002 and 004.
 4. ~~**Rubric weight sensitivity.**~~ **Built** as `adhd learn --sensitivity`. Re-decides every
    contested cluster under each dimension's weight moved by ±1 and lists the representatives
    that change. Corrected in the building: pass A does not prune, a fired trap does. What pass A

@@ -89,3 +89,20 @@ Fixed in the same commit series as this recording; each has a test.
 The fixture's `pruned_traps_include_any` was also wrong in its first draft (T3, T5, T7): T5
 cannot prune a branch that met the output contract, and T7 is what DOOR_KEEPER and HORIZON
 exist to attack. It now lists T1, T2, T3, with the reason in the fixture.
+
+## A second critic
+
+`critic/pass-a.rater2.yaml` is a second blind pass A over the same five artifacts, produced
+2026-09-07 from `critic/pass-a.brief.md` verbatim by a critic in a separate context window that
+read no other file. It is evidence about the rubric, not part of this run: the run shipped on
+`pass-a.yaml` and `score.json` is unchanged.
+
+84% exact agreement over 45 cells, 100% within one point. The overall ranking changed (HORIZON
+overtook DOOR_KEEPER) and the outcome did not: the one contested cluster kept DOOR_KEEPER, and
+HORIZON is a singleton that goes to deepen either way. Read it with:
+
+```
+adhd learn --run evals/recorded/003-kernel-strategy --agreement evals/recorded/003-kernel-strategy/critic/pass-a.rater2.yaml
+```
+
+Findings are recorded under D8 in `docs/DECISIONS.md`.

@@ -330,3 +330,29 @@ after the corpus grows past 25 artifacts before touching either anchor set.
 spread without raising their meaning, and the harness would keep passing. That is the same
 failure as rewriting a fixture assertion after seeing which controls cleared it, recorded under
 D6, and it is refused for the same reason.
+
+**Finding 3: two critics agree, and the run does not depend on which one read it.** A fresh
+critic in a separate context window scored `003-kernel-strategy`'s five artifacts from
+`critic/pass-a.brief.md` verbatim, blind, having read no other file. Its scoring is kept at
+`critic/pass-a.rater2.yaml`; the run still ships on `pass-a.yaml` and `score.json` is unchanged.
+
+- 84% exact agreement over 45 cells, 100% within one point. No cell disagreed by two.
+- Four dimensions agreed on every cell: `committal`, `foreclosure`, `falsifiability`,
+  `reversibility`. `foreclosure` also sits at the 96% ceiling, so its perfect agreement is what
+  a near-constant looks like from a second angle, not evidence that it is well-defined.
+- Worst were `assumption_attack` and `substance` at 60% exact, both mean |diff| 0.40. Those two
+  ask the critic for a judgment the artifact does not spell out.
+- The overall ranking changed: HORIZON overtook DOOR_KEEPER for top artifact.
+- The run's outcome did not. The one contested cluster (LEDGER, DOOR_KEEPER) kept DOOR_KEEPER,
+  and HORIZON is a singleton that goes to deepen either way.
+
+**What clustering is doing.** Cross-cluster rank disagreement is structurally inert: each
+cluster sends its own representative regardless of how it ranks against another's. Only order
+inside a contested cluster changes anything, and this run had one. That is a stronger claim for
+clustering than the design argument that produced it, and it also means cell agreement and
+ranking agreement both overstate how much the critic decides. `adhd learn --agreement` prints
+all three so the weakest one is not read as the answer.
+
+**Sample of one run, one second critic.** 45 cells is not an inter-rater reliability figure. It
+is a first reading, and the number to grow. Repeat it on 001, 002 and 004 before quoting 84%
+anywhere it matters.

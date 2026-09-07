@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { cfg, tmp } from "./helpers.js";
-import { dimensionCorrelation, weightSensitivity } from "../src/learn.js";
+import { dimensionCorrelation, interRater, weightSensitivity } from "../src/learn.js";
 
 const DIMS = cfg.rubric.dimensions.map((d) => d.id);
 
@@ -214,4 +214,103 @@ test("an empty corpus reports nothing instead of throwing", () => {
   assert.equal(s.flips.length, 0);
   const c = dimensionCorrelation(cfg, join(root, "does-not-exist"));
   assert.equal(c.n, 0);
+});
+
+/** A second scoring of one pack, written where `interRater` expects to be pointed at it. */
+function writeSecond(dir: string, artifacts: Record<string, Record<string, number> | undefined>, hash?: string) {
+  const scores: Record<string, Record<string, { score: number; evidence: string }>> = {};
+  for (const [letter, over] of Object.entries(artifacts)) {
+    if (!over) continue;
+    scores[letter] = {};
+    for (const d of DIMS) scores[letter]![d] = { score: over[d] ?? 2, evidence: `second ${letter}.${d}` };
+  }
+  const p = join(dir, "second.yaml");
+  writeFileSync(p, stringify({ problem_hash: hash ?? "hash-001", pass: "A", scores }));
+  return p;
+}
+
+test("two identical scorings agree on every cell and change nothing", () => {
+  const root = tmp();
+  const dir = recordRun(
+    root,
+    "001",
+    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+  );
+  const r = interRater(cfg, dir, writeSecond(root, { A: Object.fromEntries(DIMS.map((d) => [d, 3])), B: Object.fromEntries(DIMS.map((d) => [d, 1])) }));
+  assert.equal(r.artifacts, 2);
+  assert.equal(r.cells, DIMS.length * 2);
+  assert.equal(r.exact, 1);
+  assert.equal(r.ranking_changed, false);
+  assert.equal(r.representative_changes.length, 0);
+  assert.match(r.text, /kept its representative/);
+});
+
+test("a disagreement that reverses a contested cluster is reported as a changed representative", () => {
+  const root = tmp();
+  const dir = recordRun(
+    root,
+    "001",
+    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+  );
+  // The second critic reads the pack the other way round.
+  const r = interRater(cfg, dir, writeSecond(root, { A: Object.fromEntries(DIMS.map((d) => [d, 1])), B: Object.fromEntries(DIMS.map((d) => [d, 3])) }));
+  assert.equal(r.exact, 0);
+  assert.equal(r.ranking_changed, true);
+  assert.deepEqual(r.representative_changes, [{ cluster: "c1", a: "LEDGER", b: "MECHANIC" }]);
+  assert.match(r.text, /depends on which critic read it/);
+});
+
+/**
+ * The case the recorded corpus actually produced. Clusters absorb cross-cluster rank
+ * disagreement, so a changed ranking is not by itself a changed outcome.
+ */
+test("a ranking change across clusters leaves every representative standing", () => {
+  const root = tmp();
+  const dir = recordRun(
+    root,
+    "001",
+    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 2 }, C: { frame: "HORIZON", base: 1 } },
+    [
+      { id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] },
+      { id: "c2", members: ["HORIZON"], survivors: ["HORIZON"] },
+    ],
+  );
+  // HORIZON climbs past both, but it is a singleton: it goes to deepen either way.
+  const r = interRater(
+    cfg,
+    dir,
+    writeSecond(root, {
+      A: Object.fromEntries(DIMS.map((d) => [d, 2])),
+      B: Object.fromEntries(DIMS.map((d) => [d, 1])),
+      C: Object.fromEntries(DIMS.map((d) => [d, 3])),
+    }),
+  );
+  assert.equal(r.ranking_changed, true);
+  assert.equal(r.representative_changes.length, 0);
+  assert.match(r.text, /cross-cluster order decides nothing/);
+});
+
+test("scoring a different problem is refused rather than compared", () => {
+  const root = tmp();
+  const dir = recordRun(root, "001", { A: { frame: "LEDGER" } });
+  assert.throws(() => interRater(cfg, dir, writeSecond(root, { A: undefined, B: {} }, "hash-other")), /problem_hash mismatch/);
+});
+
+test("an incomplete second pack is refused rather than compared on what is there", () => {
+  const root = tmp();
+  const dir = recordRun(root, "001", { A: { frame: "LEDGER" }, B: { frame: "MECHANIC" } });
+  assert.throws(() => interRater(cfg, dir, writeSecond(root, { A: {} })), /missing artifact\(s\) B/);
+});
+
+test("the recorded second scoring of 003 is readable and still says what D8 records", () => {
+  const runDir = join(cfg.root, "evals", "recorded", "003-kernel-strategy");
+  const r = interRater(cfg, runDir, join(runDir, "critic", "pass-a.rater2.yaml"));
+  assert.equal(r.artifacts, 5);
+  assert.equal(r.cells, 45);
+  assert.ok(r.exact > 0.8, `exact agreement was ${r.exact}`);
+  assert.equal(r.within_one, 1, "no cell disagreed by more than one point");
+  assert.equal(r.ranking_changed, true);
+  assert.equal(r.representative_changes.length, 0, "the contested cluster kept DOOR_KEEPER");
 });
