@@ -1,0 +1,59 @@
+# Second blind pass A over the same artifact pack as pass-a.yaml, by a fresh critic in a
+# separate context window. Produced 2026-09-07 from critic/pass-a.brief.md verbatim, with the
+# critic instructed to read that file and nothing else. It is evidence about the rubric, not
+# part of this run: the run shipped on pass-a.yaml and score.json is unchanged.
+#
+# Read it with: adhd learn --run evals/recorded/003-kernel-strategy --agreement <this file>
+problem_hash: sha256:9c7481004ba9e79b453d7ebadec695bf3c037e97d7ba13e325f72a4d897e594b
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence that names the action (extract at most two services along already-diverged seams, keep the rest one deployable) with no hedge handing the choice back." }
+    foreclosure: { score: 3, evidence: "Rules out the full rewrite with its hiring narrative, per-service team reorganization, and using the migration as the answer to deploy pain, all of which are things a team would actually be tempted to do." }
+    falsifiability: { score: 2, evidence: "Three modules blocked on each other's release gates in six months is cheaply observable from deploy history, but observing it only lifts the two-extraction ceiling rather than overturning the position." }
+    specificity: { score: 2, evidence: "The reasoning bends around the specifics of monolith decomposition (merging services versus splitting a repo, per-service on-call tax, the fifteen-boundary count) rather than restating generic caution." }
+    assumption_attack: { score: 2, evidence: "It attacks the assumption that the right boundaries are knowable now (they were the shape of who was in which meeting), and tests it against what actually diverged, though the attack is staged as retrospect rather than named as the question's assumption." }
+    reasoning_carries: { score: 3, evidence: "No authorities, studies, or names appear anywhere; the whole argument runs on contracts, migration cost, and ownership." }
+    actor_coverage: { score: 3, evidence: "The platform team is named with a concrete action (capping how many services they will support) and the position explicitly depends on that cap being a harder constraint than the architectural argument." }
+    reversibility: { score: 2, evidence: "It contrasts a refactor inside one repo with a cross-owner data migration and uses that asymmetry to split decide-now from leave-undecided, but the position is not itself a staged sequence." }
+    substance: { score: 3, evidence: "Flat restatement (keep one deployable with mechanically enforced module walls and extract only already-diverged seams) is the same claim and still worth making." }
+  B:
+    committal: { score: 3, evidence: "One sentence naming exactly one extraction behind a strangler seam within the quarter; the conditional on further extractions is a rule, not an escape hatch." }
+    foreclosure: { score: 3, evidence: "Big-bang rewrite with a cutover date, team reorganization before production proof, and database splitting as the first step are all specific and tempting moves ruled out." }
+    falsifiability: { score: 3, evidence: "Enforcing one module boundary and failing to isolate any module in two weeks is a cheap, days-scale observation that would show incremental extraction is not viable and kill the position." }
+    specificity: { score: 2, evidence: "The reasoning bends around this problem's particulars (shared-database shadow running, cross-boundary call counts, dual-write consistency) rather than being generic one-way-door advice." }
+    assumption_attack: { score: 1, evidence: "It notes that the word rewrite is itself a one-way door but does not test that framing; the branch mostly analyzes reversibility inside the question's frame." }
+    reasoning_carries: { score: 2, evidence: "Only the passing phrase about the classic second-system failure borrows authority; the cost and latency chain stands entirely on its own." }
+    actor_coverage: { score: 2, evidence: "The product owner is named with two real actions (pull the team off, or fund a second team), but the recommended sequence does not hinge on which they choose." }
+    reversibility: { score: 3, evidence: "The whole position is an ordered sequence of afternoon-reversible steps ending at the single named one-way door of splitting the data store." }
+    substance: { score: 3, evidence: "Stripped flat (extract one module behind a flag on the shared database and only split its data after a quarter of real traffic) it is the same claim and still worth saying." }
+  C:
+    committal: { score: 3, evidence: "One sentence with two dated verbs (two weeks to write three numbered pains, one quarter to fix the costliest in place) and no hedge." }
+    foreclosure: { score: 3, evidence: "Rules out the scheduled year-long program, any feature freeze to fund it, and working on any pain that cannot be written down with a number." }
+    falsifiability: { score: 3, evidence: "The two-week write-down is itself the test, and finding that every pain is a property of the monolith's shape that cannot be fixed in place would cheaply overturn the position." }
+    specificity: { score: 1, evidence: "The invented example numbers decorate an argument (name and measure the pain before choosing the remedy) that survives untouched if monolith, microservices, and the one-year horizon are all deleted." }
+    assumption_attack: { score: 3, evidence: "It names rewrite as the load-bearing assumption bundling diagnosis with cure, tests it by asking what specifically hurts, and the recommended action follows directly from that test." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities at all; the incentive analysis and the pain-first argument stand alone." }
+    actor_coverage: { score: 2, evidence: "The business sponsor is named with a concrete action (refuse work items lacking a stated pain and number, cap architecture work at a quarter) but the position would survive without them." }
+    reversibility: { score: 1, evidence: "It prefers in-place fixes and defers extraction to only when a process boundary is unavoidable, but ordering is driven by monthly cost rather than by any explicit reversible-versus-committed distinction." }
+    substance: { score: 2, evidence: "Flat restatement (measure what actually hurts and fix the most expensive thing before choosing an architecture) is worth saying, though the reframing did much of the work." }
+  D:
+    committal: { score: 3, evidence: "One sentence directing capability-by-capability cutover behind the existing interface, gated on measurable operating cost, with no hedge." }
+    foreclosure: { score: 3, evidence: "Forecloses the clean-sheet rewrite with a switchover date, full decomposition of components with no measured pain, and any feature freeze during transition." }
+    falsifiability: { score: 2, evidence: "Routing one capability's production traffic behind the existing interface is observable and decisive, but spending a two-person team for a full quarter makes it an expensive test." }
+    specificity: { score: 1, evidence: "The Bell, FAA, and urban-renewal argument is a general case for incremental replacement of any running system; only the note that software can mirror traffic is load bearing for this problem." }
+    assumption_attack: { score: 2, evidence: "It names that the question presumes microservices as the target and tests it against precedents that were about replacing systems rather than adopting topologies, but the recommendation would be the same either way." }
+    reasoning_carries: { score: 1, evidence: "Strip the dates, dollar figures, and named programs and little remains beyond the single line that the old system is the only complete specification you have." }
+    actor_coverage: { score: 3, evidence: "The on-call rotation is named with actions (supplying maintenance-cost data, refusing an unrehearsed cutover) and the position's ordering rule depends on the cost data they hold." }
+    reversibility: { score: 2, evidence: "Indefinite interworking and per-exchange cutover order the recommendations by what can be left hybrid, but reversible and committed moves are never separated explicitly." }
+    substance: { score: 2, evidence: "Flat restatement (replace one capability at a time behind a stable interface where cost is measured) still holds, but much of the appeal came from the historical framing." }
+  E:
+    committal: { score: 3, evidence: "One sentence with a scoped action (one quarter, one module whose pain you can name) and a stop rule instead of an escape hatch." }
+    foreclosure: { score: 3, evidence: "Rules out the year-long rewrite, doing nothing at all, and extracting a second module before the first shows measured improvement." }
+    falsifiability: { score: 3, evidence: "Failing to name a single module with concrete deploy, scaling, or ownership pain in one meeting is as cheap as an observation gets and directly kills the recommendation." }
+    specificity: { score: 1, evidence: "The ledger of retries, tracing, service discovery, and per-service CI reads as a general cost of microservices; only the observation that the question never names a pain is load bearing here." }
+    assumption_attack: { score: 2, evidence: "It names the hidden assumption that leaving current pain alone costs nothing and that the pain is architectural, and tests it by pricing both sides, though the recommendation does not turn on the result." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities are used; the argument is carried entirely by who pays which bill and when." }
+    actor_coverage: { score: 2, evidence: "Finance is named with a real action (requiring a per-service run-cost estimate before provisioning), but the position stands without their involvement." }
+    reversibility: { score: 1, evidence: "It calls the recommended bill bounded and reversible in passing, but never uses reversibility to order the moves; the ordering is by who pays and how much." }
+    substance: { score: 2, evidence: "Flat restatement (extract only the one module whose pain you can name, and price the ongoing operational cost first) is worth saying, though the who-pays currency framing carried some of it." }

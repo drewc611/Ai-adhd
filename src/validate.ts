@@ -77,11 +77,75 @@ const SIBLING_RE = /\b(sibling|other branch|another branch|the other (frame|bran
  * Fails if a brief carries anything a branch must not know: another frame's id, a branch
  * count, or the phrase "so far". Used in tests and at compile time.
  */
-export function checkBriefIsolation(brief: string, ownFrameId: string, allFrameIds: string[]): string[] {
+/** A frame's identifying labels: the id the schema uses and the name a brief prints. */
+export interface FrameLabel {
+  id: string;
+  name: string;
+}
+
+interface LabelToken {
+  frame: string;
+  token: string;
+  kind: "id" | "name";
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * A frame label survives any separator a writer might reach for. DOOR_KEEPER is also written
+ * "Door keeper", "door-keeper", "doorkeeper", "DoorKeeper", and across a line break, and all of
+ * them identify the frame just as well as the id does. Matching the literal token left every
+ * two-word name in the library leaking, which is nine of thirteen frames.
+ *
+ * Words are joined by an optional run of whitespace, underscores or hyphens. Zero separator is
+ * allowed deliberately: over-redaction is the safe direction here, and a label the problem
+ * itself uses is exempted before this is ever reached.
+ */
+const SEPARATOR = "[\\s_-]*";
+const labelPattern = (token: string) =>
+  token
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map(escapeRe)
+    .join(SEPARATOR);
+const wordRe = (t: string) => new RegExp(`\\b${labelPattern(t)}\\b`, "i");
+
+function tokensFor(frames: FrameLabel[]): LabelToken[] {
+  return frames.flatMap((f) => [
+    { frame: f.id, token: f.id, kind: "id" as const },
+    { frame: f.id, token: f.name, kind: "name" as const },
+  ]);
+}
+
+/**
+ * A label the problem statement itself uses cannot identify which frame produced a text,
+ * because every branch is free to echo the problem. Exempting those is what stops a problem
+ * about a mechanic's dashboard from aborting a run whose blindness is intact.
+ */
+function discriminating(tokens: LabelToken[], problem: string): LabelToken[] {
+  return tokens.filter((t) => !(problem && wordRe(t.token).test(problem)));
+}
+
+/** Strip every identifying label but `keep`'s. Over-redaction is the safe direction here. */
+export function redactFrameLabels(
+  text: string,
+  frames: FrameLabel[],
+  opts: { keep?: string; problem?: string; replacement?: string } = {},
+): string {
+  const replacement = opts.replacement ?? "[frame]";
+  let out = text;
+  for (const t of discriminating(tokensFor(frames), opts.problem ?? "")) {
+    if (t.frame === opts.keep) continue;
+    out = out.replace(new RegExp(`\\b${labelPattern(t.token)}\\b`, "gi"), replacement);
+  }
+  return out;
+}
+
+export function checkBriefIsolation(brief: string, ownFrameId: string, frames: FrameLabel[], opts: { problem?: string } = {}): string[] {
   const problems: string[] = [];
-  for (const id of allFrameIds) {
-    if (id === ownFrameId) continue;
-    if (new RegExp(`\\b${id}\\b`).test(brief)) problems.push(`brief for ${ownFrameId} mentions frame ${id}`);
+  for (const t of discriminating(tokensFor(frames), opts.problem ?? "")) {
+    if (t.frame === ownFrameId) continue;
+    if (wordRe(t.token).test(brief)) problems.push(`brief for ${ownFrameId} mentions frame ${t.kind} ${t.token}`);
   }
   if (SO_FAR_RE.test(brief)) problems.push(`brief for ${ownFrameId} contains "so far"`);
   const c = brief.match(COUNT_RE);
@@ -91,10 +155,15 @@ export function checkBriefIsolation(brief: string, ownFrameId: string, allFrameI
   return problems;
 }
 
-/** Pass A is blind: no frame id may appear anywhere in the brief. */
-export function checkBlind(passABrief: string, allFrameIds: string[]): string[] {
+/**
+ * Pass A is blind: no label that identifies a frame may appear in the brief. Ids and display
+ * names both count. A branch writes "from inside the Door keeper stance" far more naturally
+ * than it writes DOOR_KEEPER, and checking only ids left that leak open.
+ */
+export function checkBlind(passABrief: string, frames: FrameLabel[], opts: { problem?: string } = {}): string[] {
   const problems: string[] = [];
-  for (const id of allFrameIds) if (new RegExp(`\\b${id}\\b`).test(passABrief)) problems.push(`pass A brief leaks frame id ${id}`);
+  for (const t of discriminating(tokensFor(frames), opts.problem ?? ""))
+    if (wordRe(t.token).test(passABrief)) problems.push(`pass A brief leaks frame ${t.kind} ${t.token}`);
   if (/^\s*frame:\s*\S/m.test(passABrief)) problems.push("pass A brief contains a `frame:` field");
   return problems;
 }
@@ -109,10 +178,22 @@ export type BranchValidation =
  * Subagents sometimes wrap the YAML in a fence, and sometimes add prose after it (a sources
  * line, a sign off). The artifact is the first fenced block if there is one, else the text.
  * Every reader of a subagent's final message goes through here so they agree on what it said.
+ *
+ * Deliberately not a regular expression. Every regex spelling of "fence, info string, body,
+ * fence" has two quantifiers that can match the same character, and the engine then has to try
+ * every split: quadratic on input that is, by construction, the untrusted final message of a
+ * subagent. Two rounds of patching the pattern each removed one ambiguity and left another.
+ * Three index lookups say the same thing, run in linear time, and cannot be got wrong.
  */
 export function unfence(text: string): string {
-  const fenced = text.match(/```(?:ya?ml)?\s*\n([\s\S]*?)\n```/);
-  return fenced ? fenced[1]! : text;
+  const open = text.indexOf("```");
+  if (open === -1) return text;
+  // The info string runs to the end of that line, whatever it says: yaml, yml, or nothing.
+  const bodyStart = text.indexOf("\n", open + 3);
+  if (bodyStart === -1) return text;
+  const close = text.indexOf("\n```", bodyStart);
+  if (close === -1) return text;
+  return text.slice(bodyStart + 1, close);
 }
 
 function parseYamlLoose(text: string): unknown {
@@ -170,7 +251,7 @@ export function validatePassA(text: string, expectedHash: string, letters: strin
   return r.data;
 }
 
-export function validatePassB(text: string, expectedHash: string, frameIds: string[]): PassB {
+export function validatePassB(text: string, expectedHash: string, frameIds: string[], minEvidenceWordsOnFire = 0): PassB {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
   if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass B");
@@ -184,7 +265,21 @@ export function validatePassB(text: string, expectedHash: string, frameIds: stri
       problems.push(`no trap records for ${f}`);
       continue;
     }
-    for (const t of TRAP_IDS) if (!(t in row)) problems.push(`${f}.${t} detector record missing`);
+    for (const t of TRAP_IDS) {
+      if (!(t in row)) {
+        problems.push(`${f}.${t} detector record missing`);
+        continue;
+      }
+      // Firing removes a frame from the recommendation. An assertion with no argument behind it
+      // is not a detector result, it is a verdict, and pruning on it defeats the point of
+      // writing detectors down. Not firing is the default and may stay terse.
+      const rec = row[t]!;
+      if (rec.fired && minEvidenceWordsOnFire > 0) {
+        const words = rec.evidence.trim().split(/\s+/).filter((w) => /\w/.test(w)).length;
+        if (words < minEvidenceWordsOnFire)
+          problems.push(`${f}.${t} fired on ${words} word(s) of evidence, under the ${minEvidenceWordsOnFire} required: "${rec.evidence.trim().slice(0, 60)}"`);
+      }
+    }
   }
   for (const f of Object.keys(r.data.traps)) if (!frameIds.includes(f)) problems.push(`trap records for unknown frame ${f}`);
   // Clusters partition the frames.

@@ -1,0 +1,53 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One imperative sentence naming the deadline, the propagation, and the retry budget, with no hedge and no return of the choice to the reader." }
+    foreclosure: { score: 3, evidence: "Rules out three concretely described and genuinely tempting defaults: library defaults including infinite reads, clock-resetting per-attempt retries, and one uniform global timeout across endpoints." }
+    falsifiability: { score: 2, evidence: "The latency histogram plus abandonment-by-elapsed-time is observable and would overturn the position, but abandonment by elapsed time is usually not instrumented and the check needs a week of data." }
+    specificity: { score: 2, evidence: "The argument bends around connect-versus-total phases, pool occupancy, and retry multiplication against a struggling dependency, though the cost-and-payer scaffold itself would transfer." }
+    assumption_attack: { score: 2, evidence: "It does displace the assumption that a timeout is a number you pick, replacing it with dividing an inherited budget, but it never states that assumption as a claim under test." }
+    reasoning_carries: { score: 3, evidence: "No authorities, benchmarks, or citations appear at all; every step runs on stated mechanism such as sockets held, queues backing up, and arrival-rate multiplication." }
+    actor_coverage: { score: 2, evidence: "The downstream operator is named with a real action (publish a latency SLO, enforce a server-side deadline with load shedding), but the position stands unchanged whether or not they act." }
+    reversibility: { score: 1, evidence: "It prices moves as cheap or costly (a day of work, no new infrastructure) but never separates a move you can undo from one you cannot, and no ordering follows from it." }
+    substance: { score: 3, evidence: "Flattened to end-to-end deadline propagation with a fleet-level retry budget instead of per-attempt retries, it is the same claim and still worth making." }
+  B:
+    committal: { score: 3, evidence: "A single sentence that says derive from the inherited deadline and hardcode only ceilings, with no option list and no fallback for the reader to choose." }
+    foreclosure: { score: 3, evidence: "It rules out the tuned-constant table, clock-resetting retries with the arithmetic spelled out, and sizing from the dependency p99, each of which is what a competent engineer would otherwise do." }
+    falsifiability: { score: 3, evidence: "One hour of inbound traffic checked for any deadline, cancellable context, or client disconnect is cheap and specific, and the stated null result concedes the fixed-constant design instead." }
+    specificity: { score: 2, evidence: "Handshake and between-bytes ceilings, proxy idle timeouts that silently override, and the trickle attacker are load bearing here, though the actor-enumeration method would survive transplant." }
+    assumption_attack: { score: 3, evidence: "It names the question's framing of the client as an autonomous thing with a naturally correct setting, tests it by enumerating who else holds a clock, and the whole design change follows from the result." }
+    reasoning_carries: { score: 3, evidence: "Nothing is borrowed; the case rests entirely on who can act, how fast, and at what cost, with no appeal to any authority." }
+    actor_coverage: { score: 3, evidence: "The upstream caller is named with concrete free actions (cancel, hang up, retry), and the position is literally built on inheriting that actor's deadline." }
+    reversibility: { score: 1, evidence: "Speed and cost of each actor's move are ranked, but nothing distinguishes an undoable change from a committed one, and the ordering it produces is by actor not by reversibility." }
+    substance: { score: 3, evidence: "Stripped flat to inherit the caller's deadline and keep fixed numbers only as defensive ceilings below the proxy, the claim survives intact and is non-obvious." }
+  C:
+    committal: { score: 3, evidence: "One sentence telling the reader to stop picking values, thread a deadline from entry, and define the degraded response, with no hedge or escape clause." }
+    foreclosure: { score: 3, evidence: "It forecloses the per-environment tuned constant, retries stacked on a fixed timeout with uncomputed worst case, and the standard incident reflex of raising the timeout." }
+    falsifiability: { score: 3, evidence: "Tracing a hundred real invocations to see whether anything upstream is waiting is cheap and specific, and the stated detached-batch result concedes the generous ceiling instead." }
+    specificity: { score: 2, evidence: "The stacking case, where several individually compliant calls exhaust one request, is load bearing, but much of the argument would read the same for any derived configuration value." }
+    assumption_attack: { score: 3, evidence: "It states the load bearing assumption outright, that the right number is a property of this client and its dependency, and the recommendation is the direct consequence of rejecting it." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities are present; the derivation runs from who owns the budget to why derived numbers beat chosen ones." }
+    actor_coverage: { score: 2, evidence: "The downstream owner is named with an action (publish an SLO and enforce a server-side deadline that sheds load), but the deadline-threading position does not depend on their acting." }
+    reversibility: { score: 0, evidence: "Nothing separates cheap undoable moves from committed ones; the one-line diff is invoked as a motive for the wrong answer, not as a reversibility judgment." }
+    substance: { score: 3, evidence: "Flattened to propagate a deadline and decide what the user gets when it expires, it remains the same claim and the fallback half is genuinely load bearing." }
+  D:
+    committal: { score: 3, evidence: "One sentence with three sequenced imperatives, all actionable today, and it explicitly denies being merely a plan to measure." }
+    foreclosure: { score: 3, evidence: "It rules out leaving anything unbounded while awaiting data, the client-library default retry policy on write endpoints, and compiling hand-picked constants into a shared library." }
+    falsifiability: { score: 2, evidence: "A multi-modal tail with no stable ceiling would genuinely kill the position and the canary check is cheaper, but both require a week of instrumentation that does not yet exist." }
+    specificity: { score: 2, evidence: "Concrete starting values, p99.9 headroom, and the idempotency-key gate are load bearing, though the two-way-door method is a portable frame." }
+    assumption_attack: { score: 1, evidence: "It notes in passing that a total longer than the upstream deadline is a mistake, which brushes the question's frame, but no assumption of the question is stated and tested." }
+    reasoning_carries: { score: 3, evidence: "No authorities are invoked; the duplicate-charge and detection-latency arguments carry themselves on stated causal mechanism." }
+    actor_coverage: { score: 3, evidence: "The upstream owner is named with two actions, and the position depends on one of them since retries stay off precisely until that actor supplies idempotency keys." }
+    reversibility: { score: 3, evidence: "The entire position is a sequence derived from sorting moves into two-way and one-way doors and pricing each door by cost and detection latency." }
+    substance: { score: 3, evidence: "Flattened to bound everything now in config, measure a week, and never retry non-idempotent timeouts without idempotency keys, it is the same claim and worth saying." }
+  E:
+    committal: { score: 3, evidence: "One short sentence, one number, one place, and the words stop there remove any escape hatch." }
+    foreclosure: { score: 2, evidence: "It rules out two real and tempting moves, phase-by-phase tuning and bundling retries or a breaker into the same change, but only two and the second is lightly drawn." }
+    falsifiability: { score: 1, evidence: "Watching for a week is observable, but firing on requests that would have completed successfully is a counterfactual about calls the timeout killed, so the decisive observation is not actually available." }
+    specificity: { score: 1, evidence: "The argument is the general smallest-intervention move and would read identically for many configuration questions; only the unfixed list, connect stalls and slow-drip responses, leans on this problem." }
+    assumption_attack: { score: 1, evidence: "It names an assumption about the asker's imagined scope, that a table of per-phase values is required, but accepts wholesale the question's frame that a timeout is a number you choose." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities at all; the case runs on the claim that unbounded waiting is the actual pain and everything else is a bounded and later-fixable bug." }
+    actor_coverage: { score: 2, evidence: "The downstream owner is named with an action, publishing a latency distribution or server-side deadline, but the single-number position neither needs nor waits for it." }
+    reversibility: { score: 2, evidence: "It leans on the distinction that a bounded wrong number is a fixable bug while an unbounded wait takes the caller down, and uses that to defer splitting until an observation demands it." }
+    substance: { score: 3, evidence: "Flattened to set one generous total timeout and split it only when evidence says so, it is the same claim and is the most contrarian one on offer." }

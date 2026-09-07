@@ -1,0 +1,101 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: B
+clusters:
+  - id: propagated_deadline_budget
+    action: "Stamp an absolute deadline on the request where it enters the system, carry the remaining budget into every outbound call, and derive each call's timeout and each retry decision by subtracting elapsed time from what is left."
+    members: [SABOTEUR, FRAME_BREAKER, PRIOR_ART]
+    singleton: false
+    strongest_objection: >-
+      The scheme's authority stops at the edge of what you control, and almost nothing on the
+      path is yours. A deadline is only a bound if every hop and every box between hops reads
+      it and acts on it; the load balancer, the ingress and the sidecar enforce their own
+      idle and request limits, cut connections without telling anything downstream, and are
+      changed by a platform team that has never heard of this service, so the propagated
+      number is advisory wherever it is not also asserted at that layer. Worse, a timer that
+      fires on the caller sends nothing: the far side keeps its worker, its transaction and
+      its row locks past the deadline, so budget discipline saves the caller's threads and
+      does not reclaim a single unit of the capacity that is actually scarce during the
+      incident. The scheme also has to be built before it pays anything, and the first hop has
+      no deadline to inherit, so somebody still invents a number by judgement at the edge and
+      the question that was asked, what value goes into this config today, is answered only
+      after an organisation-wide change lands. And a single remaining-budget figure is
+      structurally blind to phase: a call that has burned two of its five seconds waiting on a
+      SYN into a black hole looks exactly like one that is making progress, so a total budget
+      still needs phase-shaped limits underneath it to shed a dead peer in one round trip
+      rather than at the end of the budget.
+  - id: phase_sized_timers
+    action: "Set separate connect, TLS handshake, wait-for-headers and gap-between-body-bytes timers on this client, each sized from the physical quantity it measures, plus a decrementing absolute deadline carried in the request."
+    members: [MECHANIC]
+    singleton: true
+    strongest_objection: >-
+      The four timers assume a client that exposes four knobs, and most do not. Common HTTP
+      libraries offer a connect option and something called a read or idle option that resets
+      on every byte received, with no separate handshake bound, no header-wait bound, and no
+      way to charge the wait for a free connection from the pool; on such a library no
+      assignment of the available values bounds the call at all, and the honest prescription
+      becomes a cancellation wrapped around the call rather than a set of numbers, which is a
+      different action from the one recommended. Even where the knobs exist, four numbers
+      sized independently from path and workload properties do not compose: their worst case
+      sums to something nobody upstream agreed to wait for, and sizing the header wait from
+      the far side's own work distribution is exactly the move that produces a limit longer
+      than the patience of the caller holding the connection. The design is also silent on the
+      failure that is cheapest to cause and most expensive to leave: a timeout paired with
+      retries at several independently configured layers multiplies load on a dependency
+      precisely when it is slowest, and that loop keeps the system down after the original
+      slowdown is gone. Ruling out retry of non-idempotent requests does not address it,
+      because the amplifying retries are of the safe ones.
+  - id: audit_the_library_then_inherit
+    action: "Open this client's library, establish whether it can bound a whole call or only individual socket operations, then set one whole-call limit equal to the deadline the caller above already holds, or wrap the call in an external cancellation if no such knob exists."
+    members: [PARTICULARIST]
+    singleton: true
+    strongest_objection: null
+traps:
+  SABOTEUR:
+    T1: { fired: false, evidence: "Delete this, HTTP and client and the argument loses its load: the idle timer that resets on every body chunk, the uncharged pool checkout and the library option that bounds inactivity rather than the request are all properties of the specific artefact named, and the answer would have to be rebuilt without them." }
+    T2: { fired: false, evidence: "It names the assumption that a single chosen constant can stand for connect, first byte and whole response and that nobody upstream is on a shorter clock, then breaks it three ways and derives the answer from the break." }
+    T3: { fired: false, evidence: "No authority is invoked anywhere; the dribbling body, the metastable retry loop and the clock step each carry themselves mechanically, and removing the two example figures for an ELB and an ingress changes nothing." }
+    T4: { fired: false, evidence: "It closes four decisions: no shared tunable constant, no fixed per-call retry count and no retrying at more than one layer, no reliance on the library's idle default, and no long synchronous request granted a bigger number." }
+    T5: { fired: false, evidence: "The position is a single imperative sentence, propagate a deadline and derive every timeout from what remains, with concrete values attached." }
+    T6: { fired: false, evidence: "Names the upstream caller who states when the answer stops being useful, the operator who edits the config, and the intermediary platform team who can change the caps at any time; the attacker is explicitly dismissed as unnecessary and no capacity or finance owner appears." }
+    T7: { fired: false, evidence: "The three failure modes are explicitly ranked by cost of recovery, restart a process versus revert a file versus a loop that no longer needs its trigger, and that ranking is what selects the design." }
+    T8: { fired: false, evidence: "Flattened to derive timeouts from a propagated deadline on a monotonic clock and cap retries as a fraction of traffic rather than a count, it is the same claim and still worth making." }
+  PRIOR_ART:
+    T1: { fired: true, evidence: "The branch opens by declaring this is not a networking question and states its answer in domain-neutral terms of budget, spend-down and reserve; delete the three specifics and the prescription is word for word the same, with the shared-capacity and fan-out remarks qualifying the position rather than changing it." }
+    T2: { fired: false, evidence: "It names the question's assumption that the answer is a set of per-leg numbers chosen by whoever owns the leg, and rejects it directly." }
+    T3: { fired: true, evidence: "Remove ICAO's reserve, EASA's 2022 scheme, United 173, Avianca 052 and the termination-of-resuscitation criteria and the case for a total budget with an untouchable reserve and a standardised declaration is left as assertion, with only the closing disanalogy paragraph reasoning on its own." }
+    T4: { fired: false, evidence: "It closes three decisions: no per-dependency table tuned to each dependency's latency, no retry receiving a fresh full timeout, and no reliance on the library default or the dependency team's opinion." }
+    T5: { fired: false, evidence: "The position is one imperative sentence, set one deadline at entry, pass the remainder down, abandon below the reserve." }
+    T6: { fired: false, evidence: "Names the edge owner who can stamp and enforce the deadline header, the inbound caller whose patience sets the budget, and the cron, CLI and batch cases with no caller at all; no attacker or capacity owner appears." }
+    T7: { fired: false, evidence: "Commit points, an unspendable reserve sized to still emit the fallback and the error, and the claim that a failure declared too late is strictly worse than the original failure all separate the moment a decision is still cheap from the moment it is not." }
+    T8: { fired: false, evidence: "Stripped of the aviation and resuscitation framing it still says stamp an end-to-end deadline, spend from the remainder, and hold a reserve you never plan into, which is a claim worth making on its own." }
+  MECHANIC:
+    T1: { fired: false, evidence: "The whole argument is built from SYN retransmission, the RST that arrives in one round trip, TLS round trips, middlebox idle clocks and mid-body byte gaps, none of which survive deleting the fact that this is an HTTP client on a socket." }
+    T2: { fired: false, evidence: "It attacks the habitual one-number answer at the exact step where the boundary changes character, and shows that fixed per-hop numbers do not compose across three hops, which is the localization the question assumes." }
+    T3: { fired: false, evidence: "No citation or authority appears at any point; every claim is derived from what is held on each side of the wire during the wait." }
+    T4: { fired: false, evidence: "It closes three decisions: no single total timeout on the client object, no automatic retry of a non-idempotent request, and no long connect timeout used as a cushion for a slow dependency." }
+    T5: { fired: false, evidence: "The position is one imperative sentence naming the four timers to set and the deadline to carry." }
+    T6: { fired: false, evidence: "Names the far side's owner and the owners of the load balancer, proxy and NAT, with the actions of publishing their caps and abandoning work when the connection closes; the upstream caller and any capacity or scheduling owner are left implicit." }
+    T7: { fired: false, evidence: "The point at which the request bytes are written is treated as the commitment boundary, and the impossibility of telling not done yet from done with the reply lost is what rules out the retry recommendation." }
+    T8: { fired: false, evidence: "Flat, it says size each timer from the physical thing it measures and carry a shrinking deadline, which is the same claim without any of the framing." }
+  PARTICULARIST:
+    T1: { fired: false, evidence: "The reasoning is hung on the deleted words themselves, so removing them removes the argument: without this there is no existing library whose knob set decides between a number and a cancellation, and without client there is no side holding the socket and the thread." }
+    T2: { fired: false, evidence: "It attacks the assumption that per-socket values can bound a call at all, using the server that drips one byte before each read deadline, and the answer changes to an external cancellation when that test fails." }
+    T3: { fired: false, evidence: "Nothing is borrowed from any authority; the drip-feeding server and the inherited-versus-invented deadline carry the argument unaided." }
+    T4: { fired: false, evidence: "It closes three decisions: no copying a connect and read and write triple from a sibling service, no leaving the shipped values in place, and no retry policy added without shrinking the per-attempt limit." }
+    T5: { fired: false, evidence: "The position is one imperative sentence, open the client, set one whole-call limit from the caller's deadline, wrap it if the knob does not exist." }
+    T6: { fired: false, evidence: "Names the team operating the called server whose own limit and shedding threshold decide what the client sees, the caller above that may already be counting down, and the cron or queue worker case; no intermediary operator appears." }
+    T7: { fired: true, evidence: "It weighs latency costs, a hung request against a slow one and a number larger than the caller's remaining budget, but never once asks what it costs to be wrong about a recommendation or how long until you find out, and no move is characterised as reversible or committed; the nearest trace is the remark that an incomplete connect has produced nothing worth waiting for." }
+    T8: { fired: false, evidence: "Restated flat, find out what your library actually bounds and inherit the deadline your caller is already holding, it remains the same claim and is worth saying." }
+  FRAME_BREAKER:
+    T1: { fired: true, evidence: "Delete this, HTTP and client and the prescription is unchanged, since stamping an absolute deadline at the edge, subtracting elapsed time at each call site and budgeting retries by volume reads identically for a gRPC call, a database call or a queue publish; the only load-bearing use of the deleted words is as the phrase whose localization it objects to, and the objection survives their deletion." }
+    T2: { fired: false, evidence: "It states the load-bearing assumption outright, that a timeout is a static property of the client object, and shows the client cannot hold the information that would make the number correct." }
+    T3: { fired: false, evidence: "No citation or authority is used; the two-seconds-against-a-two-hundred-millisecond-budget case and the cui bono argument stand without external support." }
+    T4: { fired: false, evidence: "It closes three decisions: no timeout pinned from the dependency's measured p99, no generous timeout with a fixed retry count, and no platform-wide uniform default, which it names as the natural resolution and rejects." }
+    T5: { fired: false, evidence: "The position is one imperative sentence, stop configuring per-client numbers and stamp, propagate and derive instead, with a concrete set of steps for tomorrow." }
+    T6: { fired: false, evidence: "The richest actor set of the run: the called service's owner who can publish an objective and shed, the on-call rotation who closes tickets by editing a number, library authors shipping unbounded defaults, and the users to whom a latency promise was made." }
+    T7: { fired: false, evidence: "Only weakly present: starting at one user-facing entry point and logging remaining-at-call-time from day one is a cheap first move placed before the committed change, but the cost of getting the deadline value wrong, and how long before that shows up, is never stated." }
+    T8: { fired: false, evidence: "Flattened to the deadline belongs to the request path rather than to the client, and retry budget is part of the same decision, it is the same claim without the framing." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "All five branches attacked the question's load-bearing assumption that a timeout is a number chosen as a property of this client: two named it explicitly as the localization to reject, one broke it by showing a constant cannot span connect, first byte and whole response, one showed fixed per-hop numbers do not compose, and one showed per-socket values cannot bound a call at all." }
+  T6_all_missing_actor_null: { fired: false, evidence: "No branch left missing_actor null; three named an intermediary or edge operator, two named the called service's team, and every entry attaches an action that party can take." }
+lint_verdicts: []

@@ -99,3 +99,21 @@ jobs:
       uses: github/codeql-action/analyze@v4
       with:
         category: "/language:${{matrix.language}}"
+
+    # CodeQL uploads results as SARIF and reports only a count on the check run, so a failing
+    # analysis says "1 high severity alert" and nothing about which rule, file or line. Print
+    # the open alerts for this ref into the job log, where anyone reading the failure can see
+    # what to fix. Never fails the job: this is reporting, and the analysis above is the gate.
+    - name: Print open code scanning alerts
+      if: always()
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}
+      run: |
+        echo "Open CodeQL alerts on $REF"
+        gh api --paginate \
+          -H "Accept: application/vnd.github+json" \
+          "repos/${{ github.repository }}/code-scanning/alerts?state=open&ref=$REF&per_page=100" \
+          --jq '.[] | "\(.rule.security_severity_level // .rule.severity | ascii_upcase)  \(.rule.id)\n  \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)\n  \(.rule.description)\n  \(.most_recent_instance.message.text)\n"' \
+          || echo "could not read alerts (needs security-events: read on this token)"

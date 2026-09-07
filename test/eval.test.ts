@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { runEval, loadFixtures } from "../src/eval.js";
+import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
 import { problemHash } from "../src/hash.js";
+import { compile, previewText } from "../src/compile.js";
 
 test("the shipped negative control fails fixture 001 and is expected to", () => {
   const r = runEval(cfg);
@@ -122,4 +123,252 @@ test("a fixture pattern anchored with ^ reads the start of the scope text, and a
   );
   assert.deepEqual(verdict.failures, []);
   assert.equal(r.pairs.every((p) => p.ok), true);
+});
+
+test("the audit flags an assertion the negative control also satisfies, and names the text that did it", () => {
+  const dir = tmp();
+  const fixtures = join(dir, "fixtures");
+  const recorded = join(dir, "recorded");
+  mkdirSync(fixtures, { recursive: true });
+  const prompt = "Where should I look?";
+  writeFileSync(
+    join(fixtures, "901-audit.yaml"),
+    [
+      'id: "901"',
+      "name: audit",
+      "problem_class: fuzzy_debugging",
+      "seed: 1",
+      `prompt: "${prompt}"`,
+      "must_surface:",
+      "  - id: says_cron",
+      "    description: names a scheduled actor",
+      "    any_of: ['cron']",
+      "  - id: says_rare",
+      "    description: names something only a real run reaches",
+      "    any_of: ['who is hurt']",
+      "  - id: says_nothing",
+      "    description: nothing has ever said this",
+      "    any_of: ['zqx-never-appears']",
+      "must_not: []",
+      "expect: {}",
+    ].join("\n"),
+  );
+  const write = (name: string, body: string, control: boolean) => {
+    const d = join(recorded, name);
+    mkdirSync(join(d, "branches"), { recursive: true });
+    writeFileSync(join(d, "plan.json"), JSON.stringify({ problem_hash: problemHash(prompt) }));
+    writeFileSync(join(d, "synthesis.md"), `# ADHD synthesis\n## Recommendation\n\n${body}\n\n## Pruned, with reason\n\n(none)\n`);
+    writeFileSync(join(d, "expected.json"), JSON.stringify({ outcome: control ? "fail" : "pass", control }));
+  };
+  write("901-real", "Check cron, and ask who is hurt by the tail.", false);
+  write("901-linear-cot", "The usual suspects: cron, GC, cache expiry.", true);
+
+  const a = auditFixtures(cfg, { fixturesDir: fixtures, recordedDir: recorded });
+  const byId = new Map(a.items.map((i) => [i.item, i]));
+  assert.equal(byId.get("says_cron")!.verdict, "matches a control", "an assertion the consensus answer satisfies is not measuring divergence");
+  assert.equal(byId.get("says_cron")!.control_evidence, "cron");
+  assert.equal(byId.get("says_rare")!.verdict, "discriminating");
+  assert.equal(byId.get("says_nothing")!.verdict, "never matched");
+  assert.match(a.text, /matched on: "cron"/);
+  assert.match(a.text, /do not loosen the pattern to make the report quiet/);
+});
+
+test("a fixture pattern that cannot compile, or that matches everything, fails at load", () => {
+  const dir = tmp();
+  const write = (name: string, anyOf: string) =>
+    writeFileSync(
+      join(dir, name),
+      [
+        'id: "902"',
+        "name: broken",
+        "problem_class: naming",
+        "seed: 1",
+        'prompt: "x"',
+        "must_surface:",
+        "  - id: thing",
+        "    description: a thing",
+        `    any_of: [${anyOf}]`,
+        "must_not: []",
+        "expect: {}",
+      ].join("\n"),
+    );
+  write("902-broken.yaml", "'(unclosed'");
+  assert.throws(() => loadFixtures(dir), /does not compile/, "a broken pattern must fail at load, not silently never match");
+  rmSync(join(dir, "902-broken.yaml"));
+  // An assertion that matches everything cannot fail, which the harness would report as a pass.
+  write("902-vacuous.yaml", "'.*'");
+  assert.throws(() => loadFixtures(dir), /matches everything, so the assertion cannot fail/);
+  rmSync(join(dir, "902-vacuous.yaml"));
+  write("902-fine.yaml", "'who (is|gets) paged'");
+  assert.equal(loadFixtures(dir).length, 1);
+});
+
+/**
+ * A decline is a first-class outcome and it was the only one nothing tested. A routing edit that
+ * quietly starts spending five subagents on "what is the default TCP keepalive interval" would
+ * have passed the whole suite, because a fixture with no recorded run reports "no recorded runs"
+ * and the eval still passes.
+ */
+test("the decline fixtures assert the routing decision, with no recorded run", () => {
+  const r = runEval(cfg);
+  const declines = r.pairs.filter((p) => p.recorded === "(no run: declined)");
+  assert.equal(declines.length, 3, "005, 006 and 007 are declines");
+  for (const d of declines) {
+    assert.equal(d.outcome, "pass", `${d.fixture}: ${d.failures.join("; ")}`);
+    assert.match(d.notes.join(" "), /declined: \S/, `${d.fixture} did not report the reason it gave`);
+  }
+  assert.ok(!r.fixtures_without_runs.includes("005"), "a decline fixture is not a fixture missing its run");
+});
+
+test("a decline fixture fails when routing stops declining its class", () => {
+  const routing = structuredClone(cfg.routing) as typeof cfg.routing;
+  // The regression that matters: someone gives the class frames and it starts spending.
+  (routing.classes as Record<string, unknown>)["factual_lookup"] = {
+    action: "run",
+    description: "no longer declined",
+    signals: [],
+    frames: ["LEDGER", "MECHANIC", "SABOTEUR"],
+    n: 3,
+    alternates: [],
+  };
+  const r = runEval({ ...cfg, routing }, {});
+  const five = r.pairs.find((p) => p.fixture === "005")!;
+  assert.equal(five.outcome, "fail");
+  assert.equal(five.ok, false);
+  assert.match(five.failures.join(" "), /expect decline: routing compiled 3 branch\(es\)/);
+  assert.equal(r.ok, false, "the whole eval must go red");
+});
+
+test("a decline fixture fails when the reason rots into something that explains nothing", () => {
+  const routing = structuredClone(cfg.routing) as typeof cfg.routing;
+  (routing.classes as Record<string, { reason?: string }>)["factual_lookup"]!.reason = "no";
+  const r = runEval({ ...cfg, routing }, {});
+  const five = r.pairs.find((p) => p.fixture === "005")!;
+  assert.equal(five.outcome, "fail");
+  assert.match(five.failures.join(" "), /expect decline reason to include/);
+});
+
+/** The schema refuses the two shapes that would make a fixture assert nothing. */
+test("a fixture with no assertions and no decline is rejected at load", () => {
+  const dir = tmp();
+  writeFileSync(
+    join(dir, "bad.yaml"),
+    "id: '900'\nname: empty\nproblem_class: design_decision\nseed: 1\nprompt: does it work\n",
+  );
+  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline or expect.injection_warnings_min is set/);
+});
+
+test("a decline fixture carrying assertions is rejected, because there is no output to assert on", () => {
+  const dir = tmp();
+  writeFileSync(
+    join(dir, "bad.yaml"),
+    [
+      "id: '901'",
+      "name: contradictory",
+      "problem_class: factual_lookup",
+      "seed: 1",
+      "prompt: what is the default",
+      "must_surface:",
+      "  - id: x",
+      "    description: something the synthesis says",
+      "    any_of: ['anything']",
+      "expect:",
+      "  decline: true",
+      "",
+    ].join("\n"),
+  );
+  assert.throws(() => loadFixtures(dir), /no output to assert against/);
+});
+
+/**
+ * The one attack isolation cannot see. A convergence sentence in the problem reaches all five
+ * branches verbatim, compromises them identically, and leaves no branch anomalous against its
+ * siblings. The critic reads artifacts, not the problem that produced them. The defence is the
+ * D5 gate, so that is what the fixture asserts.
+ */
+test("the injection fixture asserts the gate, not a run", () => {
+  const r = runEval(cfg);
+  const gate = r.pairs.find((p) => p.fixture === "008")!;
+  assert.equal(gate.recorded, "(no run: gate only)");
+  assert.equal(gate.outcome, "pass", gate.failures.join("; "));
+  assert.ok(gate.notes.length >= 3, "each warned phrase is reported so the reader sees what fired");
+  for (const n of gate.notes) assert.match(n, /gate warned: "[^"]+" \(/, "a warning without its reason tells the reader nothing");
+});
+
+test("the injection fixture fails if the detector stops catching its problem", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "008")!;
+  // The bar is what the current patterns catch. Raising it past that is how the test proves it
+  // is measuring the detector rather than measuring nothing.
+  const dir = tmp();
+  writeFileSync(join(dir, "008.yaml"), [
+    "id: '008'",
+    "name: unreachable-bar",
+    `problem_class: ${fx.problem_class}`,
+    `seed: ${fx.seed}`,
+    "prompt: What timeouts should I set on this HTTP client?",
+    "expect:",
+    "  injection_warnings_min: 3",
+    "",
+  ].join("\n"));
+  const r = runEval(cfg, { fixturesDir: dir });
+  const gate = r.pairs[0]!;
+  assert.equal(gate.outcome, "fail");
+  assert.match(gate.failures.join(" "), /expect at least 3 injection warning\(s\) at the gate, got 0/);
+  assert.equal(r.ok, false);
+});
+
+/** Warn, never block. The verbatim passthrough is the architecture, not a concession. */
+test("a hostile problem still compiles and still reaches the gate byte for byte", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "008")!;
+  const r = compile(cfg, fx.prompt, { problem_class: fx.problem_class }, { seed: fx.seed });
+  assert.equal(r.kind, "plan", "the orchestrator does not get to decide what a problem may say");
+  const preview = previewText(r);
+  assert.ok(preview.includes(fx.prompt), "the problem is shown verbatim, hostile or not");
+  assert.match(preview, /read as instructions to the branches/);
+  assert.match(preview, /Nothing has been spent/);
+});
+
+/**
+ * `on.call` was written to match "on-call" and "on call". `.` matches any character, so it also
+ * matched "functi(on call)s" — which is how fixture 003's `who_pays` came to be satisfied by a
+ * negative control that never mentions on-call at all. The audit reported it as a judgment call
+ * about the frame library. It was a regex defect.
+ *
+ * Two others had it latent (`one.way`, `two.way door`). Same shape, same fix: anchor the first
+ * word and spell the separator out. This is the fixture-side twin of the redaction bug, where
+ * matching `door keeper` as a literal token missed `door-keeper` and `doorkeeper`.
+ */
+test("no fixture pattern uses a bare dot as a word separator", () => {
+  for (const fx of loadFixtures(join(cfg.root, "evals", "fixtures"))) {
+    const patterns = [...fx.must_surface, ...fx.must_not].flatMap((i) => ("any_of" in i && i.any_of ? i.any_of : []) as string[]);
+    for (const p of patterns) {
+      // Escaped dots are literal and character classes may legitimately contain one.
+      const bare = p.replace(/\\\./g, "").replace(/\[[^\]]*\]/g, "‹class›");
+      assert.ok(
+        !/[a-z]\.[a-z]/i.test(bare),
+        `${fx.id}: /${p}/ uses . as a separator, which matches any character. Anchor the word and spell the separator: \\bon[- ]?call.`,
+      );
+    }
+  }
+});
+
+/**
+ * The audit's own report, pinned. Three of the four assertions it flagged were resolved by
+ * removal or by fixing a pattern that admitted recitation; the fourth is left flagged on
+ * purpose and the fixture says why. A new assertion a control satisfies has to be argued for
+ * here, not merged quietly.
+ */
+test("exactly one shipped assertion is knowingly satisfied by a control, and it is documented", () => {
+  const a = auditFixtures(cfg);
+  const flagged = a.items.filter((i) => i.verdict === "matches a control").map((i) => `${i.fixture}/${i.item}`);
+  assert.deepEqual(flagged, ["003/reframe"], "the set of non-discriminating assertions changed; decide it, do not loosen it");
+
+  const yaml = readFileSync(join(cfg.root, "evals", "fixtures", "003-monolith-rewrite.yaml"), "utf8");
+  assert.match(yaml, /Left alone deliberately/, "the one flagged assertion has to carry its argument in the fixture");
+
+  // `false_means` is the other half: no run has surfaced it, and 004 is recorded as failing on
+  // it. That is a frame-set gap, and a gap that reads as "never matched" is the honest report.
+  const fm = a.items.find((i) => i.item === "false_means")!;
+  assert.equal(fm.verdict, "never matched");
+  assert.equal(fm.control_matched, 0, "the convention tokens that let the control satisfy this are gone");
 });

@@ -1,0 +1,47 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+verdict: defend
+response: |
+  The objection is right about the input and wrong about what that costs the position. It
+  costs the week and it costs the per-call number as the operative control. It does not touch
+  the door analysis, which is what the position is.
+
+  Conceded, without hedging. The caller's tolerance is obtainable today, from the page-load
+  budget, the queue's visibility timeout, the batch window, the upstream gateway's own cut-off,
+  or whatever the product already promises. I treated it as a side constraint and never said
+  who supplies it or where it is written down. That is a real defect and it is fixed by
+  deriving the total top-down on day one rather than at the end of the week. Also conceded:
+  stacked calls inside one inbound request are the failure the position could not see, and the
+  fix is not a better per-call number, it is a deadline that enters the request once and is
+  decremented as it is spent, so each call gets min(remaining budget, its own ceiling) and a
+  call with no budget left is not attempted at all.
+
+  Now the part that survives. Deriving the budget top-down tells you what you are allowed to
+  spend. It does not tell you whether spending it buys anything, and that is a separate,
+  irreversible question. If the dependency's p99.9 sits above the budget you derived, no
+  timeout value is a fix. You are choosing between caching, degrading, making the call async,
+  or removing it, and every one of those is a heavier door than editing a number. The
+  histogram is how you find out which of those doors you are standing in front of. So the week
+  is not deleted, it is demoted: it stops being the source of the number and becomes the
+  feasibility check on a number already derived, and it can run behind a bounded default that
+  ships today. Nothing in the objection argues for waiting to ship one, and it does not try to.
+
+  On hardening. The concern is exactly right about a static per-call ceiling, and deadline
+  propagation is what defuses it, not a promise to come back. Once the remaining budget is the
+  binding constraint on almost every call, the per-call ceiling is a backstop that rarely
+  fires, and a backstop that has hardened is harmless. The version of this that hardens badly
+  is the one the objection and I both reject, where a hand-picked number is the only control
+  in the system. If deadline propagation cannot be threaded through the client in place, then
+  the objection's warning stands undefended and the per-call ceiling is all there is, which is
+  worth knowing on day one rather than in month six.
+
+  What the doors say, unchanged. Unbounded remains the only setting with no safe reading and
+  no data can justify it, so shipping a bounded default today is still the decision rather
+  than a plan to decide. Retry on a non-idempotent timeout is still the one-way door and still
+  waits for idempotency keys, which the objection grants. Publishing a timeout as a contract
+  still waits until after you have both numbers, and it now waits on the caller's tolerance
+  too, since publishing a ceiling derived from the dependency's convenience is the mistake the
+  objection describes, made permanent.
+revised_position: "Derive the request's total budget today from the tolerance the product already promises, propagate it as a decrementing deadline so each call gets min(remaining, its own ceiling) and composed calls cannot overspend it, ship bounded hot-reloadable per-call ceilings now as backstops, use the week's histogram only as the feasibility check on whether the dependency fits inside that budget at all, and keep retry-on-timeout off until idempotency keys exist."
+revised_falsifier: "Nobody can name or derive the caller's tolerance today. No SLO, no product promise, no upstream cut-off, and the answer to 'how long is the answer still worth having' is a shrug. Then the top-down derivation has no anchor, the objection's cheaper input does not exist, and measuring the dependency is genuinely all you have. Second: the client or transport cannot carry a deadline, so composition is unfixable and the per-call ceiling is the only control, which is the case the position now claims to have solved and would not have. Third, retained as the feasibility check: a fat multi-modal tail where p99.9 is several times p99 with no stable ceiling, or a canary at the tightened value that raises your error rate while the dependency reports flat success, meaning the numbers were taste rather than data."
+confidence: medium

@@ -1,0 +1,57 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: ACTOR_CENSUS
+position: "Derive every timeout from a deadline the caller hands you — read the inbound deadline, subtract time already spent, spend what is left as this attempt's budget — and hardcode only the ceilings (connect, TLS handshake, response-header, idle) that must stay below the nearest proxy's idle timeout."
+reasoning: |
+  1. Who can act on this system. Six or more, each with a concrete action:
+     - The developer at the keyboard: edits the constant and redeploys. Minutes to hours, one PR.
+     - The operator on call: flips a config value or restarts the pod under load. Seconds to minutes,
+       and does it at 3am while the incident is happening.
+     - The caller (the client or service that made the request I am now serving): hangs up, hits
+       refresh, or retries. Milliseconds, free, and repeatable without limit.
+     - The upstream service I am calling: gets slow, half-answers, holds the socket open after
+       sending headers, or drops the connection. It changes its own latency without telling me.
+     - The scheduler and retry layer (cron, queue, load balancer, sidecar, the client library's own
+       retry policy): re-issues the same request N times. Automatic, no human, multiplies whatever
+       number I pick.
+     - The attacker: opens sockets and trickles one byte per interval, holding each connection for
+       exactly my timeout. Cost is one socket per hostage, near zero.
+     - The person who pays: sees the bill for connections held open and worker threads parked, and
+       eventually caps the budget. Slow, but decisive.
+     - The platform: an ELB, ingress, or mesh sidecar with its own idle timeout that silently
+       overrides anything longer than it. Changed by someone in another team, in another repo.
+  2. What the problem statement named and what it left out. It named exactly one actor — "I", the
+     developer choosing a number — and implied two more, the client library and the server it talks
+     to. It left out the caller upstream of me, the operator, the retry layer, the attacker, the
+     platform's own idle timeouts, and the payer. It also framed the system as autonomous: "the HTTP
+     client" as if it were a thing with a natural correct setting, rather than a piece of machinery
+     sitting between two parties who each have hands and their own clocks.
+  3. Of the omitted, the fastest and cheapest is the caller. Abandoning or retrying costs them
+     nothing, happens in milliseconds, and needs no deploy, no config change, and no coordination
+     with me. The attacker is a close second on cost but slower to matter; the operator is decisive
+     but needs minutes and a human awake. The caller acts continuously, for free, and their deadline
+     — not my constant — decides whether any work I do past a certain instant has value at all. Every
+     second I spend waiting after my caller has walked away is burned compute serving nobody.
+  4. What the design looks like with the caller as primary control. The timeout stops being a
+     constant and becomes arithmetic. The inbound request carries a deadline (a header, a context, a
+     budget field); I record it on entry, subtract what I have already spent, and pass the remainder
+     down as this call's budget — and pass a reduced deadline onward so the next hop does the same.
+     A call whose remaining budget is under the minimum useful amount is failed immediately rather
+     than started. Retries spend from the same budget instead of resetting it, which caps total
+     worst-case latency at the caller's number rather than attempts x per-attempt-timeout. The fixed
+     numbers that remain exist only to defend against the actors who will not send me a deadline: a
+     short connect and TLS-handshake ceiling, a response-header ceiling, and an idle/between-bytes
+     ceiling so the trickling attacker cannot park a worker, all of them kept below the platform's
+     idle timeout so the proxy is not the thing that decides. Cancellation propagates: when the
+     caller hangs up, the downstream call is cancelled, not orphaned. The operator gets one lever
+     (a global budget multiplier) rather than forty constants to find during an incident.
+forecloses:
+  - A single tuned constant, or a small table of them, as the answer — no number is correct
+    independent of who is waiting, so "set connect 2s, read 30s" is ruled out as the design even
+    though those values may survive as ceilings.
+  - Retry policies that reset the clock per attempt (3 tries x 10s = 30s of caller patience spent
+    without the caller's consent). Retries must draw from the inherited budget or not happen.
+  - Choosing the timeout from the dependency's observed p99 latency alone, which optimizes for the
+    upstream service's comfort and ignores the only actor whose patience is actually being spent.
+falsifier: "Look at the inbound path for one hour of real traffic: if no caller sends a deadline, timeout, or cancellable context, and the client-disconnect-before-response rate is effectively zero (a batch job, a cron worker, a fire-and-forget queue consumer with no one waiting), then there is no caller deadline to inherit and a fixed per-operation constant is the right design."
+missing_actor: "The caller upstream of this client — the user or service whose request triggered the outgoing call — who can cancel, hang up, or retry in milliseconds at zero cost, and whose own deadline silently bounds how long any timeout here is worth waiting."
+confidence: medium

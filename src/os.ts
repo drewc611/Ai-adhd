@@ -10,7 +10,9 @@
 //
 // State lives on disk: <root>/<run_id>/os.json and <root>/journal.jsonl. Writes are atomic
 // (tmp + rename) and serialised through a directory lock so several hosts can share a root.
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync, appendFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, appendFileSync } from "node:fs";
+import { hostname } from "node:os";
+import { parse as parseYaml } from "yaml";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import type { Config } from "./config.js";
@@ -112,20 +114,64 @@ export class Kernel {
 
   // ---- locking and persistence ------------------------------------------------------------
 
+  /** No critical section here does network or model work, so anything this old is dead. */
+  private static readonly LOCK_STALE_MS = 120_000;
+
+  /**
+   * Is the process that stamped this lock still running? Only meaningful on the machine that
+   * wrote it, so the hostname is recorded and checked. EPERM means alive but not ours.
+   */
+  private static ownerAlive(owner: { pid: number; host: string } | null): boolean | null {
+    if (!owner || owner.host !== hostname()) return null;
+    try {
+      process.kill(owner.pid, 0);
+      return true;
+    } catch (e) {
+      return (e as NodeJS.ErrnoException).code === "EPERM";
+    }
+  }
+
+  /**
+   * Whole-root mutex. `mkdir` is atomic, so acquisition is safe; breaking a held lock is the
+   * dangerous part. Breaking on age alone is a real race: a holder that is merely slow, on a
+   * loaded box or a paused container, gets its lock stolen and two processes then run inside
+   * it at once. So a lock is broken only when its owning process is known dead, or when it is
+   * old enough that nothing legitimate could still be holding it. Every break is journalled,
+   * because a broken lock is the kind of event that explains a corrupted run an hour later.
+   */
   private withLock<T>(fn: () => T): T {
     const lock = join(this.root, ".lock");
+    const ownerFile = join(lock, "owner.json");
     const deadline = Date.now() + 10_000;
     for (;;) {
       try {
         mkdirSync(lock);
+        writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, host: hostname(), at: new Date().toISOString() }));
         break;
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-        // Stale lock from a crashed process: older than 30s.
+        let owner: { pid: number; host: string } | null = null;
         try {
-          if (Date.now() - statSync(lock).mtimeMs > 30_000) rmdirSync(lock);
+          owner = JSON.parse(readFileSync(ownerFile, "utf8")) as { pid: number; host: string };
         } catch {
-          /* raced; retry */
+          /* being written right now, or written by an older version; fall back to age */
+        }
+        const alive = Kernel.ownerAlive(owner);
+        let ageMs = 0;
+        try {
+          ageMs = Date.now() - statSync(lock).mtimeMs;
+        } catch {
+          continue; // vanished under us; retry the mkdir
+        }
+        const deadOwner = alive === false;
+        const tooOld = ageMs > Kernel.LOCK_STALE_MS;
+        if (deadOwner || tooOld) {
+          try {
+            rmSync(lock, { recursive: true, force: true });
+            this.journal("lock_broken", { reason: deadOwner ? "owner process is gone" : `held ${Math.round(ageMs / 1000)}s`, owner });
+          } catch {
+            /* raced with the owner releasing it; retry */
+          }
         }
         if (Date.now() > deadline) throw new RunAbort("kernel lock held for more than 10s", "LOCK_TIMEOUT");
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
@@ -135,11 +181,34 @@ export class Kernel {
       return fn();
     } finally {
       try {
-        rmdirSync(lock);
+        rmSync(lock, { recursive: true, force: true });
       } catch {
         /* already gone */
       }
     }
+  }
+
+  /**
+   * Does this artifact answer the task it was returned for? Compares the labels the artifact
+   * declares about itself against what the task asked for. A parse failure is not decided here:
+   * the phase validator reports malformed YAML far better than this can.
+   */
+  private static misdirected(task: Task, text: string): string[] {
+    let doc: unknown;
+    try {
+      doc = parseYaml(text);
+    } catch {
+      return [];
+    }
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) return [];
+    const d = doc as Record<string, unknown>;
+    const problems: string[] = [];
+    if (typeof d.frame === "string" && (task.phase === "diverge" || task.phase === "deepen") && d.frame !== task.label)
+      problems.push(`task ${task.id} asked for frame ${task.label} but the artifact declares frame ${d.frame}; a worker returned one subagent's output under another's task`);
+    const wantPass = task.phase === "critique_a" ? "A" : task.phase === "critique_b" ? "B" : null;
+    if (wantPass && typeof d.pass === "string" && d.pass.toUpperCase() !== wantPass)
+      problems.push(`task ${task.id} is critic pass ${wantPass} but the artifact declares pass ${d.pass}`);
+    return problems;
   }
 
   private recordPath(runId: string) {
@@ -300,11 +369,21 @@ export class Kernel {
       const task = rec.tasks.find((t) => t.id === taskId);
       if (!task) throw new ContractError("return", [`no task ${taskId}`]);
       if (task.status !== "leased") throw new ContractError("return", [`task ${taskId} is ${task.status}, not leased`]);
+      // An omitted worker id used to skip this check entirely, so any process could return a
+      // task it did not hold. A lease means one subagent owns one brief; returning someone
+      // else's work silently breaks that, so the id is required whenever a lease names one.
+      if (task.worker && !worker) throw new ContractError("return", [`task ${taskId} is leased to ${task.worker}; pass that worker id to return it`]);
       if (worker && task.worker !== worker) throw new ContractError("return", [`task ${taskId} is leased to ${task.worker}, not ${worker}`]);
       // The artifact file holds the YAML the phase will parse. If the worker's message carried
       // anything outside the fence (a sources line, a sign off), the message is kept whole
       // beside it so nothing a subagent said is lost.
       const clean = unfence(output);
+      // A worker holds several subagents at once and maps task ids to them. One wrong entry in
+      // that map returns the right YAML under the wrong task, and the artifact lands in another
+      // frame's file. Nothing downstream can catch it: the run keeps going and attributes a
+      // position to a frame that never held it, which is the one thing the isolation contract
+      // is supposed to guarantee. The task knows what it asked for, so check it here.
+      for (const p of Kernel.misdirected(task, clean)) throw new ContractError("return", [p]);
       writeFileSync(join(this.runDir(runId), task.artifact_path), clean.endsWith("\n") ? clean : clean + "\n");
       if (clean !== output) writeFileSync(join(this.runDir(runId), task.artifact_path + ".raw.md"), output);
       task.status = "done";

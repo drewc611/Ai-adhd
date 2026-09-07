@@ -1,0 +1,59 @@
+# Second blind pass A over the same artifact pack as pass-a.yaml, by a fresh critic in a
+# separate context window. Produced 2026-09-07 from critic/pass-a.brief.md verbatim, with the
+# critic instructed to read that file and nothing else. It is evidence about the rubric, not
+# part of this run: the run shipped on pass-a.yaml and score.json is unchanged.
+#
+# Read it with: adhd learn --run evals/recorded/002-first-run --agreement <this file>
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence, two joined imperatives (overlay the timestamps, put a knob on each), and no hedge or return of the choice to the reader." }
+    foreclosure: { score: 2, evidence: "Rules out autoscaling-first and hotfix-deploy-first in concrete terms, but the third item (assuming the fault is inside the process) rules out a posture rather than a specific tempting action." }
+    falsifiability: { score: 3, evidence: "Plotting spike-to-spike intervals against volume is cheap, already available from the same dashboard, and a load-tracking interval would kill the clock-overlay position outright." }
+    specificity: { score: 1, evidence: "Delete the 40-minute period, p99, and the API and the whole passage still reads as a generic on-call runbook for any periodic symptom; only the phrase \"anything with a 40 minute period\" touches the instance." }
+    assumption_attack: { score: 1, evidence: "The third foreclosure names the assumption that the fault is inside the API process, but the reasoning never tests it and the four probes accept the question's \"where to look\" frame." }
+    reasoning_carries: { score: 3, evidence: "No authorities, citations, or appeals to practice appear anywhere; every claim is carried by the stated mechanism of a clock firing against a request path." }
+    actor_coverage: { score: 2, evidence: "The scheduler or shared-dependency owner is named with real actions (pause, reschedule, jitter), but the position is written so the on-call flips their own knob, so it does not depend on that actor." }
+    reversibility: { score: 3, evidence: "The position is a sequence built on the distinction: runtime knob over deploy because \"a deploy under alert is its own outage\", one period per candidate, flip the switch back and try the next." }
+    substance: { score: 2, evidence: "Flattened to \"line up spikes with your periodic jobs and make each one pausable so you can test by turning it off\", it is still worth saying, though the 3am-on-call framing carries much of the force." }
+  B:
+    committal: { score: 3, evidence: "One sentence that orders a single measurement first, and its two branches are selected by an observation rather than handed back to the reader as a choice." }
+    foreclosure: { score: 3, evidence: "It rules out the single most tempting move (suspect a cron or timer) by argument, plus capacity-first and downstream-first, all in concrete terms." }
+    falsifiability: { score: 3, evidence: "Checking whether the gap holds at 40:00 across trough and peak, plus an inventory of 60-minute credential lifetimes, is cheap and would kill both named mechanisms at once." }
+    specificity: { score: 3, evidence: "The entire chain runs on the number 40, the words \"or so\", and the p99-without-p50 detail; remove any of the three and the reasoning has nothing left to say." }
+    assumption_attack: { score: 3, evidence: "It names the buried assumption that \"or so\" is the asker's imprecision rather than a system property, and the answer literally forks on the result of testing it." }
+    reasoning_carries: { score: 3, evidence: "No citation or authority is invoked; the cron-spelling argument and the stall-shorter-than-a-request argument stand entirely on their own." }
+    actor_coverage: { score: 2, evidence: "The datastore or storage operator is named with a concrete action (line up checkpoint and vacuum logs against the timestamps), but the position runs on local timestamps and does not depend on them." }
+    reversibility: { score: 1, evidence: "It orders steps by observation cost (\"the discriminating observation costs less than opening the GC logs\") but never distinguishes reversible probes from committed changes." }
+    substance: { score: 3, evidence: "Stripped flat to \"if the period drifts with load it is a fill-and-flush, if it is pinned it is a credential refresh at two-thirds of a 60-minute lifetime\", it is the same non-obvious claim." }
+  C:
+    committal: { score: 3, evidence: "One sentence with a hard ordering (\"before touching any tuning knob\") and a stated decision rule, with no hedge." }
+    foreclosure: { score: 3, evidence: "It rules out GC and pool tuning first, taking the dashboard's period as fact, and autoscaling on an unattributed tail, all of which a competent engineer would otherwise reach for." }
+    falsifiability: { score: 2, evidence: "Even spread across all four partitions is a real observation that would kill the method, but the artifact itself concedes the per-caller and per-span records may not exist, making it potentially expensive to obtain." }
+    specificity: { score: 1, evidence: "The four-axis partition method reads unchanged for any unexplained tail-latency mystery; only the batch-caller scenario and the small-sample p99 remark lean on the 40 minutes and the p99." }
+    assumption_attack: { score: 3, evidence: "It names the three assumptions behind the obvious answer, attacks each with a concrete production case, and the position (verify the spikes in raw records before hypothesizing) follows directly from the clock-lies attack." }
+    reasoning_carries: { score: 3, evidence: "No authority is cited anywhere; the dependency, clock, and caller attacks each carry their own causal argument." }
+    actor_coverage: { score: 2, evidence: "The largest caller's team is named with a real action (confirm or stagger a 40-minute batch), but they matter only if the caller axis is the one that concentrates, so the position does not rest on them." }
+    reversibility: { score: 2, evidence: "It orders observation before any knob and ranks failure modes by cheap-to-cause versus expensive-to-recover, using that asymmetry to sequence the work rather than merely noting it." }
+    substance: { score: 3, evidence: "Flattened to \"pull raw traces at the spike times and see which of caller, endpoint, instance, or span concentrates the slow requests\", the claim survives intact without the lying-witness framing." }
+  D:
+    committal: { score: 3, evidence: "One sentence naming exactly two curves to overlay and a decision rule (whichever sawtooth resets at the spike), with the reason attached and no escape hatch." }
+    foreclosure: { score: 3, evidence: "It rules out scaling out, hunting cron or timers, and tuning timeouts and retries, each with the concrete reason the move cannot touch a per-instance fill-and-flush." }
+    falsifiability: { score: 3, evidence: "Comparing the period at peak against the quietest hour is a free dashboard read, and a period identical to the second would destroy the buffer explanation." }
+    specificity: { score: 2, evidence: "The stock-and-flow walk through listener, pool, heap, and memtable would fit any tail-latency question, but the discriminator section bends hard around \"or so\" and around forty not being a number anyone types into a schedule." }
+    assumption_attack: { score: 2, evidence: "It names and argues against the assumption that a period implies a schedule, but the argument is asserted from the drift property rather than tested, and the test is deferred to the falsifier." }
+    reasoning_carries: { score: 3, evidence: "Nothing is borrowed; the whole chain is capacity divided by fill rate, shared stalls, and queueing at a frozen boundary." }
+    actor_coverage: { score: 3, evidence: "The datastore or runtime operator is named with three concrete levers (checkpoint threshold, promotion rate, staggered max-lifetimes), and the position's fix (smaller batches, not more fleet) can only be executed by them." }
+    reversibility: { score: 0, evidence: "Nothing anywhere separates a cheap reversible probe from an expensive committed change; the recommendation to shrink flush amplitude is offered with no note of what it costs to undo." }
+    substance: { score: 3, evidence: "Flat, \"a drifting ~40 minute period is a buffer filling and draining, so find the metric that sawtooths and resets at the spike\" is the same claim and still worth making." }
+  E:
+    committal: { score: 3, evidence: "One sentence, an explicit refusal (\"stop looking\") plus a concrete procedure of shifting each schedule by an odd offset, with no hedge back to the reader." }
+    foreclosure: { score: 3, evidence: "It rules out the near-universal reflex of instrumenting or profiling first, plus scaling and slow-endpoint optimization, each named as a specific next step not to take." }
+    falsifiability: { score: 3, evidence: "Writing down 24 hours of spike timestamps costs nothing, and scattered intervals tracking request volume would show there is no clock to move." }
+    specificity: { score: 1, evidence: "The perturb-instead-of-observe method would read identically for any periodic symptom; only the passing remarks that 40 is an unusual cron cadence and that \"or so\" means unmeasured touch this instance." }
+    assumption_attack: { score: 3, evidence: "It isolates the assumption inside the words \"where should I look\" (that the cause is a place found by inspection), argues who benefits from it staying unexamined, and the entire position is what follows once it is rejected." }
+    reasoning_carries: { score: 3, evidence: "No citation or authority appears; the argument rests on periods being properties of schedulers rather than of noisy diurnal traffic." }
+    actor_coverage: { score: 3, evidence: "The platform team is named with a specific deliverable (every timer with its period and phase, and a shift on request), and the position's manipulation step cannot run without them." }
+    reversibility: { score: 1, evidence: "It gestures at caution with \"one per hour or one per day if you must be careful\" but never frames schedule shifts as cheap and reversible against anything expensive or committed." }
+    substance: { score: 3, evidence: "Stripped of the cui bono framing, \"shift each timer's schedule and see which shift drags the spike with it\" is the same claim and still the useful one." }

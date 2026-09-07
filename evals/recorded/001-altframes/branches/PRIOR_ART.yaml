@@ -1,0 +1,75 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: PRIOR_ART
+position: Set one deadline for the whole request where it enters the system, pass the remaining budget down into every outbound call, and abandon any call whose remaining budget has fallen below the reserve you need to fail gracefully, instead of assigning each HTTP call its own timeout number.
+reasoning: |
+  1. The abstract shape. This is not a networking question. It is: how long do you keep
+  waiting on an unreliable counterparty before you declare failure and act, when waiting
+  costs something, when giving up early also costs something, when the waiting is drawn
+  from a shared and finite supply, and when a failure declared too late is strictly worse
+  than the original failure. The question as asked ("what timeouts", plural, on this one
+  client) already assumes the answer is a set of per-leg numbers chosen by whoever owns
+  the leg.
+
+  2. Who has had this longer. Aviation fuel and diversion planning has had it since the
+  1930s: how long may we hold before we must divert, and who decides. Emergency medicine
+  has had it since resuscitation became routine: how long do we run the code. Maritime
+  search and rescue has it as "when do we suspend the search". All three are older than
+  packet networks and none of them are software.
+
+  3. What they converged on, and what they threw away first.
+
+  Aviation converged on a single budget for the entire trip, computed once before
+  departure and consumed continuously: trip fuel, plus contingency, plus alternate fuel,
+  plus a final reserve (ICAO: 30 minutes at holding speed at 1,500 ft) that you are never
+  permitted to plan into. There are named commit points along the way where the decision
+  is already made rather than re-litigated. And when the budget approaches reserve you
+  declare it upward in fixed words — "MINIMUM FUEL", then "MAYDAY FUEL" — so the wider
+  system reallocates priority to you.
+
+  Three things they tried and buried to get there. First, leaving "how much longer do we
+  hold" to the judgment of the person in the seat: United 173 held over Portland for an
+  hour in 1978 troubleshooting a gear light while the flight engineer's fuel warnings were
+  heard and not acted on, and ten people died. The fix was not a better captain; it was
+  mandatory callouts and CRM. Second, informal ways of saying you were low: Avianca 052
+  held 1h17m over New York in 1990, never used words that meant emergency, ATC treated it
+  as ordinary delay, 73 died — and ICAO standardised the declaration afterwards. Third,
+  flat rule-of-thumb margins: EASA's 2022 fuel/energy scheme lets an operator replace the
+  fixed 5% contingency with statistically derived contingency, but only if it actually
+  measures its own burn, and the 30-minute final reserve stays untouchable either way.
+
+  Medicine ran the same arc and landed in the same place. "Run the code until the team
+  leader feels done" was replaced from 2002 onward by explicit Termination of
+  Resuscitation rules — BLS and ALS TOR criteria with better than 99% predictive value for
+  futility — a stopping rule written down in advance, not improvised at the bedside by the
+  person most invested in continuing.
+
+  Translated into this problem: the budget is set by how long your caller will wait, not by
+  how slow your dependency is. Stamp an absolute deadline at the edge. Subtract elapsed
+  time before every downstream call and pass the remainder as that call's timeout. Hold
+  back a fixed reserve — enough to emit the fallback, the error, and the log line — and
+  treat it as unspendable. Retries are a second holding pattern and burn the same budget,
+  not a fresh one. And tell the caller you are giving up, in a form it can act on, rather
+  than dropping the connection.
+
+  The asker is standing on the discarded attempts. "What timeouts should I set on this
+  client" is per-leg discretion, tuned to the dependency's own p99, with no total budget
+  and no reserve. That is pre-CRM cockpit practice with a config file.
+
+  4. What breaks the analogy. Fuel is conserved and burned monotonically; a request can
+  fan out in parallel, so budget across parallel legs is a max, not a sum — different
+  arithmetic, same structure. Failure here is cheap, nobody dies, so the reserve is
+  milliseconds rather than 30 minutes, but it is still non-zero. The disanalogy that cuts
+  the other way strengthens the position: an aircraft carries its own fuel, whereas a
+  server's waiting capacity is shared, so a pool slot or thread held by one slow call is
+  denied to every other request — an over-long hold kills one aircraft, an over-long
+  timeout takes down the whole service. The one place the analogy genuinely fails is a
+  client with no inbound caller at all: a cron job, a CLI, a batch loader has no patience
+  to derive a deadline from, and there per-call numbers are the only thing available. That
+  is the boundary of this position, not an exception inside it.
+forecloses:
+  - A per-dependency timeout table tuned to each dependency's own observed latency (connect 2s / read 30s per service), because the number that matters is what remains of the caller's budget at the moment of the call, not what that dependency usually does.
+  - Retries that each receive a fresh full timeout, which lets a single request consume timeout x (attempts + 1); under a propagated budget a retry is only attempted if the remaining budget covers it.
+  - Leaving the wait length to the client library's default or to the dependency team's opinion, including any unbounded or absent read timeout.
+falsifier: For one day, log two numbers at every outbound call - milliseconds elapsed since the request entered the system, and whether the originating caller is still connected when the call returns. If fewer than about 1% of calls would have been cut short by an end-to-end budget (the per-call timer essentially always fires first) and callers are essentially always still waiting, then the per-call numbers already are the budget, and propagation buys nothing here.
+missing_actor: The owner of the edge - the load balancer, ingress proxy, or API gateway sitting in front of this client - whose own timeout already caps the whole request. They can stamp an absolute deadline header on every inbound request and enforce it, which is what makes budget propagation possible at all; today they cut the connection without telling anything downstream, so this client keeps working on a request nobody is waiting for. They are the ATC in the analogy - the party that reallocates priority once you declare.
+confidence: medium

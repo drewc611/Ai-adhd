@@ -29,6 +29,7 @@ returning artifacts.
 | process | a run directory with `os.json` |
 | process state | `awaiting_confirm`, `diverge`, `critique_a`, `critique_b`, `deepen`, `done`, `done_run_level`, `cancelled`, `aborted` |
 | thread | a task: one brief, one agent type, one artifact path |
+| mutex | `.lock`, a directory in the kernel root, stamped with the owning pid and host |
 | scheduler | `claim` hands out the oldest pending task under a lease |
 | preemption | lease expiry returns the task to the queue; the third expiry aborts the run |
 | syscall | an MCP tool or `adhd os <verb>` |
@@ -57,6 +58,18 @@ phase functions.
 | `adhd_log` / `adhd os log` | the journal lines for one run |
 | `adhd_record` / `adhd os record` | promote a finished run into `evals/recorded/` with provenance generated from the journal and an `expected.json` recording the eval outcome as observed |
 | `adhd os reap` | expire leases (also runs on every claim, status, and list) |
+
+### Two roots, and why they are named apart
+
+Every kernel tool takes both. `root` is the repository root holding `config/` and `prompts/`;
+`os_root` is the kernel's runs directory (default `$ADHD_OS_ROOT`, else `./runs`).
+
+They were both called `root` and meant different things depending on which tool you called: the
+repository root in `adhd_run`, `adhd_traps`, `adhd_eval` and `adhd_frames`, the runs directory in
+the ten kernel tools. A host that passed its repository root to `adhd_submit`, reasonably, got
+that directory treated as the runs root and never learned it had. The kernel tools now take
+`os_root` for the runs directory and `root` means the same thing everywhere. A host that was
+passing `root` to a kernel tool must rename it.
 
 `return` accepts `tokens`, the usage the subagent reported. When a run finishes the kernel sums
 reported tokens by phase into `cost.json`, so the synthesis shows real spend when workers
@@ -91,3 +104,30 @@ with its preview and estimate in `status` until someone confirms or cancels it, 
 before confirm spends nothing. After confirm, `cancel` at any state renders the returned
 branches unscored with the `UNSCORED, divergence only` label. Lease expiry cannot spend more
 than three attempts per task.
+
+## Two invariants the kernel enforces mechanically
+
+**One task, one worker.** `claim` and `return` both run inside a whole-root mutex built on
+`mkdir`, which is atomic, so two workers can never be handed the same task. Six processes
+racing for one run is a test, not a hope (`test/os.test.ts`).
+
+Breaking a held lock is the dangerous half. Breaking on age alone is a race: a holder that is
+merely slow, on a loaded box or a paused container, gets its lock stolen and two processes then
+run inside the mutex at once. So the lock records the owning pid and hostname, and is broken
+only when that process is known dead, or when it is older than two minutes, which no critical
+section here can reach because none of them do network or model work. Every break is journalled
+as `lock_broken`, since a stolen lock is the kind of event that explains a corrupted run an
+hour later.
+
+**An artifact answers the task it was returned for.** A worker holds several subagents at once
+and maps task ids to them; the worker skill says so explicitly. One wrong entry in that map
+returns the right YAML under the wrong task, and the artifact lands in another frame's file.
+Nothing downstream can catch that: the run continues and attributes a position to a frame that
+never held it, which is precisely what the isolation contract exists to guarantee. So `return`
+compares what the artifact declares about itself, its `frame` for a branch or deepen task and
+its `pass` for a critic task, against what the task asked for, and rejects a mismatch before
+writing anything.
+
+**A lease is ownership.** Returning a task requires naming the worker that holds it. Omitting
+the worker id used to skip the check, so any process could return work it did not do; a lease
+means one subagent owns one brief, and a return from anyone else silently breaks that.

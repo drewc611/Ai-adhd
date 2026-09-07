@@ -41,7 +41,7 @@ test("contract violation prunes without a critic verdict", () => {
 });
 
 test("monoculture: one cluster holds >= 80% of branches; deepen refused", () => {
-  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "HORIZON", "MINIMALIST"];
+  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "SUCCESSOR", "MINIMALIST"];
   const pb = passB(H, [{ id: "same", members: frames.slice(0, 4) }, { id: "other", members: [frames[4]!] }]);
   const r = scoreRun(cfg, frames.map((f) => ok(f)), null, pb, []);
   assert.equal(r.run_level.monoculture, true);

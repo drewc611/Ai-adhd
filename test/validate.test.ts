@@ -1,7 +1,8 @@
 import { test } from "node:test";
+import { stringify } from "yaml";
 import assert from "node:assert/strict";
 import { artifact, cfg, passA, passB, yaml } from "./helpers.js";
-import { validateBranchArtifact, validatePassA, validatePassB, checkBlind } from "../src/validate.js";
+import { validateBranchArtifact, validatePassA, validatePassB, checkBlind, redactFrameLabels, unfence } from "../src/validate.js";
 import { HashMismatch, ContractError } from "../src/errors.js";
 
 const H = "sha256:" + "a".repeat(64);
@@ -54,8 +55,99 @@ test("pass B: every (branch, trap) record required; clusters partition the frame
   assert.throws(() => validatePassB(yaml(orphan), H, frames), /SABOTEUR is in no cluster/);
 });
 
-test("checkBlind catches frame ids and a frame field", () => {
-  const ids = cfg.frames.frames.map((f) => f.id);
-  assert.deepEqual(checkBlind("### Artifact A\nposition: do x", ids), []);
-  assert.ok(checkBlind("### Artifact A\nframe: LEDGER", ids).length >= 2);
+test("checkBlind catches frame ids, frame display names, and a frame field", () => {
+  const frames = cfg.frames.frames;
+  assert.deepEqual(checkBlind("### Artifact A\nposition: do x", frames), []);
+  assert.ok(checkBlind("### Artifact A\nframe: LEDGER", frames).length >= 2);
+  // The leak that only checking ids left open: a branch naming its frame the way a brief prints it.
+  const byName = checkBlind("### Artifact A\nreasoning: From inside the Door keeper stance, sort the moves.", frames);
+  assert.ok(byName.some((p) => /Door keeper/.test(p)), "a display name identifies the frame as surely as its id");
+  assert.ok(checkBlind("### Artifact A\nreasoning: Reading it as the Ledger, someone pays.", frames).some((p) => /Ledger/.test(p)));
+});
+
+test("a label the problem itself uses is not a leak, because every branch may echo the problem", () => {
+  const frames = cfg.frames.frames;
+  const text = "### Artifact A\nreasoning: The mechanic cannot see the dashboard from the bay.";
+  assert.ok(checkBlind(text, frames).some((p) => /Mechanic/i.test(p)), "without the problem it reads as a label");
+  assert.deepEqual(
+    checkBlind(text, frames, { problem: "How should the mechanic see the dashboard?" }),
+    [],
+    "with the problem in hand the same word discriminates nothing",
+  );
+});
+
+test("redaction strips ids and names, keeps one frame's own label, and leaves problem words alone", () => {
+  const frames = cfg.frames.frames;
+  const text = "LEDGER says the Door keeper is wrong, and the Successor view agrees.";
+  const all = redactFrameLabels(text, frames);
+  assert.ok(!/LEDGER|Door keeper|Successor/i.test(all), `still leaking: ${all}`);
+  const kept = redactFrameLabels(text, frames, { keep: "SUCCESSOR" });
+  assert.match(kept, /Successor view/, "the survivor keeps its own label");
+  assert.ok(!/Door keeper/i.test(kept), "but not a sibling's");
+  const echoed = redactFrameLabels("The ledger is already reconciled.", frames, { problem: "Is the ledger reconciled?" });
+  assert.match(echoed, /ledger is already reconciled/, "a word the problem uses survives redaction");
+});
+
+test("a detector that fires on evidence too thin to be an argument rejects the pass", () => {
+  const H = "sha256:" + "a".repeat(64);
+  const frames = ["LEDGER", "MECHANIC"];
+  const build = (evidence: string) => {
+    const traps: Record<string, Record<string, { fired: boolean; evidence: string }>> = {};
+    for (const f of frames) {
+      traps[f] = {};
+      for (const t of ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"])
+        traps[f]![t] = f === "LEDGER" && t === "T1" ? { fired: true, evidence } : { fired: false, evidence: "not fired" };
+    }
+    return stringify({
+      problem_hash: H,
+      pass: "B",
+      clusters: [
+        { id: "a", action: "do a", members: ["LEDGER"], singleton: true, strongest_objection: null },
+        { id: "b", action: "do b", members: ["MECHANIC"], singleton: true, strongest_objection: "an objection" },
+      ],
+      traps,
+      run_level: {
+        T2_no_branch_attacked_assumption: { fired: false, evidence: "one branch did" },
+        T6_all_missing_actor_null: { fired: false, evidence: "all named an actor" },
+      },
+      lint_verdicts: [],
+    });
+  };
+  // Thin: a verdict wearing the word "evidence". Pruning a frame on this defeats the detectors.
+  assert.throws(() => validatePassB(build("yes, T1"), H, frames, 12), /fired on 2 word\(s\) of evidence/);
+  // Argued: the shape every fired record in the recorded runs actually has.
+  const real = "Delete the three most specific details from the prompt and this position is unchanged, because nothing in it depends on them.";
+  assert.doesNotThrow(() => validatePassB(build(real), H, frames, 12));
+  // The floor is opt-in: zero means the check is off, which is what an older config gets.
+  assert.doesNotThrow(() => validatePassB(build("yes, T1"), H, frames, 0));
+});
+
+test("unfence is linear on every fence CodeQL called out, and reads the shapes subagents write", () => {
+  // unfence runs on the final message of every subagent, so its input is untrusted by
+  // construction. Each regex spelling of this had two quantifiers that could match the same
+  // character, and CodeQL named three witnesses for it. All three are checked here.
+  for (const [name, hostile] of [
+    ["newline run", "```\n" + "\n ".repeat(200_000)],
+    ["info string", "```" + "```yml".repeat(200_000)],
+    ["unclosed body", "```\n" + "```\na".repeat(200_000)],
+  ] as const) {
+    const started = Date.now();
+    unfence(hostile);
+    const ms = Date.now() - started;
+    assert.ok(ms < 500, `unfence took ${ms}ms on the ${name} witness; it should be linear`);
+  }
+  for (const [input, want] of [
+    ["```yaml\nfoo: 1\n```", "foo: 1"],
+    ["```yml\nfoo: 1\n```", "foo: 1"],
+    ["```\nfoo: 1\n```", "foo: 1"],
+    ["```yaml   \nfoo: 1\n```", "foo: 1"],
+    ["```yaml\na: 1\nb: 2\n```", "a: 1\nb: 2"],
+    ["```yaml\nfoo: 1\n```\n\nSources: [one](https://example.invalid)", "foo: 1"],
+    // No fence, or an unfinished one, means the message was not fenced: hand it back whole.
+    ["foo: 1", "foo: 1"],
+    ["```", "```"],
+    ["```yaml", "```yaml"],
+    ["```yaml\nno closing fence", "```yaml\nno closing fence"],
+  ] as const)
+    assert.equal(unfence(input), want, `unfence(${JSON.stringify(input)})`);
 });

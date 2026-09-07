@@ -9,6 +9,7 @@ import { compile, letterFor, previewText } from "./compile.js";
 import {
   checkBlind,
   checkBriefIsolation,
+  redactFrameLabels,
   parseDecision,
   validateBranchArtifact,
   validateDeepen,
@@ -27,6 +28,11 @@ export interface PhaseResult {
   text: string;
   /** Files the host must now act on, if any. */
   next?: { kind: "spawn"; agent: string; brief: string; artifact: string }[];
+  /**
+   * Where compile put the run. It was only ever in the prose, so a driver had to regex a path
+   * out of a sentence to find the directory it had just been told to use.
+   */
+  runDir?: string;
   exitCode: 0 | 1 | 2;
 }
 
@@ -56,7 +62,7 @@ export function loadPlan(runDir: string): Plan {
 
 // ---- compile ----------------------------------------------------------------------------
 
-export function phaseCompile(cfg: Config, args: CompileArgs): PhaseResult & { runDir?: string } {
+export function phaseCompile(cfg: Config, args: CompileArgs): PhaseResult {
   const problemBytes = readFileSync(args.problemPath); // exact bytes, never trimmed
   const problem = problemBytes.toString("utf8");
   const decision = parseDecision(cfg, args.decision);
@@ -118,8 +124,17 @@ function renderDetectors(trapsDoc: string): string {
   const re = /^## (T[1-8])\. ([^\n]+)\n([\s\S]*?)(?=^## |^---|\Z)/gm;
   for (const m of trapsDoc.matchAll(re)) {
     const body = m[3]!;
-    const det = body.match(/\*Detector:\*([\s\S]*?)(?=\n\n|$)/);
-    out.push(`   ${m[1]} ${m[2]!.trim()}. Detector:${det ? det[1]!.replace(/\s+/g, " ") : " (see docs/TRAPS.md)"}`);
+    // Index lookups rather than a lazy match with a lookahead: same result, and it cannot
+    // rescan from every position inside a run of "*Detector:*".
+    const MARK = "*Detector:*";
+    const at = body.indexOf(MARK);
+    let det: string | null = null;
+    if (at !== -1) {
+      const from = at + MARK.length;
+      const stop = body.indexOf("\n\n", from);
+      det = body.slice(from, stop === -1 ? undefined : stop);
+    }
+    out.push(`   ${m[1]} ${m[2]!.trim()}. Detector:${det !== null ? det.replace(/\s+/g, " ") : " (see docs/TRAPS.md)"}`);
   }
   return out.join("\n");
 }
@@ -176,10 +191,10 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
     const rng = mulberry32(deriveSeed(plan.seed, 2));
     const shuffled = shuffle(valid, rng);
     const blindMap: Record<string, string> = {};
-    const allIds = cfg.frames.frames.map((f) => f.id);
-    // A branch may name its own frame in prose ("from inside LEDGER"). Redact every frame id
-    // token from the text the pass A critic sees. checkBlind below is the backstop.
-    const redact = (text: string) => allIds.reduce((t, id) => t.replace(new RegExp(`\\b${id}\\b`, "g"), "[frame]"), text);
+    // A branch may name its own frame in prose ("from inside the Door keeper stance"). Redact
+    // every identifying label, id and display name alike, from the text pass A sees. Labels the
+    // problem itself uses are left alone: they cannot say which branch wrote the artifact.
+    const redact = (text: string) => redactFrameLabels(text, cfg.frames.frames, { problem });
     const blindArtifacts = shuffled.map((a, i) => {
       const L = letterFor(i);
       blindMap[L] = a.frame;
@@ -193,7 +208,7 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
       rubric: { dimensions: renderRubric(cfg) },
       artifacts_blind: blindArtifacts.join("\n\n"),
     });
-    const leaks = checkBlind(brief, cfg.frames.frames.map((f) => f.id));
+    const leaks = checkBlind(brief, cfg.frames.frames, { problem });
     if (leaks.length) throw new RunAbort(`pass A brief is not blind: ${leaks.join("; ")}`, "BLIND_LEAK");
     const briefPath = join(criticDir, "pass-a.brief.md");
     wr(briefPath, brief);
@@ -247,7 +262,7 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
   }
 
   // State 3: both present.
-  validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame));
+  validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame), cfg.rubric.hard_rules.min_evidence_words_on_fire);
   return { text: "critique complete. next: --phase deepen.", exitCode: 0 };
 }
 
@@ -262,7 +277,7 @@ export function computeScore(cfg: Config, runDir: string): { plan: Plan; score: 
   const valid = validArtifacts(branches);
   const blindMap = JSON.parse(rd(join(criticDir, "blind-map.json"))) as Record<string, string>;
   const passA = validatePassA(rd(join(criticDir, "pass-a.yaml")), plan.problem_hash, Object.keys(blindMap), cfg.rubric.dimensions.map((d) => d.id));
-  const passB = validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame));
+  const passB = validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame), cfg.rubric.hard_rules.min_evidence_words_on_fire);
   const lints = existsSync(join(criticDir, "lints.json")) ? (JSON.parse(rd(join(criticDir, "lints.json"))) as LintHint[]) : collectLints(branches);
   const score = scoreRun(cfg, branches, passAScores(cfg, passA, blindMap), passB, lints);
   wr(join(runDir, "score.json"), JSON.stringify(score, null, 2) + "\n");
@@ -279,7 +294,6 @@ export function phaseDeepen(cfg: Config, runDir: string): PhaseResult {
     };
   }
   const byFrame = new Map(validArtifacts(branches).map((a) => [a.frame, a]));
-  const allIds = cfg.frames.frames.map((f) => f.id);
   const next: PhaseResult["next"] = [];
   for (const c of score.clusters) {
     if (!c.representative) continue;
@@ -287,9 +301,11 @@ export function phaseDeepen(cfg: Config, runDir: string): PhaseResult {
     // A survivor never sees the other survivors. The critic wrote the objection with every
     // label in view and may have named them; strip every frame id but the survivor's own.
     const objection = c.strongest_objection ?? "(the critic recorded no objection; defend against the strongest one you can construct yourself)";
-    const redacted = allIds
-      .filter((id) => id !== a.frame)
-      .reduce((t, id) => t.replace(new RegExp(`\\b${id}\\b`, "g"), "another line of reasoning"), objection);
+    const redacted = redactFrameLabels(objection, cfg.frames.frames, {
+      keep: a.frame,
+      problem,
+      replacement: "another line of reasoning",
+    });
     const brief = render(cfg.prompts.deepen, {
       problem,
       problem_hash: plan.problem_hash,
@@ -297,7 +313,7 @@ export function phaseDeepen(cfg: Config, runDir: string): PhaseResult {
       survivor_artifact: yamlBlock(a),
       strongest_objection: redacted,
     });
-    const leaks = checkBriefIsolation(brief, a.frame, allIds);
+    const leaks = checkBriefIsolation(brief, a.frame, cfg.frames.frames, { problem });
     if (leaks.length) throw new RunAbort(`deepen brief for ${a.frame} is not isolated: ${leaks.join("; ")}`, "DEEPEN_LEAK");
     const briefPath = join(runDir, "deepen", `${a.frame}.brief.md`);
     const artifactPath = join(runDir, "deepen", `${a.frame}.yaml`);

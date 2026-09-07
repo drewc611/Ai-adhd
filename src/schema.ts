@@ -24,6 +24,17 @@ export const FrameSchema = z
     axis: z.string().regex(/^[a-z][a-z_]*$/),
     attacks: z.array(TrapIdSchema).min(1),
     tools: z.array(ToolNameSchema).default([]),
+    /**
+     * Ids this frame has been renamed from. Recorded runs write the id that was current when
+     * they ran, into plan.json, blind-map.json, score.json, branch filenames and the append-only
+     * os.json journal. Rewriting those to match a rename would make a run's record claim a frame
+     * ran that did not exist yet, so the record stays as written and the library forwards.
+     *
+     * These are not redaction tokens. A frame is renamed precisely because its old label was
+     * ordinary prose, and re-adding it to the redactor would reinstate the collision the rename
+     * exists to remove.
+     */
+    former_ids: z.array(FrameIdSchema).default([]),
     stance: z.string().min(40),
     probes: z.array(z.string().min(1)).min(1),
     forbidden: z.array(z.string().min(1)).min(1),
@@ -108,6 +119,7 @@ export const HardRulesSchema = z
     scatter: z.object({ min_n: z.number().int(), requires_cluster_of: z.number().int() }).strict(),
     run_level_t2_if_no_branch_attacks_assumption: z.boolean(),
     lint_disagreement_is_reported_not_resolved: z.boolean(),
+    min_evidence_words_on_fire: z.number().int().min(0).default(0),
   })
   .strict();
 
@@ -275,7 +287,7 @@ export const FixtureSchema = z
     seed: z.number().int(),
     prompt: z.string().min(1),
     why: z.string().optional(),
-    must_surface: z.array(MustSurfaceSchema).min(1),
+    must_surface: z.array(MustSurfaceSchema).default([]),
     must_not: z.array(MustNotSchema).default([]),
     expect: z
       .object({
@@ -283,13 +295,41 @@ export const FixtureSchema = z
         pruned_traps_include_any: z.array(TrapIdSchema).optional(),
         monoculture: z.boolean().optional(),
         scatter: z.boolean().optional(),
+        /**
+         * The run must never happen. Routing declines the class, so there is no synthesis, no
+         * pruned block and nothing to record: the fixture asserts the decision itself. A decline
+         * is a first-class outcome and it was the only one nothing tested.
+         */
+        decline: z.boolean().default(false),
+        /** Substrings the decline reason must contain, so a reason cannot rot into "no". */
+        reason_includes: z.array(z.string().min(1)).default([]),
+        /**
+         * The problem statement is hostile: it tries to converge the branches. Asserted at the
+         * D5 gate, where a human sees the warning before anything is spent. Independent of
+         * `decline`, and of whether a run was recorded.
+         */
+        injection_warnings_min: z.number().int().positive().optional(),
       })
       .strict()
-      .default({}),
+      .default({ decline: false, reason_includes: [] }),
   })
-  .strict();
+  .strict()
+  // A run fixture with no must_surface asserts nothing and would pass on any output at all.
+  .refine((f) => f.expect.decline || f.expect.injection_warnings_min !== undefined || f.must_surface.length > 0, {
+    message: "must_surface is required unless expect.decline or expect.injection_warnings_min is set",
+    path: ["must_surface"],
+  })
+  .refine((f) => !f.expect.decline || (f.must_surface.length === 0 && f.must_not.length === 0), {
+    message: "a declined fixture has no output to assert against; drop must_surface and must_not",
+    path: ["expect", "decline"],
+  });
 export type Fixture = z.infer<typeof FixtureSchema>;
 
 export const RecordedExpectationSchema = z
-  .object({ outcome: z.enum(["pass", "fail"]), note: z.string().optional() })
+  .object({
+    outcome: z.enum(["pass", "fail"]),
+    note: z.string().optional(),
+    /** A hand written consensus answer that exists to fail. Audited separately from real runs. */
+    control: z.boolean().default(false),
+  })
   .strict();

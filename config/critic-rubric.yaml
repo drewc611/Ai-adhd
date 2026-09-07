@@ -137,6 +137,11 @@ hard_rules:
   scatter: { min_n: 3, requires_cluster_of: 2 }   # n>=3 and no cluster of 2 -> return ambiguity
   run_level_t2_if_no_branch_attacks_assumption: true
   lint_disagreement_is_reported_not_resolved: true   # D4
+  # Firing a detector removes a frame from the recommendation, so it has to be argued for.
+  # Not firing is the default and may be terse. Across the first nine recorded runs, real
+  # fired evidence ran 29 to 50 words, median 40, so this floor is far below anything
+  # genuine and only catches a record that asserts a trap without saying why.
+  min_evidence_words_on_fire: 12
 
 # Pass A score = sum(weight * score) / sum(weight * 3). Used for ordering within a cluster
 # and for reporting. Never used to rescue a branch with a fired trap.

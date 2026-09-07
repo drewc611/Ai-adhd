@@ -1,0 +1,66 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+position: 'Ship conservative hot-reloadable timeouts today (separate connect, read, and total budgets, total set below the caller''s own deadline), instrument the latency histogram for a week, and keep retry-on-timeout switched off until idempotency keys exist on every non-idempotent call.'
+reasoning: |
+  1. What can be undone in an afternoon, and what cannot be undone at all.
+
+  Two way doors, all reversible in an afternoon or less: the numeric values of the connect,
+  read, write and total timeouts; whether they live in config or code; per-endpoint overrides;
+  the connection pool and keep-alive settings; adding latency and timeout-rate metrics. If a
+  number is wrong you edit it and redeploy. Nothing outside your process remembers the old
+  value.
+
+  One way doors, not undoable: (a) retrying a timed-out request that is not idempotent, because
+  a timeout does not tell you whether the server did the work, so the retry can charge a card
+  twice, ship twice, or double-post, and you cannot un-charge by editing a config; (b)
+  publishing your timeout as a contract, in an SLA, a client library default, or a public API
+  deadline, because callers then build on it and you cannot shorten it back; (c) picking a total
+  timeout longer than the caller upstream of you will wait, which makes your process hold
+  connections and threads for work nobody will collect, and under load that becomes a saturation
+  event with real user-visible damage.
+
+  2. Cost of being wrong, and detection latency, for each one way door.
+
+  Retry on a non-idempotent timeout. Cost of being wrong is duplicated side effects on someone
+  else's system, which is money, trust, and manual reconciliation. Detection latency is bad:
+  weeks, and usually via a customer complaint or a finance reconciliation, not via your
+  dashboard, because a duplicated success looks like two successes.
+
+  Timeout as a published contract. Cost of being wrong is that you are stuck carrying a number
+  you chose before you had data, and every future latency regression becomes a breaking change.
+  Detection latency is months, at the first time you want to tighten it.
+
+  Total timeout longer than the upstream deadline. Cost of being wrong is resource exhaustion
+  under a dependency slowdown, which is the classic way one slow dependency takes down a whole
+  service. Detection latency is short in the sense that the outage is loud, but the outage is
+  the detector, and that is too late.
+
+  3. The cheap reversible experiment that tells you which one way door to take.
+
+  Instrument first. Record the client-side latency histogram per endpoint, plus the count of
+  requests that hit each timeout, for one normal week including a peak. That gives you p50,
+  p99, p99.9 and the tail shape. Concretely, start with connect 1s, read 5s, total 10s or
+  whatever sits comfortably under the upstream deadline, all read from config at runtime, and
+  watch. If nothing times out, tighten toward p99.9 plus headroom. Second cheap experiment,
+  run in a canary for a day: apply the tightened values to a small share of traffic and compare
+  its error rate to the rest while the dependency's own success metrics stay flat. Third, before
+  the retry door, check whether the endpoints you would retry accept an idempotency key, and if
+  they do not, ask the owner for one. All three are reversible.
+
+  4. The ordering.
+
+  First, put timeouts in config, never unbounded, with separate connect and total budgets and
+  the total under the caller's deadline. Second, add the histogram and per-timeout counters.
+  Third, run a week and set the numbers from p99.9 plus headroom, canary the change. Fourth,
+  only after idempotency keys exist, turn on bounded retries with jitter and a budget, for
+  idempotent calls only. Fifth, if you ever publish the timeout as a contract, publish it after
+  step three, not before. The commitment is real, not merely a plan to measure: shipping the
+  bounded conservative default today is itself the decision, because unbounded is the one
+  setting with no safe reading.
+forecloses:
+  - Leaving any timeout unset or infinite while waiting for data, which is the option that feels cautious and is actually the irreversible one.
+  - Turning on retry-on-timeout now for write endpoints, including the common shortcut of a client-library default retry policy, before idempotency keys exist.
+  - Baking hand-picked round numbers into compiled code or a shared client library so that changing them requires a release rather than a config push.
+falsifier: 'One week of the histogram shows a fat, multi-modal tail where p99.9 is several times p99 with no stable ceiling. Then no single static number is defensible, the timeout is not the real decision, and the position is wrong. Cheaper still, if the canary at the tightened value raises your error rate while the dependency reports flat success, the numbers were taste, not data.'
+missing_actor: 'The owner of the upstream service being called. They can publish their own server-side timeout and latency SLO, which caps any value you can sensibly choose, and they can add idempotency keys, which is what converts the retry one way door into a two way door.'
+confidence: medium

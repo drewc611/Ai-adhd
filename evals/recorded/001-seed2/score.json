@@ -1,0 +1,167 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "ACTOR_CENSUS",
+      "status": "pruned",
+      "cluster": "deadline_propagation",
+      "pass_a": 0.8958333333333334,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "Moves are ranked by speed and cost of the actor who makes them, but no recommendation is examined for cost of being wrong or detection latency, and nothing separates a reversible change from a committed one."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Derive every timeout from a deadline the caller hands you — read the inbound deadline, subtract time already spent, spend what is left as this attempt's budget — and hardcode only the ceilings (connect, TLS handshake, response-header, idle) that must stay below the nearest proxy's idle timeout.",
+      "forecloses": [
+        "A single tuned constant, or a small table of them, as the answer — no number is correct independent of who is waiting, so \"set connect 2s, read 30s\" is ruled out as the design even though those values may survive as ceilings.",
+        "Retry policies that reset the clock per attempt (3 tries x 10s = 30s of caller patience spent without the caller's consent). Retries must draw from the inherited budget or not happen.",
+        "Choosing the timeout from the dependency's observed p99 latency alone, which optimizes for the upstream service's comfort and ignores the only actor whose patience is actually being spent."
+      ],
+      "falsifier": "Look at the inbound path for one hour of real traffic: if no caller sends a deadline, timeout, or cancellable context, and the client-disconnect-before-response rate is effectively zero (a batch job, a cron worker, a fire-and-forget queue consumer with no one waiting), then there is no caller deadline to inherit and a fixed per-operation constant is the right design.",
+      "missing_actor": "The caller upstream of this client — the user or service whose request triggered the outgoing call — who can cancel, hang up, or retry in milliseconds at zero cost, and whose own deadline silently bounds how long any timeout here is worth waiting."
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "status": "survivor",
+      "cluster": "bounded_defaults_then_measure",
+      "pass_a": 0.8125,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Ship conservative hot-reloadable timeouts today (separate connect, read, and total budgets, total set below the caller's own deadline), instrument the latency histogram for a week, and keep retry-on-timeout switched off until idempotency keys exist on every non-idempotent call.",
+      "forecloses": [
+        "Leaving any timeout unset or infinite while waiting for data, which is the option that feels cautious and is actually the irreversible one.",
+        "Turning on retry-on-timeout now for write endpoints, including the common shortcut of a client-library default retry policy, before idempotency keys exist.",
+        "Baking hand-picked round numbers into compiled code or a shared client library so that changing them requires a release rather than a config push."
+      ],
+      "falsifier": "One week of the histogram shows a fat, multi-modal tail where p99.9 is several times p99 with no stable ceiling. Then no single static number is defensible, the timeout is not the real decision, and the position is wrong. Cheaper still, if the canary at the tightened value raises your error rate while the dependency reports flat success, the numbers were taste, not data.",
+      "missing_actor": "The owner of the upstream service being called. They can publish their own server-side timeout and latency SLO, which caps any value you can sensibly choose, and they can add idempotency keys, which is what converts the retry one way door into a two way door."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "pruned",
+      "cluster": "single_total_timeout",
+      "pass_a": 0.625,
+      "fired": [
+        {
+          "trap": "T6",
+          "evidence": "Only the asker and the downstream owner appear; the caller upstream is never named, and that omission is load bearing because the advice to pick something plainly generous when data is missing is exactly the choice a caller's own deadline would overturn, since a total longer than the waiting party will wait converts a slow dependency into thread and connection exhaustion."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set one total request timeout on the client, pick a number a few times your worst observed response, and stop there.",
+      "forecloses": [
+        "Tuning separate connect, read, write, and pool-acquire timeouts now, before any evidence says which one is the problem.",
+        "Adding retries or a circuit breaker in the same change, on the theory that a timeout is only useful with a recovery policy attached."
+      ],
+      "falsifier": "Turn the timeout on in production and watch for a week; if it fires on requests that would have completed successfully, the single-number position is wrong and the budget has to be split by phase.",
+      "missing_actor": "The owner of the service being called, who can publish its actual latency distribution or its own server-side deadline, which would replace the guess with a number."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "deadline_propagation",
+      "pass_a": 0.8541666666666666,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "No recommendation is examined for cost of being wrong or detection latency, and threading a deadline through a call path is treated as equivalent in commitment to editing a constant, when it is the more expensive and less reversible of the two."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop choosing timeout values on the client and instead thread an explicit end-to-end deadline from the request entry point through every outbound call, deriving each call's timeout from the remaining budget and defining the degraded response you return when that budget is spent.",
+      "forecloses": [
+        "A single tuned constant per client, per environment, kept in config and revised after incidents.",
+        "Retry policies layered on top of a fixed timeout, where the worst case latency is timeout times attempts and nobody has computed it.",
+        "Raising the timeout as the remedy when the dependency gets slow, which is the standard response and the one that converts a slow dependency into a thread and connection exhaustion outage."
+      ],
+      "falsifier": "Trace one hundred real invocations of this call. If it is the sole outbound call in a detached batch or cron path with no caller waiting on it and no latency target anywhere upstream, then there is no budget to propagate, and a single generous ceiling plus a concurrency cap is the correct and cheaper answer.",
+      "missing_actor": "The owner or operator of the downstream service, who can publish a latency SLO and enforce a server side deadline that sheds load and returns an error rather than letting requests queue, which turns every client timeout in the fleet from a guess into a derivation."
+    },
+    {
+      "frame": "LEDGER",
+      "status": "pruned",
+      "cluster": "deadline_propagation",
+      "pass_a": 0.7916666666666666,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "Every recommendation is priced in currency and payer, but nothing asks what it costs to be wrong or how long until you find out, and no move is sorted into cheap-and-undoable versus committed, so the whole position ships at one level of commitment."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set one end-to-end deadline for the whole call, sized from the user-facing latency budget (roughly 1s to connect, the rest of the remaining budget for the total attempt), propagate that deadline to every downstream hop, and cap retries with a retry budget of a few percent of traffic.",
+      "forecloses": [
+        "Leaving the client's default timeout in place, including any default that is effectively infinite (no read timeout, or a socket timeout with no total-call cap).",
+        "Fixed per-attempt retries where each attempt restarts the clock, so worst-case wait is attempts x timeout and a struggling dependency gets a multiplied arrival rate.",
+        "One generous global timeout applied uniformly to every endpoint regardless of what the user is waiting on, which prices a background refresh the same as a checkout button."
+      ],
+      "falsifier": "Pull the latency histogram of successful responses from this dependency for a week, and the abandonment or client-cancel rate by elapsed time. If a material share of successful responses land after the proposed deadline and users are still there waiting for them, the deadline is converting paying work into errors and this position is wrong. Equally, if the connection pool has never queued and the dependency has never had a slow-but-up period, the cascade cost being priced here does not exist and a plain generous timeout is cheaper than the plumbing.",
+      "missing_actor": "The team that operates the service being called. They can publish a server-side latency SLO and enforce it themselves with a server-side deadline plus load-shedding, which turns every client's timeout from a guess into a documented number and stops retry storms at the door rather than at each caller."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "deadline_propagation",
+      "action": "Thread an explicit end-to-end deadline from the request entry point through every outbound call, derive each call's timeout from the time remaining, spend retries out of that same budget, and keep only a few fixed ceilings.",
+      "members": [
+        "LEDGER",
+        "ACTOR_CENSUS",
+        "FRAME_BREAKER"
+      ],
+      "survivors": [],
+      "singleton": false,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "bounded_defaults_then_measure",
+      "action": "Put conservative connect, read and total values into hot-reloadable config today, add a latency histogram and per-timeout counters for a week, then tighten from the measured tail, and leave retry-on-timeout off until idempotency keys exist.",
+      "members": [
+        "DOOR_KEEPER"
+      ],
+      "survivors": [
+        "DOOR_KEEPER"
+      ],
+      "singleton": true,
+      "strongest_objection": "The week of measurement is aimed at the wrong variable. A histogram of this dependency tells you how long it takes to answer; it cannot tell you how long the answer is still worth having, and that second quantity is the one that decides the number. The plan concedes as much by requiring the total to sit under the caller's deadline, but that deadline is asserted as a side constraint and never obtained, derived, or carried anywhere, so the central input is the one thing nobody measures during the week. Sizing from p99.9 plus headroom then optimizes for the dependency's convenience rather than the patience being spent, and it fails in the case that actually causes outages: two or three such calls stacked inside one inbound request, each comfortably inside its own configured limit while the request as a whole blows past anything the waiting party would tolerate. A static per-call number cannot see that composition no matter how good the histogram is. There is also a self-inflicted cost in the sequencing: the caller's tolerance is usually knowable today from what the product already promises, at no instrumentation cost, so a week of waiting buys data about the dependency while the cheaper and more decisive input sits unused. The reversibility analysis is real and the retry gate on idempotency keys is right, but neither requires deferring the number, and a conservative static ceiling shipped now hardens into the permanent answer precisely because it stops the bleeding well enough that nobody returns for step three.",
+      "representative": "DOOR_KEEPER",
+      "mean_pass_a": 0.8125
+    },
+    {
+      "id": "single_total_timeout",
+      "action": "Set one total request timeout, generously sized from the worst response you have seen, and change nothing else until it misfires.",
+      "members": [
+        "MINIMALIST"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "Two branches attacked the load bearing assumption explicitly, that a timeout is a value chosen on this client independent of whoever is waiting, one by naming it as the assumption and one by showing the question named a single actor and framed the client as autonomous; a third displaced it without naming it."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "All five branches populated missing_actor with a named party and an action: four name the operator or owner of the service being called, and one names the caller upstream of this client."
+    },
+    "notes": [
+      "singleton DOOR_KEEPER escalated to deepen, flagged unverified"
+    ]
+  },
+  "proceed": true
+}

@@ -1,6 +1,8 @@
-# ADHD
+<p align="center">
+  <img src="assets/banner.svg" alt="ADHD, Anchoring Defeat by Heterogeneous Divergence" width="860">
+</p>
 
-**Anchoring Defeat by Heterogeneous Divergence**
+# ADHD
 
 A reasoning architecture for Claude Code. Not a prompting technique.
 
@@ -12,6 +14,27 @@ the branches and the tree explores variations of one idea instead of several ide
 
 Self consistency and best of N have the same defect: sampling the same conditioned
 distribution N times gives you N draws from one basin.
+
+```mermaid
+flowchart LR
+  subgraph tot["Tree of thought, self-consistency, best-of-N: ONE context window"]
+    direction LR
+    P1(["prompt"]) --> S1["first framing<br/><b>the anchor</b>"]
+    S1 --> B1["branch"] --> R1["variation<br/>of one idea"]
+    S1 --> B2["branch"] --> R2["variation<br/>of one idea"]
+    S1 --> B3["branch"] --> R3["variation<br/>of one idea"]
+  end
+  subgraph adhd["ADHD: N context windows, no channel between them"]
+    direction LR
+    P2(["prompt"]) -.->|"brief, one way"| C1["LEDGER<br/><i>who pays</i>"] --> O1["position"]
+    P2 -.->|"brief, one way"| C2["SABOTEUR<br/><i>how it breaks</i>"] --> O2["position"]
+    P2 -.->|"brief, one way"| C3["SUPPLICANT<br/><i>who is hurt</i>"] --> O3["position"]
+  end
+  R2 ~~~ P2
+```
+
+The dotted arrows go one way. A branch receives its brief and returns an artifact; it
+never learns that the others exist, how many there are, or what they said.
 
 ADHD treats this as an architecture problem. It spawns N isolated reasoning processes
 under deliberately distorted cognitive frames, with **zero shared context during
@@ -36,6 +59,13 @@ What it never surfaces:
 That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
 the whole system. If a run only returns the timeout triple, the run failed.
 
+**It does not pass reliably.** The same problem run at seed 2, with the same five frames, misses
+two of the four bullets above: the human who can cancel, and who pays for the retry. Both are
+recorded in `evals/recorded/001-seed2`, which is kept as failing. Those two findings were
+properties of one sample, not of the frame library, and no claim in this repo rests on a single
+run without saying so. `docs/EXPERIMENTS.md` registers what that experiment was testing, before
+it ran.
+
 ## When to reach for it
 
 Design decisions. Fuzzy debugging where the symptom does not name the cause. Naming.
@@ -43,6 +73,78 @@ API surface design. Strategy. Any prompt of the shape "give me a few ways to..."
 
 Do **not** use it for factual lookup, mechanical refactors, or anything with one correct
 answer. It costs N times the tokens. Spend that only where the search space is the problem.
+
+## The frame library
+
+Thirteen frames on ten axes. Routing picks n of them for a problem class, one per axis, so a run
+cannot ask the same question twice under two names.
+
+```mermaid
+flowchart LR
+  subgraph one["axes with one frame — a single way in"]
+    direction TB
+    a1["particulars<br/><b>PARTICULARIST</b>"]
+    a2["frame_validity<br/><b>FRAME_BREAKER</b>"]
+    a3["cost<br/><b>LEDGER</b>"]
+    a4["reversibility<br/><b>DOOR_KEEPER</b>"]
+    a5["adversary<br/><b>SABOTEUR</b>"]
+    a6["scope<br/><b>MINIMALIST</b>"]
+    a7["precedent<br/><b>PRIOR_ART</b>"]
+  end
+  subgraph two["axes with two — routing picks one, never both"]
+    direction TB
+    b1["actors<br/><b>ACTOR_CENSUS</b> · <b>SUPPLICANT</b>"]
+    b2["mechanism<br/><b>MECHANIC</b> · <b>FIRST_PRINCIPLES</b>"]
+    b3["operation<br/><b>NIGHT_OPERATOR</b> · <b>SUCCESSOR</b>"]
+  end
+  a7 ~~~ b1
+```
+
+Each frame exists to defeat a named trap from `docs/TRAPS.md`. Drawing that as a graph shows
+where the library is thick and where it is one frame deep.
+
+```mermaid
+flowchart LR
+  PARTICULARIST --> T1
+  LEDGER --> T1
+  LEDGER --> T6
+  MINIMALIST --> T1
+  MINIMALIST --> T4
+  MINIMALIST --> T5
+  FIRST_PRINCIPLES --> T1
+  FIRST_PRINCIPLES --> T3
+  SUPPLICANT --> T1
+  SUPPLICANT --> T6
+  FRAME_BREAKER --> T2
+  PRIOR_ART --> T2
+  PRIOR_ART --> T8
+  ACTOR_CENSUS --> T6
+  SABOTEUR --> T6
+  SABOTEUR --> T7
+  NIGHT_OPERATOR --> T6
+  NIGHT_OPERATOR --> T4
+  DOOR_KEEPER --> T7
+  SUCCESSOR --> T7
+  SUCCESSOR --> T4
+  MECHANIC --> T3
+
+  T1["T1 consensus"]
+  T2["T2 frame accepted"]
+  T3["T3 borrowed authority<br/><b>never fired</b>"]
+  T4["T4 option list"]
+  T5["T5 no verdict<br/><b>never fired</b>"]
+  T6["T6 missing actor"]
+  T7["T7 reversibility"]
+  T8["T8 voice over content"]
+
+  classDef cold fill:#2A1D20,stroke:#F97B6B,color:#F97B6B
+  class T3,T5 cold
+```
+
+`T1` and `T6` have five attackers each; `T8` has one. The two in red have never fired in any
+recorded run, which is either prevention working or dead weight, and the counts cannot say
+which. `T5` is close to structurally unable to fire, because the output contract already demands
+a committal position. `docs/RETIREMENT.md` sets the bar for acting on any of it.
 
 ## Execution model
 
@@ -56,16 +158,95 @@ The library and the MCP server never call a model. They compile plans, enforce t
 isolation contract, score outputs against the rubric, and run the eval harness. Inference
 is supplied by the host.
 
+```mermaid
+flowchart TB
+  P(["problem.txt, hashed byte for byte"]) --> C["compile: routing picks N frames on N distinct axes"]
+  C --> G{"D5 gate"}
+  G -->|"class declined"| X(["answer directly, no branches"])
+  G -->|"confirmed"| D
+  subgraph D["diverge &mdash; N context windows, no channel between them"]
+    direction LR
+    F1["LEDGER"] ~~~ F2["SABOTEUR"] ~~~ F3["DOOR_KEEPER"] ~~~ F4["SUPPLICANT"] ~~~ F5["FRAME_BREAKER"]
+  end
+  D --> A["critic pass A &mdash; <b>blind</b><br/>artifacts as letters, frame labels redacted"]
+  A --> B["critic pass B &mdash; unblind<br/>cluster by action, run all 8 trap detectors"]
+  B --> K["deepen: each cluster's representative<br/>against its strongest objection"]
+  K --> S(["synthesis"])
+  B -.->|"pruned, with trap ids and detector output"| S
+```
+
+Nothing is spent before the gate. The preview shows the problem verbatim with its hash and
+a token estimate, and the run does not start until a human agrees to it.
+
+### How pass A stays blind
+
+The critic scores the artifacts before it is allowed to know which frame wrote any of them. The
+map that would tell it is written to disk and kept out of the brief until pass A has returned.
+
+```mermaid
+flowchart LR
+  A["branch artifact<br/><code>frame: LEDGER</code>"] --> S{{"strip, redact, shuffle"}}
+  S -->|"the frame field is removed"| B["<b>Artifact C</b><br/>position, reasoning,<br/>forecloses, falsifier"]
+  S -.->|"kept out of the brief"| M[("blind-map.json<br/>C = LEDGER")]
+
+  B --> PA["critic, pass A<br/>scores 9 dimensions by letter<br/><i>cannot name what it is scoring</i>"]
+  PA --> R["scores keyed C, not LEDGER"]
+
+  R --> J{{"join on the map"}}
+  M -.-> J
+  J --> PB["critic, pass B<br/>now sees LEDGER<br/>clusters by action, runs 8 detectors"]
+```
+
+Redaction is not only the `frame` field. A branch writes "from inside the Door keeper stance"
+far more naturally than it writes `DOOR_KEEPER`, so every id and display name goes, in any
+casing and across any separator. A label the problem statement itself uses is exempt, because
+every branch is free to echo the problem and echoing it identifies nobody.
+
+### What reaches the user
+
+A pruned position is not a discarded one. Every path through the critic ends at the reader,
+which is why the pruned block is a non-negotiable rather than a debugging aid.
+
+```mermaid
+flowchart LR
+  A["one branch<br/>returns a position"] --> T{"any of the 8<br/>detectors fire?"}
+  T -->|"yes"| PR["<b>pruned block</b><br/>position, trap ids,<br/>detector output"]
+  T -->|"no"| CL{"clustered with<br/>another frame?"}
+  CL -->|"no"| SG["live singletons<br/><i>unverified</i>"]
+  CL -->|"yes"| RP{"cluster<br/>representative?"}
+  RP -->|"no"| CO["corroborated findings"]
+  RP -->|"yes"| DP{"survives its<br/>strongest objection?"}
+  DP -->|"folds"| FD["folded<br/><i>and what it should<br/>have been instead</i>"]
+  DP -->|"defends"| RC["<b>recommendation</b>"]
+
+  PR --> U(["the user reads all of it"])
+  SG --> U
+  CO --> U
+  FD --> U
+  RC --> U
+```
+
+`SUPPLICANT` (which ran as `END_USER`, before the rename in D6) is the case that justifies the rule. It has been pruned in both runs it appeared
+in, and it is also the frame that closed the who-is-hurt gap in `002-kernel-enduser`. The
+question reached the user through the pruned block, after the critic rejected the position
+carrying it.
+
 ## Layout
 
 ```
-config/       frames, routing, critic rubric      <- the actual IP
-prompts/      orchestrator, branch, critic, deepen
-docs/         architecture, trap taxonomy, open decisions
-evals/        fixtures with must_surface assertions, recorded runs
-skills/adhd/  Claude Code skill
-agents/       subagent definitions
+config/     frames, routing, critic rubric      <- the actual IP
+prompts/    orchestrator, branch, critic, deepen, synthesis
+docs/       architecture, traps, decisions, features, backlog, retirement
+evals/      fixtures with must_surface assertions, recorded runs and controls
+src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
+test/       263 tests over all of it
+skills/     adhd (drives a run), adhd-worker (executes one)
+agents/     the four subagent definitions and their tool grants
+assets/     the mark, the banner, the run explorer shell
 ```
+
+Nothing under `src/` calls a model. It compiles briefs, enforces the isolation contract, scores
+what comes back, and refuses to proceed when a record is missing.
 
 ## Install
 
@@ -81,17 +262,53 @@ The plugin registers the `/adhd` skill, the branch, critic, and deepen agents, a
 server. The MCP server can also be used on its own by any MCP host:
 
 ```
-node dist/src/mcp.js           # stdio; tools: adhd_run, adhd_traps, adhd_eval, adhd_frames
+node dist/src/mcp.js           # stdio; the four commands plus the ten kernel verbs, 14 tools
 ```
 
 ## Quickstart
 
 ```
 npm install && npm test          # builds, then runs the contract tests and the eval harness
+node dist/src/cli.js wizard       # menus over every verb below; each screen prints the command it ran
+node dist/src/cli.js viewer       # one self-contained HTML page over every recorded run
 node dist/src/cli.js validate    # loads config/ and prompts/, runs the D6 static check
 node dist/src/cli.js frames      # the library
 node dist/src/cli.js eval        # replays evals/recorded/ against evals/fixtures/
+node dist/src/cli.js eval --audit            # which assertions the consensus answer also satisfies
+node dist/src/cli.js diff <runA> <runB>      # two runs of one fixture: what moved, and whether it was the seed
+node dist/src/cli.js why <run> <frame>      # everything that happened to one frame: pass A row, cluster, detectors, deepen
+node dist/src/cli.js frames --stats          # how each frame has behaved across recorded runs
+node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates in practice
+node dist/src/cli.js frames --collisions     # which frame names are also ordinary prose
+node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
+node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
+node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?
+node dist/src/cli.js learn --agreement-all   # the same, pooled over every run that has a second scoring
+node dist/src/cli.js learn --panel --run <dir>   # three or more critics on one pack: ambiguous rubric, or odd critic?
 ```
+
+`learn` reads the recorded runs and calls nothing. It is how the frame library, the rubric and
+the fixtures get changed on evidence rather than on taste. Current findings are in D8.
+
+<details>
+<summary><b>Exit codes</b> — a script driving a run branches on these, so each means one thing</summary>
+
+| code | meaning |
+|---|---|
+| 0 | ok |
+| 1 | a contract violation (`traps`), a failing eval, a flagged orthogonality pair, a `diff` of two different problems, or an unexpected error |
+| 2 | `ContractError`: an artifact broke the contract where the run needed it not to |
+| 3 | `RunAbort`: the run is over. A `problem_hash` mismatch is the usual cause. Also returned by `os claim` with nothing claimable and `os result` with no synthesis yet |
+| 4 | the repository is invalid: a missing or malformed file under `config/`, `prompts/` or `docs/` |
+| 5 | the command line is wrong. The repository is fine |
+
+</details>
+
+`wizard` needs a terminal and says so when piped, so it never blocks in CI. `viewer` inlines
+the run data rather than fetching it, so the page opens from disk with nothing to serve: pick a
+run and a frame and you get the blind pass A row with the critic's evidence, every detector that
+fired with the text that fired it, the cluster and its margin, and the deepen verdict. Filter by
+trap to see everything T1 caught across a run, or by status to read only what was pruned.
 
 A run is four commands driven by the host (see `skills/adhd/SKILL.md`):
 
@@ -103,14 +320,24 @@ adhd run --phase synth    --run runs/<id>     # add --partial after a cancel
 ```
 
 The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `adhd_traps`,
-`adhd_eval`, `adhd_frames`.
+`adhd_eval`, `adhd_frames`, plus the ten kernel verbs. Kernel tools take `root` (the repository
+holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate arguments; see
+`docs/OS.md`.
 
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D5 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D8 are resolved in `docs/DECISIONS.md`.
 
-Five real runs are recorded, five isolated subagents each.
+Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
+negative control per fixture that must fail, plus three decline fixtures that assert routing
+refuses a class rather than spending on it. Every real run has been scored a second time by a
+fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
+recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
+contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
+
+<details>
+<summary><b>What each recorded run found</b>, including the two recorded as failing</summary>
 
 - `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
   MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on
@@ -120,10 +347,10 @@ Five real runs are recorded, five isolated subagents each.
   SABOTEUR (T1) and NIGHT_OPERATOR (T2); PARTICULARIST with MECHANIC and FRAME_BREAKER with
   NIGHT_OPERATOR formed two clusters; both survivors defended and each withdrew a claim.
 
-- `evals/recorded/002-kernel-enduser/` passes fixture 002. Same prompt, END_USER swapped in
+- `evals/recorded/002-kernel-enduser/` passes fixture 002. Same prompt, SUPPLICANT swapped in
   for NIGHT_OPERATOR through an explicit frame list, and the first run driven end to end by
   the kernel: nine tasks claimed and returned by one worker, four automatic phase advances,
-  real token accounting. END_USER asked who is hurt and was pruned for it, so the question
+  real token accounting. SUPPLICANT asked who is hurt and was pruned for it, so the question
   reached the output through the pruned block. MECHANIC folded under objection.
 - `evals/recorded/003-kernel-strategy/` passes fixture 003 (strategy class, monolith rewrite),
   driven by the kernel. All five frames refused the year-long rewrite; the critic pruned
@@ -136,13 +363,72 @@ Five real runs are recorded, five isolated subagents each.
   said what they should have been instead. Nobody asked what the flag's name asserts when it
   is false, which is a frame-set gap, kept visible rather than patched out of the fixture.
 
+</details>
+
 Each run's `README.md` says how it was produced and what it did not surface.
+
+### What this cannot tell you yet
+
+A reader should start here rather than discover it.
+
+- **Fixture 001 has passed once, in the run it was written against.** Re-run at seed 2 with the
+  same five frames it misses two of its four assertions; run with four of five frames swapped it
+  misses two others. Different assertions turn out to have different dependencies, and the only
+  one robust across all three runs is the weakest one. `docs/EXPERIMENTS.md` has the table.
+- **Every per-frame rate here is a one-to-three-sample figure.** At least one of them moves:
+  `ACTOR_CENSUS` went from holding the recommendation to pruned on a reseed alone.
+- **Four critics on one pack, two on the rest.** 225 cells is a first corpus, not a reliability
+  figure.
+- **`002-kernel-enduser` is not robust to who scored it.** Four critics split 2-2 on which
+  position goes to deepen. Left that way on purpose.
+- **`TaskList` is the one isolation claim that is argued rather than demonstrated.** It is the
+  launch permit every isolated agent carries, and what it shows a branch inside a running
+  dispatch has never been observed. D4 says so.
+- **The plugin agents have never run as plugin agents.** Every recorded run used general-purpose
+  subagents, so the manifest and the tool grants are checked mechanically and never end to end.
+- **One fixture assertion is still satisfied by a negative control.** `003/reframe` matches on
+  deploy-pain vocabulary, which the real run uses as a reframe and the consensus answer uses as a
+  selling point. Separating them needs a run that has not happened; writing a pattern against the
+  two texts already read is how a harness gets tuned until it always passes. Three others were
+  flagged with it and are resolved, one of them a regex defect rather than a judgment.
 
 ## As an agent operating system
 
 The four phases can run unattended. `src/os.ts` is a kernel over run directories: it owns
 state, leases, phase advancement, the D5 gate, and cancellation, and it never calls a model.
+
+```mermaid
+stateDiagram-v2
+  [*] --> awaiting_confirm: submit
+  awaiting_confirm --> cancelled: cancel, nothing spent
+  awaiting_confirm --> running: confirm
+
+  state "running" as running {
+    [*] --> diverge
+    diverge --> critique_a: every branch returned
+    critique_a --> critique_b: blind scores in
+    critique_b --> deepen: clusters and trap sweep in
+  }
+
+  running --> done: every survivor answered
+  running --> done_run_level: monoculture or scatter
+  running --> cancelled: cancel, at any point
+  running --> aborted: hash mismatch, third lease expiry, contract violation
+
+  done --> [*]
+  done_run_level --> [*]
+  cancelled --> [*]
+  aborted --> [*]
+```
+
+A cancel is not a discard. Every branch that already returned is rendered as a partial,
+marked UNSCORED, with the pruned block absent and said to be absent, so a reader who has
+learned to look for that block is told why there isn't one.
+
 Hosts supply inference by claiming tasks and returning artifacts, over MCP or the CLI:
+
+<details>
+<summary><b>The syscalls</b>, over MCP or the CLI</summary>
 
 ```
 adhd os submit --problem p.txt --decision '{"problem_class":"design_decision"}'   # preview, awaiting_confirm
@@ -157,11 +443,15 @@ The same verbs are MCP tools (`adhd_submit`, `adhd_confirm`, `adhd_claim`, `adhd
 any Claude Code session running the `adhd-worker` skill can execute it. `docs/OS.md` has the
 process model and the syscall table.
 
+</details>
+
 ## Contributing
 
 Read `CONTRIBUTING.md`. Frames are the expensive part and have a proposal process (D6 in
-`docs/DECISIONS.md`). Fixtures are claims about what a good run must surface; tighten them,
-never loosen them.
+`docs/DECISIONS.md`) and a retirement bar (`docs/RETIREMENT.md`), because a library that only
+grows eventually contains three frames producing one answer, which is the monoculture this exists
+to prevent arriving by the back door. Fixtures are claims about what a good run must surface;
+tighten them, never loosen them.
 
 ## License
 

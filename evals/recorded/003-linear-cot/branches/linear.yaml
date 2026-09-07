@@ -1,0 +1,15 @@
+problem_hash: "sha256:pending"
+frame: linear
+position: It depends on your team size, scaling needs, and organisational readiness.
+reasoning: |
+  The monolith versus microservices question does not have a universal answer. Martin Fowler's
+  MonolithFirst argues that most successful microservices stories began with a monolith that
+  was later decomposed, and that greenfield microservices often fail because the boundaries are
+  wrong. Sam Newman's Building Microservices recommends the strangler fig pattern for
+  incremental migration. Weigh the benefits (independent deployability, team autonomy,
+  independent scaling, technology diversity) against the costs (operational complexity,
+  distributed tracing, network latency, eventual consistency, and the need for mature CI/CD).
+forecloses: []
+falsifier: null
+missing_actor: null
+confidence: medium

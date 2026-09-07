@@ -1,0 +1,61 @@
+# Blind pass A number 4 over the same artifact pack as pass-a.yaml, by a fresh critic in a
+# separate context window. Produced 2026-09-07 from critic/pass-a.brief.md verbatim, with the
+# critic instructed to read that file and nothing else. It is evidence about the rubric, not
+# part of this run: the run shipped on pass-a.yaml and score.json is unchanged.
+#
+# This pack has a panel because the shipped and rater2 scorings sent different positions to
+# deepen. Read the panel with:
+#   adhd learn --panel --run evals/recorded/002-kernel-enduser
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence with an imperative verb and an explicit ordering claim (before you touch a single cause) and no hedge returning the choice to the reader." }
+    foreclosure: { score: 3, evidence: "Names three tempting concrete moves it rules out - the root-cause hunt with GC/cron/cache expiry spelled out, dismissing p99 as only 1 percent, and silent retry or queueing that hides the stall." }
+    falsifiability: { score: 3, evidence: "Sampling requests inside a spike window for duplicate submissions, refreshes, and session drop-off in the following minute is a specific observation that would show users never noticed and kill the position." }
+    specificity: { score: 1, evidence: "Strip p99, 40 minutes, and API and the argument about spinners, double submits, and abandoned sessions survives intact for any user-facing slowness; only the leak every 40 minutes line leans on a given detail." }
+    assumption_attack: { score: 2, evidence: "It names the question's frame (which subsystem) and refuses it, and branches on whether users noticed, but it largely asserts the reframe rather than testing the frame's load-bearing premise about the periodicity." }
+    reasoning_carries: { score: 3, evidence: "No authorities, citations, or named tools appear anywhere; the whole chain runs on first-person mechanism about what a caller can see and do." }
+    actor_coverage: { score: 3, evidence: "The client team is named with concrete actions - idempotency keys, a visible working state, sane timeouts - and the position's fix cannot be delivered without them." }
+    reversibility: { score: 1, evidence: "It orders experience-first before cause-hunting and mentions retries as compounding damage, but never distinguishes cheap reversible probes from expensive committed changes." }
+    substance: { score: 2, evidence: "Flattened to check whether the spikes actually harm callers before hunting a cause, it is still worth saying, though the first-person user voice does a lot of the persuasive work." }
+  B:
+    committal: { score: 3, evidence: "One sentence, a single actionable verb (pull the timestamps of the last ten spikes and measure the gaps), and the branching is about what the measurement will show, not an escape hatch." }
+    foreclosure: { score: 3, evidence: "Rules out flame graphs under load, adding capacity or autoscaling, and GC flag tuning, each with a concrete reason tied to periodicity and phase alignment." }
+    falsifiability: { score: 3, evidence: "Restarting one instance out of phase is cheap, takes minutes, and a spike that stays locked to the fleet schedule directly invalidates the in-process config grep." }
+    specificity: { score: 3, evidence: "The whole argument turns on 40 being inexpressible in cron (:00/:40 giving 40/20 gaps), on 2400 seconds as a config value, and on p99 meaning one request in a hundred - none of it transfers to a different period." }
+    assumption_attack: { score: 2, evidence: "It tests the assumption that the stated period is exact and phase-independent, but accepts the question's where should I look framing rather than challenging it." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities; the cron arithmetic and the phase-alignment argument stand entirely on their own derivation." }
+    actor_coverage: { score: 2, evidence: "The DBA or platform owner is named with a real action (enumerate ~40-minute cadence work on the shared database or nodes), but the position holds even if that branch turns out empty." }
+    reversibility: { score: 2, evidence: "It orders a free measurement and a one-instance restart ahead of profiling, capacity, and GC tuning, using cost to sequence the recommendations without making that the spine of the position." }
+    substance: { score: 3, evidence: "Flat restatement - the histogram of inter-spike gaps discriminates a process timer from a cron from a fill-and-flush - is the same claim and is non-obvious." }
+  C:
+    committal: { score: 3, evidence: "One sentence naming two specific artifacts to pull (per-instance memory occupancy curve and stop-the-world pause log) and one thing to do with them, with no hedge." }
+    foreclosure: { score: 3, evidence: "Rules out searching the job scheduler, adding instances, raising client timeouts, and starting at the database or network, each with a stated mechanism for why it fails." }
+    falsifiability: { score: 3, evidence: "An interval that stays exactly 40 minutes at 3 a.m. and at peak, or all instances spiking on the same second, is readable off graphs already collected and kills the per-process bucket claim." }
+    specificity: { score: 2, evidence: "The or so wording and p99-versus-p50 are load bearing for the threshold-not-clock fork, but the capacity-over-fill-rate model is a general theory of periodic stalls that would survive a different period." }
+    assumption_attack: { score: 3, evidence: "It isolates the assumption that 40 minutes is a schedule, shows a clock cannot drift while the reporter says it does, and the entire position follows from that fork." }
+    reasoning_carries: { score: 3, evidence: "Nothing is cited; the argument is a derivation through load balancer, backlog, worker, pool, and datastore boundaries with no borrowed authority." }
+    actor_coverage: { score: 2, evidence: "The datastore or cache operator is named with a real action (report flush, checkpoint, and compaction cadence), but the position points inside the process and does not depend on them." }
+    reversibility: { score: 2, evidence: "It argues the process-local bucket is the cheapest thing to read and that it discriminates from one graph, using cost of observation to order the first step without building the whole position on it." }
+    substance: { score: 3, evidence: "Stripped of the mechanism narration it still says a drifting period implies a threshold-triggered blocking pause, so read memory and pause logs first - the same claim, still worth saying." }
+  D:
+    committal: { score: 3, evidence: "One sentence, opens with stop inspecting the API, and gives an ordered chain of actionable verbs ending in pause the matching one for two cycles, with no hedge." }
+    foreclosure: { score: 3, evidence: "Rules out profilers, flame graphs, and distributed traces of the request path, plus capacity, autoscaling, and GC tuning, with concrete reasons tied to an external periodic actor." }
+    falsifiability: { score: 3, evidence: "Period shortening at peak and lengthening overnight is readable from data already on hand and would show the cause is load driven and internal, directly killing the clock hypothesis." }
+    specificity: { score: 2, evidence: "The reasoning bends around the exact wording where should I look and around or so as a jitter fingerprint, though the cron-versus-duration-timer split would transfer to other periods." }
+    assumption_attack: { score: 3, evidence: "It names the load-bearing assumption explicitly - that the cause is a place found by inspection - explains who benefits from leaving it unexamined, and the position follows from rejecting it." }
+    reasoning_carries: { score: 3, evidence: "No authorities are invoked; the vendor-incentive observation is an argument rather than a citation and the chain stands without it." }
+    actor_coverage: { score: 3, evidence: "The largest API client is named with two actions (share the schedule or shift it ten minutes) plus the platform/DBA owners, and the correlation position cannot be executed without them." }
+    reversibility: { score: 2, evidence: "The confirming move is deliberately a reversible two-cycle pause rather than a fix, and measurement precedes any change, but the cheap-versus-committed distinction is never made explicit." }
+    substance: { score: 3, evidence: "Flattened to fingerprint the period and its jitter, then match it against every scheduled actor sharing your resources, it is the same claim and remains actionable." }
+  E:
+    committal: { score: 3, evidence: "One sentence with three sequenced imperatives and an explicit ordering constraint (before you open a single crontab or touch a single config), no hedge." }
+    foreclosure: { score: 3, evidence: "Rules out crontab grepping, GC tuning, heap sizing, autoscaling, and the tempting move of widening the aggregation window until the spike disappears - all concrete and genuinely attractive." }
+    falsifiability: { score: 3, evidence: "A scheduler listing on the service's own hosts matching spike start times to the second is cheap to check and concedes the raw log pull was wasted." }
+    specificity: { score: 2, evidence: "The aliasing argument depends on p99 aggregation and produces the concrete ten-replicas-at-400-minutes case, but the measurement-lies critique would apply to most periodic-chart claims." }
+    assumption_attack: { score: 3, evidence: "It enumerates four assumptions inside the obvious answer, attacks the most load bearing one - that the 40-minute period is real rather than an artifact - and the position is exactly the test of that." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities; the three failure modes are argued from how percentiles, scrape intervals, TTLs, and pools behave." }
+    actor_coverage: { score: 2, evidence: "The API's callers are named with real actions (disclose a poll or batch schedule, add jitter), and the artifact honestly admits the position stalls at a polite email if they refuse, so the position does not turn on them." }
+    reversibility: { score: 2, evidence: "It explicitly weighs cheapest to cause against most expensive to recover from and uses that to put a read-only raw log pull ahead of GC tuning, pool resizing, and hot-path rewrites." }
+    substance: { score: 3, evidence: "Flat restatement - confirm the period from raw single-host request logs with per-upstream breakdown before trusting the aggregated chart - is the same claim and is worth saying." }

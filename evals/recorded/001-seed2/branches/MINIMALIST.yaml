@@ -1,0 +1,37 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MINIMALIST
+position: Set one total request timeout on the client, pick a number a few times your worst observed response, and stop there.
+reasoning: |
+  1. The pain. Nobody types this question out of curiosity about timeout theory. Something
+  hung. A call sat there with no ceiling on it, or the asker just noticed the client ships
+  with no timeout at all and got a cold feeling about it. The pain is unbounded waiting, not
+  an unsolved tuning problem.
+
+  2. The smallest intervention. One number, in one place: a total deadline on the whole
+  request. That converts "hangs forever" into "fails at N seconds", which is the entire pain.
+  Choose N by looking at how long the slow calls actually take today and multiplying by a
+  small factor, so normal traffic never trips it. If there is no such data, pick something
+  plainly generous, because a too-loose timeout still removes the hang and a too-tight one
+  creates a new outage. This is smaller than what the asker is imagining, which is a table of
+  connect, read, write, idle, and pool-acquire values, each argued for separately.
+
+  3. What it leaves unfixed. Plenty, deliberately. A connect that stalls on an unreachable
+  host burns the full budget instead of failing in a second. A slow-drip response that sends
+  a byte every few seconds is indistinguishable from a healthy slow one until the deadline.
+  Nothing here retries, sheds load, or protects the pool from being tied up by slow calls.
+  That is acceptable because none of those are the thing that hurt. They are shapes of
+  failure that are now at least bounded, and a bounded wrong answer is a normal bug you can
+  fix later, whereas an unbounded wait takes the caller down with it.
+
+  4. When the larger fix becomes necessary. When the timeout starts firing on traffic that
+  was going to succeed, or when it stops firing while things still feel stuck. Concretely:
+  you see timeout errors clustering on one dependency rather than scattered, or the callers
+  pile up waiting near the full budget under load. Either of those means the single number
+  has stopped separating healthy from broken, and only then do you split it into connect and
+  read. Until you can point at one of those observations, splitting it is guessing.
+forecloses:
+  - Tuning separate connect, read, write, and pool-acquire timeouts now, before any evidence says which one is the problem.
+  - Adding retries or a circuit breaker in the same change, on the theory that a timeout is only useful with a recovery policy attached.
+falsifier: Turn the timeout on in production and watch for a week; if it fires on requests that would have completed successfully, the single-number position is wrong and the budget has to be split by phase.
+missing_actor: The owner of the service being called, who can publish its actual latency distribution or its own server-side deadline, which would replace the guess with a number.
+confidence: medium

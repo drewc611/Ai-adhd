@@ -43,3 +43,21 @@ ACTOR_CENSUS, FRAME_BREAKER. Recorded 2026-09-06 from a live run driven by the p
   contradicted the revised position without saying so. Both fixed.
 - `adhd frames --orthogonality` flagged ACTOR_CENSUS and FRAME_BREAKER at 100% on one shared
   run. One observation is an anecdote; the flag now requires three shared runs.
+
+## A second critic
+
+`critic/pass-a.rater2.yaml` is a second blind pass A over the same artifacts, produced 2026-09-07
+from `critic/pass-a.brief.md` verbatim by a critic in a separate context window that read no other
+file. It is evidence about the rubric, not part of this run: the run shipped on `pass-a.yaml` and
+`score.json` is unchanged.
+
+69% exact agreement over 45 cells, 100% within one point. `specificity` agreed on only 1 of 5
+artifacts, the worst single-dimension figure in the corpus. The ranking changed and the outcome
+did not: every contested cluster kept its representative.
+
+```
+adhd learn --run evals/recorded/001-first-run --agreement evals/recorded/001-first-run/critic/pass-a.rater2.yaml
+adhd learn --agreement-all
+```
+
+Pooled findings are recorded under D8 in `docs/DECISIONS.md`.

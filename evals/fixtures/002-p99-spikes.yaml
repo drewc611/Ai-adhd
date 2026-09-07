@@ -12,20 +12,19 @@ why: |
   "or so" is itself a clue, and never sequences the cheap observations before the expensive
   ones. A passing run does all three.
 
+# `periodic_actor` was a fifth must_surface here and was removed, not loosened. `adhd eval
+# --audit` showed the negative control satisfying it on seven of nine alternatives, and reading
+# the control says why: linear CoT gets the class of cause right. "Spikes are almost always
+# caused by something running on a schedule" is its opening line. Naming a periodic actor was
+# never the divergent contribution, and the `why` above never claimed it was — it names three
+# things a passing run does, and this was not one of them. An assertion the consensus answer
+# already satisfies measures nothing, however well it reads.
+#
+# What the real runs do with the period is a different matter, and `cheap_first` already asks
+# for it: both correlate spike timestamps against the schedule and pause a candidate to confirm,
+# where the control hands back the list. That distinction is not lexical and no keyword list
+# reaches it.
 must_surface:
-  - id: periodic_actor
-    trap: T6
-    description: A scheduled or periodic actor (cron, scheduler, token refresh, cert rotation, GC, batch job) is named as the thing that acts every ~40 minutes.
-    any_of:
-      - "cron"
-      - "schedul"
-      - "batch"
-      - "token (refresh|expir)"
-      - "cert(ificate)? (rotat|renew)"
-      - "garbage collect"
-      - "\\bGC\\b"
-      - "compaction"
-      - "periodic"
   - id: who_is_hurt
     trap: T2
     description: Someone asks whether p99 matters, and to whom.

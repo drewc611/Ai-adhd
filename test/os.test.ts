@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
+import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { artifact, cfg, passA, passB, tmp, yaml } from "./helpers.js";
 import { Kernel } from "../src/os.js";
@@ -9,8 +11,9 @@ const PROBLEM = "What timeouts should I set on this HTTP client?";
 
 function kernel(opts: { leaseSeconds?: number; maxAttempts?: number; clock?: { t: number } } = {}) {
   const clock = opts.clock ?? { t: Date.parse("2026-09-06T00:00:00Z") };
-  const k = new Kernel(cfg, { root: join(tmp(), "root"), leaseSeconds: opts.leaseSeconds ?? 60, maxAttempts: opts.maxAttempts ?? 3, now: () => new Date(clock.t) });
-  return { k, clock };
+  const root = join(tmp(), "root");
+  const k = new Kernel(cfg, { root, leaseSeconds: opts.leaseSeconds ?? 60, maxAttempts: opts.maxAttempts ?? 3, now: () => new Date(clock.t) });
+  return { k, clock, root };
 }
 
 test("submit stops at the D5 gate; confirm mints one task per branch", () => {
@@ -161,6 +164,35 @@ test("cancel mid-diverge renders the returned branches unscored (D5)", () => {
   assert.match(res.synthesis!, /UNSCORED, divergence only/);
   assert.match(res.synthesis!, /branches returned: 2 of 5/);
   assert.equal(k.claim("w1"), null);
+});
+
+/**
+ * The non-negotiable is that the pruned block always ships with trap ids and detector output.
+ * A cancelled run has no pruned block because no critic ran, and the dangerous failure is
+ * shipping that silently: a reader who has learned to look for the pruned block sees a clean
+ * output and concludes nothing was pruned. The partial has to say the sweep did not happen.
+ */
+test("a cancelled run ships no pruned block and says why, rather than omitting it quietly", () => {
+  const { k, root } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  for (let i = 0; i < 2; i++) {
+    const t = k.claim("w1")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w1");
+  }
+  k.cancel("r1", "user pressed stop");
+  const synth = k.result("r1").synthesis!;
+
+  assert.ok(!/## Pruned, with reason/.test(synth), "no critic ran, so there is nothing to prune with");
+  assert.ok(!/## Recommendation/.test(synth), "an unscored run must not recommend");
+  assert.match(synth, /no blind scoring, no clustering, no trap sweep by a critic, no\s+recommendation/i, "the absence has to be stated, not just true");
+  assert.match(synth, /one unverified angle, not a finding/);
+
+  // The frames that never returned are named, so the reader knows what the run did not hear.
+  assert.match(synth, /## Not returned/);
+  const planned = JSON.parse(readFileSync(join(root, "r1", "plan.json"), "utf8")) as { branches: { frame: string }[] };
+  const returned = synth.match(/^## ([A-Z_]+)$/gm)!.map((h) => h.slice(3));
+  for (const b of planned.branches) if (!returned.includes(b.frame)) assert.match(synth, new RegExp(`- ${b.frame}`), `${b.frame} never returned and is not listed as missing`);
 });
 
 test("cancel before confirm spends nothing and renders nothing", () => {
@@ -390,4 +422,107 @@ test("a position that folds under its objection is reported as folded, never as 
   assert.match(live, /\(none\)/);
   assert.match(foldSec, new RegExp(`\\*\\*${c}\\*\\* gave up:`));
   assert.match(foldSec, new RegExp(`deepen/${c}\\.yaml`), "the fold points at its full concession");
+});
+
+test("two workers racing for the same run never receive the same task", async () => {
+  // Real concurrency, not a fake clock: separate processes contending for the kernel lock.
+  const root = join(tmp(), "root");
+  const { k } = kernel({ clock: { t: Date.now() } });
+  const realRoot = k.root;
+  void root;
+  k.submit(PROBLEM, { problem_class: "enumerate_options" }, { seed: 1, runId: "race", confirmed: true });
+  const pending = k.status("race").tasks.pending;
+  assert.ok(pending >= 5, `expected a wide run, got ${pending} tasks`);
+
+  const claimOnce = (worker: string) =>
+    new Promise<string | null>((resolve, reject) => {
+      execFile(
+        process.execPath,
+        [join(process.cwd(), "dist", "src", "cli.js"), "os", "claim", "--worker", worker, "--run", "race", "--os-root", realRoot],
+        (err, stdout) => {
+          if (err && !stdout) return reject(err);
+          const t = stdout.trim();
+          if (!t || t === "null") return resolve(null);
+          try {
+            resolve((JSON.parse(t) as { id: string }).id);
+          } catch {
+            resolve(null);
+          }
+        },
+      );
+    });
+
+  const workers = ["w1", "w2", "w3", "w4", "w5", "w6"];
+  const claimed = (await Promise.all(workers.map(claimOnce))).filter((x): x is string => x !== null);
+  const unique = new Set(claimed);
+  assert.equal(unique.size, claimed.length, `a task was handed to two workers: ${claimed.join(", ")}`);
+  assert.ok(claimed.length >= 5, `expected every pending task to be claimed once, got ${claimed.length}`);
+});
+
+test("a leased task cannot be returned without naming the worker that holds it", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const t = k.claim("w1")!;
+  assert.throws(() => k.return_(t.id, yaml(artifact(t.label, hash))), /pass that worker id/);
+  assert.throws(() => k.return_(t.id, yaml(artifact(t.label, hash)), "w2"), /leased to w1/);
+  k.return_(t.id, yaml(artifact(t.label, hash)), "w1");
+  assert.equal(k.status("r1").tasks.done, 1);
+});
+
+test("a lock whose owner process is gone is broken and the break is journalled", () => {
+  const { k } = kernel();
+  const lock = join(k.root, ".lock");
+  mkdirSync(lock, { recursive: true });
+  // pid 2^22 is above every default pid_max, so it names no live process.
+  writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: 4194304, host: hostname(), at: new Date().toISOString() }));
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  assert.equal(k.status("r1").state, "diverge");
+  const journal = readFileSync(join(k.root, "journal.jsonl"), "utf8");
+  assert.match(journal, /lock_broken/);
+  assert.match(journal, /owner process is gone/);
+});
+
+test("a lock held by a live process is not broken, and the caller times out instead", () => {
+  const { k } = kernel();
+  const lock = join(k.root, ".lock");
+  mkdirSync(lock, { recursive: true });
+  writeFileSync(join(lock, "owner.json"), JSON.stringify({ pid: process.pid, host: hostname(), at: new Date().toISOString() }));
+  assert.throws(() => k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true }), /lock held for more than 10s/);
+});
+
+test("an artifact returned under the wrong task is rejected, not filed under the wrong frame", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const t1 = k.claim("w")!;
+  const t2 = k.claim("w")!;
+  assert.notEqual(t1.label, t2.label);
+  // The worker's task-to-subagent map is wrong by one, so t2's output comes back under t1.
+  assert.throws(
+    () => k.return_(t1.id, yaml(artifact(t2.label, hash)), "w"),
+    new RegExp(`asked for frame ${t1.label} but the artifact declares frame ${t2.label}`),
+  );
+  // The task is untouched and still claimable work, and nothing was written to t1's file.
+  assert.equal(existsSync(join(k.root, "r1", t1.artifact_path)), false);
+  k.return_(t1.id, yaml(artifact(t1.label, hash)), "w");
+  assert.equal(k.status("r1").tasks.done, 1);
+});
+
+test("a critic pass returned for the other pass's task is rejected", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w");
+  }
+  const blindMap = JSON.parse(readFileSync(join(k.root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  const passATask = k.claim("w")!;
+  assert.equal(passATask.id.includes("critique_a"), true);
+  const framesInRun = Object.values(blindMap);
+  const passBDoc = passB(hash, [{ id: "one", members: framesInRun.slice(0, 3) }, { id: "two", members: framesInRun.slice(3) }]);
+  assert.throws(() => k.return_(passATask.id, yaml(passBDoc), "w"), /is critic pass A but the artifact declares pass B/);
+  k.return_(passATask.id, yaml(passA(hash, Object.keys(blindMap))), "w");
+  assert.equal(k.status("r1").state, "critique_b");
 });

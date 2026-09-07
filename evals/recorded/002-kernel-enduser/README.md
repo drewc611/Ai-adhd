@@ -54,3 +54,34 @@ worker: nine claims, nine returns, four automatic phase advances, zero lease exp
 One run, one seed, explicit frames. It is evidence, not a decision. If END_USER joins the
 `fuzzy_debugging` primary set, expect it to be pruned often and to earn its place through the
 pruned block. The owner decides.
+
+## A second critic
+
+`critic/pass-a.rater2.yaml` is a second blind pass A over the same artifacts, produced 2026-09-07
+from `critic/pass-a.brief.md` verbatim by a critic in a separate context window that read no other
+file. It is evidence about the rubric, not part of this run: the run shipped on `pass-a.yaml` and
+`score.json` is unchanged.
+
+78% exact over 45 cells, 100% within one point, and the one run in the corpus whose outcome
+depends on the critic: the second reader sends PARTICULARIST to deepen instead of FRAME_BREAKER
+in the `measure_the_period_first` cluster. Kept as recorded. This run's recommendation is not
+robust to who scored it, and that is worth more visible than a passing eval.
+
+Two more critics were then run on the same pack under the same conditions, kept as
+`pass-a.rater3.yaml` and `pass-a.rater4.yaml`. Four critics split **2-2**: FRAME_BREAKER for the
+shipped critic and rater4, PARTICULARIST for raters 2 and 3. No cell disagreed by more than one
+point and 76% were scored identically, so this is the rubric, not one odd reader.
+
+All four score FRAME_BREAKER at exactly 0.9167 and SABOTEUR at 0.8958; only PARTICULARIST moves,
+and rater4's 0.9167 ties FRAME_BREAKER exactly, so what shipped was decided by `localeCompare`.
+
+```
+adhd learn --run evals/recorded/002-kernel-enduser --agreement evals/recorded/002-kernel-enduser/critic/pass-a.rater2.yaml
+adhd learn --panel --run evals/recorded/002-kernel-enduser
+adhd learn --agreement-all
+```
+
+`synthesis.md` here predates the Close call note the synthesiser now renders, and is left as the
+run produced it.
+
+Pooled findings are recorded under D8 in `docs/DECISIONS.md`.

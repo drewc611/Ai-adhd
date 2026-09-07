@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from kernel run 20260907035041-7e664e. Failing items: must_surface retry_target_questioned (T2): \"Wait, then retry the same instance\" is questioned: either an alternative is named\n(fail over, degraded mode, partial output) or retry amplification against the target\nthat is already struggling is called out. A bare \"degrade\" does not count; the first\nreal run matched \"degrades that way\" in an unrelated sentence.; must_surface retry_cost (T6): Someone pays for the retry, and the answer says who and in what currency.. Recorded as observed, not hidden."
+}

@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from kernel run 20260907034314-7e664e. Failing items: must_surface human_cancel (T6): The human waiting is an actor who can cancel. The bail out path is modelled.; must_surface retry_cost (T6): Someone pays for the retry, and the answer says who and in what currency.; expect pruned_traps_include_any T1,T2,T3: none named in pruned block. Recorded as observed, not hidden."
+}

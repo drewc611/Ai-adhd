@@ -1,0 +1,46 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: FRAME_BREAKER
+position: Stop configuring per-client timeout numbers and instead stamp every inbound request with a total deadline at your edge, propagate that deadline through each downstream call, and derive every individual timeout by subtracting elapsed time from what is left.
+reasoning: |
+  1. The load bearing assumption is that a timeout is a property of the HTTP client, a
+  static number you choose once and write into a config, and that reliability is therefore a
+  tuning exercise on that object. The phrasing "on this HTTP client" localizes the decision to
+  one component. But a timeout is only meaningful relative to how long the thing waiting at
+  the other end is still willing to wait. Two seconds is generous for a call that starts with
+  a 5s budget and already impossible for one that starts with 200ms left. The number cannot be
+  correct as a property of the client, because the client does not hold the information that
+  makes it correct.
+
+  2. Whoever owns the service you are calling benefits most from this staying unexamined. As
+  long as timeout choice is framed as the caller's tuning problem, they never have to publish
+  a latency objective or shed load when they cannot meet one; every overrun becomes your
+  misconfiguration. The on-call rotation also benefits in a shabby way: changing a number in a
+  config is a visible action that closes an incident ticket without touching capacity, retry
+  behavior, or fan-out. And library authors benefit, because "sensible defaults" that are
+  actually unbounded stay unexamined as long as everyone believes the number is the user's job.
+
+  3. Once the assumption is dropped, the question is about latency budget ownership and
+  failure policy: how much wall clock time is this user-facing request allowed to consume in
+  total, who is authorized to spend it, and what specifically happens when it runs out —
+  fail fast, degrade, serve stale, or shed. That is a question about the request path, not
+  about a client object. It is also a question about amplification: a timeout plus retries is
+  a load multiplier during exactly the incident you set the timeout to survive, so retry
+  budget is part of the same decision and cannot be settled in the client config either.
+
+  4. Tomorrow: pick one user-facing entry point and give it an explicit end-to-end deadline
+  (an absolute time, not a duration) at the edge — a value you can defend, e.g. the latency
+  you have already promised users. Carry it in the request context and in an outbound
+  Deadline or grpc-timeout style header. Replace the hardcoded timeout at each outbound call
+  site with remaining = deadline - now, and fail immediately when remaining is below the
+  observed floor for that dependency rather than issuing a call that cannot finish. Add a
+  retry budget expressed as a percentage of request volume, not a per-call retry count, and
+  make retries spend from the same remaining budget. Log remaining-at-call-time and
+  deadline-exceeded counts per hop from day one; that log is the artifact that tells you where
+  the budget is actually going, which no static timeout ever tells you.
+forecloses:
+  - Deriving each timeout from the dependency's measured p99 or p99.9 latency and pinning it in client config; under a propagated deadline that number is an input to a floor check at most, never the timeout itself.
+  - Setting a generous timeout plus a fixed retry count (the common "3 retries, 30s each" shape); this position rules out per-call retry counts in favor of a shared retry budget, and rules out any timeout long enough to outlive the caller who is waiting.
+  - A central platform-wide default timeout applied uniformly to all clients, which is the natural resolution of the question as asked and which this position rejects outright.
+falsifier: Log, for one day on the real traffic, the inbound entry point and every outbound call it makes. If the service is a single-hop leaf — no request makes more than one downstream call, no caller upstream is holding a user-facing latency promise, and nothing fans out or retries — then there is no budget to divide, deadline propagation buys nothing, and a flat per-client timeout is the right answer after all. A second cheap falsifier - if that log shows deadline-exceeded events are already effectively zero and tail latency incidents trace to capacity rather than waiting, the whole reframing is misplaced effort.
+missing_actor: The owner of the service being called. They can publish a latency objective and enforce it server side — reject or shed a request they can already tell they will not finish in time, and honor an inbound deadline header instead of doing work whose result nobody will read. Without them, every caller pays for their unbounded tail individually and the wasted work still lands on their own capacity.
+confidence: medium

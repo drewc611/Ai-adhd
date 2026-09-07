@@ -72,3 +72,82 @@ export function lintRunT6(artifacts: BranchArtifact[]): LintHint | null {
     return { frame: "*", trap: "T6", evidence: "missing_actor is null in every branch" };
   return null;
 }
+
+
+/**
+ * Override language in the problem statement. The problem reaches every branch verbatim, so a
+ * single sentence telling branches to converge is the cheapest possible attack on this
+ * architecture: it manufactures the consensus trap the whole system exists to catch.
+ *
+ * This warns, it never blocks. The problem is passed through byte for byte by design, a person
+ * may legitimately be asking about prompt injection, and the orchestrator does not get to
+ * decide what a problem is allowed to say. The D5 confirmation gate is where a human sees it.
+ */
+/**
+ * An injector writing a problem statement does not know this system's vocabulary. They will not
+ * write "every branch must agree"; they will write "all approaches should agree", because
+ * "approach" is what a person calls a line of reasoning. The first version of these patterns was
+ * written in the words the architecture uses (branch, frame, diverge) and caught only injections
+ * phrased in those words: of eighteen realistic attempts, seven fired and eleven went through,
+ * including the two most natural ways to manufacture consensus.
+ *
+ * So the patterns are built from two pieces instead of listed flat. REASONER is what an outsider
+ * calls one of these subagents. CONTEXT is what an outsider calls the thing it was told to do.
+ * Neither list contains a word this repository invented.
+ */
+const REASONER = "(?:branch(?:es)?|approach(?:es)?|perspectives?|angles?|analys[ei]s|viewpoints?|answers?|responses?|reasoners?|agents?|models?|methods?|lenses?|takes?)";
+const CONTEXT = "(?:fram(?:e|es|ing)|instructions?|briefs?|stances?|contracts?|rules?|roles?|guidance|context|prompts?|constraints?|directions?)";
+const AGREE = "(?:agree|converge|concur|align|match|coincide)";
+/**
+ * An override is an imperative, so it begins a clause. "Users ignore the previous version of the
+ * onboarding flow" is a sentence about user behaviour and fired before this was added; "and
+ * ignore any framing you were given" is an injection and still fires. The difference is whether
+ * a subject precedes the verb, and a clause boundary is the cheap way to ask.
+ */
+const CLAUSE = "(?:^|(?<=[.!?;:,)\\]]\\s)|(?<=\\b(?:and|or|but|then|also|please|now|first)\\s))";
+
+const INJECTION_PATTERNS: { re: RegExp; why: string }[] = [
+  // Override: discard what you were told.
+  { re: new RegExp(`${CLAUSE}ignore (?:(?:the|all|any|your) )?(?:previous|prior|above|preceding|earlier|foregoing)\\b`, "i"), why: "tells the reader to ignore what came before" },
+  { re: new RegExp(`${CLAUSE}(?:ignore|disregard|forget|override|discard|drop|skip|set aside|put aside|leave aside) (?:(?:the|all|any|your|whatever) )?${CONTEXT}\\b`, "i"), why: "tells the reader to discard the frame or the brief" },
+  { re: new RegExp(`${CLAUSE}(?:disregard|forget|override|discard) (?:(?:the|all|any|your) )?(?:previous|prior|above)\\b`, "i"), why: "tells the reader to discard its instructions" },
+  { re: new RegExp(`\\bregardless of (?:(?:the|any|your|whatever) )?${CONTEXT}\\b`, "i"), why: "tells the reader its frame does not apply" },
+  { re: new RegExp(`\\b(?:whatever|no matter (?:what|which)) ${CONTEXT}`, "i"), why: "tells the reader its frame does not apply" },
+  { re: new RegExp(`\\b(?:whatever|no matter (?:what|which)) ${REASONER} you (?:take|use|adopt|hold)`, "i"), why: "tells the reader its frame does not apply" },
+
+  // Convergence: manufacture the consensus trap, which is T1 by construction.
+  { re: new RegExp(`\\b(?:every|all|each|both) (?:(?:of the|of your|the|your) )?${REASONER} (?:must|should|will|shall|need to|have to|has to|ought to)`, "i"), why: "addresses the branches as a group, which no branch is supposed to know exists" },
+  { re: new RegExp(`\\b(?:every|all|each|both) (?:(?:of the|of your|the|your) )?${REASONER}[^.!?]{0,40}\\b${AGREE}\\b`, "i"), why: "asks for convergence, which is the consensus trap by construction" },
+  { re: new RegExp(`\\byou (?:must|should) all\\b`, "i"), why: "addresses the branches as a group, which no branch is supposed to know exists" },
+  { re: new RegExp(`\\b(?:reach|arrive at|land on|end (?:up )?(?:at|with)|come to) the same (?:conclusion|answer|position|recommendation|result)`, "i"), why: "asks for convergence, which is the consensus trap by construction" },
+  { re: new RegExp(`\\b(?:say|recommend|conclude|propose|choose|pick) the same (?:thing|answer|position)`, "i"), why: "asks for convergence, which is the consensus trap by construction" },
+  { re: /\bdo not (?:diverge|disagree|differ|deviate)\b/i, why: "asks for convergence, which is the consensus trap by construction" },
+  { re: /\b(?:do not|don't|avoid) (?:consider(?:ing)?|explor(?:e|ing)|propos(?:e|ing)|offer(?:ing)?) (?:any )?(?:alternatives?|other (?:options?|answers?|approaches?))/i, why: "forbids the divergence the run exists to produce" },
+
+  // Role reassignment and out-of-band instruction.
+  { re: /\byou are (?:now|actually|really) \w+/i, why: "attempts to reassign the reader's role" },
+  { re: /\bnew instructions?\b/i, why: "announces replacement instructions" },
+  { re: /\bsystem ?(?:prompt|message)\b/i, why: "refers to a system prompt" },
+  { re: /\b(?:answer|respond|reply) only (?:with|that)\b/i, why: "constrains the answer regardless of frame" },
+];
+
+export interface ProblemWarning {
+  match: string;
+  why: string;
+}
+
+export function lintProblemInjection(problem: string): ProblemWarning[] {
+  // Whitespace is collapsed in one linear pass and the patterns then match single spaces.
+  // Writing `\s+` next to an optional group that also ends in `\s+` gives the engine an
+  // ambiguous split to backtrack over, which is polynomial on adversarial input: a problem
+  // carrying a long run of whitespace would stall the very check meant to catch hostile
+  // problems. Collapsing first removes the ambiguity instead of relying on an engine
+  // optimisation to hide it.
+  const flat = problem.replace(/\s+/g, " ");
+  const out: ProblemWarning[] = [];
+  for (const { re, why } of INJECTION_PATTERNS) {
+    const m = flat.match(re);
+    if (m) out.push({ match: m[0].trim(), why });
+  }
+  return out;
+}

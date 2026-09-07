@@ -1,0 +1,10 @@
+{
+  "problem_class": "design_decision",
+  "frames": [
+    "FRAME_BREAKER",
+    "PARTICULARIST",
+    "SABOTEUR",
+    "MECHANIC",
+    "PRIOR_ART"
+  ]
+}

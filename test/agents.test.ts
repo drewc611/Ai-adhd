@@ -3,7 +3,7 @@
 // no branch, critic, or deepen agent ever carries a filesystem or network channel.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { cfg } from "./helpers.js";
@@ -25,6 +25,24 @@ function tools(fm: Record<string, unknown>): string[] {
 const FILESYSTEM = ["Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "Bash", "NotebookEdit", "LS"];
 const NETWORK = ["WebSearch", "WebFetch"];
 
+/**
+ * An allowlist, not a denylist. Naming the tools that must not appear leaves every tool nobody
+ * thought of passing silently, and the ones that would hurt most are the ones a future edit is
+ * most likely to reach for: Agent and SendMessage reach other agents, TaskCreate and TaskOutput
+ * reach other tasks, and any MCP tool reaches whatever its server does. "Branches never see
+ * siblings" is a CLAUDE.md non-negotiable, so a new grant has to be argued for here first.
+ *
+ * TaskList is the launch permit from D4: Claude Code refuses to launch an agent with zero tools.
+ * It is read only and reaches no file and no network. What it reveals about sibling tasks is
+ * unverified; see D4. It is the one grant on this list that rests on an untested claim.
+ */
+const PERMITTED: Record<string, string[]> = {
+  "adhd-branch.md": ["TaskList"],
+  "adhd-critic.md": ["TaskList"],
+  "adhd-deepen.md": ["TaskList"],
+  "adhd-branch-search.md": ["WebFetch", "WebSearch"],
+};
+
 test("every agent file has a name matching its filename, a description, and at least one tool", () => {
   const dir = join(cfg.root, "agents");
   const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
@@ -37,7 +55,18 @@ test("every agent file has a name matching its filename, a description, and at l
   }
 });
 
-test("no branch, critic, or deepen agent carries a filesystem tool; only adhd-branch-search has network", () => {
+test("every agent grants exactly the tools it is permitted, and nothing else", () => {
+  const dir = join(cfg.root, "agents");
+  const files = readdirSync(dir).filter((x) => x.endsWith(".md"));
+  assert.deepEqual(files.sort(), Object.keys(PERMITTED).sort(), "a new agent file needs an entry in PERMITTED");
+  for (const f of files) {
+    const t = tools(frontmatter(join(dir, f))).sort();
+    assert.deepEqual(t, [...PERMITTED[f]!].sort(), `${f}: tool grant changed. Argue for it in D4 before changing PERMITTED.`);
+  }
+});
+
+/** The two categories that matter most, named separately so a failure says which line was crossed. */
+test("no agent carries a filesystem tool, and only the search agent carries network", () => {
   const dir = join(cfg.root, "agents");
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {
     const t = tools(frontmatter(join(dir, f)));
@@ -45,6 +74,20 @@ test("no branch, critic, or deepen agent carries a filesystem tool; only adhd-br
     const net = t.filter((x) => NETWORK.includes(x));
     if (f === "adhd-branch-search.md") assert.deepEqual(net.sort(), ["WebFetch", "WebSearch"]);
     else assert.deepEqual(net, [], `${f} grants network tools`);
+  }
+});
+
+/**
+ * Every tool that reaches another agent, another task, or another server. Listed by name as well
+ * as caught by the allowlist above, so a failure here says what the grant would have opened.
+ */
+test("no agent carries a tool that reaches another agent, task, or server", () => {
+  const REACHING = ["Agent", "Task", "SendMessage", "ListAgents", "TaskCreate", "TaskUpdate", "TaskOutput", "TaskStop", "TaskGet", "Skill", "Workflow", "AskUserQuestion"];
+  const dir = join(cfg.root, "agents");
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {
+    const t = tools(frontmatter(join(dir, f)));
+    for (const bad of REACHING) assert.ok(!t.includes(bad), `${f} grants ${bad}: branches never see siblings`);
+    for (const tool of t) assert.ok(!tool.startsWith("mcp__"), `${f} grants the MCP tool ${tool}, which reaches whatever its server does`);
   }
 });
 
@@ -69,4 +112,37 @@ test("plugin.json points at existing skill, agents, and MCP entry", () => {
   const mcp = (p["mcpServers"] as Record<string, { command: string; args: string[] }>)["adhd"]!;
   assert.equal(mcp.command, "node");
   assert.match(mcp.args[0]!, /dist\/src\/mcp\.js$/);
+});
+
+test("every path package.json publishes exists after a build", () => {
+  // The package shipped with bin, main and two scripts all pointing at dist/cli.js and
+  // friends, while the build emits dist/src/. `npm i -g adhd && adhd` would have failed.
+  // Nothing caught it because everything in development runs dist/src/cli.js directly.
+  const root = cfg.root;
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+    bin: Record<string, string>;
+    main: string;
+    types?: string;
+    exports?: Record<string, Record<string, string> | string>;
+    scripts: Record<string, string>;
+    files: string[];
+  };
+  const mustExist = new Set<string>([...Object.values(pkg.bin), pkg.main]);
+  if (pkg.types) mustExist.add(pkg.types);
+  for (const entry of Object.values(pkg.exports ?? {}))
+    if (typeof entry === "object") for (const v of Object.values(entry)) mustExist.add(v.replace(/^\.\//, ""));
+  // Scripts that launch a built file are entry points too, and were wrong in the same way.
+  for (const cmd of Object.values(pkg.scripts)) {
+    const m = cmd.match(/node (dist\/\S+\.js)/);
+    if (m) mustExist.add(m[1]!);
+  }
+  assert.ok(mustExist.size >= 4, "expected several published entry points to check");
+  for (const rel of mustExist) assert.ok(existsSync(join(root, rel)), `package.json points at ${rel}, which does not exist after a build`);
+  // And the tarball must actually carry them: a correct path into an unshipped directory is
+  // the same failure wearing a different hat.
+  for (const rel of mustExist)
+    assert.ok(
+      pkg.files.some((f) => rel === f || rel.startsWith(f.replace(/\/$/, "") + "/")),
+      `${rel} is an entry point but no "files" entry ships it`,
+    );
 });

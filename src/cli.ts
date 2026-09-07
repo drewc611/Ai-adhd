@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { loadConfig } from "./config.js";
+import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
-import { formatEvalReport, runEval } from "./eval.js";
-import { listFrames, orthogonality } from "./frames.js";
+import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
+import { diffRuns, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
+import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
+import { explainFrame } from "./why.js";
+import { writeViewer } from "./viewer.js";
+import { wizard } from "./tui.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
-import { ConfigError, ContractError, RunAbort } from "./errors.js";
+import { ConfigError, ContractError, RunAbort, UsageError } from "./errors.js";
 
 const program = new Command();
 program
@@ -29,6 +33,10 @@ function fail(e: unknown): never {
     console.error(e.message);
     process.exit(4);
   }
+  if (e instanceof UsageError) {
+    console.error(`usage: ${e.message}`);
+    process.exit(5);
+  }
   console.error(e instanceof Error ? e.stack ?? e.message : String(e));
   process.exit(1);
 }
@@ -45,6 +53,7 @@ program
   .option("--run-id <id>", "override the generated run id (compile)")
   .option("--yes", "compile only: acknowledge the plan preview non-interactively (the CLI never blocks anyway; this records intent)")
   .option("--partial", "synth only: render returned branches unscored (D5 cancel path)")
+  .option("--json")
   .action((o) => {
     const phase = o.phase as Phase;
     if (!["compile", "critique", "deepen", "synth"].includes(phase)) fail(new ContractError("run", [`unknown phase ${phase}`]));
@@ -59,7 +68,9 @@ program
         runId: o.runId,
         partial: o.partial,
       });
-      console.log(r.text);
+      // `next` is the whole point for a driver: it names the briefs to spawn and where their
+      // artifacts go. Printing it as text means parsing prose to find a path.
+      console.log(o.json ? JSON.stringify({ phase, exit_code: r.exitCode, run_dir: r.runDir ?? null, next: r.next ?? null, text: r.text }, null, 2) : r.text);
       process.exit(r.exitCode);
     } catch (e) {
       fail(e);
@@ -70,10 +81,13 @@ program
   .command("traps <file>")
   .description("run the contract check and code lints over one branch artifact")
   .option("--hash <problem_hash>", "expected problem_hash")
-  .action((file, o) => {
+  .option("--json")
+  .action((file, o: { hash?: string; json?: boolean }) => {
     try {
-      const r = trapsReport(file, { expectHash: o.hash });
-      console.log(r.text);
+      const r = trapsReport(file, { expectHash: o.hash, frames: knownFrameIds(loadConfig(program.opts().root)) });
+      // The exit code is the contract a script branches on, so --json carries it too rather
+      // than replacing it. A caller that only reads stdout still gets the verdict.
+      console.log(o.json ? JSON.stringify({ file, ok: r.exitCode === 0, exit_code: r.exitCode, report: r.text }, null, 2) : r.text);
       process.exit(r.exitCode);
     } catch (e) {
       fail(e);
@@ -85,10 +99,16 @@ program
   .description("replay recorded runs against fixture assertions")
   .option("--fixtures <dir>")
   .option("--recorded <dir>")
+  .option("--audit", "report which assertions discriminate a real run from the negative control")
   .option("--json", "machine readable")
   .action((o) => {
     try {
       const cfg = loadConfig(program.opts().root);
+      if (o.audit) {
+        const a = auditFixtures(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded });
+        console.log(o.json ? JSON.stringify(a.items, null, 2) : a.text);
+        return;
+      }
       const r = runEval(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded });
       console.log(o.json ? JSON.stringify(r, null, 2) : formatEvalReport(r));
       process.exit(r.ok ? 0 : 1);
@@ -99,19 +119,151 @@ program
 
 program
   .command("frames")
-  .description("list the frame library, or report pairwise co-clustering across recorded runs")
-  .option("--orthogonality", "D6 empirical check")
+  .description("list the frame library, or report how it has behaved across recorded runs")
+  .option("--orthogonality", "D6 empirical check: pairwise co-clustering")
+  .option("--stats", "per-frame prune, fold and recommendation rates, and detector fire counts")
+  .option("--collisions", "which frame labels are also ordinary prose, so the redactor removes real text")
   .option("--recorded <dir>")
   .option("--json")
   .action((o) => {
     try {
       const cfg = loadConfig(program.opts().root);
+      if (o.stats) {
+        const r = frameStats(cfg, o.recorded);
+        console.log(o.json ? JSON.stringify({ runs: r.runs, frames: r.frames, traps: r.traps }, null, 2) : r.text);
+        return;
+      }
+      if (o.collisions) {
+        const r = labelCollisions(cfg, o.recorded);
+        console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+        return;
+      }
       if (o.orthogonality) {
         const r = orthogonality(cfg, o.recorded);
         console.log(o.json ? JSON.stringify(r.pairs, null, 2) : r.text);
         process.exit(r.flagged.length ? 1 : 0);
       }
       console.log(listFrames(cfg, Boolean(o.json)));
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("diff")
+  .description("compare two recorded runs of the same fixture: what survived, what moved, what was the seed")
+  .argument("<runA>", "a recorded run directory")
+  .argument("<runB>", "another recorded run directory")
+  .option("--json")
+  .action((runA: string, runB: string, o: { json?: boolean }) => {
+    try {
+      const r = diffRuns(loadConfig(program.opts().root), runA, runB);
+      console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+      // A mismatched problem_hash means the two are not runs of one problem, so the comparison
+      // is meaningless rather than merely uninteresting. Say so with an exit code.
+      process.exit(r.same_problem ? 0 : 1);
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("learn")
+  .description("what the recorded runs say about the rubric itself. Reads runs; never calls a model")
+  .option("--sensitivity", "do small weight changes send different positions to deepen?")
+  .option("--correlation", "do two dimensions measure the same thing?")
+  .option("--agreement <passA.yaml>", "a second blind pass A over the same pack; needs --run")
+  .option("--run <dir>", "the recorded run whose pass A the second scoring is compared against")
+  .option("--agreement-all", "pool every run that has a second scoring on disk")
+  .option("--panel", "three or more critics on one pack; needs --run. Separates an ambiguous rubric from an odd critic")
+  .option("--recorded <dir>")
+  .option("--delta <n>", "weight perturbation for --sensitivity", "1")
+  .option("--json")
+  .action((o: { sensitivity?: boolean; correlation?: boolean; agreement?: string; agreementAll?: boolean; panel?: boolean; run?: string; recorded?: string; delta: string; json?: boolean }) => {
+    try {
+      const cfg = loadConfig(program.opts().root);
+      if (o.agreement && !o.run) throw new UsageError("--agreement needs --run: a second scoring is only meaningful against the run it re-scores");
+      if (o.panel) {
+        if (!o.run) throw new UsageError("--panel needs --run: a panel scores one artifact pack");
+        const r = raterPanel(cfg, o.run);
+        console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+        return;
+      }
+      if (o.agreementAll) {
+        const r = interRaterCorpus(cfg, o.recorded);
+        console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+        return;
+      }
+      if (o.agreement) {
+        const r = interRater(cfg, o.run!, o.agreement);
+        console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+        return;
+      }
+      const want = { sensitivity: Boolean(o.sensitivity), correlation: Boolean(o.correlation) };
+      // Neither flag means both: the two answer one question between them, which is whether the
+      // rubric is deciding anything the weights are not.
+      if (!want.sensitivity && !want.correlation) {
+        want.sensitivity = true;
+        want.correlation = true;
+      }
+      const out: Record<string, unknown> = {};
+      const texts: string[] = [];
+      if (want.sensitivity) {
+        const r = weightSensitivity(cfg, o.recorded, Number(o.delta));
+        out.sensitivity = r;
+        texts.push(r.text);
+      }
+      if (want.correlation) {
+        const r = dimensionCorrelation(cfg, o.recorded);
+        out.correlation = r;
+        texts.push(r.text);
+      }
+      console.log(o.json ? JSON.stringify(out, null, 2) : texts.join("\n\n" + "-".repeat(72) + "\n\n"));
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("why")
+  .argument("<run>", "a run directory")
+  .argument("<frame>", "the frame to explain")
+  .description("everything that happened to one frame in one run, from the files the run wrote")
+  .option("--json")
+  .action((run: string, frame: string, o: { json?: boolean }) => {
+    try {
+      const r = explainFrame(loadConfig(program.opts().root), run, frame);
+      console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("wizard")
+  .description("the commands without the flags: menus over the same verbs, each printing what it ran")
+  .action(async () => {
+    try {
+      await wizard(loadConfig(program.opts().root));
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("viewer")
+  .description("build one self-contained HTML page over the recorded runs. Reads runs; never calls a model")
+  .option("--out <file>", "where to write it", "adhd-runs.html")
+  .option("--recorded <dir>")
+  .option("--json")
+  .action((o: { out: string; recorded?: string; json?: boolean }) => {
+    try {
+      const r = writeViewer(loadConfig(program.opts().root), o.out, { recordedDir: o.recorded });
+      if (o.json) return void console.log(JSON.stringify(r, null, 2));
+      console.log(
+        `wrote ${r.path} (${(r.bytes / 1024).toFixed(0)} KB): ${r.runs} run(s), ${r.frames} frame(s).`,
+        "\nSelf-contained. Open it from disk; there is nothing to serve and nothing to fetch.",
+      );
     } catch (e) {
       fail(e);
     }
@@ -184,10 +336,18 @@ os.command("reap").option("--os-root <dir>", "kernel root").action((o) => { try 
 program
   .command("validate")
   .description("load and validate config/ and prompts/ (the first thing every other command does)")
-  .action(() => {
+  .option("--json")
+  .action((o: { json?: boolean }) => {
     try {
       const cfg = loadConfig(program.opts().root);
-      console.log(`ok: ${cfg.frames.frames.length} frames, ${Object.keys(cfg.routing.classes).length} classes, ${cfg.rubric.dimensions.length} rubric dimensions`);
+      const summary = {
+        ok: true,
+        frames: cfg.frames.frames.length,
+        classes: Object.keys(cfg.routing.classes).length,
+        dimensions: cfg.rubric.dimensions.length,
+      };
+      if (o.json) return void console.log(JSON.stringify(summary, null, 2));
+      console.log(`ok: ${summary.frames} frames, ${summary.classes} classes, ${summary.dimensions} rubric dimensions`);
     } catch (e) {
       fail(e);
     }

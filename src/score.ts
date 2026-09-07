@@ -1,7 +1,7 @@
 // The scorer is code. It aggregates critic output deterministically, applies the hard rules
 // in config/critic-rubric.yaml, and refuses to proceed on a missing record. It never rescues
 // a branch with a fired trap on the strength of its pass A score.
-import type { Config } from "./config.js";
+import { currentFrameId, type Config } from "./config.js";
 import type { DetectorRecord, PassA, PassB, TrapId } from "./schema.js";
 import type { BranchValidation } from "./validate.js";
 import type { LintHint } from "./lint.js";
@@ -53,6 +53,38 @@ export interface ScoreResult {
   run_level: RunLevel;
   /** False on monoculture or scatter: do not deepen. */
   proceed: boolean;
+  /**
+   * The rubric that produced these numbers. `pass_a` is a weighted total, so it is only
+   * comparable across runs scored under the same weights, and until this was stamped a rubric
+   * change would have silently split the corpus into halves that look comparable and are not.
+   * The field existed in config/critic-rubric.yaml and nothing read it.
+   */
+  rubric_version: number;
+}
+
+/**
+ * A recorded run names frames by the ids that were current when it ran, and a rename must not
+ * split the corpus in two. Mapping forward here, once, at the point a recorded score is read,
+ * keeps every count downstream about frames as the library names them today.
+ *
+ * The recorded files themselves are never rewritten. `score.json`, `plan.json`,
+ * `blind-map.json`, the branch filenames and the append-only `os.json` journal are the record
+ * of what ran; editing them to match a later rename would make a run claim a frame that did not
+ * exist yet. An unknown id passes through unchanged, because a run may name a frame that has
+ * since been retired outright and that is a real fact about the run.
+ */
+export function forwardFrameIds(cfg: Config, score: ScoreResult): ScoreResult {
+  const cur = (id: string) => currentFrameId(cfg, id);
+  return {
+    ...score,
+    frames: score.frames.map((f) => ({ ...f, frame: cur(f.frame) })),
+    clusters: score.clusters.map((c) => ({
+      ...c,
+      members: c.members.map(cur),
+      survivors: c.survivors.map(cur),
+      representative: c.representative ? cur(c.representative) : c.representative,
+    })),
+  };
 }
 
 /** weighted mean, normalised to [0,1]. */
@@ -160,5 +192,6 @@ export function scoreRun(
       notes,
     },
     proceed: !monoculture && !scatter && frames.some((f) => f.status === "survivor"),
+    rubric_version: cfg.rubric.version,
   };
 }

@@ -1,0 +1,59 @@
+# Second blind pass A over the same artifact pack as pass-a.yaml, by a fresh critic in a
+# separate context window. Produced 2026-09-07 from critic/pass-a.brief.md verbatim, with the
+# critic instructed to read that file and nothing else. It is evidence about the rubric, not
+# part of this run: the run shipped on pass-a.yaml and score.json is unchanged.
+#
+# Read it with: adhd learn --run evals/recorded/001-first-run --agreement <this file>
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence with hard numbers (connect 2s, total 10s) and an imperative to ship, with no option list and no return of the choice to the reader." }
+    foreclosure: { score: 3, evidence: "Rules out four concretely named and genuinely tempting moves, including retries layered outside the deadline and sub-second production values set before data exists." }
+    falsifiability: { score: 2, evidence: "A week of elapsed-time logs is observable and directly relevant, but costs a week of instrumented traffic and would only move the 10s default rather than kill the position's semantics." }
+    specificity: { score: 3, evidence: "The reasoning depends on HTTP-particular mechanics (TCP handshake times, slowloris trickle defeating read-only timeouts, retry multiplication of the deadline) that do not transfer to any other problem." }
+    assumption_attack: { score: 2, evidence: "It challenges the implicit assumption that the answer is a number by separating numbers from semantics, but the semantics-are-the-one-way-door claim is asserted through experiments rather than tested against the question's frame, and the recommended numbers still come out." }
+    reasoning_carries: { score: 3, evidence: "No authorities, standards, or citations appear anywhere; every claim is carried by a stated failure mechanism." }
+    actor_coverage: { score: 2, evidence: "The upstream service owners are named with a real action (publish a latency SLO, set server-side deadlines), but the position stands unchanged whether or not they act." }
+    reversibility: { score: 3, evidence: "The whole position is a sequence built on two-way versus one-way doors: take the free semantic commitments now, ship generous numbers, tighten after data." }
+    substance: { score: 3, evidence: "Flattened to set a total deadline, forbid infinite, keep retries inside the budget, and tune from measured p99, the claim is unchanged and still worth saying." }
+  B:
+    committal: { score: 3, evidence: "One sentence that says make callers pass a deadline and give the client only floors that can be shortened but never lengthened, with no hedge." }
+    foreclosure: { score: 3, evidence: "Concretely rules out the compiled-in global constant, tuning purely to the upstream p99, and letting the load balancer or liveness probe end a stuck request." }
+    falsifiability: { score: 3, evidence: "Instrumenting the caller side for cancellations is a specific and cheap observation whose null result would collapse the deadline-propagation position back to fixed floors." }
+    specificity: { score: 3, evidence: "The floors are argued from HTTP and infrastructure particulars (connect handshake latency, trickling peers, staying under the load balancer idle and liveness cutoffs) that fit no other problem." }
+    assumption_attack: { score: 3, evidence: "It names the assumption that the timeout is a property of the client running unattended, tests it by asking who is actually waiting and who can act fastest, and the answer changes to a caller-supplied deadline." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities are invoked; the case rests entirely on an enumerated actor-and-cost argument." }
+    actor_coverage: { score: 3, evidence: "The abandoning end user is named with a concrete action (cancel or refresh), and the entire position is derived from treating that actor as the primary control." }
+    reversibility: { score: 1, evidence: "Speed and cost of each actor's action are enumerated and runtime config is mentioned, but cheap reversible moves are never distinguished from committed ones or used to order the recommendation." }
+    substance: { score: 3, evidence: "Stripped flat to callers own the deadline and the client only enforces small defensive floors, the claim survives intact and remains contestable." }
+  C:
+    committal: { score: 2, evidence: "One clear imperative sentence, but the typically 2 to 5 seconds range and the sized-to-what-you-measured clause hand the actual number back to the reader." }
+    foreclosure: { score: 3, evidence: "Rules out the library default including no timeout, the 30-second-plus generous value smoothed by retries, and picking the number by convention, all of which are what people actually do." }
+    falsifiability: { score: 3, evidence: "Pulling last week's latency histogram and checking p99.9 of legitimate successes is cheap, specific, and would defeat the proposed deadline for that endpoint." }
+    specificity: { score: 2, evidence: "Thread pool exhaustion, retry amplification, and handshake timing bend around the HTTP case, but the who-pays and defaults-look-free-until-the-incident argument would survive transplant to most default-setting questions." }
+    assumption_attack: { score: 1, evidence: "It names the assumption that generous timeouts are the safe default but leaves the question's own frame, that the answer is a number configured on the client, entirely unexamined." }
+    reasoning_carries: { score: 3, evidence: "No SLO documents, standards, or named authorities are cited; the cost argument stands on its own mechanics." }
+    actor_coverage: { score: 3, evidence: "The downstream owning team is named with real actions (publish an SLO, enforce server-side deadlines and load shedding) and the position's justification, that they should not absorb the pile-up, depends on them." }
+    reversibility: { score: 1, evidence: "It notes the fix is cheap and needs no new infrastructure, but never separates reversible moves from committed ones or uses that separation to order anything." }
+    substance: { score: 3, evidence: "Flattened to short connect timeout, deadline from the measured slow tail, at most one jittered retry on idempotent calls, the claim is the same and worth saying without the ledger framing." }
+  D:
+    committal: { score: 3, evidence: "One sentence telling the reader to stop configuring a client timeout and pass a per-call deadline instead, with no escape hatch." }
+    foreclosure: { score: 3, evidence: "Rules out the inherited global config field, sizing from the upstream p99, and retry policies that add time on top of the deadline, all concretely stated." }
+    falsifiability: { score: 3, evidence: "Enumerating call sites is an afternoon of work and a single caller with one fixed budget would make the whole deadline-propagation position pointless." }
+    specificity: { score: 2, evidence: "It hangs on the question's phrase on this HTTP client, but the argument that the setting belongs to the caller rather than the object carries no HTTP-particular content and the backstop numbers are left vague." }
+    assumption_attack: { score: 3, evidence: "It isolates the load-bearing assumption that a timeout is a property of the client, refutes it with one client having two correct answers for a batch job and a user-facing path, and the recommended action follows directly from that refutation." }
+    reasoning_carries: { score: 3, evidence: "No authorities are cited; the interest-analysis and the batch-versus-SLO counterexample do all the work." }
+    actor_coverage: { score: 2, evidence: "The upstream owner is named with actions (publish an SLO, return 503 with Retry-After) but the position holds whether or not they ever do so." }
+    reversibility: { score: 0, evidence: "Nothing distinguishes cheap reversible moves from expensive committed ones; deleting the config field is proposed without any accounting of what it costs to undo." }
+    substance: { score: 3, evidence: "Flattened to the timeout belongs to whoever is waiting, so require a deadline argument and delete the client-wide field, the claim is unchanged and still contestable." }
+  E:
+    committal: { score: 3, evidence: "One flat sentence, set a 10 second overall deadline and change nothing else, with an explicit refusal to add anything." }
+    foreclosure: { score: 3, evidence: "Explicitly rules out per-phase timeouts, per-route tuning, and retries or circuit breakers, which are precisely the tempting additions and are named in concrete terms." }
+    falsifiability: { score: 3, evidence: "One production timeout error against a dependency whose own metrics show a sub-10s success is a cheap, specific observation that would directly kill the one-number position." }
+    specificity: { score: 2, evidence: "Connect versus read timeouts and long-poll endpoints are HTTP-particular, but the core argument, do the smallest thing and let the loud failure teach you the real number, transfers to almost any tuning question." }
+    assumption_attack: { score: 1, evidence: "It names one assumption, that no streaming or long-poll endpoints exist, and leaves it untested, while accepting the question's frame that the answer is a number on the client." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities appear; the case for 10 seconds is argued from detection latency and failure-mode visibility alone." }
+    actor_coverage: { score: 2, evidence: "The upstream owner is named with an action (publish an SLO or p99 that would replace the guess) but the position deliberately does not depend on it." }
+    reversibility: { score: 1, evidence: "It stages a smallest move now and a larger fix later, but the ordering is justified by evidence and guesswork rather than by any distinction between reversible and committed choices." }
+    substance: { score: 2, evidence: "The flat restatement, set one 10 second deadline and wait for a real timeout error, is still a real claim but much of its force came from the minimal-intervention framing." }

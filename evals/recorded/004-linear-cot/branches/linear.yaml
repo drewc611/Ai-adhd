@@ -1,0 +1,13 @@
+problem_hash: "sha256:pending"
+frame: linear
+position: Call it enable_new_checkout, following your existing boolean naming convention.
+reasoning: |
+  Feature flag names should be descriptive and follow a consistent convention. Boolean flags
+  conventionally take an is_, has_, or enable_ prefix so that reading the name tells you it is
+  a boolean. Since this flag controls whether users see the new checkout, enable_new_checkout
+  reads clearly at the call site. Keep it in snake_case if that matches the rest of the
+  codebase, and prefix with the owning team or domain if your flag namespace is crowded.
+forecloses: []
+falsifier: null
+missing_actor: null
+confidence: high

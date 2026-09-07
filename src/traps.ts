@@ -5,7 +5,13 @@ import { parse as parseYaml } from "yaml";
 import { BranchArtifactSchema } from "./schema.js";
 import { lintBranch } from "./lint.js";
 
-export function trapsReport(filePath: string, opts: { expectHash?: string } = {}): { text: string; exitCode: 0 | 1 } {
+/**
+ * `frames` is the library to check membership against. FrameIdSchema only checks the shape,
+ * because it also validates config/frames.yaml itself and cannot refer to it. Without this,
+ * `adhd traps` reported "contract: ok (frame NOT_A_FRAME)" on an artifact no run would accept.
+ * Optional so the report still works with no config to hand, and it says which check it skipped.
+ */
+export function trapsReport(filePath: string, opts: { expectHash?: string; frames?: readonly string[] } = {}): { text: string; exitCode: 0 | 1 } {
   const text = readFileSync(filePath, "utf8");
   const raw = parseYaml(unfence(text));
   const lines: string[] = [`artifact: ${filePath}`];
@@ -18,7 +24,14 @@ export function trapsReport(filePath: string, opts: { expectHash?: string } = {}
     return { text: lines.join("\n"), exitCode: 1 };
   }
   const a = r.data;
-  lines.push(`contract: ok (frame ${a.frame}, confidence ${a.confidence})`);
+  if (opts.frames && !opts.frames.includes(a.frame)) {
+    lines.push(
+      "contract: VIOLATED (would be pruned)",
+      `  - frame: ${a.frame} is not in the frame library. Known: ${[...opts.frames].join(", ")}`,
+    );
+    return { text: lines.join("\n"), exitCode: 1 };
+  }
+  lines.push(`contract: ok (frame ${a.frame}, confidence ${a.confidence})${opts.frames ? "" : " [frame id shape only; no library to check membership against]"}`);
   if (opts.expectHash) {
     if (a.problem_hash !== opts.expectHash) {
       bad = true;

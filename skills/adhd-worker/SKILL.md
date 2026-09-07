@@ -34,6 +34,9 @@ Pick a worker id once per session, e.g. `worker-<short random>`.
   you siblings, and you must not go looking.
 - Combine tasks. One subagent per task, always. Two branch tasks in one subagent is the
   failure this whole architecture exists to prevent.
+- Return one subagent's message under another's task id. The kernel checks the artifact's
+  own `frame` and `pass` against the task and rejects a mismatch, so a wrong entry in your map
+  costs you a rejected return rather than a silently corrupted run. Fix the map, then return.
 - Retry a task yourself. If a subagent fails, return whatever it said; the kernel decides.
 
 ## Stopping
