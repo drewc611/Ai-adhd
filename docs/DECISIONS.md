@@ -247,7 +247,7 @@ editing the pattern until the answer is decided on its merits.
 `adhd eval --audit` replays every fixture assertion against the real runs and the negative
 controls separately. An assertion the control also satisfies is not measuring divergence: the
 consensus answer already clears it. Finding `false_means` that way was luck; the audit makes it
-mechanical. On the current nine recorded runs it flags four of twenty-one assertions:
+mechanical. On the nine recorded runs it first ran over it flagged four of twenty-one assertions:
 
 | assertion | the control text that satisfied it |
 |---|---|
@@ -266,10 +266,55 @@ what the consensus answer is good at, so requiring the words proves nothing abou
 what the run should be asked for is which periodic actor and how the period was established.
 `003/who_pays` matching "on call" is close behind.
 
-**They are recorded, not fixed.** Rewriting four assertions immediately after seeing which ones
-the controls cleared is how a harness gets tuned until it always passes. Each should be changed,
-if at all, on its own argument about what the assertion is for, and with a fresh run to show the
-change measures something. That is the owner's call.
+**Resolved, 2026-09-07, each on its own argument.** They were left standing at first because
+rewriting four assertions immediately after seeing which ones the controls cleared is how a
+harness gets tuned until it always passes. Reading the per-alternative evidence rather than the
+audit's summary line shows the four are four different things, and only one of them is the
+judgment call the table implies.
+
+**`003/who_pays` was a regex defect, not a judgment.** The pattern is `on.call`, and `.` matches
+any character, so it fired on "functi**on call**s" in the sentence "network calls replace function
+calls". The control never mentions on-call at all; the word appears once in it and that once is
+inside another word. Fixed to `\bon[- ]?call`, which anchors the first word and spells the
+separator. Two others had the same shape latent, `one.way` and `two.way door`, and are fixed the
+same way. This is the fixture-side twin of the redaction bug, where matching `door keeper` as a
+literal token missed `door-keeper`, `doorkeeper` and `DoorKeeper`. A test now rejects any fixture
+pattern using a bare dot between two letters.
+
+After the fix `003/who_pays` is 1/1 real, 0/1 control. The real run matched five alternatives on
+content the control has nothing like: "paid by whoever holds the pager and by finance", "the
+on-call bill is invisible because it is paid at 3am by individuals, not in a budget line".
+
+**`002/periodic_actor` was removed from the fixture, not loosened.** The control satisfied seven
+of its nine alternatives, and reading it says why: linear CoT gets the class of cause right. Its
+opening line is "spikes are almost always caused by something running on a schedule". Naming a
+periodic actor was never the divergent contribution, and fixture 002's own `why` never claimed it
+was — that paragraph names three things a passing run does, and this was not one of them. What
+the real runs do with the period is a different matter and `cheap_first` already asks for it:
+both correlate spike timestamps against the schedule and pause a candidate to confirm, where the
+control hands the list back. That distinction is not lexical and no keyword list reaches it.
+
+**`004/false_means` lost the two alternatives that rewarded recitation.** "Avoid negations,
+`disable_old_checkout` forces the reader to think in double negatives" is in every naming style
+guide, which is where the control got it; the tokens `double negative` and `negat` name a
+convention, while the assertion asks what the name asserts when the flag is off. Removing them
+costs nothing on the real side, because `004-kernel-naming` matched no alternative at all. The
+verdict moves from "matches a control" to **never matched**, which is the honest report: this is
+a frame-set gap, backlog item 17, and 004 stays recorded as failing on it.
+
+**`003/reframe` stays flagged, and the fixture carries the reason.** Only one of its eight
+alternatives has ever fired — the deploy/release-pain one — and it fired in the real run and the
+control on opposite uses. "If the pain is coupling or deploy cadence" is the reframe the assertion
+asks for; "teams gain autonomy over their own stack and release cadence" is microservices
+advocacy. Every other alternative encodes a stance and this one encodes a topic, which is why it
+admits both. Deleting it would flip `003-kernel-strategy` to failing on a reframe the run
+demonstrably made. Writing a stance pattern instead would be fitted to the two texts just read,
+which is the failure the whole section exists to avoid. It needs a run that has not happened, not
+a better regex written today.
+
+No recorded run's outcome changed under any of this, which is the signature the change should
+have: three assertions that measured nothing now measure nothing more visibly, and nothing was
+made easier to pass.
 
 Third class run: `evals/recorded/003-kernel-strategy/`, the `strategy` set (FRAME_BREAKER,
 LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON) on fixture 003. It passes. The set was not a

@@ -239,7 +239,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       255 tests over all of it
+test/       257 tests over all of it
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
@@ -386,9 +386,11 @@ A reader should start here rather than discover it.
   dispatch has never been observed. D4 says so.
 - **The plugin agents have never run as plugin agents.** Every recorded run used general-purpose
   subagents, so the manifest and the tool grants are checked mechanically and never end to end.
-- **Four of twenty-one fixture assertions do not discriminate**, and are recorded rather than
-  fixed. Rewriting an assertion after learning which ones the control cleared is how a harness
-  gets tuned until it always passes.
+- **One fixture assertion is still satisfied by a negative control.** `003/reframe` matches on
+  deploy-pain vocabulary, which the real run uses as a reframe and the consensus answer uses as a
+  selling point. Separating them needs a run that has not happened; writing a pattern against the
+  two texts already read is how a harness gets tuned until it always passes. Three others were
+  flagged with it and are resolved, one of them a regex defect rather than a judgment.
 
 ## As an agent operating system
 

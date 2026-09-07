@@ -19,6 +19,17 @@ must_surface:
   - id: reframe
     trap: T2
     description: Someone rejects the axis in the question. Monolith versus microservices is not the decision; the pain being bought off is.
+    # Left alone deliberately, and it is the one of the four `--audit` flagged that stays. Only
+    # one alternative has ever fired, the deploy/release-pain one, and it fired in both the real
+    # run and the control on opposite uses: "if the pain is coupling or deploy cadence" is the
+    # reframe this asks for, and "teams gain autonomy over their own stack and release cadence"
+    # is microservices advocacy. Every other alternative here encodes a stance; this one encodes
+    # a topic, which is why it admits both.
+    #
+    # Deleting it would flip 003-kernel-strategy to failing on a reframe the run demonstrably
+    # made. Writing a stance pattern instead would be fitted to the two texts already read, which
+    # is the D6 failure this fixture set exists to avoid. It needs a run that has not happened,
+    # not a better regex written today.
     any_of:
       - "(what|which) (problem|pain|constraint) (is|are|does) (this|the rewrite|it) (actually |really )?(solv|buy|fix|address)"
       - "the (question|problem|decision) (is not|isn't|is rarely) (monolith|microservices|architecture)"
@@ -32,12 +43,12 @@ must_surface:
     trap: T7
     description: The rewrite is treated as hard to reverse, and the answer says what that changes.
     any_of:
-      - "one.way"
+      - "\\bone[- ]?way"
       - "irreversib"
       - "(can't|cannot|can not|hard to|expensive to) (easily )?(undo|reverse|go back|put back|merge back)"
       - "reversib"
       - "point of no return"
-      - "two.way door"
+      - "\\btwo[- ]?way door"
       - "(un)?merg(e|ing) (them|the services|services) back"
   - id: detection_latency
     description: The answer says how the asker would learn the bet was wrong, and when. This is what makes the class a strategy class.
@@ -58,7 +69,7 @@ must_surface:
     trap: T6
     description: The people who operate, staff, or fund the result are named as actors with a cost.
     any_of:
-      - "on.call"
+      - "\\bon[- ]?call"
       - "pager"
       - "3 ?a\\.?m"
       - "\\bhir(e|ing)\\b"

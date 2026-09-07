@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
@@ -326,4 +326,49 @@ test("a hostile problem still compiles and still reaches the gate byte for byte"
   assert.ok(preview.includes(fx.prompt), "the problem is shown verbatim, hostile or not");
   assert.match(preview, /read as instructions to the branches/);
   assert.match(preview, /Nothing has been spent/);
+});
+
+/**
+ * `on.call` was written to match "on-call" and "on call". `.` matches any character, so it also
+ * matched "functi(on call)s" — which is how fixture 003's `who_pays` came to be satisfied by a
+ * negative control that never mentions on-call at all. The audit reported it as a judgment call
+ * about the frame library. It was a regex defect.
+ *
+ * Two others had it latent (`one.way`, `two.way door`). Same shape, same fix: anchor the first
+ * word and spell the separator out. This is the fixture-side twin of the redaction bug, where
+ * matching `door keeper` as a literal token missed `door-keeper` and `doorkeeper`.
+ */
+test("no fixture pattern uses a bare dot as a word separator", () => {
+  for (const fx of loadFixtures(join(cfg.root, "evals", "fixtures"))) {
+    const patterns = [...fx.must_surface, ...fx.must_not].flatMap((i) => ("any_of" in i && i.any_of ? i.any_of : []) as string[]);
+    for (const p of patterns) {
+      // Escaped dots are literal and character classes may legitimately contain one.
+      const bare = p.replace(/\\\./g, "").replace(/\[[^\]]*\]/g, "‹class›");
+      assert.ok(
+        !/[a-z]\.[a-z]/i.test(bare),
+        `${fx.id}: /${p}/ uses . as a separator, which matches any character. Anchor the word and spell the separator: \\bon[- ]?call.`,
+      );
+    }
+  }
+});
+
+/**
+ * The audit's own report, pinned. Three of the four assertions it flagged were resolved by
+ * removal or by fixing a pattern that admitted recitation; the fourth is left flagged on
+ * purpose and the fixture says why. A new assertion a control satisfies has to be argued for
+ * here, not merged quietly.
+ */
+test("exactly one shipped assertion is knowingly satisfied by a control, and it is documented", () => {
+  const a = auditFixtures(cfg);
+  const flagged = a.items.filter((i) => i.verdict === "matches a control").map((i) => `${i.fixture}/${i.item}`);
+  assert.deepEqual(flagged, ["003/reframe"], "the set of non-discriminating assertions changed; decide it, do not loosen it");
+
+  const yaml = readFileSync(join(cfg.root, "evals", "fixtures", "003-monolith-rewrite.yaml"), "utf8");
+  assert.match(yaml, /Left alone deliberately/, "the one flagged assertion has to carry its argument in the fixture");
+
+  // `false_means` is the other half: no run has surfaced it, and 004 is recorded as failing on
+  // it. That is a frame-set gap, and a gap that reads as "never matched" is the honest report.
+  const fm = a.items.find((i) => i.item === "false_means")!;
+  assert.equal(fm.verdict, "never matched");
+  assert.equal(fm.control_matched, 0, "the convention tokens that let the control satisfy this are gone");
 });

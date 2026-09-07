@@ -14,9 +14,15 @@ yet enough to know whether they work.
 
 ## 1. Evidence from runs we can already do
 
-0. **Decide the four non-discriminating assertions** that `adhd eval --audit` flags
+0. ~~**Decide the four non-discriminating assertions** that `adhd eval --audit` flags
    (`002/periodic_actor`, `003/reframe`, `003/who_pays`, `004/false_means`). Each on its own
-   argument, each with a fresh run showing the change measures something. See D6 in DECISIONS.
+   argument, each with a fresh run showing the change measures something. See D6 in DECISIONS.~~
+   **Done, three of four, and no fresh run was needed for any of them. `003/who_pays` was a regex
+   defect: `on.call` matched "functi(on call)s" and the control never says on-call. `002/periodic_actor`
+   was removed, because the consensus answer genuinely names the periodic actor and the fixture's
+   own `why` never claimed otherwise. `004/false_means` lost the two style-guide tokens and now
+   reads "never matched", which is the truth. `003/reframe` stays flagged with its argument in the
+   fixture. No recorded outcome changed. Full reasoning in D6.**
 1. ~~**`adhd frames --stats`** (evidence). Per-frame rates across recorded runs: appearances,
    prune rate, which traps prune it, mean pass A, survivor rate, fold rate, how often it holds
    the recommendation. Five runs is thin but the command is what makes run six worth anything.~~

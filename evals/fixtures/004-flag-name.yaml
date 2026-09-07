@@ -35,7 +35,7 @@ must_surface:
     trap: T6
     description: Someone other than the person naming it is named as a reader of the name.
     any_of:
-      - "on.call"
+      - "\\bon[- ]?call"
       - "pager"
       - "3 ?a\\.?m"
       - "(next|future|another) (engineer|developer|person|maintainer)"
@@ -46,11 +46,16 @@ must_surface:
   - id: false_means
     trap: T2
     description: The answer says what the name asserts when the flag is off, or attacks the assumption that a name alone carries that.
+    # "double negative" and "negat" were alternatives here until `adhd eval --audit` caught the
+    # control on both. "Avoid negations, disable_old_checkout forces the reader to think in
+    # double negatives" is in every naming style guide, which is where the control got it. The
+    # tokens name a convention; the assertion asks what the name asserts when the flag is off.
+    # Removing them costs nothing on the real side, because 004-kernel-naming matched no
+    # alternative at all. The honest verdict is that no run has yet surfaced this, and the
+    # fixture is recorded as failing on it.
     any_of:
       - "when (it|the flag) is (false|off|disabled)"
       - "(false|off) means"
-      - "double negative"
-      - "negat"
       - "ambiguous"
       - "(what|which) state"
       - "names? the state"
