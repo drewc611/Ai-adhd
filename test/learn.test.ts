@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { cfg, tmp } from "./helpers.js";
-import { dimensionCorrelation, interRater, weightSensitivity } from "../src/learn.js";
+import { dimensionCorrelation, interRater, interRaterCorpus, weightSensitivity } from "../src/learn.js";
 
 const DIMS = cfg.rubric.dimensions.map((d) => d.id);
 
@@ -313,4 +313,81 @@ test("the recorded second scoring of 003 is readable and still says what D8 reco
   assert.equal(r.within_one, 1, "no cell disagreed by more than one point");
   assert.equal(r.ranking_changed, true);
   assert.equal(r.representative_changes.length, 0, "the contested cluster kept DOOR_KEEPER");
+});
+
+test("a corpus with no second scoring says how to make one instead of printing zeroes", () => {
+  const root = tmp();
+  recordRun(root, "001", { A: { frame: "LEDGER" } });
+  const r = interRaterCorpus(cfg, root);
+  assert.equal(r.runs.length, 0);
+  assert.equal(r.cells, 0);
+  assert.match(r.text, /pass-a\.rater2\.yaml/);
+  assert.match(r.text, /separate context window/);
+});
+
+/**
+ * Pooling is by cell, not by mean of run means. A three-artifact pack and a five-artifact pack
+ * are not equal evidence, and averaging percentages would pretend they are.
+ */
+test("corpus agreement pools by cell rather than averaging run percentages", () => {
+  const root = tmp();
+  const big = recordRun(root, "001", {
+    A: { frame: "LEDGER", base: 2 },
+    B: { frame: "MECHANIC", base: 2 },
+    C: { frame: "HORIZON", base: 2 },
+    D: { frame: "SABOTEUR", base: 2 },
+  });
+  const small = recordRun(root, "002", { A: { frame: "LEDGER", base: 2 } }, [], {});
+  // Four artifacts scored identically, one artifact disagreeing on every dimension.
+  const same = Object.fromEntries(DIMS.map((d) => [d, 2]));
+  writeFileSync(
+    join(big, "critic", "pass-a.rater2.yaml"),
+    stringify({ problem_hash: "hash-001", pass: "A", scores: Object.fromEntries(["A", "B", "C", "D"].map((l) => [l, Object.fromEntries(DIMS.map((d) => [d, { score: same[d], evidence: "e" }]))])) }),
+  );
+  writeFileSync(
+    join(small, "critic", "pass-a.rater2.yaml"),
+    stringify({ problem_hash: "hash-002", pass: "A", scores: { A: Object.fromEntries(DIMS.map((d) => [d, { score: 3, evidence: "e" }])) } }),
+  );
+  const r = interRaterCorpus(cfg, root);
+  assert.equal(r.runs.length, 2);
+  assert.equal(r.cells, DIMS.length * 5);
+  // Cell-pooled: 36 of 45 agree. A mean of run means would give 50%.
+  assert.ok(Math.abs(r.exact - 36 / 45) < 1e-9, `expected 0.8, got ${r.exact}`);
+  assert.ok(r.by_dimension.every((d) => d.n === 5));
+});
+
+test("the corpus rollup names the runs whose representative would have changed", () => {
+  const root = tmp();
+  const dir = recordRun(
+    root,
+    "001",
+    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+  );
+  writeFileSync(
+    join(dir, "critic", "pass-a.rater2.yaml"),
+    stringify({
+      problem_hash: "hash-001",
+      pass: "A",
+      scores: {
+        A: Object.fromEntries(DIMS.map((d) => [d, { score: 1, evidence: "e" }])),
+        B: Object.fromEntries(DIMS.map((d) => [d, { score: 3, evidence: "e" }])),
+      },
+    }),
+  );
+  const r = interRaterCorpus(cfg, root);
+  assert.deepEqual(r.runs_with_changed_representative, ["001"]);
+  assert.match(r.text, /would have sent a different position to deepen/);
+  assert.match(r.text, /LEDGER->MECHANIC/);
+});
+
+test("the recorded corpus rollup reads every second scoring on disk", () => {
+  const r = interRaterCorpus(cfg);
+  assert.ok(r.runs.length >= 1, "003-kernel-strategy has a second scoring");
+  assert.ok(r.cells >= 45);
+  assert.ok(r.exact > 0.7, `pooled exact agreement was ${r.exact}`);
+  assert.ok(
+    r.by_dimension.every((d) => d.n === r.runs.reduce((s, x) => s + x.report.artifacts, 0)),
+    "every dimension should be scored on every artifact",
+  );
 });

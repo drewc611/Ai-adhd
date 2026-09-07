@@ -98,6 +98,7 @@ node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates i
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
 node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?
+node dist/src/cli.js learn --agreement-all   # the same, pooled over every run that has a second scoring
 ```
 
 `learn` reads the recorded runs and calls nothing. It is how the frame library, the rubric and

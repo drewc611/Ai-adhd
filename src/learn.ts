@@ -395,3 +395,105 @@ export function interRater(cfg: Config, runDir: string, altPassAPath: string): I
   );
   return { artifacts: letters.length, cells: all.length, exact, within_one, by_dimension, ranking_changed, representative_changes, text: lines.join("\n") };
 }
+
+export interface CorpusAgreement {
+  runs: { run: string; report: InterRaterReport }[];
+  cells: number;
+  exact: number;
+  within_one: number;
+  by_dimension: DimensionAgreement[];
+  runs_with_changed_representative: string[];
+  text: string;
+}
+
+/** The second scoring lives beside the one the run shipped on, under a name that says so. */
+const SECOND_SCORING = "pass-a.rater2.yaml";
+
+/**
+ * Every run that has a second scoring, pooled. One pack is a reading; a corpus is a number, and
+ * the pooled per-dimension figures are the only ones worth quoting. The run-level count that
+ * matters is not how many cells moved but how many runs would have sent a different position to
+ * deepen, because that is the only disagreement a reader of the output could ever see.
+ */
+export function interRaterCorpus(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): CorpusAgreement {
+  const dims = cfg.rubric.dimensions.map((d) => d.id);
+  const runs: { run: string; report: InterRaterReport }[] = [];
+  if (existsSync(recordedDir))
+    for (const id of readdirSync(recordedDir).sort()) {
+      const dir = join(recordedDir, id);
+      if (!statSync(dir).isDirectory()) continue;
+      const alt = join(dir, "critic", SECOND_SCORING);
+      if (existsSync(alt)) runs.push({ run: id, report: interRater(cfg, dir, alt) });
+    }
+
+  // Pooled by weight of cells, not by mean of run means: a five artifact pack and a three
+  // artifact pack are not equal evidence, and averaging the percentages would pretend they are.
+  const pooled = (get: (d: DimensionAgreement) => number) => (dim: string) => {
+    let hits = 0;
+    let n = 0;
+    for (const r of runs)
+      for (const d of r.report.by_dimension)
+        if (d.dimension === dim) {
+          hits += get(d) * d.n;
+          n += d.n;
+        }
+    return { hits, n };
+  };
+  const by_dimension: DimensionAgreement[] = dims
+    .map((dim) => {
+      const e = pooled((d) => d.exact)(dim);
+      const w = pooled((d) => d.within_one)(dim);
+      const m = pooled((d) => d.mean_abs_diff)(dim);
+      return {
+        dimension: dim,
+        exact: e.n ? e.hits / e.n : 0,
+        within_one: w.n ? w.hits / w.n : 0,
+        mean_abs_diff: m.n ? m.hits / m.n : 0,
+        n: e.n,
+      };
+    })
+    .sort((a, b) => a.exact - b.exact);
+
+  const cells = runs.reduce((s, r) => s + r.report.cells, 0);
+  const exact = cells ? runs.reduce((s, r) => s + r.report.exact * r.report.cells, 0) / cells : 0;
+  const within_one = cells ? runs.reduce((s, r) => s + r.report.within_one * r.report.cells, 0) / cells : 0;
+  const runs_with_changed_representative = runs.filter((r) => r.report.representative_changes.length).map((r) => r.run);
+
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const lines: string[] = [];
+  if (!runs.length)
+    lines.push(
+      `no run under ${recordedDir} has a ${SECOND_SCORING}.`,
+      "",
+      "A second scoring is produced by handing critic/pass-a.brief.md verbatim to a fresh critic",
+      "in a separate context window, with instructions to read nothing else, and saving its pass A",
+      `beside the first as ${SECOND_SCORING}.`,
+    );
+  else {
+    lines.push(
+      `critic agreement pooled over ${runs.length} run(s), ${cells} scored cell(s)`,
+      "",
+      `exact agreement    ${pct(exact)}`,
+      `within one point   ${pct(within_one)}`,
+      "",
+      "per dimension, worst agreement first:",
+    );
+    for (const d of by_dimension)
+      lines.push(`  ${d.dimension.padEnd(20)} exact ${pct(d.exact).padStart(4)}  within 1 ${pct(d.within_one).padStart(4)}  mean |diff| ${d.mean_abs_diff.toFixed(2)}  n=${d.n}`);
+    lines.push("", "per run:");
+    for (const r of runs)
+      lines.push(
+        `  ${r.run.padEnd(24)} exact ${pct(r.report.exact).padStart(4)}  ranking ${r.report.ranking_changed ? "CHANGED " : "same    "}  representatives ${
+          r.report.representative_changes.length ? `CHANGED (${r.report.representative_changes.map((c) => `${c.a}->${c.b}`).join(", ")})` : "same"
+        }`,
+      );
+    lines.push("");
+    lines.push(
+      runs_with_changed_representative.length
+        ? `${runs_with_changed_representative.length} of ${runs.length} run(s) would have sent a different position to deepen: ${runs_with_changed_representative.join(", ")}.`
+        : `No run would have sent a different position to deepen. Cell disagreement did not reach the output in any of the ${runs.length}.`,
+    );
+    lines.push("", `Pooled over ${cells} cells from ${runs.length} run(s), one second critic each. Grow both before quoting a figure.`);
+  }
+  return { runs, cells, exact, within_one, by_dimension, runs_with_changed_representative, text: lines.join("\n") };
+}
