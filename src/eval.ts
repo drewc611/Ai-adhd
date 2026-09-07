@@ -7,6 +7,7 @@ import { FixtureSchema, RecordedExpectationSchema, type Fixture } from "./schema
 import { problemHash, PLACEHOLDER_HASH } from "./hash.js";
 import { hasImperative, IMPERATIVE_START, splitSentences, wordCount } from "./lint.js";
 import type { ScoreResult } from "./score.js";
+import { compile, previewText } from "./compile.js";
 
 export interface PairResult {
   fixture: string;
@@ -197,6 +198,33 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
   return { fixture: fixture.id, recorded: run.dir, outcome, expected, ok: outcome === expected, expected_note: expectation.note, failures, notes };
 }
 
+/**
+ * A decline fixture has no run to replay. Routing refuses the class before anything is compiled,
+ * so there is no synthesis, no pruned block, and nothing to record: the assertion is the decision
+ * itself. That is checked against config/routing.yaml directly, which means it runs on every eval
+ * without needing a recorded run to exist.
+ *
+ * A decline is a first-class outcome and it was the only one nothing tested. A routing edit that
+ * quietly starts spending five subagents on "what is the default TCP keepalive interval" would
+ * have passed the whole suite.
+ */
+function evaluateDecline(cfg: Config, fixture: Fixture): PairResult {
+  const failures: string[] = [];
+  const notes: string[] = [];
+  const r = compile(cfg, fixture.prompt, { problem_class: fixture.problem_class }, { seed: fixture.seed });
+  if (r.kind !== "declined") failures.push(`expect decline: routing compiled ${r.plan.branches.length} branch(es) for problem_class ${fixture.problem_class}`);
+  else {
+    const preview = previewText(r);
+    if (!r.reason.trim()) failures.push("expect decline: the reason is empty, so the user is told no without being told why");
+    for (const want of fixture.expect.reason_includes)
+      if (!new RegExp(want, "i").test(r.reason)) failures.push(`expect decline reason to include /${want}/i, got: ${r.reason}`);
+    if (!/nothing spent/i.test(preview)) failures.push("expect the preview to say nothing was spent");
+    notes.push(`declined: ${r.reason}`);
+  }
+  const outcome = failures.length ? "fail" : "pass";
+  return { fixture: fixture.id, recorded: "(no run: declined)", outcome, expected: "pass", ok: outcome === "pass", failures, notes };
+}
+
 export function runEval(cfg: Config, opts: { fixturesDir?: string; recordedDir?: string } = {}): EvalReport {
   const fixturesDir = opts.fixturesDir ?? join(cfg.root, "evals", "fixtures");
   const recordedDir = opts.recordedDir ?? join(cfg.root, "evals", "recorded");
@@ -205,6 +233,10 @@ export function runEval(cfg: Config, opts: { fixturesDir?: string; recordedDir?:
   const pairs: PairResult[] = [];
   const without: string[] = [];
   for (const fx of fixtures) {
+    if (fx.expect.decline) {
+      pairs.push(evaluateDecline(cfg, fx));
+      continue;
+    }
     const runs = recorded.filter((d) => d.startsWith(`${fx.id}-`) || d === fx.id);
     if (!runs.length) without.push(fx.id);
     for (const d of runs) pairs.push(evaluatePair(fx, loadRecorded(join(recordedDir, d))));

@@ -63,8 +63,12 @@ can be wrong without saying so.
 9. ~~**`adhd diff <runA> <runB>`.**~~ **Built.** Two runs of one fixture side by side: frames
    only in one, status changes, pass A movement, and both recommendations. Refuses to attribute
    a change to the seed when the frame sets also differ, and says so.
-10. **Decline-path fixtures** for `factual_lookup`, `mechanical_refactor` and
-    `single_correct_answer`. A decline is a first-class outcome and no recorded run declines.
+10. ~~**Decline-path fixtures**~~ **Built**: 005, 006 and 007 cover `factual_lookup`,
+    `mechanical_refactor` and `single_correct_answer`. A decline produces no run to record, so
+    the fixture asserts the routing decision itself and runs on every eval without a recorded run
+    existing. `expect.decline` also asserts the reason: a decline the user cannot learn anything
+    from is a decline that has rotted. Tests prove all three go red when routing stops declining
+    and when the reason is emptied out.
 11. **A deliberate monoculture fixture.** The detector has only ever fired in unit tests.
 12. **A deliberate scatter fixture.** Same reasoning, opposite failure.
 13. **A cancel fixture (D5).** Confirm, return two branches, cancel; assert the partial

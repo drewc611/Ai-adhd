@@ -140,7 +140,8 @@ Library, CLI, MCP server, and plugin are implemented and tested against the cont
 `CLAUDE.md`. D1 through D8 are resolved in `docs/DECISIONS.md`.
 
 Five real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
-negative control per fixture that must fail. Every real run has been scored a second time by a
+negative control per fixture that must fail, plus three decline fixtures that assert routing
+refuses a class rather than spending on it. Every real run has been scored a second time by a
 fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).

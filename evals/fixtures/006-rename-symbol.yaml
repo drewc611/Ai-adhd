@@ -1,0 +1,18 @@
+# A decline. The change is already specified; there is nothing to diverge about.
+id: "006"
+name: rename-symbol
+problem_class: mechanical_refactor
+seed: 6
+prompt: "Rename all occurrences of `fetchUser` to `loadUser` across the repository."
+
+why: |
+  Divergence is for questions where the frame you reason under changes the answer. This one has
+  no frame worth changing: the instruction names the old symbol, the new symbol, and the scope.
+  Running it through seven frames produces seven arguments about whether the rename is a good
+  idea, which is a different question and not the one asked.
+
+expect:
+  decline: true
+  reason_includes:
+    - "specified"
+    - "do not deliberate"

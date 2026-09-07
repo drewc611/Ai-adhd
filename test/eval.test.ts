@@ -201,3 +201,80 @@ test("a fixture pattern that cannot compile, or that matches everything, fails a
   write("902-fine.yaml", "'who (is|gets) paged'");
   assert.equal(loadFixtures(dir).length, 1);
 });
+
+/**
+ * A decline is a first-class outcome and it was the only one nothing tested. A routing edit that
+ * quietly starts spending five subagents on "what is the default TCP keepalive interval" would
+ * have passed the whole suite, because a fixture with no recorded run reports "no recorded runs"
+ * and the eval still passes.
+ */
+test("the decline fixtures assert the routing decision, with no recorded run", () => {
+  const r = runEval(cfg);
+  const declines = r.pairs.filter((p) => p.recorded === "(no run: declined)");
+  assert.equal(declines.length, 3, "005, 006 and 007 are declines");
+  for (const d of declines) {
+    assert.equal(d.outcome, "pass", `${d.fixture}: ${d.failures.join("; ")}`);
+    assert.match(d.notes.join(" "), /declined: \S/, `${d.fixture} did not report the reason it gave`);
+  }
+  assert.ok(!r.fixtures_without_runs.includes("005"), "a decline fixture is not a fixture missing its run");
+});
+
+test("a decline fixture fails when routing stops declining its class", () => {
+  const routing = structuredClone(cfg.routing) as typeof cfg.routing;
+  // The regression that matters: someone gives the class frames and it starts spending.
+  (routing.classes as Record<string, unknown>)["factual_lookup"] = {
+    action: "run",
+    description: "no longer declined",
+    signals: [],
+    frames: ["LEDGER", "MECHANIC", "SABOTEUR"],
+    n: 3,
+    alternates: [],
+  };
+  const r = runEval({ ...cfg, routing }, {});
+  const five = r.pairs.find((p) => p.fixture === "005")!;
+  assert.equal(five.outcome, "fail");
+  assert.equal(five.ok, false);
+  assert.match(five.failures.join(" "), /expect decline: routing compiled 3 branch\(es\)/);
+  assert.equal(r.ok, false, "the whole eval must go red");
+});
+
+test("a decline fixture fails when the reason rots into something that explains nothing", () => {
+  const routing = structuredClone(cfg.routing) as typeof cfg.routing;
+  (routing.classes as Record<string, { reason?: string }>)["factual_lookup"]!.reason = "no";
+  const r = runEval({ ...cfg, routing }, {});
+  const five = r.pairs.find((p) => p.fixture === "005")!;
+  assert.equal(five.outcome, "fail");
+  assert.match(five.failures.join(" "), /expect decline reason to include/);
+});
+
+/** The schema refuses the two shapes that would make a fixture assert nothing. */
+test("a fixture with no assertions and no decline is rejected at load", () => {
+  const dir = tmp();
+  writeFileSync(
+    join(dir, "bad.yaml"),
+    "id: '900'\nname: empty\nproblem_class: design_decision\nseed: 1\nprompt: does it work\n",
+  );
+  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline is true/);
+});
+
+test("a decline fixture carrying assertions is rejected, because there is no output to assert on", () => {
+  const dir = tmp();
+  writeFileSync(
+    join(dir, "bad.yaml"),
+    [
+      "id: '901'",
+      "name: contradictory",
+      "problem_class: factual_lookup",
+      "seed: 1",
+      "prompt: what is the default",
+      "must_surface:",
+      "  - id: x",
+      "    description: something the synthesis says",
+      "    any_of: ['anything']",
+      "expect:",
+      "  decline: true",
+      "",
+    ].join("\n"),
+  );
+  assert.throws(() => loadFixtures(dir), /no output to assert against/);
+});

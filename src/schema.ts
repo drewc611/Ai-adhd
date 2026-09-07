@@ -276,7 +276,7 @@ export const FixtureSchema = z
     seed: z.number().int(),
     prompt: z.string().min(1),
     why: z.string().optional(),
-    must_surface: z.array(MustSurfaceSchema).min(1),
+    must_surface: z.array(MustSurfaceSchema).default([]),
     must_not: z.array(MustNotSchema).default([]),
     expect: z
       .object({
@@ -284,11 +284,28 @@ export const FixtureSchema = z
         pruned_traps_include_any: z.array(TrapIdSchema).optional(),
         monoculture: z.boolean().optional(),
         scatter: z.boolean().optional(),
+        /**
+         * The run must never happen. Routing declines the class, so there is no synthesis, no
+         * pruned block and nothing to record: the fixture asserts the decision itself. A decline
+         * is a first-class outcome and it was the only one nothing tested.
+         */
+        decline: z.boolean().default(false),
+        /** Substrings the decline reason must contain, so a reason cannot rot into "no". */
+        reason_includes: z.array(z.string().min(1)).default([]),
       })
       .strict()
-      .default({}),
+      .default({ decline: false, reason_includes: [] }),
   })
-  .strict();
+  .strict()
+  // A run fixture with no must_surface asserts nothing and would pass on any output at all.
+  .refine((f) => f.expect.decline || f.must_surface.length > 0, {
+    message: "must_surface is required unless expect.decline is true",
+    path: ["must_surface"],
+  })
+  .refine((f) => !f.expect.decline || (f.must_surface.length === 0 && f.must_not.length === 0), {
+    message: "a declined fixture has no output to assert against; drop must_surface and must_not",
+    path: ["expect", "decline"],
+  });
 export type Fixture = z.infer<typeof FixtureSchema>;
 
 export const RecordedExpectationSchema = z

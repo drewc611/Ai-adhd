@@ -1,0 +1,18 @@
+# A decline. One right answer, and the prompt asks for it directly.
+id: "007"
+name: does-it-compile
+problem_class: single_correct_answer
+seed: 7
+prompt: "Does this TypeScript compile: `const x: string = 42;`"
+
+why: |
+  The distinction from 005 is worth keeping separate in the fixtures. A factual lookup has an
+  answer somebody wrote down; this has an answer the compiler will give you. Both decline, and
+  a routing change that merged them would lose the reason each one gives, which is the only
+  part of a decline the user actually reads.
+
+expect:
+  decline: true
+  reason_includes:
+    - "one right answer"
+    - "directly"

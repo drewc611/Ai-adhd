@@ -1,0 +1,24 @@
+# A decline. Routing refuses this class before anything is compiled, so there is no run to
+# record and nothing to assert against a synthesis. The assertion is the decision itself.
+#
+# The failure this catches is a routing edit that quietly starts spending five subagents on a
+# question with one right answer. Nothing in the suite would have noticed: a fixture with no
+# recorded run reports "no recorded runs" and the eval still passes.
+id: "005"
+name: tcp-keepalive
+problem_class: factual_lookup
+seed: 5
+prompt: "What is the default TCP keepalive interval on Linux?"
+
+why: |
+  There is one answer, it is in a man page, and five isolated subagents under distorted frames
+  would produce five paraphrases of it plus one confidently wrong number. A decline is not the
+  system refusing to help. It is the system correctly reporting that its mechanism does not
+  apply, and the reason has to say which mechanism and why, or the user learns nothing from
+  being turned away.
+
+expect:
+  decline: true
+  reason_includes:
+    - "one correct answer"
+    - "token"
