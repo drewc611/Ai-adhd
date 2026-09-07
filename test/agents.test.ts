@@ -25,6 +25,24 @@ function tools(fm: Record<string, unknown>): string[] {
 const FILESYSTEM = ["Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "Bash", "NotebookEdit", "LS"];
 const NETWORK = ["WebSearch", "WebFetch"];
 
+/**
+ * An allowlist, not a denylist. Naming the tools that must not appear leaves every tool nobody
+ * thought of passing silently, and the ones that would hurt most are the ones a future edit is
+ * most likely to reach for: Agent and SendMessage reach other agents, TaskCreate and TaskOutput
+ * reach other tasks, and any MCP tool reaches whatever its server does. "Branches never see
+ * siblings" is a CLAUDE.md non-negotiable, so a new grant has to be argued for here first.
+ *
+ * TaskList is the launch permit from D4: Claude Code refuses to launch an agent with zero tools.
+ * It is read only and reaches no file and no network. What it reveals about sibling tasks is
+ * unverified; see D4. It is the one grant on this list that rests on an untested claim.
+ */
+const PERMITTED: Record<string, string[]> = {
+  "adhd-branch.md": ["TaskList"],
+  "adhd-critic.md": ["TaskList"],
+  "adhd-deepen.md": ["TaskList"],
+  "adhd-branch-search.md": ["WebFetch", "WebSearch"],
+};
+
 test("every agent file has a name matching its filename, a description, and at least one tool", () => {
   const dir = join(cfg.root, "agents");
   const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
@@ -37,7 +55,18 @@ test("every agent file has a name matching its filename, a description, and at l
   }
 });
 
-test("no branch, critic, or deepen agent carries a filesystem tool; only adhd-branch-search has network", () => {
+test("every agent grants exactly the tools it is permitted, and nothing else", () => {
+  const dir = join(cfg.root, "agents");
+  const files = readdirSync(dir).filter((x) => x.endsWith(".md"));
+  assert.deepEqual(files.sort(), Object.keys(PERMITTED).sort(), "a new agent file needs an entry in PERMITTED");
+  for (const f of files) {
+    const t = tools(frontmatter(join(dir, f))).sort();
+    assert.deepEqual(t, [...PERMITTED[f]!].sort(), `${f}: tool grant changed. Argue for it in D4 before changing PERMITTED.`);
+  }
+});
+
+/** The two categories that matter most, named separately so a failure says which line was crossed. */
+test("no agent carries a filesystem tool, and only the search agent carries network", () => {
   const dir = join(cfg.root, "agents");
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {
     const t = tools(frontmatter(join(dir, f)));
@@ -45,6 +74,20 @@ test("no branch, critic, or deepen agent carries a filesystem tool; only adhd-br
     const net = t.filter((x) => NETWORK.includes(x));
     if (f === "adhd-branch-search.md") assert.deepEqual(net.sort(), ["WebFetch", "WebSearch"]);
     else assert.deepEqual(net, [], `${f} grants network tools`);
+  }
+});
+
+/**
+ * Every tool that reaches another agent, another task, or another server. Listed by name as well
+ * as caught by the allowlist above, so a failure here says what the grant would have opened.
+ */
+test("no agent carries a tool that reaches another agent, task, or server", () => {
+  const REACHING = ["Agent", "Task", "SendMessage", "ListAgents", "TaskCreate", "TaskUpdate", "TaskOutput", "TaskStop", "TaskGet", "Skill", "Workflow", "AskUserQuestion"];
+  const dir = join(cfg.root, "agents");
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {
+    const t = tools(frontmatter(join(dir, f)));
+    for (const bad of REACHING) assert.ok(!t.includes(bad), `${f} grants ${bad}: branches never see siblings`);
+    for (const tool of t) assert.ok(!tool.startsWith("mcp__"), `${f} grants the MCP tool ${tool}, which reaches whatever its server does`);
   }
 });
 

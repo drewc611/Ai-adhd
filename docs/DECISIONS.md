@@ -105,8 +105,24 @@ One wrinkle, found against the Claude Code docs after the first real run: the ho
 launch an agent with zero tools, and `tools: []` is treated as zero. So `adhd-branch`,
 `adhd-critic`, and `adhd-deepen` carry exactly one tool, `TaskList`, which is read only,
 touches no file, reaches no network, and spawns nothing. It is a launch permit, not a
-capability. A test in `test/agents.test.ts` fails if any agent file grants a filesystem tool,
-a network tool other than the two allowed on `adhd-branch-search`, or nothing at all.
+capability.
+
+**The launch permit rests on an untested claim, and this is the honest statement of it.** Read
+only, no file, no network and no spawn are all true and none of them is the question. The
+non-negotiable is that branches never see siblings, and what `TaskList` returns inside a running
+ADHD dispatch has never been observed. An attempt to check it from a subagent in this repository
+returned "tool unavailable", which settles nothing: that subagent was not a plugin agent
+declaring the grant. Until a real plugin run reports what it sees, treat this as the one
+isolation claim in the design that is argued rather than demonstrated. If it turns out to leak,
+the fix is a different launch permit, not a weaker rule.
+
+`test/agents.test.ts` checks the grants as an **allowlist**, not a denylist. It was a denylist,
+naming filesystem and network tools, which left every tool nobody had thought of passing
+silently, and the dangerous ones are exactly what a future edit would reach for: `Agent` and
+`SendMessage` reach another agent, `TaskCreate` and `TaskOutput` reach another task, and any
+`mcp__*` tool reaches whatever its server does. Each agent file must now grant exactly its
+permitted set, a new agent file fails until it has an entry, and changing a grant means arguing
+for it here first.
 
 ---
 
