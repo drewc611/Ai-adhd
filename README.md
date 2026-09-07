@@ -67,6 +67,78 @@ API surface design. Strategy. Any prompt of the shape "give me a few ways to..."
 Do **not** use it for factual lookup, mechanical refactors, or anything with one correct
 answer. It costs N times the tokens. Spend that only where the search space is the problem.
 
+## The frame library
+
+Thirteen frames on ten axes. Routing picks n of them for a problem class, one per axis, so a run
+cannot ask the same question twice under two names.
+
+```mermaid
+flowchart LR
+  subgraph one["axes with one frame — a single way in"]
+    direction TB
+    a1["particulars<br/><b>PARTICULARIST</b>"]
+    a2["frame_validity<br/><b>FRAME_BREAKER</b>"]
+    a3["cost<br/><b>LEDGER</b>"]
+    a4["reversibility<br/><b>DOOR_KEEPER</b>"]
+    a5["adversary<br/><b>SABOTEUR</b>"]
+    a6["scope<br/><b>MINIMALIST</b>"]
+    a7["precedent<br/><b>PRIOR_ART</b>"]
+  end
+  subgraph two["axes with two — routing picks one, never both"]
+    direction TB
+    b1["actors<br/><b>ACTOR_CENSUS</b> · <b>END_USER</b>"]
+    b2["mechanism<br/><b>MECHANIC</b> · <b>FIRST_PRINCIPLES</b>"]
+    b3["operation<br/><b>NIGHT_OPERATOR</b> · <b>HORIZON</b>"]
+  end
+  a7 ~~~ b1
+```
+
+Each frame exists to defeat a named trap from `docs/TRAPS.md`. Drawing that as a graph shows
+where the library is thick and where it is one frame deep.
+
+```mermaid
+flowchart LR
+  PARTICULARIST --> T1
+  LEDGER --> T1
+  LEDGER --> T6
+  MINIMALIST --> T1
+  MINIMALIST --> T4
+  MINIMALIST --> T5
+  FIRST_PRINCIPLES --> T1
+  FIRST_PRINCIPLES --> T3
+  END_USER --> T1
+  END_USER --> T6
+  FRAME_BREAKER --> T2
+  PRIOR_ART --> T2
+  PRIOR_ART --> T8
+  ACTOR_CENSUS --> T6
+  SABOTEUR --> T6
+  SABOTEUR --> T7
+  NIGHT_OPERATOR --> T6
+  NIGHT_OPERATOR --> T4
+  DOOR_KEEPER --> T7
+  HORIZON --> T7
+  HORIZON --> T4
+  MECHANIC --> T3
+
+  T1["T1 consensus"]
+  T2["T2 frame accepted"]
+  T3["T3 borrowed authority<br/><b>never fired</b>"]
+  T4["T4 option list"]
+  T5["T5 no verdict<br/><b>never fired</b>"]
+  T6["T6 missing actor"]
+  T7["T7 reversibility"]
+  T8["T8 voice over content"]
+
+  classDef cold fill:#2A1D20,stroke:#F97B6B,color:#F97B6B
+  class T3,T5 cold
+```
+
+`T1` and `T6` have five attackers each; `T8` has one. The two in red have never fired in any
+recorded run, which is either prevention working or dead weight, and the counts cannot say
+which. `T5` is close to structurally unable to fire, because the output contract already demands
+a committal position. `docs/RETIREMENT.md` sets the bar for acting on any of it.
+
 ## Execution model
 
 No API keys. No provider SDK. No billing surface of its own.
@@ -98,6 +170,30 @@ flowchart TB
 
 Nothing is spent before the gate. The preview shows the problem verbatim with its hash and
 a token estimate, and the run does not start until a human agrees to it.
+
+### How pass A stays blind
+
+The critic scores the artifacts before it is allowed to know which frame wrote any of them. The
+map that would tell it is written to disk and kept out of the brief until pass A has returned.
+
+```mermaid
+flowchart LR
+  A["branch artifact<br/><code>frame: LEDGER</code>"] --> S{{"strip, redact, shuffle"}}
+  S -->|"the frame field is removed"| B["<b>Artifact C</b><br/>position, reasoning,<br/>forecloses, falsifier"]
+  S -.->|"kept out of the brief"| M[("blind-map.json<br/>C = LEDGER")]
+
+  B --> PA["critic, pass A<br/>scores 9 dimensions by letter<br/><i>cannot name what it is scoring</i>"]
+  PA --> R["scores keyed C, not LEDGER"]
+
+  R --> J{{"join on the map"}}
+  M -.-> J
+  J --> PB["critic, pass B<br/>now sees LEDGER<br/>clusters by action, runs 8 detectors"]
+```
+
+Redaction is not only the `frame` field. A branch writes "from inside the Door keeper stance"
+far more naturally than it writes `DOOR_KEEPER`, so every id and display name goes, in any
+casing and across any separator. A label the problem statement itself uses is exempt, because
+every branch is free to echo the problem and echoing it identifies nobody.
 
 ### What reaches the user
 
