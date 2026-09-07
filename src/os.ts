@@ -12,6 +12,7 @@
 // (tmp + rename) and serialised through a directory lock so several hosts can share a root.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, appendFileSync } from "node:fs";
 import { hostname } from "node:os";
+import { randomUUID } from "node:crypto";
 import { parse as parseYaml } from "yaml";
 import { join, resolve } from "node:path";
 import { z } from "zod";
@@ -34,6 +35,14 @@ export const RUN_STATES = [
   "aborted", // hash mismatch, contract failure, or too many lease expiries
 ] as const;
 export type RunState = (typeof RUN_STATES)[number];
+
+/** States with work a host can do. A run outside this set has no claimable or returnable task. */
+export const ACTIVE_STATES = ["diverge", "critique_a", "critique_b", "deepen"] as const satisfies readonly RunState[];
+/** States a run never leaves. Reached once, and nothing may be claimed, returned or cancelled. */
+export const TERMINAL_STATES = ["done", "done_run_level", "cancelled", "aborted"] as const satisfies readonly RunState[];
+
+const isActive = (s: RunState): boolean => (ACTIVE_STATES as readonly RunState[]).includes(s);
+const isTerminal = (s: RunState): boolean => (TERMINAL_STATES as readonly RunState[]).includes(s);
 
 export const TaskSchema = z
   .object({
@@ -143,10 +152,13 @@ export class Kernel {
     const lock = join(this.root, ".lock");
     const ownerFile = join(lock, "owner.json");
     const deadline = Date.now() + 10_000;
+    // Identifies this acquisition, not this process: a process that acquires, loses the lock to
+    // a break, and acquires again must not mistake the older stamp for its own.
+    const token = randomUUID();
     for (;;) {
       try {
         mkdirSync(lock);
-        writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, host: hostname(), at: new Date().toISOString() }));
+        writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, host: hostname(), at: new Date().toISOString(), token }));
         break;
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
@@ -180,10 +192,26 @@ export class Kernel {
     try {
       return fn();
     } finally {
+      // Acquisition guards against breaking a lock somebody still holds. Release has to guard
+      // the mirror image: this process may itself be the slow holder whose lock was broken on
+      // age while it worked, and the directory now sitting there belongs to whoever acquired
+      // after the break. Removing it unconditionally would evict them and let a third process
+      // in while they are still inside, which is the exact race the break rules exist to avoid.
+      // So release only what still carries this acquisition's token.
+      let mine = false;
       try {
-        rmSync(lock, { recursive: true, force: true });
+        mine = (JSON.parse(readFileSync(ownerFile, "utf8")) as { token?: string }).token === token;
       } catch {
-        /* already gone */
+        /* lock or owner file already gone; nothing of ours to release */
+      }
+      if (mine) {
+        try {
+          rmSync(lock, { recursive: true, force: true });
+        } catch {
+          /* already gone */
+        }
+      } else if (existsSync(lock)) {
+        this.journal("lock_lost", { note: "this lock was broken and re-acquired by another holder while we worked" });
       }
     }
   }
@@ -336,7 +364,11 @@ export class Kernel {
   claim(worker: string, opts: { runId?: string } = {}): ClaimedTask | null {
     return this.withLock(() => {
       this.reapLocked();
-      const runs = opts.runId ? [this.load(opts.runId)] : this.listLocked().filter((r) => ["diverge", "critique_a", "critique_b", "deepen"].includes(r.state));
+      // The state filter belongs on both paths. Naming a run explicitly used to skip it, so a
+      // host that tracked its own run id could be handed a task from a run that was already
+      // cancelled, aborted or still sitting at the D5 gate — spending a subagent on a decision
+      // the user had declined or the kernel had already given up on.
+      const runs = (opts.runId ? [this.load(opts.runId)] : this.listLocked()).filter((r) => isActive(r.state));
       const nowMs = this.now().getTime();
       for (const rec of runs.sort((a, b) => a.created_at.localeCompare(b.created_at))) {
         const task = rec.tasks.find(
@@ -366,6 +398,9 @@ export class Kernel {
     return this.withLock(() => {
       const runId = taskId.split(":")[0]!;
       const rec = this.load(runId);
+      // A terminal run has no work left to accept. Said before the task lookup so the error
+      // names the reason a host actually needs — the run ended — rather than the symptom.
+      if (isTerminal(rec.state)) throw new ContractError("return", [`run ${runId} is ${rec.state}${rec.reason ? ` (${rec.reason})` : ""}; it accepts no more work`]);
       const task = rec.tasks.find((t) => t.id === taskId);
       if (!task) throw new ContractError("return", [`no task ${taskId}`]);
       if (task.status !== "leased") throw new ContractError("return", [`task ${taskId} is ${task.status}, not leased`]);
@@ -400,7 +435,7 @@ export class Kernel {
   cancel(runId: string, reason = "cancelled by user") {
     return this.withLock(() => {
       const rec = this.load(runId);
-      if (["done", "done_run_level", "cancelled", "aborted"].includes(rec.state)) return this.summary(rec);
+      if (isTerminal(rec.state)) return this.summary(rec);
       for (const t of rec.tasks) if (t.status === "pending" || t.status === "leased") t.status = "dropped";
       const wasConfirmed = rec.confirmed_at !== null;
       rec.state = "cancelled";
@@ -430,9 +465,14 @@ export class Kernel {
 
   /** The synthesis, when there is one. */
   result(runId: string): { state: RunState; synthesis: string | null; reason: string | null } {
-    const rec = this.withLock(() => this.load(runId));
-    const p = join(this.runDir(runId), "synthesis.md");
-    return { state: rec.state, synthesis: existsSync(p) ? readFileSync(p, "utf8") : null, reason: rec.reason };
+    // The record and the file it describes are read together. Reading the record under the lock
+    // and the file outside it returns a state from before a concurrent cancel and a synthesis
+    // from after: the caller is told the run is still deepening and handed a partial rendering.
+    return this.withLock(() => {
+      const rec = this.load(runId);
+      const p = join(this.runDir(runId), "synthesis.md");
+      return { state: rec.state, synthesis: existsSync(p) ? readFileSync(p, "utf8") : null, reason: rec.reason };
+    });
   }
 
   list() {
@@ -471,8 +511,14 @@ export class Kernel {
           rec.state = "aborted";
           rec.reason = `task ${t.id} expired ${t.attempts} times`;
           rec.finished_at = this.now().toISOString();
+          // The abort in advanceLocked drops every outstanding task; this one used to drop only
+          // the task that expired, leaving its siblings pending on a run that was already over.
+          // They stayed claimable, so a host went on spending subagents on a dead run and the
+          // work came back to a kernel with nowhere to put it.
+          for (const s of rec.tasks) if (s.status === "pending" || s.status === "leased") s.status = "dropped";
           aborted.push(rec.run_id);
           this.journal("aborted", { run_id: rec.run_id, reason: rec.reason });
+          break; // the run is over; the remaining leases were just dropped, not expired
         } else {
           t.status = "pending";
           t.worker = null;

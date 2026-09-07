@@ -185,6 +185,33 @@ Findings from a full sweep, all fixed. Recorded because the first one would have
 59. **`noUnusedLocals` and friends were off.** Turning them on found two dead variables left by
     an earlier refactor of mine.
 
+62. **The kernel mutex was safe to take and unsafe to release.** Acquisition refuses to break a
+    lock whose owner is alive, precisely because breaking one on age alone lets two processes
+    run inside it together. Release had the mirror image and no guard: a slow holder whose lock
+    *was* broken on age deleted the directory on its way out — evicting whoever had legitimately
+    acquired it, and letting a third process in while that holder was still inside. Each
+    acquisition now stamps a token and releases only what still carries it; losing the lock
+    mid-section is journalled as `lock_lost`, because it explains a corrupted run an hour later.
+63. **Aborting on lease expiry dropped one task and left its siblings claimable.** The abort in
+    `advanceLocked` drops every outstanding task; the reap path dropped only the task that had
+    expired. So a run that was already `aborted` still had four pending branch tasks, and hosts
+    went on spending subagents on it and returning work to a kernel with nowhere to put it.
+64. **`claim` skipped the run-state filter when given a run id.** The listing path filtered to
+    the four active states; naming a run explicitly went straight to `load`. Every non-active
+    state also dropped its tasks, so the only reachable leak was through 63 — but the filter now
+    applies to both paths, so a future state that keeps its tasks cannot reopen it quietly.
+65. **A terminal run accepted returned work.** `return_` checked the task's lease and never the
+    run's state, so an artifact could be written into a run that had aborted or been cancelled.
+    It is refused now with the reason a host needs — the run ended, and why — rather than the
+    symptom that the task is no longer leased.
+66. **`result` read the record under the lock and the synthesis outside it.** A cancel landing
+    between the two returned a state from before it with a rendering from after: the caller was
+    told the run was still deepening and handed the partial. Both are read under one lock now.
+
+Two of the six tests for these pin intent rather than catch a regression, and say so in place:
+64 has no single-process reproduction once 63 is fixed, and the atomicity in 66 is not
+observable from one process at all. Recorded rather than dressed up as coverage.
+
 Left alone deliberately: `actions/checkout` is v4 here and v7 in the CodeQL workflow. CI is
 green and there is no evidence of a problem, so bumping a working action on cosmetic
 inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 requires Node

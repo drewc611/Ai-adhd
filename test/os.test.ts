@@ -526,3 +526,99 @@ test("a critic pass returned for the other pass's task is rejected", () => {
   k.return_(passATask.id, yaml(passA(hash, Object.keys(blindMap))), "w");
   assert.equal(k.status("r1").state, "critique_b");
 });
+
+// ---- concurrency and terminal-state guards ------------------------------------------------
+
+test("releasing the lock never evicts a holder that acquired it after ours was broken", () => {
+  // Acquisition already refuses to break a lock somebody still holds. Release is the mirror
+  // image and had no guard: a slow holder whose lock was broken on age used to delete the
+  // directory on its way out, evicting whoever legitimately took it and letting a third
+  // process in while that holder was still inside the critical section.
+  const root = join(tmp(), "root");
+  const lock = join(root, ".lock");
+  const ownerFile = join(lock, "owner.json");
+  let hijacked = false;
+  const k = new Kernel(cfg, {
+    root,
+    now: () => {
+      // Stands in for the second process: it broke our lock on age and stamped its own owner.
+      if (!hijacked && existsSync(ownerFile)) {
+        hijacked = true;
+        writeFileSync(ownerFile, JSON.stringify({ pid: 999_999, host: "elsewhere", at: "2026-09-06T00:00:00Z", token: "held-by-someone-else" }));
+      }
+      return new Date(Date.parse("2026-09-06T00:00:00Z"));
+    },
+  });
+  k.list();
+  assert.ok(hijacked, "the test never reached a point where the lock was held");
+  assert.ok(existsSync(ownerFile), "release deleted a lock this process no longer owned");
+  assert.equal(JSON.parse(readFileSync(ownerFile, "utf8")).token, "held-by-someone-else");
+  const events = readFileSync(join(root, "journal.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l).event);
+  assert.ok(events.includes("lock_lost"), "losing the lock mid-critical-section is not journalled");
+});
+
+test("the lock a process still owns is released, so the next syscall does not have to break it", () => {
+  const { k, root } = kernel();
+  k.list();
+  assert.equal(existsSync(join(root, ".lock")), false);
+  k.list(); // would hang for 10s against a lock left behind
+});
+
+test("aborting on expiry drops every outstanding task, not only the one that expired", () => {
+  // The abort in advanceLocked drops them all. This path used to drop only the expired task,
+  // so four siblings stayed pending on a run that was already over and hosts kept spending
+  // subagents on it.
+  const { k, clock } = kernel({ leaseSeconds: 60, maxAttempts: 1 });
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  assert.equal(k.status("r1").tasks.pending, 5);
+  k.claim("w1");
+  clock.t += 61_000;
+  const st = k.status("r1");
+  assert.equal(st.state, "aborted");
+  assert.equal(st.tasks.pending, 0, "siblings of the expired task are still claimable on a dead run");
+  assert.equal(st.tasks.leased, 0);
+  assert.equal(k.claim("w2"), null);
+  assert.equal(k.claim("w2", { runId: "r1" }), null);
+});
+
+test("naming a run explicitly does not get a host past the state filter", () => {
+  // Defence in depth, and this test says so rather than claiming more. The listing path
+  // filtered by state and the explicit-runId path did not, but every non-active state also
+  // dropped its outstanding tasks, so nothing pending was reachable through the gap — except
+  // on the expiry-abort path above, which left siblings pending and is what actually leaked.
+  // That is fixed at its source; this pins the filter so a future state that keeps its tasks
+  // does not reopen the hole silently.
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1" });
+  assert.equal(k.claim("w1", { runId: "r1" }), null, "the D5 gate is not a suggestion");
+  k.confirm("r1");
+  assert.ok(k.claim("w1", { runId: "r1" }), "an active run is still claimable by id");
+  k.cancel("r1", "user changed their mind");
+  assert.equal(k.claim("w2", { runId: "r1" }), null, "a cancelled run handed out work");
+});
+
+test("a terminal run refuses returned work and says why", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const t = k.claim("w1")!;
+  k.cancel("r1", "user changed their mind");
+  assert.throws(
+    () => k.return_(t.id, yaml(artifact(t.label, k.status("r1").problem_hash)), "w1"),
+    /run r1 is cancelled .*user changed their mind.*accepts no more work/s,
+  );
+});
+
+test("result returns the record and the synthesis without leaving the lock held", () => {
+  // The reason `result` now reads both under one lock is a concurrent cancel between them:
+  // a state from before it and a rendering from after. One process cannot observe that, so
+  // this asserts only what it can — the syscall still works and releases what it took.
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const r = k.result("r1");
+  assert.equal(r.state, "diverge");
+  assert.equal(r.synthesis, null);
+  assert.equal(existsSync(join(k.root, ".lock")), false, "result left the lock held");
+});
