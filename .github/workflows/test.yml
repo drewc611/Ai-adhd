@@ -23,3 +23,7 @@ jobs:
       - run: npm test
       - run: node dist/src/cli.js validate
       - run: node dist/src/cli.js eval
+      # Every recorded synthesis still renders from its own artifacts, or is in
+      # evals/replay-baseline.json with a reason. Fails equally on a baseline entry that has
+      # gone stale, because one that forgives drift no longer happening waves the next one through.
+      - run: node dist/src/cli.js replay

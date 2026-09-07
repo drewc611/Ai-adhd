@@ -622,3 +622,26 @@ test("result returns the record and the synthesis without leaving the lock held"
   assert.equal(r.synthesis, null);
   assert.equal(existsSync(join(k.root, ".lock")), false, "result left the lock held");
 });
+
+test("a critic that refuses aborts the run with the reason it gave, not a schema complaint", () => {
+  // The kernel already routes any RunAbort to `aborted` with its code, so this asserts the
+  // reason survives the trip: a host reading os.json sees what the critic said, not
+  // "critic pass A: scores: Required".
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w1")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w1");
+  }
+  const ta = k.claim("w1")!;
+  assert.equal(ta.phase, "critique_a");
+  k.return_(ta.id, yaml({ problem_hash: hash, pass: "A", refused: true, reason: "two artifacts are byte-identical; blind scoring would score one text twice" }), "w1");
+
+  const st = k.status("r1");
+  assert.equal(st.state, "aborted");
+  assert.match(st.reason!, /^CRITIC_REFUSED: /);
+  assert.match(st.reason!, /byte-identical/);
+  assert.ok(!/Required|invalid|expected/.test(st.reason!), "the refusal was reported as a schema failure");
+  assert.equal(k.claim("w2"), null, "an aborted run keeps handing out work");
+});

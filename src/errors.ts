@@ -37,3 +37,23 @@ export class ContractError extends Error {
     this.name = "ContractError";
   }
 }
+
+/**
+ * The critic said it could not score the pack, rather than returning a malformed one.
+ *
+ * A refusal used to reach the reader as `critic pass A: scores: Required` — a schema complaint
+ * about a critic that was being clear. The two are not the same failure and must not read the
+ * same: malformed output is a contract violation to fix, and a refusal is a judgement with a
+ * reason attached that somebody should read before rerunning anything.
+ *
+ * This is the receiving half only. Nothing in `prompts/` tells the critic it may refuse, and
+ * that is deliberate: an escape hatch a critic is told about is easier to take than scoring,
+ * and the critique phase is where the consensus trap gets caught. Whether to offer one is a
+ * change to the product and is backlog 69.
+ */
+export class CriticRefusal extends RunAbort {
+  constructor(public readonly pass: "A" | "B", public readonly reason: string) {
+    super(`critic pass ${pass} refused to score: ${reason}`, "CRITIC_REFUSED");
+    this.name = "CriticRefusal";
+  }
+}
