@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifact, cfg, passA, passB, tmp, writeProblem, yaml } from "./helpers.js";
-import { phaseCompile, phaseCritique, phaseDeepen, phaseSynth, loadPlan } from "../src/run.js";
+import { computeScore, phaseCompile, phaseCritique, phaseDeepen, phaseSynth, loadPlan } from "../src/run.js";
 import { checkBlind } from "../src/validate.js";
 import { HashMismatch, RunAbort } from "../src/errors.js";
 import { sections } from "../src/eval.js";
@@ -207,4 +207,31 @@ test("a comfortable margin gets no close call note", () => {
   const synth = runToSynth((frame) => (frame === clustered[0] ? 3 : 0));
   const rec = sections(synth)["Recommendation"]!;
   assert.ok(!/Close call/.test(rec), "a wide margin should say nothing");
+});
+
+/**
+ * `pass_a` is a weighted total, so two runs are only comparable if the same weights produced
+ * them. The version existed in config/critic-rubric.yaml and nothing read it, which meant a
+ * rubric change would have split the corpus into halves that look comparable and are not.
+ * D8 recommends exactly such a change, so the stamp has to land before it, not after.
+ */
+test("a scored run records the rubric version that produced its numbers", () => {
+  const { runDir, plan } = compileRun();
+  const H = plan.problem_hash;
+  const frames = plan.branches.map((b) => b.frame);
+  for (const b of plan.branches) writeFileSync(join(runDir, b.artifact_path), yaml(artifact(b.frame, H)));
+
+  phaseCritique(cfg, runDir);
+  const blindMap = JSON.parse(readFileSync(join(runDir, "critic/blind-map.json"), "utf8")) as Record<string, string>;
+  writeFileSync(join(runDir, "critic/pass-a.yaml"), yaml(passA(H, Object.keys(blindMap))));
+  phaseCritique(cfg, runDir);
+  writeFileSync(
+    join(runDir, "critic/pass-b.yaml"),
+    yaml(passB(H, [{ id: "together", members: frames.slice(0, 2) }, ...frames.slice(2).map((f) => ({ id: `c_${f}`, members: [f] }))])),
+  );
+  phaseCritique(cfg, runDir);
+
+  const { score } = computeScore(cfg, runDir);
+  assert.equal(score.rubric_version, cfg.rubric.version);
+  assert.equal(JSON.parse(readFileSync(join(runDir, "score.json"), "utf8")).rubric_version, cfg.rubric.version);
 });

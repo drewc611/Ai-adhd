@@ -523,3 +523,45 @@ two anchor points or fewer:
 `--sensitivity` prints the same margins beneath the flip count. The recorded runs' `synthesis.md`
 files predate the note and are left as they were rendered: they are the record of what those runs
 produced, not a place to backfill.
+
+---
+
+**Finding 5: two of nine dimensions are measuring the output contract, not the reasoning.** Over
+seven real runs and 35 scored artifacts, `foreclosure` sits at its top anchor 91% of the time and
+`reasoning_carries` 94%. Both have two distinct values in the whole corpus. A dimension that
+almost never varies still contributes its weight to every total, so it raises every score by
+roughly a constant and separates nothing.
+
+The corpus says why, for each, and the two mechanisms are different.
+
+`foreclosure` asks whether `forecloses` rules out things a reasonable person might otherwise do.
+The output contract already requires a non-empty `forecloses` array and rejects the artifact
+otherwise, so anchor 0 ("empty, or rules out only straw options") is half unreachable by
+construction. The critic is scoring compliance with a schema the validator already enforced.
+
+`reasoning_carries` asks what survives when every citation is removed. Its top anchor is "no
+authorities were needed and none were used" — and twelve of the thirteen frames have no web tools
+under D4, so they cannot cite an authority even if the reasoning wanted one. The dimension reads
+as a near-constant 3 because the tool allowlist makes it one. The single run where a frame did
+have search, `PRIOR_ART` in E1b, is also the only run in the corpus where T3 has ever fired.
+
+**The 2-versus-3 boundary tracks nothing measurable.** Three artifacts scored 2 on `foreclosure`
+against 32 at 3. Their `forecloses` arrays average 2.7 entries against 3.0, and 19.9 words against
+23.1. `001-first-run/LEDGER` scored 2 while satisfying anchor 3 verbatim: its entries name
+specific, tempting options in concrete terms. On this evidence the boundary is critic noise, not a
+property of the artifacts.
+
+**Recommendation for a v1 rubric, not applied here.**
+
+1. Rewrite `foreclosure`'s anchors so the contract's floor is anchor 0 and the scale starts above
+   it — an artifact that merely fills the array has met the contract, not the dimension.
+2. Either drop `reasoning_carries` or make it conditional on the frame having had tools. Scoring
+   an unciteable artifact for not citing is measuring D4.
+3. Whatever is done, bump `version` in `config/critic-rubric.yaml`.
+
+**Why none of it is done in this change.** `pass_a` is a weighted total, so two artifacts are only
+comparable if the same weights and anchors produced them. Rewriting anchors mid-corpus splits the
+35 scored artifacts into two halves that look comparable and are not, and every figure in Findings
+1 through 4 is drawn from that pool. The prerequisite shipped instead: `score.json` now records
+`rubric_version`, so a future rubric change is legible in the corpus rather than invisible. The
+rubric change itself is the owner's call and belongs in `docs/BACKLOG.md` until it is made.

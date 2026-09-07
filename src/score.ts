@@ -53,6 +53,13 @@ export interface ScoreResult {
   run_level: RunLevel;
   /** False on monoculture or scatter: do not deepen. */
   proceed: boolean;
+  /**
+   * The rubric that produced these numbers. `pass_a` is a weighted total, so it is only
+   * comparable across runs scored under the same weights, and until this was stamped a rubric
+   * change would have silently split the corpus into halves that look comparable and are not.
+   * The field existed in config/critic-rubric.yaml and nothing read it.
+   */
+  rubric_version: number;
 }
 
 /** weighted mean, normalised to [0,1]. */
@@ -160,5 +167,6 @@ export function scoreRun(
       notes,
     },
     proceed: !monoculture && !scatter && frames.some((f) => f.status === "survivor"),
+    rubric_version: cfg.rubric.version,
   };
 }

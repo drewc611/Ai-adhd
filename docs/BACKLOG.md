@@ -83,7 +83,7 @@ yet enough to know whether they work.
    **Built as `adhd learn --sensitivity`. 0 of 4 contested representatives flip, and the report says why that is not stability: every contested decision is settled inside two anchor points out of 48.**
 25. ~~**Dimension correlation matrix.** If two dimensions always move together across runs, one
     of them is not measuring anything.~~
-   **Built as `adhd learn --correlation`. Max |r| is 0.47, but `foreclosure` and `reasoning_carries` sit at the ceiling on 96% of artifacts, which correlation cannot see.**
+   **Built as `adhd learn --correlation`. Max |r| is 0.51, but `foreclosure` (91%) and `reasoning_carries` (94%) sit at the ceiling on 35 scored artifacts, which correlation cannot see. D8 finding 5 says why: both are measuring the output contract and the D4 tool allowlist rather than the reasoning.**
 26. ~~**Blind-pack integrity fuzz.** Generate artifacts that mention their own frame in a dozen
     ways and assert pass A redaction catches all of them.~~
    **Built, and it found the hole it was written for: every two-word frame name leaked under any separator.**
@@ -95,6 +95,14 @@ yet enough to know whether they work.
 29. ~~**Detector output quality check.** Some evidence strings are one clause. Set a floor and
     reject pass B if a fired trap's evidence is under N words.~~
    **Built. Floor set from data: real fired evidence runs 29 to 50 words.**
+60. **Rewrite the two ceiling dimensions (v1 rubric).** `foreclosure`'s anchor 0 is half
+    unreachable because the output contract already rejects an empty `forecloses`; scale it
+    from the contract's floor upward. `reasoning_carries` reads a near-constant 3 because
+    twelve of thirteen frames have no web tools, so drop it or make it conditional on the
+    frame having had them. Bump `version` in `config/critic-rubric.yaml` when either lands —
+    `score.json` records `rubric_version`, so the split in the corpus will be legible. Owner's
+    call: it makes the 35 artifacts scored under version 0 non-comparable with everything
+    after. Evidence in D8 finding 5.
 
 ## 5. Kernel (D7)
 
