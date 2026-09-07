@@ -25,11 +25,13 @@ can be wrong without saying so.
    The single most important unanswered question: are the findings the frames, or the seed?
 2. **Run-to-run variance floor.** Same fixture, same seed, repeated. Establishes the noise
    against which every other comparison is read.
-3. ~~**Critic inter-rater reliability.**~~ **Built** as `adhd learn --run <dir> --agreement
-   <passA.yaml>`, and run once: 84% exact over 45 cells on `003-kernel-strategy`, 100% within one
-   point, ranking changed, outcome unchanged. Reports per-dimension agreement, the ranking, and
-   whether any contested cluster changed representative. The third is the one that matters and
-   the other two overstate it. Still one run and one second critic; repeat on 001, 002 and 004.
+3. ~~**Critic inter-rater reliability.**~~ **Built and run across the corpus.**
+   `adhd learn --run <dir> --agreement <passA.yaml>` for one pack, `--agreement-all` pooled.
+   Every real run was scored a second time blind: 79% exact over 225 cells, 100% within one
+   point. All five rankings changed; one outcome did (`002-kernel-enduser` sends PARTICULARIST to
+   deepen instead of FRAME_BREAKER). The two dimensions the critics agree on most are the two
+   pinned at the ceiling, which is Finding 2 from a second direction. Two raters still cannot
+   separate an ambiguous rubric from an idiosyncratic critic; a third rater on one pack would.
 4. ~~**Rubric weight sensitivity.**~~ **Built** as `adhd learn --sensitivity`. Re-decides every
    contested cluster under each dimension's weight moved by ±1 and lists the representatives
    that change. Corrected in the building: pass A does not prune, a fired trap does. What pass A

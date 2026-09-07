@@ -95,3 +95,20 @@ handing the reader a two-way fork conditioned on a fact it did not go and get â€
 same shape as its stated fallback when the problem lacks specifics. That fallback is written
 into the frame's own stance, so the frame is behaving as designed and the design is what
 tripped the detector. One run; not a verdict. Worth watching if it repeats.
+
+## A second critic
+
+`critic/pass-a.rater2.yaml` is a second blind pass A over the same artifacts, produced 2026-09-07
+from `critic/pass-a.brief.md` verbatim by a critic in a separate context window that read no other
+file. It is evidence about the rubric, not part of this run: the run shipped on `pass-a.yaml` and
+`score.json` is unchanged.
+
+89% exact over 45 cells, the highest in the corpus, 100% within one point. Every cluster had one
+survivor, so no representative decision could change whatever the critics disagreed on.
+
+```
+adhd learn --run evals/recorded/004-kernel-naming --agreement evals/recorded/004-kernel-naming/critic/pass-a.rater2.yaml
+adhd learn --agreement-all
+```
+
+Pooled findings are recorded under D8 in `docs/DECISIONS.md`.

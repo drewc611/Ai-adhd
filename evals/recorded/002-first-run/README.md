@@ -52,3 +52,20 @@ fixtures use it.
 - The pass B prompt's instruction not to name frames in objections held: both objections were
   clean and the deepen redaction had nothing to remove.
 - Fixture verb lists were a maintenance trap. Replaced by one shared imperative check.
+
+## A second critic
+
+`critic/pass-a.rater2.yaml` is a second blind pass A over the same artifacts, produced 2026-09-07
+from `critic/pass-a.brief.md` verbatim by a critic in a separate context window that read no other
+file. It is evidence about the rubric, not part of this run: the run shipped on `pass-a.yaml` and
+`score.json` is unchanged.
+
+73% exact over 45 cells, 100% within one point. The ranking changed (FRAME_BREAKER and MECHANIC
+swapped) and the outcome did not.
+
+```
+adhd learn --run evals/recorded/002-first-run --agreement evals/recorded/002-first-run/critic/pass-a.rater2.yaml
+adhd learn --agreement-all
+```
+
+Pooled findings are recorded under D8 in `docs/DECISIONS.md`.

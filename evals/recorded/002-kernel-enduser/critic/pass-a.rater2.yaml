@@ -1,0 +1,59 @@
+# Second blind pass A over the same artifact pack as pass-a.yaml, by a fresh critic in a
+# separate context window. Produced 2026-09-07 from critic/pass-a.brief.md verbatim, with the
+# critic instructed to read that file and nothing else. It is evidence about the rubric, not
+# part of this run: the run shipped on pass-a.yaml and score.json is unchanged.
+#
+# Read it with: adhd learn --run evals/recorded/002-kernel-enduser --agreement <this file>
+problem_hash: sha256:4275fedee633951b897fba88d5494509cc9877b4fec53e74a4bd773dba9d2806
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence with an imperative pair of verbs ('look at what the slowest 1% experience' and 'make the system answer them within a few seconds') and an explicit ordering claim, with no hedge handing the choice back." }
+    foreclosure: { score: 3, evidence: "It names three tempting moves in concrete terms - root-cause hunting through GC, cron, cache expiry and connection churn; dismissing p99 as only the slowest 1%; and silent retry or queueing that hides the wait - all of which a reasonable team would otherwise do." }
+    falsifiability: { score: 3, evidence: "Sampling requests inside a spike window for completion, duplicate submissions and drop-off in the following minute is a specific observation available from existing logs, and the branch states outright that a clean result kills the position." }
+    specificity: { score: 1, evidence: "Strip the 40-minute period, the p99 metric and the API framing and almost the whole user-experience argument survives intact; only the 'slowest 1%, so maybe nobody noticed' step leans on a detail." }
+    assumption_attack: { score: 3, evidence: "It names the assumption buried in 'where should I look' - that the answer is a subsystem - and makes its own conclusion conditional on whether users actually experience a stall, so the answer follows from the test." }
+    reasoning_carries: { score: 3, evidence: "There is not a single citation, tool name or authority anywhere; the argument runs entirely on what a user can see and do at the moment of the stall." }
+    actor_coverage: { score: 3, evidence: "The client team or integration partner is named with three concrete actions (idempotency keys, a visible working state, a sane timeout), and the position's fix depends on them acting before the server side changes." }
+    reversibility: { score: 1, evidence: "It orders the work (stop the bleeding, then chase the cause) and notes the client fixes land before server changes, but the ordering is argued from user harm rather than from any cheap-versus-committed distinction." }
+    substance: { score: 2, evidence: "Flattened to 'check whether the spike actually harms users before fixing it', the claim still stands and matters, though the first-person narrative voice is doing a lot of the persuasive work." }
+  B:
+    committal: { score: 3, evidence: "One sentence, a single imperative ('pull the exact timestamps of the last ten spikes and measure the gaps'), and the branching that follows is about interpretation, not about handing the reader a menu of actions." }
+    foreclosure: { score: 3, evidence: "Flame graphs and request-path profiling, autoscaling, and GC flag tuning are all named specifically with the reason each is ruled out (periodic not load-shaped, same phase, histogram first)." }
+    falsifiability: { score: 3, evidence: "Restarting one instance out of phase is nearly free, and the branch states exactly what the failure looks like - spikes staying locked to the fleet schedule - and what it invalidates." }
+    specificity: { score: 3, evidence: "The whole derivation runs on the arithmetic of 40 specifically (cron fires at :00 and :40 giving alternating 40/20 gaps, grep for 2400 or 40*60) plus 'or so' and p99, so it is unusable for a differently-shaped period." }
+    assumption_attack: { score: 3, evidence: "It identifies that the question's 'or so' hides the load-bearing unknown - whether the period is exact - and the recommended place to look changes completely across the three measured outcomes." }
+    reasoning_carries: { score: 3, evidence: "No authorities, vendors or sources are invoked; the argument is arithmetic about periods and phase alignment that stands on its own." }
+    actor_coverage: { score: 2, evidence: "The DBA or platform owner is named with a concrete action (list what runs against the same database or nodes on a 40-minute cadence), but the position's first move is the team's own gap histogram, not that actor." }
+    reversibility: { score: 1, evidence: "Cheapness surfaces twice - the out-of-phase restart probe and 'without the API team changing anything' - but it is never used to structure or order the recommendation." }
+    substance: { score: 3, evidence: "Flat, the claim is 'the distribution of gaps between spikes tells you whether it is a process timer, a cron, or a fill-and-flush, so measure it first', which is the same claim and worth saying." }
+  C:
+    committal: { score: 3, evidence: "One sentence naming two artifacts to pull and the correlation to run, with the causal claim attached and no hedge or fallback offered." }
+    foreclosure: { score: 3, evidence: "Searching the job scheduler, adding instances, raising client timeouts, and starting at the database or network are each ruled out with a stated mechanism for why they fail." }
+    falsifiability: { score: 3, evidence: "Comparing the interval at 3 a.m. against peak, or checking whether all instances spike in the same second, are both cheap reads of data already on hand and either result kills the per-process-bucket claim." }
+    specificity: { score: 2, evidence: "The 'or so' and the p99-versus-p50 reasoning genuinely bend the derivation, but the accumulator and boundary-holding walkthrough would transfer to any drifting periodic stall." }
+    assumption_attack: { score: 2, evidence: "It names the assumption that a period implies a schedule and argues from 'or so' that it does not, but the position then commits to the bucket hypothesis rather than letting the answer branch on the test result." }
+    reasoning_carries: { score: 3, evidence: "The whole piece is derived from capacity over fill rate and what each component holds during a stall, with no citation or authority anywhere." }
+    actor_coverage: { score: 2, evidence: "The datastore or cache operator is named with a real action - report the flush, checkpoint or compaction cadence - but the position deliberately starts inside the process instead of with them." }
+    reversibility: { score: 2, evidence: "It explicitly picks the cheapest bucket to read first because the process writes its own sawtooth and pause log, using cost of observation to order the investigation, though it never frames moves as reversible versus committed." }
+    substance: { score: 3, evidence: "Stripped flat, 'a period that drifts with traffic is capacity divided by fill rate, not a clock, so read the accumulator' is the same claim and is non-obvious." }
+  D:
+    committal: { score: 3, evidence: "One sentence, four chained imperatives ending in 'pause the matching one for two cycles to confirm', with an explicit 'stop inspecting the API' and no escape hatch." }
+    foreclosure: { score: 3, evidence: "Profilers, flame graphs and distributed traces, plus autoscaling and GC tuning, are ruled out with concrete reasons tied to the position's own argument about clocks versus places." }
+    falsifiability: { score: 3, evidence: "Checking whether the interval shortens at peak and lengthens overnight uses data already collected and would directly show the cause is load-driven and internal, killing the external-scheduler position." }
+    specificity: { score: 2, evidence: "The reasoning bends around 'or so' as the jitter fingerprint and around the exact phrasing 'where should I look', but the cron-versus-duration-timer split would carry over to any periodic spike with a different number." }
+    assumption_attack: { score: 3, evidence: "It isolates the load-bearing assumption inside 'where should I look' - that the cause is a place found by inspection - explains the incentive to leave it unexamined, and the entire recommended action follows from rejecting it." }
+    reasoning_carries: { score: 3, evidence: "Product names appear only as examples of schedules to grep, never as authority; remove them and the clock-not-a-place argument is untouched." }
+    actor_coverage: { score: 3, evidence: "The largest API client is named with two actions (share the schedule, shift it by ten minutes) and the position - correlate against every scheduled actor sharing a resource - depends on exactly that party cooperating." }
+    reversibility: { score: 2, evidence: "The sequence deliberately runs free measurement first and confirms with a reversible two-cycle pause of one job before any fix, so cost ordering shapes the recommendation without being named as such." }
+    substance: { score: 3, evidence: "Flattened to 'a periodic spike is a scheduler somewhere, so fingerprint the period and its jitter and match it against other teams' schedules', it is the same claim and worth saying." }
+  E:
+    committal: { score: 3, evidence: "One sentence, a single concrete action (three hours of unaggregated per-request logs from one host, broken down by upstream), with a hard boundary - before you open a crontab or touch a config - and no hedge." }
+    foreclosure: { score: 3, evidence: "It rules out the crontab grep, GC tuning and heap sizing before the period is confirmed, capacity as a first move, and the very tempting act of widening the aggregation window until the spike disappears." }
+    falsifiability: { score: 3, evidence: "Grepping the schedulers on the service's own hosts for an exact 40-minute job matching the spike timestamps costs minutes and would show the raw-log detour was unnecessary." }
+    specificity: { score: 2, evidence: "The aliasing argument is worked concretely against this problem - ten replicas with a 400-minute event staggered by deploy time yielding an apparent fleet-wide 40 - but the general 'the metric may lie' catalogue would survive deleting the details." }
+    assumption_attack: { score: 3, evidence: "It names four assumptions the obvious answer smuggles in, attacks the load-bearing one - that the 40-minute period is real rather than a charting artifact - and the answer branches on what the raw per-host intervals show." }
+    reasoning_carries: { score: 3, evidence: "No authorities are cited; the argument runs on how percentiles aggregate across hosts and windows, and holds without any of the named technologies." }
+    actor_coverage: { score: 2, evidence: "The callers are named with real actions - disclose a 40-minute poll or batch schedule and add jitter to it - but the position's first move is the team's own log pull, so it does not hinge on them." }
+    reversibility: { score: 2, evidence: "It explicitly weighs cheap-to-cause against expensive-to-recover-from and orders read-only confirmation ahead of tuning GC, resizing pools and rewriting hot paths, though the axis is wasted effort more than reversibility." }
+    substance: { score: 3, evidence: "Flat, 'confirm the period exists in raw per-host data before chasing any cause, because an aggregated percentile chart can manufacture a period no component has' is the same claim and non-obvious." }

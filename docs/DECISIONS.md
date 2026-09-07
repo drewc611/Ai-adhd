@@ -331,28 +331,58 @@ spread without raising their meaning, and the harness would keep passing. That i
 failure as rewriting a fixture assertion after seeing which controls cleared it, recorded under
 D6, and it is refused for the same reason.
 
-**Finding 3: two critics agree, and the run does not depend on which one read it.** A fresh
-critic in a separate context window scored `003-kernel-strategy`'s five artifacts from
-`critic/pass-a.brief.md` verbatim, blind, having read no other file. Its scoring is kept at
-`critic/pass-a.rater2.yaml`; the run still ships on `pass-a.yaml` and `score.json` is unchanged.
+**Finding 3: the critics agree, and one run in five would still have shipped a different
+answer.** Every real run's artifact pack was scored a second time by a fresh critic in a separate
+context window, from `critic/pass-a.brief.md` verbatim, instructed to read no other file. Each
+second scoring is kept beside the first as `critic/pass-a.rater2.yaml`; every run still ships on
+`pass-a.yaml` and no `score.json` changed.
 
-- 84% exact agreement over 45 cells, 100% within one point. No cell disagreed by two.
-- Four dimensions agreed on every cell: `committal`, `foreclosure`, `falsifiability`,
-  `reversibility`. `foreclosure` also sits at the 96% ceiling, so its perfect agreement is what
-  a near-constant looks like from a second angle, not evidence that it is well-defined.
-- Worst were `assumption_attack` and `substance` at 60% exact, both mean |diff| 0.40. Those two
-  ask the critic for a judgment the artifact does not spell out.
-- The overall ranking changed: HORIZON overtook DOOR_KEEPER for top artifact.
-- The run's outcome did not. The one contested cluster (LEDGER, DOOR_KEEPER) kept DOOR_KEEPER,
-  and HORIZON is a singleton that goes to deepen either way.
+Pooled over 225 cells from 5 runs: **79% exact, 100% within one point**. Not one cell in the
+corpus disagreed by two.
 
-**What clustering is doing.** Cross-cluster rank disagreement is structurally inert: each
-cluster sends its own representative regardless of how it ranks against another's. Only order
-inside a contested cluster changes anything, and this run had one. That is a stronger claim for
-clustering than the design argument that produced it, and it also means cell agreement and
-ranking agreement both overstate how much the critic decides. `adhd learn --agreement` prints
-all three so the weakest one is not read as the answer.
+| | exact | mean abs diff |
+|---|---|---|
+| specificity (weight 3) | 68% | 0.32 |
+| substance | 68% | 0.32 |
+| reversibility | 72% | 0.28 |
+| assumption_attack | 76% | 0.24 |
+| actor_coverage | 76% | 0.24 |
+| committal | 80% | 0.20 |
+| falsifiability | 80% | 0.20 |
+| foreclosure | 92% | 0.08 |
+| reasoning_carries | 96% | 0.04 |
 
-**Sample of one run, one second critic.** 45 cells is not an inter-rater reliability figure. It
-is a first reading, and the number to grow. Repeat it on 001, 002 and 004 before quoting 84%
-anywhere it matters.
+**The two dimensions the critics agree on most are the two pinned at the ceiling.** `foreclosure`
+and `reasoning_carries` score the maximum on 96% of artifacts (Finding 2) and agree at 92% and
+96%. That is one fact reached from two directions: they agree because almost every artifact gets
+a 3. High inter-rater agreement is not evidence a dimension is well defined when the dimension
+barely varies.
+
+`specificity` carries the highest weight in the rubric and has the worst agreement. It is also
+the dimension whose anchors ask the critic to do something (delete the three most specific
+details and re-read) rather than to recognise something.
+
+**Every ranking changed. One outcome did.**
+
+| run | exact | ranking | representative |
+|---|---|---|---|
+| 001-first-run | 69% | changed | same |
+| 002-first-run | 73% | changed | same |
+| 002-kernel-enduser | 78% | changed | **FRAME_BREAKER → PARTICULARIST** |
+| 003-kernel-strategy | 84% | changed | same |
+| 004-kernel-naming | 89% | changed | same |
+
+In `002-kernel-enduser` the second critic sends PARTICULARIST to deepen instead of FRAME_BREAKER
+in the `measure_the_period_first` cluster. That run's recommendation depends on which critic read
+it. Recorded, not smoothed: it is the exact failure `--agreement` was built to find, and it fired
+on the fifth pack tried.
+
+**What clustering is doing.** Cross-cluster rank disagreement is structurally inert: each cluster
+sends its own representative regardless of how it ranks against another's. 5 of 5 rankings moved
+and 1 of 5 outcomes did. So cell agreement and ranking agreement both overstate how much the
+critic decides, and `adhd learn --agreement` prints all three with the weakest ones labelled as
+such. That is a stronger argument for clustering than the design reasoning that produced it.
+
+**Five runs, one second critic each.** 225 cells is a first corpus, not a reliability figure. Two
+raters give no way to separate a rubric that is ambiguous from a critic that is idiosyncratic; a
+third rater on one pack would. Quote 79% with the sample size attached or not at all.

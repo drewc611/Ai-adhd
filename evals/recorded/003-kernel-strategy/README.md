@@ -105,4 +105,4 @@ HORIZON is a singleton that goes to deepen either way. Read it with:
 adhd learn --run evals/recorded/003-kernel-strategy --agreement evals/recorded/003-kernel-strategy/critic/pass-a.rater2.yaml
 ```
 
-Findings are recorded under D8 in `docs/DECISIONS.md`.
+Pooled with the other four packs (225 cells, 79% exact) under D8 in `docs/DECISIONS.md`.

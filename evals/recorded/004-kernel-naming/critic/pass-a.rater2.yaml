@@ -1,0 +1,59 @@
+# Second blind pass A over the same artifact pack as pass-a.yaml, by a fresh critic in a
+# separate context window. Produced 2026-09-07 from critic/pass-a.brief.md verbatim, with the
+# critic instructed to read that file and nothing else. It is evidence about the rubric, not
+# part of this run: the run shipped on pass-a.yaml and score.json is unchanged.
+#
+# Read it with: adhd learn --run evals/recorded/004-kernel-naming --agreement <this file>
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+pass: A
+scores:
+  A:
+    committal: { score: 1, evidence: 'The position forks on a fact it says it does not have, so the reader is handed two names and told to pick after finding out which case they are in.' }
+    foreclosure: { score: 3, evidence: 'It rules out the named tempting candidates new_checkout / checkout_new / enable_new_checkout and the very tempting compromise of a name that serves both lifespans, with a stated reason why no such name exists.' }
+    falsifiability: { score: 3, evidence: 'Asking one person whether a delete date exists is a one-question observation that eliminates one of the two candidate names outright.' }
+    specificity: { score: 3, evidence: 'The argument is built on the literal phrases in the statement - whether users see, the new checkout, and the calendar-bound word new - and would have nothing left if those were removed.' }
+    assumption_attack: { score: 3, evidence: 'It names the unstated assumption that the flag lifespan is irrelevant to the name, shows the value is missing, and derives each answer from a possible value of it.' }
+    reasoning_carries: { score: 3, evidence: 'No authority, standard, or source is invoked anywhere; the chain runs entirely on stated mechanism.' }
+    actor_coverage: { score: 2, evidence: 'The support or on-call engineer reading the flag beside a user id is named with an action (escalate), but the position mainly rests on the lifespan fork rather than on that reader.' }
+    reversibility: { score: 1, evidence: 'Deletion pressure and permanence are mentioned, but no move is classified as cheap or committed and nothing is ordered by that.' }
+    substance: { score: 3, evidence: 'Flattened to do not put an expiring word in a permanent identifier and let lifespan pick the name, it is the same claim and still worth making.' }
+  B:
+    committal: { score: 3, evidence: 'One sentence with an imperative verb: write the rollout plan first and let the name fall out of it, with no hedge returned to the reader.' }
+    foreclosure: { score: 3, evidence: 'It rules out the just wrap it in an if approach, the house style guide answer, and split analytics/engineering ownership, all named concretely.' }
+    falsifiability: { score: 3, evidence: 'One grep of the flag definitions plus checking whether three recent flags were deleted is cheap, specific, and stated to make naming the only open decision.' }
+    specificity: { score: 2, evidence: 'Sticky bucketing mid-purchase, in-flight carts, and checkout completion rate bend it toward this problem, but the ramp-and-halt-metric core would survive being pointed at most feature rollouts.' }
+    assumption_attack: { score: 3, evidence: 'It names the smuggled assumption that a single boolean is the right control surface, tests it phrase by phrase against the question wording, and the recommendation follows from rejecting it.' }
+    reasoning_carries: { score: 3, evidence: 'Nothing is cited or deferred to; every claim is argued from consequence.' }
+    actor_coverage: { score: 2, evidence: 'Support and payments operations are named with a real action (trigger the halt), but the position is the rollout doc and would stand if that actor were dropped.' }
+    reversibility: { score: 3, evidence: 'The recommendation is an ordered exposure ladder from internal staff to 100 percent with a tested rollback, which is a sequence built on cost of undoing.' }
+    substance: { score: 2, evidence: 'Flattened to design the ramp before naming the flag it remains worth saying, though some of its force comes from the you-asked-the-wrong-question angle.' }
+  C:
+    committal: { score: 3, evidence: 'One sentence naming a specific string, checkout_v2_visible, with the trailing clause stating purpose rather than offering an out.' }
+    foreclosure: { score: 3, evidence: 'Three families of tempting names are ruled out with instances - exp_4417, checkout_redesign, new_checkout, checkout_rollout_pct - each with a stated failure mode.' }
+    falsifiability: { score: 2, evidence: 'Handing an agent ten real tickets is observable and would settle it, but it requires collecting tickets and an agent trial rather than a minute of looking.' }
+    specificity: { score: 2, evidence: 'The card form, the total, the abandoned cart and the mid-payment failure bend it to checkout, but the underlying name-it-for-what-the-user-sees argument would survive on other user-visible flags.' }
+    assumption_attack: { score: 1, evidence: 'It implicitly rejects the assumption that the name is an engineering-internal string by switching to the buyer viewpoint, but never states that assumption or tests it.' }
+    reasoning_carries: { score: 3, evidence: 'No authorities, conventions, or sources appear; the case is argued from what a user and an agent can each observe.' }
+    actor_coverage: { score: 3, evidence: 'The frontline support agent is named with concrete actions (read the name aloud, request a reversion) and the entire choice of name is justified by that seat.' }
+    reversibility: { score: 1, evidence: 'Reversion is raised as something the user wants, but no decision is sorted into cheap-to-undo versus committed and nothing is ordered by it.' }
+    substance: { score: 2, evidence: 'Flattened to name the flag after the state the user can see so support can identify it, the claim survives, though the first-person voice supplies much of its punch.' }
+  D:
+    committal: { score: 3, evidence: 'One sentence, one literal string, checkout_v2_2026_09, plus the registry entry, with the contrast to new_checkout stated and no escape hatch.' }
+    foreclosure: { score: 3, evidence: 'It rules out key reuse for the next iteration, short conversational names as a team convention, and encoding rollout state in the key, and states what each foreclosure costs.' }
+    falsifiability: { score: 3, evidence: 'Reading median flag lifetime off the flag provider list is cheap and specific, and it concedes that under six weeks new_checkout becomes the correct answer.' }
+    specificity: { score: 2, evidence: 'The expiring word new and checkout being the highest-stakes path do work, but the author states the general rule that relative names die, and that rule carries most of the argument on its own.' }
+    assumption_attack: { score: 3, evidence: 'It attacks the assumption that a flag key is cheap to change, tests it by tracing the string into warehouse tables, alerts and old writeups, and the recommendation follows from finding it unrenameable.' }
+    reasoning_carries: { score: 3, evidence: 'No source or authority is leaned on; the archaeology cost is argued from where the string physically ends up.' }
+    actor_coverage: { score: 3, evidence: 'The data team is named, given an enforceable action at the ingestion layer, and the position depends on them because they are the party a rename actually blocks.' }
+    reversibility: { score: 3, evidence: 'The whole structure splits the unrenameable key from the cheap-to-change evaluation logic and orders the recommendation into decide now versus deliberately leave open.' }
+    substance: { score: 3, evidence: 'Flattened to flag keys are permanent identifiers so name them descriptively and register owner and expiry at creation, it is the same claim and stands unaided.' }
+  E:
+    committal: { score: 3, evidence: 'Name it new_checkout and merge it today is one sentence, two acting verbs, and no qualifier.' }
+    foreclosure: { score: 3, evidence: 'It rules out adopting any naming convention as a precondition, encoding rollout semantics in the key, and keeping the flag as a durable switch, and accepts the named costs of each.' }
+    falsifiability: { score: 3, evidence: 'One minute at the flag dashboard checking whether a prefix or owner-tag convention is already in use, and the position concedes it loses if one is.' }
+    specificity: { score: 1, evidence: 'Only the literal phrase the new checkout is load bearing; the cheap-to-reverse-decisions argument would read identically for almost any naming question.' }
+    assumption_attack: { score: 2, evidence: 'It names the assumption that this decision deserves deliberation and answers it with a reversal-cost argument, but the cost is asserted rather than tested and the answer is the frames default one.' }
+    reasoning_carries: { score: 3, evidence: 'No conventions, standards or sources are invoked; the case rests on the claimed cost of a find-and-replace.' }
+    actor_coverage: { score: 2, evidence: 'The person who deletes the flag is named with a concrete action, opening the cleanup ticket in the same PR, but the position of ship it today does not depend on them.' }
+    reversibility: { score: 3, evidence: 'Cheap-to-reverse versus expensive is the load-bearing distinction and it drives an explicit sequence of do this now, adopt a convention when collision appears.' }
+    substance: { score: 3, evidence: 'Flattened to this is a cheap rename so pick the obvious words, ship, and let the aging name act as a deletion timer, the claim is intact and contestable.' }

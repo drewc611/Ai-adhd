@@ -381,13 +381,36 @@ test("the corpus rollup names the runs whose representative would have changed",
   assert.match(r.text, /LEDGER->MECHANIC/);
 });
 
+/**
+ * Pinned to the recorded corpus so the figures quoted in D8 fail the suite if they stop being
+ * true. Not pinned to the exact percentage, which would break on the next second scoring added.
+ */
 test("the recorded corpus rollup reads every second scoring on disk", () => {
   const r = interRaterCorpus(cfg);
-  assert.ok(r.runs.length >= 1, "003-kernel-strategy has a second scoring");
-  assert.ok(r.cells >= 45);
+  assert.ok(r.runs.length >= 5, `expected at least 5 runs with a second scoring, got ${r.runs.length}`);
+  assert.ok(r.cells >= 225);
   assert.ok(r.exact > 0.7, `pooled exact agreement was ${r.exact}`);
+  assert.equal(r.within_one, 1, "no cell in the corpus disagreed by more than one point");
   assert.ok(
     r.by_dimension.every((d) => d.n === r.runs.reduce((s, x) => s + x.report.artifacts, 0)),
     "every dimension should be scored on every artifact",
   );
+  // The two dimensions the correlation report finds pinned at the ceiling are also the two the
+  // critics agree on most. They agree because almost every artifact gets a 3.
+  const worst = r.by_dimension[0]!;
+  const best = r.by_dimension.slice(-2).map((d) => d.dimension);
+  assert.deepEqual(new Set(best), new Set(["foreclosure", "reasoning_carries"]));
+  assert.equal(worst.dimension, "specificity", "the highest weighted dimension has the worst agreement");
+  // One run in the corpus would have sent a different position to deepen. This is the finding
+  // the tool exists to catch, and it is recorded rather than smoothed over.
+  assert.deepEqual(r.runs_with_changed_representative, ["002-kernel-enduser"]);
+});
+
+test("every recorded run's ranking moved between critics and only one outcome did", () => {
+  const r = interRaterCorpus(cfg);
+  assert.ok(
+    r.runs.every((x) => x.report.ranking_changed),
+    "all five rankings changed",
+  );
+  assert.equal(r.runs.filter((x) => x.report.representative_changes.length).length, 1);
 });
