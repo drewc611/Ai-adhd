@@ -8,10 +8,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { Config } from "./config.js";
+import { currentFrameId, frameIdHistory, type Config } from "./config.js";
 import { UsageError } from "./errors.js";
 import { DeepenArtifactSchema, PassASchema, PlanSchema, type PassA, type Plan } from "./schema.js";
-import type { ScoreResult, ScoredCluster, ScoredFrame } from "./score.js";
+import { forwardFrameIds, type ScoreResult, type ScoredCluster, type ScoredFrame } from "./score.js";
 import { unfence } from "./validate.js";
 
 export interface FrameStanding {
@@ -54,26 +54,34 @@ const trunc = (line: string): string => (line.length > CLIP ? `${line.slice(0, C
 const body = (lines: string[]): string => lines.map(trunc).join("\n");
 
 export function explainFrame(cfg: Config, runDir: string, frameId: string): WhyReport {
-  const frame = frameId.toUpperCase();
-  if (!cfg.frames.frames.some((f) => f.id === frame))
-    throw new UsageError(`unknown frame ${frame}. The library has: ${cfg.frames.frames.map((f) => f.id).join(", ")}`);
+  const asked = frameId.toUpperCase();
+  if (!cfg.frames.frames.some((f) => f.id === asked || f.former_ids.includes(asked)))
+    throw new UsageError(`unknown frame ${asked}. The library has: ${cfg.frames.frames.map((f) => f.id).join(", ")}`);
+  // A recorded run names frames by the ids current when it ran. Report under today's name, and
+  // look the run's files up under every name the frame has ever had, so `adhd why <run> SUPPLICANT`
+  // finds branches/END_USER.yaml and `adhd why <run> END_USER` still works for anyone holding
+  // an old note.
+  const history = frameIdHistory(cfg, asked);
+  const frame = history[0]!;
+  const isFrame = (id: string | null | undefined) => id !== null && id !== undefined && history.includes(id);
 
   const plan = read<Plan>(join(runDir, "plan.json"), (r) => PlanSchema.parse(JSON.parse(r)));
-  const score = read<ScoreResult>(join(runDir, "score.json"), (r) => JSON.parse(r) as ScoreResult);
+  const score = read<ScoreResult>(join(runDir, "score.json"), (r) => forwardFrameIds(cfg, JSON.parse(r) as ScoreResult));
   const passA = read<PassA>(join(runDir, "critic", "pass-a.yaml"), (r) => PassASchema.parse(parseYaml(unfence(r))));
   const blindMap = read<Record<string, string>>(join(runDir, "critic", "blind-map.json"), (r) => JSON.parse(r) as Record<string, string>);
-  const deepenRaw = read(join(runDir, "deepen", `${frame}.yaml`), (r) => DeepenArtifactSchema.parse(parseYaml(unfence(r))));
+  const deepenPath = history.map((id) => join(runDir, "deepen", `${id}.yaml`)).find((p) => existsSync(p)) ?? join(runDir, "deepen", `${frame}.yaml`);
+  const deepenRaw = read(deepenPath, (r) => DeepenArtifactSchema.parse(parseYaml(unfence(r))));
   const synthesis = read(join(runDir, "synthesis.md"), (r) => r);
 
-  const branch = plan?.branches.find((b) => b.frame === frame) ?? null;
+  const branch = plan?.branches.find((b) => isFrame(b.frame)) ?? null;
   const scored: ScoredFrame | null = score?.frames.find((f) => f.frame === frame) ?? null;
-  const cluster = score?.clusters.find((c) => c.members.includes(frame)) ?? null;
+  const cluster = score?.clusters.find((c) => c.members.includes(frame)) ?? null;  // already forwarded
 
   const max = cfg.rubric.scale.max;
   const den = cfg.rubric.dimensions.reduce((s, d) => s + d.weight * max, 0);
   const anchorStep = Math.min(...cfg.rubric.dimensions.map((d) => d.weight)) / den;
 
-  const letter = blindMap ? Object.entries(blindMap).find(([, f]) => f === frame)?.[0] : undefined;
+  const letter = blindMap ? Object.entries(blindMap).find(([, f]) => isFrame(f))?.[0] : undefined;
   const row = letter && passA ? (passA.scores[letter] as Record<string, { score: number; evidence: string } | undefined>) : undefined;
   const dimensions = row
     ? cfg.rubric.dimensions
@@ -109,7 +117,7 @@ export function explainFrame(cfg: Config, runDir: string, frameId: string): WhyR
 
   const lines: string[] = [`${frame} in ${runDir.split("/").pop()}`, ""];
   if (!branch) {
-    lines.push(`Not dispatched. The plan for this run selected ${plan?.branches.length ?? 0} frames and ${frame} was not among them:`, `  ${plan?.branches.map((b) => b.frame).join(", ") ?? "(no plan.json)"}`, "", "A frame that was never asked cannot have been rejected. Routing chose the set; see config/routing.yaml.");
+    lines.push(`Not dispatched. The plan for this run selected ${plan?.branches.length ?? 0} frames and ${frame} was not among them:`, `  ${plan?.branches.map((b) => currentFrameId(cfg, b.frame)).join(", ") ?? "(no plan.json)"}`, "", "A frame that was never asked cannot have been rejected. Routing chose the set; see config/routing.yaml.");
     return { run: runDir, frame, dispatched: false, axis: null, status, standing, dimensions, cluster, fired: [], violations: [], lint_disagreements: [], deepen: null, in_synthesis, text: body(lines) };
   }
 

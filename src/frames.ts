@@ -2,9 +2,9 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { unfence } from "./validate.js";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { Config } from "./config.js";
+import { currentFrameId, type Config } from "./config.js";
 import { DeepenArtifactSchema, PassBSchema, TRAP_IDS, type TrapId } from "./schema.js";
-import type { ScoreResult } from "./score.js";
+import { forwardFrameIds, type ScoreResult } from "./score.js";
 
 export function listFrames(cfg: Config, json = false): string {
   if (json) return JSON.stringify(cfg.frames.frames.map(({ id, name, axis, attacks, tools }) => ({ id, name, axis, attacks, tools })), null, 2);
@@ -36,7 +36,9 @@ export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals",
       if (!r.success) continue;
       runs++;
       const clusterOf = new Map<string, string>();
-      for (const c of r.data.clusters) for (const m of c.members) clusterOf.set(m, c.id);
+      // pass-b.yaml names frames by the ids current when the run happened; forward them so a
+      // renamed frame's pair history is not split across two names.
+      for (const c of r.data.clusters) for (const m of c.members) clusterOf.set(currentFrameId(cfg, m), c.id);
       const frames = [...clusterOf.keys()].sort();
       for (let i = 0; i < frames.length; i++)
         for (let j = i + 1; j < frames.length; j++) {
@@ -130,7 +132,7 @@ export function frameStats(
       if (!existsSync(scorePath)) continue;
       let score: ScoreResult;
       try {
-        score = JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult;
+        score = forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult);
       } catch {
         continue;
       }
@@ -244,12 +246,12 @@ export interface RunDiff {
   text: string;
 }
 
-function summarise(dir: string): RunSummary {
+function summarise(cfg: Config, dir: string): RunSummary {
   const read = (f: string) => (existsSync(join(dir, f)) ? readFileSync(join(dir, f), "utf8") : null);
   const plan = read("plan.json");
   const p = plan ? (JSON.parse(plan) as { problem_hash?: string; seed?: number }) : {};
   const scoreRaw = read("score.json");
-  const score = scoreRaw ? (JSON.parse(scoreRaw) as ScoreResult) : null;
+  const score = scoreRaw ? forwardFrameIds(cfg, JSON.parse(scoreRaw) as ScoreResult) : null;
   const synth = read("synthesis.md") ?? "";
   const bold = synth.match(/## Recommendation\s*\n+\*\*([\s\S]*?)\*\*/);
   const id = dir.split("/").filter(Boolean).pop() ?? dir;
@@ -269,9 +271,9 @@ function summarise(dir: string): RunSummary {
  * cannot currently answer at all: when a finding appears, is it the frame set or the seed?
  * A frame that survives at one seed and is pruned at another is a fact about the seed.
  */
-export function diffRuns(dirA: string, dirB: string): RunDiff {
-  const a = summarise(dirA);
-  const b = summarise(dirB);
+export function diffRuns(cfg: Config, dirA: string, dirB: string): RunDiff {
+  const a = summarise(cfg, dirA);
+  const b = summarise(cfg, dirB);
   const hash = (d: string) => {
     const p = join(d, "plan.json");
     return existsSync(p) ? ((JSON.parse(readFileSync(p, "utf8")) as { problem_hash?: string }).problem_hash ?? null) : null;

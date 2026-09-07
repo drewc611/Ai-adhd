@@ -19,7 +19,21 @@ test("an unknown frame is refused with the library listed, not explained as abse
 });
 
 test("frame ids are matched case insensitively", () => {
-  assert.equal(explainFrame(cfg, run("002-kernel-enduser"), "end_user").frame, "END_USER");
+  assert.equal(explainFrame(cfg, run("002-kernel-enduser"), "supplicant").frame, "SUPPLICANT");
+});
+
+/**
+ * The run on disk says END_USER: in its plan, its score, its blind map and the filename of its
+ * artifact. Anyone holding a note from before the rename, or reading the run's own synthesis.md,
+ * will type that. It has to resolve, and it has to report under the name the library uses now.
+ */
+test("a frame renamed since the run still resolves under the id the run recorded", () => {
+  const byOld = explainFrame(cfg, run("002-kernel-enduser"), "END_USER");
+  const byNew = explainFrame(cfg, run("002-kernel-enduser"), "SUPPLICANT");
+  assert.equal(byOld.frame, "SUPPLICANT", "the report names the frame as the library names it today");
+  assert.equal(byOld.dispatched, true, "the run dispatched it, under its old id");
+  assert.equal(byOld.status, "pruned");
+  assert.deepEqual(byOld, byNew, "both ids reach the same frame in the same run");
 });
 
 /** A frame routing never selected was not rejected, and saying "pruned: no" would imply it was. */
@@ -34,7 +48,7 @@ test("a frame the plan never selected is reported as not dispatched", () => {
 });
 
 test("a pruned frame prints every detector that fired, with its evidence", () => {
-  const r = explainFrame(cfg, run("002-kernel-enduser"), "END_USER");
+  const r = explainFrame(cfg, run("002-kernel-enduser"), "SUPPLICANT");
   assert.equal(r.status, "pruned");
   assert.deepEqual(r.fired.map((f) => f.trap).sort(), ["T1", "T7", "T8"]);
   for (const f of r.fired) assert.ok(f.evidence.split(/\s+/).length > 10, `${f.trap} evidence is too thin to have pruned anything`);
@@ -47,7 +61,7 @@ test("a pruned frame prints every detector that fired, with its evidence", () =>
  * corroborated the action; a pruned frame that was the whole cluster took the action with it.
  */
 test("a pruned singleton cluster says the action reached the reader only through the pruned block", () => {
-  const r = explainFrame(cfg, run("002-kernel-enduser"), "END_USER");
+  const r = explainFrame(cfg, run("002-kernel-enduser"), "SUPPLICANT");
   assert.equal(r.cluster!.members.length, 1);
   assert.match(r.text, /only member and was pruned, so the action has no holder/);
 });

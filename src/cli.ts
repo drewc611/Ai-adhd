@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { loadConfig } from "./config.js";
+import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
@@ -84,7 +84,7 @@ program
   .option("--json")
   .action((file, o: { hash?: string; json?: boolean }) => {
     try {
-      const r = trapsReport(file, { expectHash: o.hash, frames: loadConfig(program.opts().root).frames.frames.map((f) => f.id) });
+      const r = trapsReport(file, { expectHash: o.hash, frames: knownFrameIds(loadConfig(program.opts().root)) });
       // The exit code is the contract a script branches on, so --json carries it too rather
       // than replacing it. A caller that only reads stdout still gets the verdict.
       console.log(o.json ? JSON.stringify({ file, ok: r.exitCode === 0, exit_code: r.exitCode, report: r.text }, null, 2) : r.text);
@@ -157,7 +157,7 @@ program
   .option("--json")
   .action((runA: string, runB: string, o: { json?: boolean }) => {
     try {
-      const r = diffRuns(runA, runB);
+      const r = diffRuns(loadConfig(program.opts().root), runA, runB);
       console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
       // A mismatched problem_hash means the two are not runs of one problem, so the comparison
       // is meaningless rather than merely uninteresting. Say so with an exit code.

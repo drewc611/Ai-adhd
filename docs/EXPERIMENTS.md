@@ -40,7 +40,7 @@ number quoted anywhere in this repo about one run is uninterpretable without thi
   sample.
 - If the same frames prune and survive, the critic is stable on this pack. If the prune set
   changes, `frames --stats` prune rates are single-sample noise and every claim resting on them
-  is weaker than stated, including `END_USER` being "pruned in every appearance".
+  is weaker than stated, including `SUPPLICANT` being "pruned in every appearance".
 - `adhd diff` reports this pair as **same frames, different seed**, which is the case it was
   built to call a seed effect.
 
@@ -114,8 +114,8 @@ found the thing; the critic threw it away.
 
 **Consequences, none of them optional.**
 
-- Every per-frame rate in `frames --stats` is single-sample noise at this corpus size. "END_USER
-  is pruned in every appearance (2/2)" and "DOOR_KEEPER, HORIZON and MECHANIC have never been
+- Every per-frame rate in `frames --stats` is single-sample noise at this corpus size. "SUPPLICANT
+  is pruned in every appearance (2/2)" and "DOOR_KEEPER, SUCCESSOR and MECHANIC have never been
   pruned" are two-sample statements, and the one frame with three samples just changed status.
 - `docs/RETIREMENT.md`'s five-run floor was set by intuition and is now evidenced: at n=1 the
   prune rate for a frame swung from 0 to 1.

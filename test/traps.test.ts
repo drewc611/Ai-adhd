@@ -5,9 +5,10 @@ import { join } from "node:path";
 import { stringify } from "yaml";
 import { artifact, cfg, tmp } from "./helpers.js";
 import { trapsReport } from "../src/traps.js";
+import { knownFrameIds } from "../src/config.js";
 
 const HASH = "sha256:" + "a".repeat(64);
-const FRAMES = cfg.frames.frames.map((f) => f.id);
+const FRAMES = knownFrameIds(cfg);
 
 function write(body: unknown, name = "a.yaml"): string {
   const p = join(tmp(), name);

@@ -78,11 +78,11 @@ test("a label the problem itself uses is not a leak, because every branch may ec
 
 test("redaction strips ids and names, keeps one frame's own label, and leaves problem words alone", () => {
   const frames = cfg.frames.frames;
-  const text = "LEDGER says the Door keeper is wrong, and the Horizon view agrees.";
+  const text = "LEDGER says the Door keeper is wrong, and the Successor view agrees.";
   const all = redactFrameLabels(text, frames);
-  assert.ok(!/LEDGER|Door keeper|Horizon/i.test(all), `still leaking: ${all}`);
-  const kept = redactFrameLabels(text, frames, { keep: "HORIZON" });
-  assert.match(kept, /Horizon view/, "the survivor keeps its own label");
+  assert.ok(!/LEDGER|Door keeper|Successor/i.test(all), `still leaking: ${all}`);
+  const kept = redactFrameLabels(text, frames, { keep: "SUCCESSOR" });
+  assert.match(kept, /Successor view/, "the survivor keeps its own label");
   assert.ok(!/Door keeper/i.test(kept), "but not a sibling's");
   const echoed = redactFrameLabels("The ledger is already reconciled.", frames, { problem: "Is the ledger reconciled?" });
   assert.match(echoed, /ledger is already reconciled/, "a word the problem uses survives redaction");

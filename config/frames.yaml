@@ -256,8 +256,14 @@ frames:
       - Any sentence that begins "the usual way" or "normally".
       - Using a term of art without deriving what it means here.
 
-  - id: END_USER
-    name: End user
+  - id: SUPPLICANT
+    name: Supplicant
+    # Renamed from END_USER, 2026-09-07. Both its old labels were ordinary prose: `adhd frames
+    # --collisions` found "end user" written twelve times across artifacts this frame did not
+    # write, and the redactor removed every one, so the critic scored an actor census that
+    # appeared to name no actor. "Supplicant" appears nowhere in the corpus. Recorded runs keep
+    # the id they ran under; former_ids forwards them.
+    former_ids: [END_USER]
     axis: actors
     attacks: [T6, T1]
     tools: []
@@ -277,8 +283,13 @@ frames:
       - Assuming the user waits. Users leave.
       - Recommending anything the user cannot observe the effect of.
 
-  - id: HORIZON
-    name: Horizon
+  - id: SUCCESSOR
+    name: Successor
+    # Renamed from HORIZON, same reason and same date. "Horizon" is what any branch calls a
+    # time frame, and FRAME_BREAKER wrote "a one year horizon" in a run this frame was not in.
+    # The new name states the stance directly: the person who inherits the decision, not the
+    # timescale they inherit it over.
+    former_ids: [HORIZON]
     axis: operation
     attacks: [T7, T4]
     tools: []

@@ -13,15 +13,21 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { Config } from "./config.js";
+import { currentFrameId, type Config } from "./config.js";
 import { ConfigError } from "./errors.js";
 import { PlanSchema, RecordedExpectationSchema, type Plan } from "./schema.js";
-import type { ScoreResult } from "./score.js";
+import { forwardFrameIds, type ScoreResult } from "./score.js";
 import { explainFrame, type WhyReport } from "./why.js";
 import { runEval } from "./eval.js";
 import { unfence } from "./validate.js";
 
 export interface ViewerFrame extends WhyReport {
+  /**
+   * The id this run wrote, when the frame has since been renamed. The page reports frames under
+   * today's names so the corpus joins, but the run's own synthesis.md and artifacts still say
+   * the old one, and a reader looking at both needs to know they are the same frame.
+   */
+  recorded_as: string | null;
   /** Straight from score.json rather than scraped out of the terminal report, which clips. */
   position: string | null;
   forecloses: string[];
@@ -80,16 +86,20 @@ export function collect(cfg: Config, recordedDir = join(cfg.root, "evals", "reco
     const dir = join(recordedDir, id);
     if (!statSync(dir).isDirectory()) continue;
     const plan = readIf<Plan>(join(dir, "plan.json"), (r) => PlanSchema.parse(JSON.parse(r)));
-    const score = readIf<ScoreResult>(join(dir, "score.json"), (r) => JSON.parse(r) as ScoreResult);
+    const score = readIf<ScoreResult>(join(dir, "score.json"), (r) => forwardFrameIds(cfg, JSON.parse(r) as ScoreResult));
     const expected = readIf(join(dir, "expected.json"), (r) => RecordedExpectationSchema.parse(JSON.parse(r)));
 
     // Frames the run actually dispatched. A control has no plan, so fall back to whatever the
     // scorer recorded; anything with neither is a directory the viewer can only name.
-    const ids = plan ? plan.branches.map((b) => b.frame) : (score?.frames ?? []).map((f) => f.frame);
-    const frames: ViewerFrame[] = ids.map((f) => {
+    // `score` is already forwarded; `plan` is raw, so forward it too or a renamed frame would
+    // show under two names depending on which file the run happens to carry.
+    const recorded = plan ? plan.branches.map((b) => b.frame) : (score?.frames ?? []).map((f) => f.frame);
+    const frames: ViewerFrame[] = recorded.map((was) => {
+      const f = currentFrameId(cfg, was);
       const scored = score?.frames.find((x) => x.frame === f);
       return {
         ...explainFrame(cfg, dir, f),
+        recorded_as: was === f ? null : was,
         position: scored?.position ?? null,
         forecloses: scored?.forecloses ?? [],
         falsifier: scored?.falsifier ?? null,

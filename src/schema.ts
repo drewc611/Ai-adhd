@@ -24,6 +24,17 @@ export const FrameSchema = z
     axis: z.string().regex(/^[a-z][a-z_]*$/),
     attacks: z.array(TrapIdSchema).min(1),
     tools: z.array(ToolNameSchema).default([]),
+    /**
+     * Ids this frame has been renamed from. Recorded runs write the id that was current when
+     * they ran, into plan.json, blind-map.json, score.json, branch filenames and the append-only
+     * os.json journal. Rewriting those to match a rename would make a run's record claim a frame
+     * ran that did not exist yet, so the record stays as written and the library forwards.
+     *
+     * These are not redaction tokens. A frame is renamed precisely because its old label was
+     * ordinary prose, and re-adding it to the redactor would reinstate the collision the rename
+     * exists to remove.
+     */
+    former_ids: z.array(FrameIdSchema).default([]),
     stance: z.string().min(40),
     probes: z.array(z.string().min(1)).min(1),
     forbidden: z.array(z.string().min(1)).min(1),

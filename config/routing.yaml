@@ -54,8 +54,8 @@ classes:
       - "what should I set"
       - "trade-off"
     frames: [FRAME_BREAKER, ACTOR_CENSUS, LEDGER, DOOR_KEEPER, MINIMALIST]
-    alternates: [PARTICULARIST, NIGHT_OPERATOR, SABOTEUR, MECHANIC, PRIOR_ART, HORIZON,
-                 END_USER, FIRST_PRINCIPLES]
+    alternates: [PARTICULARIST, NIGHT_OPERATOR, SABOTEUR, MECHANIC, PRIOR_ART, SUCCESSOR,
+                 SUPPLICANT, FIRST_PRINCIPLES]
 
   fuzzy_debugging:
     action: run
@@ -67,8 +67,8 @@ classes:
       - "where should I look"
       - "no idea why"
     frames: [MECHANIC, PARTICULARIST, SABOTEUR, NIGHT_OPERATOR, FRAME_BREAKER]
-    alternates: [ACTOR_CENSUS, DOOR_KEEPER, MINIMALIST, LEDGER, END_USER, PRIOR_ART,
-                 FIRST_PRINCIPLES, HORIZON]
+    alternates: [ACTOR_CENSUS, DOOR_KEEPER, MINIMALIST, LEDGER, SUPPLICANT, PRIOR_ART,
+                 FIRST_PRINCIPLES, SUCCESSOR]
 
   naming:
     action: run
@@ -77,7 +77,7 @@ classes:
       - "what should I call"
       - "name for"
       - "rename"
-    frames: [PARTICULARIST, FRAME_BREAKER, END_USER, HORIZON, MINIMALIST]
+    frames: [PARTICULARIST, FRAME_BREAKER, SUPPLICANT, SUCCESSOR, MINIMALIST]
     alternates: [ACTOR_CENSUS, DOOR_KEEPER, NIGHT_OPERATOR, LEDGER, PRIOR_ART, SABOTEUR,
                  MECHANIC, FIRST_PRINCIPLES]
 
@@ -90,9 +90,9 @@ classes:
       - "signature"
       - "expose"
       - "public"
-    frames: [END_USER, DOOR_KEEPER, SABOTEUR, MINIMALIST, FRAME_BREAKER]
+    frames: [SUPPLICANT, DOOR_KEEPER, SABOTEUR, MINIMALIST, FRAME_BREAKER]
     alternates: [ACTOR_CENSUS, PARTICULARIST, NIGHT_OPERATOR, LEDGER, MECHANIC, PRIOR_ART,
-                 HORIZON, FIRST_PRINCIPLES]
+                 SUCCESSOR, FIRST_PRINCIPLES]
 
   strategy:
     action: run
@@ -102,9 +102,9 @@ classes:
       - "should we invest"
       - "long term"
       - "bet"
-    frames: [FRAME_BREAKER, LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON]
+    frames: [FRAME_BREAKER, LEDGER, DOOR_KEEPER, PRIOR_ART, SUCCESSOR]
     alternates: [SABOTEUR, PARTICULARIST, ACTOR_CENSUS, MINIMALIST, NIGHT_OPERATOR,
-                 MECHANIC, END_USER, FIRST_PRINCIPLES]
+                 MECHANIC, SUPPLICANT, FIRST_PRINCIPLES]
 
   enumerate_options:
     action: run
@@ -118,7 +118,7 @@ classes:
     n: 7                      # wide by default; still below hard_cap. Nine listed, seven
                               # taken in seeded shuffle order; axes stay distinct by
                               # construction here (one frame per axis in this list).
-    alternates: [PRIOR_ART, END_USER, HORIZON, FIRST_PRINCIPLES]
+    alternates: [PRIOR_ART, SUPPLICANT, SUCCESSOR, FIRST_PRINCIPLES]
 
   factual_lookup:
     action: decline

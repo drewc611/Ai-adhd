@@ -176,7 +176,7 @@ union of `attacks` covers T1 through T7. Empirical check, `adhd frames --orthogo
 flagged. That report is the data D6 asks for.
 
 Library as of 2026-09-06: PARTICULARIST, FRAME_BREAKER, ACTOR_CENSUS, LEDGER, DOOR_KEEPER,
-MECHANIC, SABOTEUR, MINIMALIST, NIGHT_OPERATOR, PRIOR_ART, FIRST_PRINCIPLES, END_USER, HORIZON.
+MECHANIC, SABOTEUR, MINIMALIST, NIGHT_OPERATOR, PRIOR_ART, FIRST_PRINCIPLES, SUPPLICANT, SUCCESSOR.
 The last four were added at the owner's request to reach thirteen. They have not yet been
 shown to diverge on a fixture. That is a debt against this policy and `adhd frames
 --orthogonality` is how it gets paid.
@@ -184,14 +184,14 @@ shown to diverge on a fixture. That is a debt against this policy and `adhd fram
 Run data so far (two runs, one per fixture): the `fuzzy_debugging` frame set (MECHANIC,
 PARTICULARIST, SABOTEUR, NIGHT_OPERATOR, FRAME_BREAKER) did not surface fixture 002's
 `who_is_hurt` item. No frame in that set asks who the tail latency lands on. The frames that
-ask that question (END_USER, ACTOR_CENSUS, LEDGER) are all on the actors and cost axes and
+ask that question (SUPPLICANT, ACTOR_CENSUS, LEDGER) are all on the actors and cost axes and
 none is in the fuzzy debugging primary set. Whether to swap one in is a routing decision for
 the owner; it should be made on a second run, not on this one. The recorded run is marked
 `expected: fail` so the harness verifies the miss stays recorded rather than hiding it.
 
-The second run exists: `evals/recorded/002-kernel-enduser/`, END_USER swapped in for
+The second run exists: `evals/recorded/002-kernel-enduser/`, SUPPLICANT swapped in for
 NIGHT_OPERATOR via an explicit `frames` list, driven by the kernel. It passes fixture 002.
-END_USER asked who is hurt and was pruned for it (T1, T7, T8); the question reached the output
+SUPPLICANT asked who is hurt and was pruned for it (T1, T7, T8); the question reached the output
 through the pruned block. So the frame closes the gap as a question-raiser, not as a
 recommendation. Swapping it into the `fuzzy_debugging` primary set is now a decision with two
 runs behind it. Still the owner's.
@@ -209,12 +209,12 @@ saying three things, none of them yet a verdict:
 > the corpus happened to show, not as per-frame behaviour. `docs/EXPERIMENTS.md` has the result.
 
 
-- **END_USER is pruned every time it appears (2/2).** It is also the frame that closed the
+- **SUPPLICANT is pruned every time it appears (2/2).** It is also the frame that closed the
   `who_is_hurt` gap in `002-kernel-enduser`, and it did so *through the pruned block*. A frame
   that reliably fails the rubric and reliably produces the missing question is not a bad frame;
   it is a frame whose value the rubric does not measure. Either the rubric is incomplete or
-  END_USER belongs in a different role. Do not resolve this on two runs.
-- **DOOR_KEEPER, HORIZON and MECHANIC have never been pruned (0/2 each).** Being unprunable is
+  SUPPLICANT belongs in a different role. Do not resolve this on two runs.
+- **DOOR_KEEPER, SUCCESSOR and MECHANIC have never been pruned (0/2 each).** Being unprunable is
   not obviously good. A frame no detector ever catches may be well-designed or may simply be
   producing safe answers the critic has no grounds to reject.
 - **T3 and T5 have never fired.** T5 (no "do X" sentence) is close to structurally unable to
@@ -317,7 +317,7 @@ have: three assertions that measured nothing now measure nothing more visibly, a
 made easier to pass.
 
 Third class run: `evals/recorded/003-kernel-strategy/`, the `strategy` set (FRAME_BREAKER,
-LEDGER, DOOR_KEEPER, PRIOR_ART, HORIZON) on fixture 003. It passes. The set was not a
+LEDGER, DOOR_KEEPER, PRIOR_ART, SUCCESSOR) on fixture 003. It passes. The set was not a
 monoculture by the critic's clustering (three clusters), but every one of the five positions
 opened with "do not rewrite", and two were pruned for T1: their reasoning would serve any
 rewrite question. The frames that survived were the ones whose mechanism is specific to this
@@ -334,23 +334,52 @@ which labels turn up in artifacts their frame did not write, across 29 recorded 
 
 | label | foreign uses | own uses |
 |---|---|---|
-| End user / END_USER | 5 | 0 |
-| Horizon / HORIZON | 1 | 0 |
+| End user / SUPPLICANT | 5 | 0 |
+| Horizon / SUCCESSOR | 1 | 0 |
 
-Nothing else collides. END_USER has never written its own label; ACTOR_CENSUS and LEDGER wrote
+Nothing else collides. SUPPLICANT has never written its own label; ACTOR_CENSUS and LEDGER wrote
 it five times between them, once inside a `missing_actor` field, and the redactor removes all
 five. The critic then scores an actor census that appears not to name an actor, on
 `actor_coverage`.
 
-Two things were done and one was not. The pass A prompt now tells the critic that `[frame]` is
-machine redaction of a real noun phrase, to be read through rather than scored as vagueness.
-Separator spellings are now caught, which made redaction stricter, not looser: "door-keeper",
-"doorkeeper", "DoorKeeper" and a line break between the words all leaked before, which is nine of
-thirteen frames.
+Three things were done. The pass A prompt now tells the critic that `[frame]` is machine
+redaction of a real noun phrase, to be read through rather than scored as vagueness. Separator
+spellings are now caught, which made redaction stricter, not looser: "door-keeper", "doorkeeper",
+"DoorKeeper" and a line break between the words all leaked before, which is nine of thirteen
+frames.
 
-What was not done is renaming END_USER and HORIZON. That is a D6 change to the library and it
-belongs to the owner. Zero own uses across five runs is also a small sample: a future END_USER
-artifact writing "the end user" would be identifying itself, and redaction would be right.
+**And the two frames were renamed, 2026-09-07, on the owner's call.** `END_USER` became
+`SUPPLICANT` and `HORIZON` became `SUCCESSOR`. Both new names were picked mechanically rather
+than by ear: every candidate was matched against all 39 recorded artifacts, all eleven synthesis
+files and all eight fixtures, and only names that appear nowhere in the corpus were eligible.
+`Supplicant` and `Successor` are clean; so were `Petitioner`, `Captive`, `Inheritor` and
+`Latecomer`, and `The waiting` was rejected because it collided eight times. `adhd frames
+--collisions` now reports every label as discriminating.
+
+The names also state the stance rather than the setting, which is what made the old ones prose in
+the first place. `HORIZON` named a timescale, so any branch reasoning about one wrote the word —
+`FRAME_BREAKER` wrote "a one year horizon" in a run the frame was not even in. `SUCCESSOR` names
+the person who inherits the decision, which is what the stance actually asks the branch to be.
+
+**What was not done is rewriting the recorded runs.** Five runs write `END_USER` and `HORIZON`
+into `plan.json`, `blind-map.json`, `score.json`, `pass-b.yaml`, their branch and deepen
+filenames, their `synthesis.md` and the append-only `os.json` journal. Editing those to match
+would make a run's record claim a frame ran that did not exist when it ran, which is falsifying
+evidence to tidy a name. So `config/frames.yaml` carries `former_ids` and the library forwards:
+every reader of a recorded run maps the old id to the current one at the point it reads it, so
+the corpus stays one corpus, and `adhd why <run> END_USER` still resolves for anyone holding an
+older note. `adhd traps` accepts a former id too, or five runs of history would fail their own
+contract check.
+
+`former_ids` are deliberately **not** redaction tokens. A frame is renamed precisely because its
+old label was ordinary prose; re-adding it to the redactor would reinstate the collision the
+rename exists to remove. `crossCheck` rejects a `former_id` that is also a live id, or that two
+frames both claim, because either makes a recorded run ambiguous.
+
+One caveat the rename does not remove: zero own uses across five runs is still a small sample. A
+future artifact from this frame writing "the end user" would have been identifying itself, and
+redaction would have been right to remove it. The rename resolves that by making the question
+moot rather than by answering it.
 
 ---
 

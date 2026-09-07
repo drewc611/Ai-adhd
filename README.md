@@ -28,7 +28,7 @@ flowchart LR
     direction LR
     P2(["prompt"]) -.->|"brief, one way"| C1["LEDGER<br/><i>who pays</i>"] --> O1["position"]
     P2 -.->|"brief, one way"| C2["SABOTEUR<br/><i>how it breaks</i>"] --> O2["position"]
-    P2 -.->|"brief, one way"| C3["END_USER<br/><i>who is hurt</i>"] --> O3["position"]
+    P2 -.->|"brief, one way"| C3["SUPPLICANT<br/><i>who is hurt</i>"] --> O3["position"]
   end
   R2 ~~~ P2
 ```
@@ -93,9 +93,9 @@ flowchart LR
   end
   subgraph two["axes with two — routing picks one, never both"]
     direction TB
-    b1["actors<br/><b>ACTOR_CENSUS</b> · <b>END_USER</b>"]
+    b1["actors<br/><b>ACTOR_CENSUS</b> · <b>SUPPLICANT</b>"]
     b2["mechanism<br/><b>MECHANIC</b> · <b>FIRST_PRINCIPLES</b>"]
-    b3["operation<br/><b>NIGHT_OPERATOR</b> · <b>HORIZON</b>"]
+    b3["operation<br/><b>NIGHT_OPERATOR</b> · <b>SUCCESSOR</b>"]
   end
   a7 ~~~ b1
 ```
@@ -113,8 +113,8 @@ flowchart LR
   MINIMALIST --> T5
   FIRST_PRINCIPLES --> T1
   FIRST_PRINCIPLES --> T3
-  END_USER --> T1
-  END_USER --> T6
+  SUPPLICANT --> T1
+  SUPPLICANT --> T6
   FRAME_BREAKER --> T2
   PRIOR_ART --> T2
   PRIOR_ART --> T8
@@ -124,8 +124,8 @@ flowchart LR
   NIGHT_OPERATOR --> T6
   NIGHT_OPERATOR --> T4
   DOOR_KEEPER --> T7
-  HORIZON --> T7
-  HORIZON --> T4
+  SUCCESSOR --> T7
+  SUCCESSOR --> T4
   MECHANIC --> T3
 
   T1["T1 consensus"]
@@ -166,7 +166,7 @@ flowchart TB
   G -->|"confirmed"| D
   subgraph D["diverge &mdash; N context windows, no channel between them"]
     direction LR
-    F1["LEDGER"] ~~~ F2["SABOTEUR"] ~~~ F3["DOOR_KEEPER"] ~~~ F4["END_USER"] ~~~ F5["FRAME_BREAKER"]
+    F1["LEDGER"] ~~~ F2["SABOTEUR"] ~~~ F3["DOOR_KEEPER"] ~~~ F4["SUPPLICANT"] ~~~ F5["FRAME_BREAKER"]
   end
   D --> A["critic pass A &mdash; <b>blind</b><br/>artifacts as letters, frame labels redacted"]
   A --> B["critic pass B &mdash; unblind<br/>cluster by action, run all 8 trap detectors"]
@@ -226,7 +226,7 @@ flowchart LR
   RC --> U
 ```
 
-`END_USER` is the case that justifies the rule. It has been pruned in both runs it appeared
+`SUPPLICANT` (which ran as `END_USER`, before the rename in D6) is the case that justifies the rule. It has been pruned in both runs it appeared
 in, and it is also the frame that closed the who-is-hurt gap in `002-kernel-enduser`. The
 question reached the user through the pruned block, after the critic rejected the position
 carrying it.
@@ -239,7 +239,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       257 tests over all of it
+test/       263 tests over all of it
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
@@ -347,10 +347,10 @@ contested decision in the corpus turns out to be settled inside two anchor point
   SABOTEUR (T1) and NIGHT_OPERATOR (T2); PARTICULARIST with MECHANIC and FRAME_BREAKER with
   NIGHT_OPERATOR formed two clusters; both survivors defended and each withdrew a claim.
 
-- `evals/recorded/002-kernel-enduser/` passes fixture 002. Same prompt, END_USER swapped in
+- `evals/recorded/002-kernel-enduser/` passes fixture 002. Same prompt, SUPPLICANT swapped in
   for NIGHT_OPERATOR through an explicit frame list, and the first run driven end to end by
   the kernel: nine tasks claimed and returned by one worker, four automatic phase advances,
-  real token accounting. END_USER asked who is hurt and was pruned for it, so the question
+  real token accounting. SUPPLICANT asked who is hurt and was pruned for it, so the question
   reached the output through the pruned block. MECHANIC folded under objection.
 - `evals/recorded/003-kernel-strategy/` passes fixture 003 (strategy class, monolith rewrite),
   driven by the kernel. All five frames refused the year-long rewrite; the critic pruned

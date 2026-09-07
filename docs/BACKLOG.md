@@ -73,6 +73,11 @@ yet enough to know whether they work.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**
+61. ~~**Rename the two frames whose labels are ordinary prose.** `adhd frames --collisions`
+    found `END_USER` and `HORIZON` written in artifacts they did not produce and never once by
+    themselves; the redactor removed every use, so the critic scored an actor census that
+    appeared to name no actor.~~
+   **Done. `SUPPLICANT` and `SUCCESSOR`, picked mechanically: every candidate was matched against all 39 recorded artifacts, all synthesis files and all fixtures, and only names appearing nowhere in the corpus were eligible. `config/frames.yaml` carries `former_ids` so the five runs that wrote the old ids still resolve; the runs themselves are not rewritten. D6 has the reasoning.**
 19. **Per-frame fixtures.** One fixture per frame that the frame should obviously win, as a
     unit test for the frame's own stance.
 20. **Probe ordering experiment.** Do the numbered probes change the answer if reordered?

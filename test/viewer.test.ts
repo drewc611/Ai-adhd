@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { buildViewer, collect, DATA_MARKER } from "../src/viewer.js";
+import { frameIdHistory } from "../src/config.js";
 import { ConfigError } from "../src/errors.js";
 
 const data = collect(cfg);
@@ -52,7 +53,10 @@ test("the frame the viewer says holds the recommendation is the one the synthesi
       continue;
     }
     assert.ok(r.recommendation, `${r.id}: the synthesis has a recommendation and the viewer found none`);
-    assert.ok(held.includes(r.recommendation!), `${r.id}: viewer says ${r.recommendation}, synthesis says "${held}"`);
+    // The synthesis is a historical document and names the frame by the id current when it ran.
+    // The viewer reports today's id, so a frame renamed since matches through its history.
+    const names = frameIdHistory(cfg, r.recommendation!);
+    assert.ok(names.some((n) => held.includes(n)), `${r.id}: viewer says ${r.recommendation}, synthesis says "${held}"`);
     checked++;
   }
   assert.ok(checked >= 3, `only ${checked} runs had a recommendation to check against`);
@@ -65,7 +69,7 @@ test("a run-level failure has no recommendation at all, whatever its clusters lo
 });
 
 test("each frame carries its detectors with the evidence that fired them", () => {
-  const endUser = data.runs.find((r) => r.id === "002-kernel-enduser")!.frames.find((f) => f.frame === "END_USER")!;
+  const endUser = data.runs.find((r) => r.id === "002-kernel-enduser")!.frames.find((f) => f.frame === "SUPPLICANT")!;
   assert.equal(endUser.status, "pruned");
   assert.deepEqual(endUser.fired.map((t) => t.trap).sort(), ["T1", "T7", "T8"]);
   for (const t of endUser.fired) assert.ok(t.evidence.split(/\s+/).length > 10, `${t.trap}: evidence too thin to have pruned anything`);
@@ -128,4 +132,21 @@ test("the shipped shell declares the theme both ways, so it is readable in eithe
   assert.match(shell, /@media \(prefers-color-scheme: dark\)/);
   assert.match(shell, /:root\[data-theme="dark"\]/);
   assert.match(shell, /:root:not\(\[data-theme="light"\]\)/, "an explicit light choice has to beat the system preference");
+});
+
+/**
+ * A run recorded before a rename still says the old id everywhere a reader can see: in its
+ * synthesis.md, in its artifacts, in the branch filenames. The page reports today's id so the
+ * corpus joins into one library, which leaves the two disagreeing on screen unless the page says
+ * why. `recorded_as` is that.
+ */
+test("a frame renamed since the run is labelled with the id the run recorded", () => {
+  const kernel = data.runs.find((r) => r.id === "002-kernel-enduser")!;
+  const supplicant = kernel.frames.find((f) => f.frame === "SUPPLICANT")!;
+  assert.equal(supplicant.recorded_as, "END_USER");
+  assert.match(kernel.synthesis!, /END_USER/, "the run's own synthesis still says the old id, and is not rewritten");
+
+  // Every other frame in the corpus is unrenamed and must not carry the tag.
+  const spurious = data.runs.flatMap((r) => r.frames.filter((f) => f.recorded_as === f.frame).map((f) => `${r.id}/${f.frame}`));
+  assert.deepEqual(spurious, [], "a frame that was not renamed must report recorded_as as null");
 });

@@ -124,7 +124,7 @@ test("two dimensions that move together are flagged as one dimension charging tw
   // committal and substance track each other exactly across six artifacts; nothing else varies.
   const rows = [0, 1, 2, 3, 2, 1];
   const artifacts: Record<string, { frame: string; base: number; scores: Record<string, number> }> = {};
-  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "HORIZON", "END_USER"];
+  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "SUCCESSOR", "SUPPLICANT"];
   rows.forEach((v, i) => {
     artifacts[String.fromCharCode(65 + i)] = { frame: frames[i]!, base: 1, scores: { committal: v, substance: v } };
   });
@@ -161,7 +161,7 @@ test("a dimension that never varies is reported as deciding nothing", () => {
 test("a dimension pinned at the ceiling is flagged even though it varies", () => {
   const root = tmp();
   const artifacts: Record<string, { frame: string; base: number; scores: Record<string, number> }> = {};
-  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "HORIZON", "END_USER", "HORIZON", "PRIOR_ART", "DOOR_KEEPER", "MINIMALIST"];
+  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "SUCCESSOR", "SUPPLICANT", "SUCCESSOR", "PRIOR_ART", "DOOR_KEEPER", "MINIMALIST"];
   frames.forEach((f, i) => {
     artifacts[String.fromCharCode(65 + i)] = { frame: f, base: i % 4, scores: { foreclosure: i === 0 ? 2 : 3 } };
   });
@@ -193,7 +193,7 @@ test("a clean rubric reports no finding rather than inventing one", () => {
   ];
   assert.equal(columns.length, DIMS.length, "one column per rubric dimension");
   const artifacts: Record<string, { frame: string; scores: Record<string, number> }> = {};
-  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "HORIZON", "END_USER", "PRIOR_ART", "DOOR_KEEPER"];
+  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "SUCCESSOR", "SUPPLICANT", "PRIOR_ART", "DOOR_KEEPER"];
   frames.forEach((f, i) => {
     const scores: Record<string, number> = {};
     DIMS.forEach((d, j) => (scores[d] = columns[j]![i]!));
@@ -271,13 +271,13 @@ test("a ranking change across clusters leaves every representative standing", ()
   const dir = recordRun(
     root,
     "001",
-    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 2 }, C: { frame: "HORIZON", base: 1 } },
+    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 2 }, C: { frame: "SUCCESSOR", base: 1 } },
     [
       { id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] },
-      { id: "c2", members: ["HORIZON"], survivors: ["HORIZON"] },
+      { id: "c2", members: ["SUCCESSOR"], survivors: ["SUCCESSOR"] },
     ],
   );
-  // HORIZON climbs past both, but it is a singleton: it goes to deepen either way.
+  // SUCCESSOR climbs past both, but it is a singleton: it goes to deepen either way.
   const r = interRater(
     cfg,
     dir,
@@ -334,7 +334,7 @@ test("corpus agreement pools by cell rather than averaging run percentages", () 
   const big = recordRun(root, "001", {
     A: { frame: "LEDGER", base: 2 },
     B: { frame: "MECHANIC", base: 2 },
-    C: { frame: "HORIZON", base: 2 },
+    C: { frame: "SUCCESSOR", base: 2 },
     D: { frame: "SABOTEUR", base: 2 },
   });
   const small = recordRun(root, "002", { A: { frame: "LEDGER", base: 2 } }, [], {});

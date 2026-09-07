@@ -36,7 +36,9 @@ five runs in which it was dispatched**. One is a pattern; two is a case.
 **A frame that is pruned every time and still produces the question nobody else asked is not a
 candidate. It is doing its job.**
 
-`END_USER` is the live example and the reason this section exists. It is pruned in 2 of 2
+`SUPPLICANT` is the live example and the reason this section exists. It ran as `END_USER` in
+both those runs and was renamed on 2026-09-07 (D6); the records still say the old id and are not
+rewritten, so `adhd frames --stats` forwards them. Figures below are the same runs either way. It is pruned in 2 of 2
 appearances, has the second-lowest mean pass A in the library at 0.69, has never held a
 recommendation, and fired four detectors against itself across two runs. By criteria 2 and 3 it
 looks like the clearest retirement candidate in the set.
@@ -59,7 +61,7 @@ produced?** If yes, it stays, and the finding goes in `docs/DECISIONS.md` under 
   anything the corpus can demonstrate.
 - **Fewer runs than the bar.** Five dispatched runs is the floor, not a target to reach by
   counting a frame's appearances generously. A frame in three runs has no case either way.
-- **A frame you find uncomfortable to read.** `SABOTEUR` and `END_USER` are supposed to be
+- **A frame you find uncomfortable to read.** `SABOTEUR` and `SUPPLICANT` are supposed to be
   annoying. That is the mechanism.
 - **A frame whose output you disagree with.** Retirement is about whether the frame produces
   divergence, not whether it produces answers you like. This is the failure mode that would turn
@@ -94,8 +96,8 @@ needs shared runs in the high single digits before it means anything.
 | frame | runs | why it is on the list |
 |---|---|---|
 | `FRAME_BREAKER` + `SABOTEUR` | 3 shared | criterion 1 met at 67%, on the minimum sample. Watch, do not act. |
-| `END_USER`, `PRIOR_ART` | 2 each | pruned in every appearance. `END_USER` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
-| `DOOR_KEEPER`, `MECHANIC`, `HORIZON` | 3, 3, 2 | never pruned. Not a retirement criterion, and the opposite worry, which belongs in D6. |
+| `SUPPLICANT`, `PRIOR_ART` | 2 each | pruned in every appearance. `SUPPLICANT` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
+| `DOOR_KEEPER`, `MECHANIC`, `SUCCESSOR` | 3, 3, 2 | never pruned. Not a retirement criterion, and the opposite worry, which belongs in D6. |
 | `FIRST_PRINCIPLES` | 0 | never dispatched; criterion 5's count has not started. |
 
 `FRAME_BREAKER` is the only frame at or past the five-run floor, at seven, and it meets no

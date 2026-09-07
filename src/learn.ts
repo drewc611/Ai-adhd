@@ -6,10 +6,10 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { Config } from "./config.js";
+import { currentFrameId, type Config } from "./config.js";
 import { PassASchema, RecordedExpectationSchema, type PassA } from "./schema.js";
 import { unfence } from "./validate.js";
-import type { ScoreResult } from "./score.js";
+import { forwardFrameIds, type ScoreResult } from "./score.js";
 
 interface ScoredRun {
   id: string;
@@ -20,7 +20,7 @@ interface ScoredRun {
 }
 
 /** Real runs only. A negative control is a hand written answer, not a critic's scoring. */
-function loadScoredRuns(recordedDir: string): ScoredRun[] {
+function loadScoredRuns(cfg: Config, recordedDir: string): ScoredRun[] {
   if (!existsSync(recordedDir)) return [];
   const out: ScoredRun[] = [];
   for (const id of readdirSync(recordedDir).sort()) {
@@ -38,11 +38,16 @@ function loadScoredRuns(recordedDir: string): ScoredRun[] {
       id,
       dir,
       passA: parsed.data,
-      blindMap: JSON.parse(readFileSync(bm, "utf8")) as Record<string, string>,
-      score: existsSync(scorePath) ? (JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult) : null,
+      blindMap: forwardBlindMap(cfg, JSON.parse(readFileSync(bm, "utf8")) as Record<string, string>),
+      score: existsSync(scorePath) ? forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult) : null,
     });
   }
   return out;
+}
+
+/** The blind map is letter -> frame id as the run wrote it. Same forwarding, same reason. */
+function forwardBlindMap(cfg: Config, m: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(m).map(([letter, frame]) => [letter, currentFrameId(cfg, frame)]));
 }
 
 function weightedScore(row: Record<string, { score: number }>, weights: Record<string, number>, max: number): number {
@@ -84,7 +89,7 @@ export interface SensitivityReport {
  * chosen by the rubric; it was chosen by the weights.
  */
 export function weightSensitivity(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded"), delta = 1): SensitivityReport {
-  const runs = loadScoredRuns(recordedDir);
+  const runs = loadScoredRuns(cfg, recordedDir);
   const max = cfg.rubric.scale.max;
   const base: Record<string, number> = {};
   for (const d of cfg.rubric.dimensions) base[d.id] = d.weight;
@@ -224,7 +229,7 @@ function pearson(xs: number[], ys: number[]): number {
 const CEILING = 0.85;
 
 export function dimensionCorrelation(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded"), flagAt = 0.8): CorrelationReport {
-  const runs = loadScoredRuns(recordedDir);
+  const runs = loadScoredRuns(cfg, recordedDir);
   const dims = cfg.rubric.dimensions.map((d) => d.id);
   const columns = new Map<string, number[]>(dims.map((d) => [d, []]));
   for (const run of runs)
@@ -377,7 +382,7 @@ export function interRater(cfg: Config, runDir: string, altPassAPath: string): I
   const ranking_changed = order(tA).join(",") !== order(tB).join(",");
 
   const scorePath = join(runDir, "score.json");
-  const clusters = existsSync(scorePath) ? ((JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
+  const clusters = existsSync(scorePath) ? (forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
   const pick = (frames: string[], t: Record<string, number>) => [...frames].sort((x, y) => (t[y] ?? 0) - (t[x] ?? 0) || x.localeCompare(y))[0]!;
   const representative_changes: { cluster: string; a: string; b: string }[] = [];
   for (const c of clusters.filter((c) => c.survivors.length > 1)) {
@@ -620,7 +625,7 @@ export function raterPanel(cfg: Config, runDir: string): PanelReport {
   };
   const ranked = (frames: string[], t: Record<string, number>) => [...frames].sort((x, y) => (t[y] ?? 0) - (t[x] ?? 0) || x.localeCompare(y));
   const scorePath = join(runDir, "score.json");
-  const scored = existsSync(scorePath) ? ((JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
+  const scored = existsSync(scorePath) ? (forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
 
   const clusters: PanelCluster[] = scored
     .filter((c) => c.survivors.length > 1)

@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { pathToFileURL } from "node:url";
-import { loadConfig } from "./config.js";
+import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
@@ -56,7 +56,7 @@ export function buildServer(): McpServer {
   server.registerTool(
     "adhd_traps",
     { description: "Contract check and code lints over one branch artifact file.", inputSchema: { file: z.string(), expect_hash: z.string().optional(), root: z.string().optional().describe("repository root holding config/ and prompts/") } },
-    async (a) => wrap(() => trapsReport(a.file, { expectHash: a.expect_hash, frames: loadConfig(a.root).frames.frames.map((f) => f.id) }).text),
+    async (a) => wrap(() => trapsReport(a.file, { expectHash: a.expect_hash, frames: knownFrameIds(loadConfig(a.root)) }).text),
   );
 
   server.registerTool(

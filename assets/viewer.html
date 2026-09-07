@@ -198,7 +198,7 @@ function visibleFrames() {
     if (state.status === "pruned" && f.status !== "pruned") return false;
     if (state.status === "rec" && !heldRecommendation(r, f)) return false;
     if (state.q) {
-      const hay = [f.frame, f.axis, f.position ?? "", f.falsifier ?? "", f.missing_actor ?? "", ...f.forecloses,
+      const hay = [f.frame, f.recorded_as ?? "", f.axis, f.position ?? "", f.falsifier ?? "", f.missing_actor ?? "", ...f.forecloses,
                    ...f.fired.map(t => t.trap + " " + t.evidence), ...f.dimensions.map(d => d.evidence),
                    f.deepen?.response ?? "", f.cluster?.action ?? ""].join(" ").toLowerCase();
       if (!hay.includes(state.q)) return false;
@@ -266,6 +266,9 @@ function renderDetail(f) {
 
   const head = el("div", "headline");
   head.append(el("h2", null, f.frame));
+  // This run's own synthesis.md and artifacts still say the old id. Saying so here is the
+  // difference between a reader trusting the page and thinking it has the wrong run open.
+  if (f.recorded_as) head.append(el("span", "tag", `recorded as ${f.recorded_as}`));
   const rec = heldRecommendation(r, f);
   if (rec) head.append(el("span", "tag rec", "held the recommendation"));
   head.append(el("span", "tag " + f.status, f.status));

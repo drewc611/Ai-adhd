@@ -55,11 +55,11 @@ test("frame stats count prunes, folds and recommendations across runs, and name 
     "001-a",
     [
       { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9, verdict: "defend" },
-      { frame: "HORIZON", status: "survivor", pass_a: 0.7 },
+      { frame: "SUCCESSOR", status: "survivor", pass_a: 0.7 },
       { frame: "LEDGER", status: "pruned", pass_a: 0.5, fired: ["T1"] },
     ],
     [
-      { id: "big", members: ["DOOR_KEEPER", "HORIZON"], survivors: ["DOOR_KEEPER", "HORIZON"], representative: "DOOR_KEEPER" },
+      { id: "big", members: ["DOOR_KEEPER", "SUCCESSOR"], survivors: ["DOOR_KEEPER", "SUCCESSOR"], representative: "DOOR_KEEPER" },
       { id: "gone", members: ["LEDGER"], survivors: [], representative: null },
     ],
   );
@@ -68,12 +68,12 @@ test("frame stats count prunes, folds and recommendations across runs, and name 
     "001-b",
     [
       { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.8, verdict: "fold" },
-      { frame: "HORIZON", status: "survivor", pass_a: 0.6, verdict: "defend" },
+      { frame: "SUCCESSOR", status: "survivor", pass_a: 0.6, verdict: "defend" },
       { frame: "LEDGER", status: "pruned", pass_a: 0.4, fired: ["T1", "T7"] },
     ],
     [
       { id: "one", members: ["DOOR_KEEPER"], survivors: ["DOOR_KEEPER"], representative: "DOOR_KEEPER" },
-      { id: "two", members: ["HORIZON"], survivors: ["HORIZON"], representative: "HORIZON" },
+      { id: "two", members: ["SUCCESSOR"], survivors: ["SUCCESSOR"], representative: "SUCCESSOR" },
       { id: "gone", members: ["LEDGER"], survivors: [], representative: null },
     ],
   );
@@ -83,7 +83,7 @@ test("frame stats count prunes, folds and recommendations across runs, and name 
   const dk = r.frames.find((f) => f.frame === "DOOR_KEEPER")!;
   assert.deepEqual([dk.runs, dk.pruned, dk.folded, dk.defended], [2, 0, 1, 1]);
   assert.equal(dk.recommended, 1, "a folded representative does not hold the recommendation");
-  const hz = r.frames.find((f) => f.frame === "HORIZON")!;
+  const hz = r.frames.find((f) => f.frame === "SUCCESSOR")!;
   assert.equal(hz.recommended, 1, "the next live cluster holds it when the first folded");
   const ld = r.frames.find((f) => f.frame === "LEDGER")!;
   assert.deepEqual([ld.runs, ld.pruned, ld.traps.T1, ld.traps.T7], [2, 2, 2, 1]);
@@ -104,9 +104,9 @@ test("a run that failed at run level attributes the recommendation to nobody", (
     "900-mono",
     [
       { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9, verdict: "defend" },
-      { frame: "HORIZON", status: "survivor", pass_a: 0.8, verdict: "defend" },
+      { frame: "SUCCESSOR", status: "survivor", pass_a: 0.8, verdict: "defend" },
     ],
-    [{ id: "one", members: ["DOOR_KEEPER", "HORIZON"], survivors: ["DOOR_KEEPER", "HORIZON"], representative: "DOOR_KEEPER" }],
+    [{ id: "one", members: ["DOOR_KEEPER", "SUCCESSOR"], survivors: ["DOOR_KEEPER", "SUCCESSOR"], representative: "DOOR_KEEPER" }],
     { monoculture: true },
   );
   const r = frameStats(cfg, root);
@@ -151,21 +151,21 @@ test("diff refuses to blame the seed when the frame sets also differ", () => {
 
   // Same frames, different seed: the change is attributable.
   const clean = [
-    mk("900-a", 1, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "HORIZON", status: "pruned", pass_a: 0.5 }], "Do X."),
-    mk("900-b", 2, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "HORIZON", status: "survivor", pass_a: 0.7 }], "Do Y."),
+    mk("900-a", 1, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "SUCCESSOR", status: "pruned", pass_a: 0.5 }], "Do X."),
+    mk("900-b", 2, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "SUCCESSOR", status: "survivor", pass_a: 0.7 }], "Do Y."),
   ] as const;
-  const ok = diffRuns(clean[0], clean[1]);
+  const ok = diffRuns(cfg, clean[0], clean[1]);
   assert.equal(ok.same_problem, true);
-  assert.deepEqual(ok.status_changed, [{ frame: "HORIZON", a: "pruned", b: "survivor" }]);
+  assert.deepEqual(ok.status_changed, [{ frame: "SUCCESSOR", a: "pruned", b: "survivor" }]);
   assert.match(ok.text, /this change is the seed's doing/);
   assert.match(ok.text, /That is a seed effect/);
   assert.ok(!/CONFOUNDED/.test(ok.text));
-  assert.equal(ok.pass_a_moved.find((m) => m.frame === "HORIZON")?.delta.toFixed(2), "0.20");
+  assert.equal(ok.pass_a_moved.find((m) => m.frame === "SUCCESSOR")?.delta.toFixed(2), "0.20");
 
   // Different frames as well as a different seed: it is not.
   const c = mk("901-c", 3, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "MECHANIC", status: "survivor", pass_a: 0.7 }], "Do Z.");
-  const confounded = diffRuns(clean[0], c);
-  assert.deepEqual(confounded.only_a, ["HORIZON"]);
+  const confounded = diffRuns(cfg, clean[0], c);
+  assert.deepEqual(confounded.only_a, ["SUCCESSOR"]);
   assert.deepEqual(confounded.only_b, ["MECHANIC"]);
   assert.match(confounded.text, /CONFOUNDED/);
   assert.match(confounded.text, /cannot say which caused it/);
@@ -181,7 +181,7 @@ test("diff says plainly when two runs are not of the same problem", () => {
     writeFileSync(join(dir, "synthesis.md"), "# ADHD synthesis\n\n## Recommendation\n\n**Do it.**\n");
     return dir;
   };
-  const r = diffRuns(mk("902-a", "sha256:" + "1".repeat(64)), mk("902-b", "sha256:" + "2".repeat(64)));
+  const r = diffRuns(cfg, mk("902-a", "sha256:" + "1".repeat(64)), mk("902-b", "sha256:" + "2".repeat(64)));
   assert.equal(r.same_problem, false);
   assert.match(r.text, /DIFFERENT problem_hash/);
   assert.match(r.text, /nothing below is a comparison/);
@@ -207,22 +207,26 @@ test("a label used only by its own frame is discriminating and not reported", ()
 });
 
 /**
- * The case that damages a run. ACTOR_CENSUS writing "the end user behind that caller" is naming
- * an actor, not identifying itself, and the redactor removes it anyway.
+ * The case that damages a run. A branch writing "the mechanic who has to fix it" is naming a
+ * person, not identifying itself, and the redactor removes it anyway.
+ *
+ * This was written against END_USER, whose label was "End user" and which no artifact ever used
+ * to identify itself. That frame is SUPPLICANT now precisely because of what this check found,
+ * so the mechanism is demonstrated on a label that is still ordinary English.
  */
 test("a label used by a frame that does not own it is reported with the text that matched", () => {
   const root = tmp();
   recordBranches(root, "001", {
-    ACTOR_CENSUS: 'missing_actor: "The end user behind that caller, who can cancel."',
-    END_USER: 'reasoning: "Whoever is waiting should get an answer or a clean failure."',
+    ACTOR_CENSUS: 'missing_actor: "The mechanic who has to fix it at 3am."',
+    MECHANIC: 'reasoning: "Trace the request path and find where the time goes."',
   });
   const r = labelCollisions(cfg, root);
-  const c = r.collisions.find((x) => x.label === "End user")!;
-  assert.equal(c.frame, "END_USER");
+  const c = r.collisions.find((x) => x.label === "Mechanic")!;
+  assert.equal(c.frame, "MECHANIC");
   assert.equal(c.foreign, 1);
   assert.equal(c.own, 0);
   // The example shows the text as it actually appeared, not the label as configured.
-  assert.match(c.examples[0]!, /001\/ACTOR_CENSUS: "end user"/);
+  assert.match(c.examples[0]!, /001\/ACTOR_CENSUS: "mechanic"/);
   assert.match(r.text, /a phrase the redactor removes/);
 });
 
@@ -245,13 +249,21 @@ test("separator spellings count as the same label", () => {
   assert.equal(c.foreign, 2, "door-keeper and doorkeeper are both the label");
 });
 
-test("the recorded corpus reports END_USER as the worst collision", () => {
+/**
+ * This asserted the opposite until the rename. END_USER's two labels were written twelve times
+ * across artifacts it did not produce and never once by itself, and HORIZON's once; the redactor
+ * removed every one. SUPPLICANT and SUCCESSOR appear nowhere in the corpus, which is why they
+ * were chosen over the alternatives. A new frame whose name is ordinary prose fails here.
+ */
+test("no frame label in the shipped library collides with the recorded corpus", () => {
   const r = labelCollisions(cfg);
-  assert.ok(r.artifacts >= 25, `only ${r.artifacts} artifacts read`);
-  const worst = r.collisions[0]!;
-  assert.equal(worst.frame, "END_USER");
-  assert.ok(worst.foreign > worst.own, "the label is used more by frames that are not it");
-  assert.equal(worst.own, 0, "END_USER has never written its own label");
+  assert.ok(r.artifacts >= 39, `only ${r.artifacts} artifacts read`);
+  assert.deepEqual(
+    r.collisions.filter((c) => c.foreign > 0).map((c) => `${c.frame} "${c.label}"`),
+    [],
+    "a label found in an artifact its frame did not write identifies nothing and is redacted anyway",
+  );
+  assert.match(r.text, /Every label is discriminating/);
 });
 
 test("no recorded artifacts reports nothing rather than claiming every label is clean", () => {
@@ -275,16 +287,16 @@ test("the retirement policy's stated standing matches what the tooling reports",
   const atOrOverFloor = stats.frames.filter((f) => f.runs >= 5).map((f) => f.frame);
   assert.deepEqual(atOrOverFloor, ["FRAME_BREAKER"], "the doc names FRAME_BREAKER as the only frame at the floor");
 
-  // The END_USER exemption, which is the whole point of the section it sits in.
-  const endUser = by.get("END_USER")!;
-  assert.equal(endUser.runs, endUser.pruned, "END_USER is pruned in every appearance");
+  // The SUPPLICANT exemption, which is the whole point of the section it sits in.
+  const endUser = by.get("SUPPLICANT")!;
+  assert.equal(endUser.runs, endUser.pruned, "SUPPLICANT is pruned in every appearance");
   assert.equal(endUser.recommended, 0);
-  assert.match(doc, /`END_USER` is the live example/);
+  assert.match(doc, /`SUPPLICANT` is the live example/);
   assert.match(doc, /through the pruned block/);
 
   // The never-pruned three, named as a D6 worry rather than a retirement criterion.
   const neverPruned = stats.frames.filter((f) => f.runs >= 2 && f.pruned === 0).map((f) => f.frame).sort();
-  assert.deepEqual(neverPruned, ["DOOR_KEEPER", "HORIZON", "MECHANIC"]);
+  assert.deepEqual(neverPruned, ["DOOR_KEEPER", "MECHANIC", "SUCCESSOR"]);
   for (const f of neverPruned) assert.match(doc, new RegExp(`\`${f}\``), `${f} is never pruned and the doc does not mention it`);
 
   // Criterion 4 rests on which traps have never fired, and that set shrank when T3 fired in E1b.

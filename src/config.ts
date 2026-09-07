@@ -78,12 +78,52 @@ function readText(path: string, problems: string[]): string {
  * The D6 static check plus cross file referential integrity. Runs on every load. A frame
  * library that fails here never reaches the compiler.
  */
+/**
+ * Every id a frame has ever had, current first. Takes a current id or a former one, so a caller
+ * reading a recorded run does not have to know which era it came from.
+ *
+ * Renaming a frame is a D6 change and rare, so this is a linear scan over thirteen frames rather
+ * than a cached map. Building the map per call would cost more than the scan.
+ */
+export function frameIdHistory(cfg: Config, id: string): string[] {
+  const f = cfg.frames.frames.find((x) => x.id === id || x.former_ids.includes(id));
+  return f ? [f.id, ...f.former_ids] : [id];
+}
+
+/**
+ * Every frame id the repository will recognise: the live library plus every id it has been
+ * renamed from. `adhd traps` on a recorded artifact has to accept the id that artifact was
+ * written under, or a rename would make five runs of history fail their own contract check.
+ */
+export function knownFrameIds(cfg: Config): string[] {
+  return cfg.frames.frames.flatMap((f) => [f.id, ...f.former_ids]);
+}
+
+/** The id a recorded run's frame goes by today. Unknown ids pass through unchanged: a run may
+ *  name a frame that has since been retired outright, and that is a real fact about the run. */
+export function currentFrameId(cfg: Config, id: string): string {
+  return frameIdHistory(cfg, id)[0]!;
+}
+
 export function crossCheck(frames: FramesFile, routing: RoutingFile, rubric: RubricFile): string[] {
   const problems: string[] = [];
   const ids = frames.frames.map((f) => f.id);
   const dup = ids.filter((id, i) => ids.indexOf(id) !== i);
   if (dup.length) problems.push(`frames: duplicate ids ${[...new Set(dup)].join(", ")}`);
   const byId = new Map(frames.frames.map((f) => [f.id, f]));
+
+  // A former id that is also a live id, or that two frames both claim, makes a recorded run
+  // ambiguous. Both would resolve silently to whichever frame the scan reached first.
+  const live = new Set(ids);
+  const seenFormer = new Map<string, string>();
+  for (const f of frames.frames)
+    for (const old of f.former_ids) {
+      if (live.has(old)) problems.push(`frames.${f.id}: former_id ${old} is also a live frame id`);
+      if (old === f.id) problems.push(`frames.${f.id}: lists its own id as a former_id`);
+      const claimed = seenFormer.get(old);
+      if (claimed) problems.push(`frames: ${claimed} and ${f.id} both claim former_id ${old}`);
+      else seenFormer.set(old, f.id);
+    }
 
   // D6: the union of attacks covers T1..T7. T8 is the critic's counterweight.
   const attacked = new Set(frames.frames.flatMap((f) => f.attacks));
