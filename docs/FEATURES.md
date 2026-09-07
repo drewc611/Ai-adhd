@@ -47,8 +47,15 @@ can be wrong without saying so.
 6. **Frame retirement policy**, written, with the evidence bar stated. The library has no way
    to shrink, which is how frame sets rot.
 7. **Per-frame unit fixtures.** One fixture per frame that the frame should obviously win.
-8. **`adhd why <run> <frame>`.** Print exactly why a frame was pruned: detector output, pass A
-   row, cluster, and what the synthesis did with it.
+8. ~~**`adhd why <run> <frame>`.**~~ **Built.** Everything that happened to one frame in one run,
+   in order: axis and tool allowlist, the blind pass A row weakest dimension first with the
+   critic's evidence, its cluster and where it ranked among survivors, every detector that fired
+   with the text that fired it, the deepen verdict, and the synthesis lines naming it. It also
+   carries the Finding 4 margin: a representative that won by an anchor point or tied outright
+   says so here, which is where a reader asking about one frame would look. Three distinctions
+   the pruned block cannot draw: a frame routing never selected was not rejected; a pruned member
+   of a cluster others hold corroborated the action, while a pruned singleton took the action
+   with it; and a branch that returned nothing is not the same as one that scored badly.
 9. ~~**`adhd diff <runA> <runB>`.**~~ **Built.** Two runs of one fixture side by side: frames
    only in one, status changes, pass A movement, and both recommendations. Refuses to attribute
    a change to the seed when the frame sets also differ, and says so.

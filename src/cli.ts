@@ -6,6 +6,7 @@ import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { diffRuns, frameStats, listFrames, orthogonality } from "./frames.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
+import { explainFrame } from "./why.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort } from "./errors.js";
@@ -200,6 +201,21 @@ program
         texts.push(r.text);
       }
       console.log(o.json ? JSON.stringify(out, null, 2) : texts.join("\n\n" + "-".repeat(72) + "\n\n"));
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("why")
+  .argument("<run>", "a run directory")
+  .argument("<frame>", "the frame to explain")
+  .description("everything that happened to one frame in one run, from the files the run wrote")
+  .option("--json")
+  .action((run: string, frame: string, o: { json?: boolean }) => {
+    try {
+      const r = explainFrame(loadConfig(program.opts().root), run, frame);
+      console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
     } catch (e) {
       fail(e);
     }

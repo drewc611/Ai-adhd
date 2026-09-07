@@ -93,6 +93,7 @@ node dist/src/cli.js frames      # the library
 node dist/src/cli.js eval        # replays evals/recorded/ against evals/fixtures/
 node dist/src/cli.js eval --audit            # which assertions the consensus answer also satisfies
 node dist/src/cli.js diff <runA> <runB>      # two runs of one fixture: what moved, and whether it was the seed
+node dist/src/cli.js why <run> <frame>      # everything that happened to one frame: pass A row, cluster, detectors, deepen
 node dist/src/cli.js frames --stats          # how each frame has behaved across recorded runs
 node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates in practice
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
