@@ -30,8 +30,11 @@ can be wrong without saying so.
    Every real run was scored a second time blind: 79% exact over 225 cells, 100% within one
    point. All five rankings changed; one outcome did (`002-kernel-enduser` sends PARTICULARIST to
    deepen instead of FRAME_BREAKER). The two dimensions the critics agree on most are the two
-   pinned at the ceiling, which is Finding 2 from a second direction. Two raters still cannot
-   separate an ambiguous rubric from an idiosyncratic critic; a third rater on one pack would.
+   pinned at the ceiling, which is Finding 2 from a second direction. `--panel` reads three or
+   more critics on one pack and separates an ambiguous rubric from an idiosyncratic one: on
+   `002-kernel-enduser` four critics split 2-2, and one scored the top two level, so what shipped
+   was chosen by `localeCompare`. Every contested decision in the corpus is settled inside two
+   anchor points out of 48; the synthesis now says so on the recommendation line.
 4. ~~**Rubric weight sensitivity.**~~ **Built** as `adhd learn --sensitivity`. Re-decides every
    contested cluster under each dimension's weight moved by ±1 and lists the representatives
    that change. Corrected in the building: pass A does not prune, a fired trap does. What pass A

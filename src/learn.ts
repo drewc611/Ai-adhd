@@ -68,6 +68,8 @@ export interface SensitivityReport {
   cluster_decisions: number;
   flips: RepresentativeFlip[];
   by_dimension: { dimension: string; flips: number }[];
+  /** How much rubric separated each shipped representative from the runner up in its cluster. */
+  margins: { run: string; cluster: string; winner: string; runner_up: string; margin: number }[];
   text: string;
 }
 
@@ -91,8 +93,10 @@ export function weightSensitivity(cfg: Config, recordedDir = join(cfg.root, "eva
   const flipsByDim = new Map<string, number>();
   let decisions = 0;
 
-  const pick = (frames: string[], scores: Record<string, number>): string =>
-    [...frames].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || a.localeCompare(b))[0]!;
+  const rank = (frames: string[], scores: Record<string, number>): string[] =>
+    [...frames].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || a.localeCompare(b));
+  const pick = (frames: string[], scores: Record<string, number>): string => rank(frames, scores)[0]!;
+  const margins: SensitivityReport["margins"] = [];
 
   for (const run of runs) {
     const scoresUnder = (weights: Record<string, number>): Record<string, number> => {
@@ -122,6 +126,10 @@ export function weightSensitivity(cfg: Config, recordedDir = join(cfg.root, "eva
         }
       }
     }
+    for (const c of contested) {
+      const order = rank(c.survivors, shipped);
+      margins.push({ run: run.id, cluster: c.id, winner: order[0]!, runner_up: order[1]!, margin: (shipped[order[0]!] ?? 0) - (shipped[order[1]!] ?? 0) });
+    }
     decisions += contested.length;
   }
 
@@ -150,8 +158,29 @@ export function weightSensitivity(cfg: Config, recordedDir = join(cfg.root, "eva
     lines.push("", "flips by dimension:");
     for (const d of by_dimension.filter((x) => x.flips)) lines.push(`  ${d.dimension.padEnd(20)} ${d.flips}`);
   }
+  // A "no flip" result reads as stability, and it is not stability if the decision was never
+  // wide in the first place. One point on the cheapest dimension is the smallest move any single
+  // anchor can make; a margin at or under that is inside the rubric's own resolution.
+  const minWeight = Math.min(...cfg.rubric.dimensions.map((d) => d.weight));
+  const step = minWeight / cfg.rubric.dimensions.reduce((sum, d) => sum + d.weight * max, 0);
+  // Margins are ratios of small integers and land a bit either side of an exact anchor point.
+  const atMost = (v: number, bound: number) => v <= bound + 1e-9;
+  if (margins.length) {
+    lines.push("", `how much rubric separated each shipped representative (one anchor point on the cheapest dimension is ${step.toFixed(4)}):`);
+    for (const m of margins.sort((a, b) => a.margin - b.margin))
+      lines.push(`  ${m.run.padEnd(24)} ${m.cluster.padEnd(26)} ${m.winner} over ${m.runner_up}  ${m.margin.toFixed(4)}${m.margin === 0 ? "  !! exact tie, broken alphabetically" : atMost(m.margin, step) ? "  !! one anchor point" : ""}`);
+    const tight = margins.filter((m) => atMost(m.margin, step * 2));
+    if (tight.length === margins.length)
+      lines.push(
+        "",
+        `Every one of the ${margins.length} contested decisions was settled by two anchor points or fewer out of`,
+        `${cfg.rubric.dimensions.reduce((sum, d) => sum + d.weight * max, 0)}. Read the no-flip result above against that: these representatives are not`,
+        "stable because the rubric is decisive, they are close enough that any of them could ship.",
+      );
+    else if (tight.length) lines.push("", `${tight.length} of ${margins.length} contested decisions were settled by two anchor points or fewer.`);
+  }
   lines.push("", `Corpus size is ${runs.length} run(s). Treat everything above as a pointer, not a result.`);
-  return { runs: runs.length, cluster_decisions: decisions, flips, by_dimension, text: lines.join("\n") };
+  return { runs: runs.length, cluster_decisions: decisions, flips, by_dimension, margins, text: lines.join("\n") };
 }
 
 export interface DimensionPair {
@@ -422,8 +451,9 @@ export function interRaterCorpus(cfg: Config, recordedDir = join(cfg.root, "eval
     for (const id of readdirSync(recordedDir).sort()) {
       const dir = join(recordedDir, id);
       if (!statSync(dir).isDirectory()) continue;
-      const alt = join(dir, "critic", SECOND_SCORING);
-      if (existsSync(alt)) runs.push({ run: id, report: interRater(cfg, dir, alt) });
+      // The first second-scoring on disk, so a run carrying only a rater3 still counts.
+      const alt = raterFiles(dir)[0];
+      if (alt) runs.push({ run: id, report: interRater(cfg, dir, alt.path) });
     }
 
   // Pooled by weight of cells, not by mean of run means: a five artifact pack and a three
@@ -496,4 +526,165 @@ export function interRaterCorpus(cfg: Config, recordedDir = join(cfg.root, "eval
     lines.push("", `Pooled over ${cells} cells from ${runs.length} run(s), one second critic each. Grow both before quoting a figure.`);
   }
   return { runs, cells, exact, within_one, by_dimension, runs_with_changed_representative, text: lines.join("\n") };
+}
+
+export interface PanelCluster {
+  cluster: string;
+  survivors: string[];
+  picks: Record<string, string>;
+  unanimous: boolean;
+  split: { frame: string; raters: string[] }[];
+  /** Top minus second, per critic. How much rubric actually separates the position that ships. */
+  margins: Record<string, number>;
+  /** Critics whose top two were exactly level, so the pick fell to the alphabetical tie-break. */
+  ties: string[];
+  narrowest: number;
+}
+
+export interface PanelReport {
+  run: string;
+  raters: string[];
+  artifacts: number;
+  cells: number;
+  unanimous_cells: number;
+  max_spread: number;
+  by_dimension: { dimension: string; unanimous: number; mean_spread: number; max_spread: number }[];
+  clusters: PanelCluster[];
+  text: string;
+}
+
+/** Second and later scorings of one pack: pass-a.rater2.yaml, pass-a.rater3.yaml, and so on. */
+function raterFiles(runDir: string): { label: string; path: string }[] {
+  const dir = join(runDir, "critic");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => /^pass-a\.rater[0-9]+\.yaml$/.test(f))
+    .map((f) => ({ label: f.slice("pass-a.".length, -".yaml".length), path: join(dir, f), n: Number(f.replace(/\D+/g, "")) }))
+    .sort((a, b) => a.n - b.n)
+    .map(({ label, path }) => ({ label, path }));
+}
+
+/**
+ * Three or more critics on one pack. Two raters can tell you they disagreed and nothing about
+ * why: an ambiguous rubric and one idiosyncratic critic look identical at n=2. A panel separates
+ * them. If the raters split evenly on a cluster the rubric does not determine the answer; if one
+ * rater stands alone the rubric does and that rater read it differently.
+ *
+ * The cell figures are here because they are cheap. The cluster table is the report.
+ */
+export function raterPanel(cfg: Config, runDir: string): PanelReport {
+  const dims = cfg.rubric.dimensions.map((d) => d.id);
+  const max = cfg.rubric.scale.max;
+  const weights: Record<string, number> = {};
+  for (const d of cfg.rubric.dimensions) weights[d.id] = d.weight;
+
+  const read = (p: string): PassA => PassASchema.parse(parseYaml(unfence(readFileSync(p, "utf8"))));
+  const shipped = read(join(runDir, "critic", "pass-a.yaml"));
+  const extra = raterFiles(runDir).map((f) => ({ label: f.label, pa: read(f.path) }));
+  const panel = [{ label: "shipped", pa: shipped }, ...extra];
+  for (const r of extra)
+    if (r.pa.problem_hash !== shipped.problem_hash)
+      throw new Error(`problem_hash mismatch on ${r.label}: a panel must be scoring one problem (${r.pa.problem_hash} vs ${shipped.problem_hash})`);
+
+  const blindMap = JSON.parse(readFileSync(join(runDir, "critic", "blind-map.json"), "utf8")) as Record<string, string>;
+  const letters = Object.keys(shipped.scores)
+    .filter((l) => panel.every((r) => r.pa.scores[l]))
+    .sort();
+
+  const spreads = new Map<string, number[]>(dims.map((d) => [d, []]));
+  for (const l of letters)
+    for (const d of dims) {
+      const vals = panel.map((r) => (r.pa.scores[l] as Record<string, { score: number } | undefined>)[d]?.score).filter((v): v is number => v !== undefined);
+      if (vals.length === panel.length) spreads.get(d)!.push(Math.max(...vals) - Math.min(...vals));
+    }
+  const all = [...spreads.values()].flat();
+  const by_dimension = dims
+    .map((d) => {
+      const xs = spreads.get(d)!;
+      return {
+        dimension: d,
+        unanimous: xs.length ? xs.filter((v) => v === 0).length / xs.length : 0,
+        mean_spread: xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : 0,
+        max_spread: xs.length ? Math.max(...xs) : 0,
+      };
+    })
+    .sort((a, b) => a.unanimous - b.unanimous);
+
+  const totalsFor = (pa: PassA): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const l of letters) {
+      const frame = blindMap[l];
+      if (frame) out[frame] = weightedScore(pa.scores[l] as Record<string, { score: number }>, weights, max);
+    }
+    return out;
+  };
+  const ranked = (frames: string[], t: Record<string, number>) => [...frames].sort((x, y) => (t[y] ?? 0) - (t[x] ?? 0) || x.localeCompare(y));
+  const scorePath = join(runDir, "score.json");
+  const scored = existsSync(scorePath) ? ((JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
+
+  const clusters: PanelCluster[] = scored
+    .filter((c) => c.survivors.length > 1)
+    .map((c) => {
+      const picks: Record<string, string> = {};
+      const margins: Record<string, number> = {};
+      const ties: string[] = [];
+      for (const r of panel) {
+        const t = totalsFor(r.pa);
+        const order = ranked(c.survivors, t);
+        picks[r.label] = order[0]!;
+        margins[r.label] = (t[order[0]!] ?? 0) - (t[order[1]!] ?? 0);
+        // An exact tie is not a close decision, it is no decision: `ranked` falls through to
+        // localeCompare, so the frame that ships is the one whose id sorts first.
+        if (margins[r.label] === 0) ties.push(r.label);
+      }
+      const grouped = new Map<string, string[]>();
+      for (const [label, frame] of Object.entries(picks)) grouped.set(frame, [...(grouped.get(frame) ?? []), label]);
+      const split = [...grouped.entries()].map(([frame, raters]) => ({ frame, raters })).sort((a, b) => b.raters.length - a.raters.length);
+      return { cluster: c.id, survivors: c.survivors, picks, unanimous: split.length === 1, split, margins, ties, narrowest: Math.min(...Object.values(margins)) };
+    });
+
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const unanimous_cells = all.length ? all.filter((v) => v === 0).length / all.length : 0;
+  // One point on the lowest weighted dimension, as a fraction of the normalised total. A margin
+  // under this is closer than the smallest move any single anchor can make.
+  const minWeight = Math.min(...cfg.rubric.dimensions.map((d) => d.weight));
+  const nearTie = minWeight / cfg.rubric.dimensions.reduce((sum, d) => sum + d.weight * max, 0);
+  const lines = [
+    `panel of ${panel.length} critic(s) on ${runDir.split("/").pop()}: ${panel.map((r) => r.label).join(", ")}`,
+    "",
+    `${letters.length} artifact(s), ${all.length} cell(s), ${pct(unanimous_cells)} scored identically by every critic`,
+    `widest disagreement on any cell: ${all.length ? Math.max(...all) : 0} point(s)`,
+    "",
+    "per dimension, least unanimous first:",
+  ];
+  for (const d of by_dimension) lines.push(`  ${d.dimension.padEnd(20)} unanimous ${pct(d.unanimous).padStart(4)}  mean spread ${d.mean_spread.toFixed(2)}  widest ${d.max_spread}`);
+
+  lines.push("", "contested clusters, and who each critic sends to deepen:");
+  if (!clusters.length) lines.push("  none: every cluster had one survivor, so no critic had a choice to make.");
+  for (const c of clusters) {
+    lines.push(`  ${c.cluster}  (${c.survivors.join(" vs ")})`);
+    for (const s of c.split) lines.push(`    ${s.frame.padEnd(18)} ${s.raters.join(", ")}`);
+    lines.push(`    margin over second place: ${panel.map((r) => `${r.label} ${c.margins[r.label]!.toFixed(4)}`).join(", ")}`);
+    if (c.ties.length)
+      lines.push(
+        `    !! EXACT TIE for ${c.ties.join(", ")}: the rubric separates nothing, so the position that`,
+        "       ships is whichever frame id sorts first alphabetically. That is not a decision.",
+      );
+    else if (c.narrowest <= nearTie + 1e-9)
+      lines.push(`    !! narrowest margin ${c.narrowest.toFixed(4)} is under ${nearTie.toFixed(4)}, one point on the cheapest`, "       dimension. A single anchor read either way would change what ships.");
+    if (c.unanimous) lines.push("    unanimous: the rubric determines this one.");
+    // An even split is the more specific statement, so it is checked before the no-majority
+    // case: with two critics disagreeing both are true and only one is worth printing.
+    else if (c.split.length === 2 && c.split[0]!.raters.length * 2 === panel.length)
+      lines.push("    even split: the rubric does not determine the answer. This is the rubric, not the critic.");
+    else if (c.split[0]!.raters.length === 1)
+      lines.push(`    ${c.split.length}-way split with no majority: on ${panel.length} critics the rubric does not settle it.`);
+    else lines.push(`    ${c.split.map((s) => s.raters.length).join("-")}: a majority, and ${c.split.slice(1).flatMap((s) => s.raters).join(", ")} read it differently.`);
+  }
+  lines.push(
+    "",
+    "Cell agreement is cheap. The cluster table is the report: it is the only place a critic's",
+    "disagreement can reach a reader of the output.",
+  );
+  return { run: runDir, raters: panel.map((r) => r.label), artifacts: letters.length, cells: all.length, unanimous_cells, max_spread: all.length ? Math.max(...all) : 0, by_dimension, clusters, text: lines.join("\n") };
 }

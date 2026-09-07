@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { cfg, tmp } from "./helpers.js";
-import { dimensionCorrelation, interRater, interRaterCorpus, weightSensitivity } from "../src/learn.js";
+import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "../src/learn.js";
 
 const DIMS = cfg.rubric.dimensions.map((d) => d.id);
 
@@ -413,4 +413,159 @@ test("every recorded run's ranking moved between critics and only one outcome di
     "all five rankings changed",
   );
   assert.equal(r.runs.filter((x) => x.report.representative_changes.length).length, 1);
+});
+
+/** Write pass-a.raterN.yaml beside a run's shipped scoring. */
+function addRater(dir: string, n: number, artifacts: Record<string, number>, hash = "hash-001") {
+  writeFileSync(
+    join(dir, "critic", `pass-a.rater${n}.yaml`),
+    stringify({
+      problem_hash: hash,
+      pass: "A",
+      scores: Object.fromEntries(Object.entries(artifacts).map(([l, v]) => [l, Object.fromEntries(DIMS.map((d) => [d, { score: v, evidence: "e" }]))])),
+    }),
+  );
+}
+
+function contestedRun(root: string, id = "001") {
+  return recordRun(
+    root,
+    id,
+    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+  );
+}
+
+test("a panel where every critic agrees says the rubric determines the cluster", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  addRater(dir, 2, { A: 3, B: 2 });
+  addRater(dir, 3, { A: 2, B: 1 });
+  const r = raterPanel(cfg, dir);
+  assert.deepEqual(r.raters, ["shipped", "rater2", "rater3"]);
+  assert.equal(r.clusters.length, 1);
+  assert.equal(r.clusters[0]!.unanimous, true);
+  assert.deepEqual(r.clusters[0]!.picks, { shipped: "LEDGER", rater2: "LEDGER", rater3: "LEDGER" });
+  assert.match(r.text, /unanimous: the rubric determines this one/);
+});
+
+/**
+ * The distinction two raters cannot make. A 2-1 majority means the rubric settles it and one
+ * critic read it differently; an even split means the rubric does not settle it at all.
+ */
+test("a 2-1 majority names the critic that read it differently", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  addRater(dir, 2, { A: 3, B: 1 });
+  addRater(dir, 3, { A: 1, B: 3 });
+  const r = raterPanel(cfg, dir);
+  assert.equal(r.clusters[0]!.unanimous, false);
+  assert.deepEqual(r.clusters[0]!.split, [
+    { frame: "LEDGER", raters: ["shipped", "rater2"] },
+    { frame: "MECHANIC", raters: ["rater3"] },
+  ]);
+  assert.match(r.text, /2-1: a majority, and rater3 read it differently/);
+});
+
+test("an even split is reported as the rubric's problem, not a critic's", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  addRater(dir, 2, { A: 1, B: 3 });
+  const r = raterPanel(cfg, dir);
+  assert.equal(r.raters.length, 2);
+  assert.equal(r.clusters[0]!.unanimous, false);
+  assert.match(r.text, /even split: the rubric does not determine the answer/);
+  assert.match(r.text, /This is the rubric, not the critic/);
+});
+
+test("panel spread is measured across every critic, not pairwise", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  addRater(dir, 2, { A: 2, B: 1 });
+  addRater(dir, 3, { A: 1, B: 1 });
+  const r = raterPanel(cfg, dir);
+  // A was scored 3, 2 and 1: a spread of 2, which no pair of critics would show as more than 1.
+  assert.equal(r.max_spread, 2);
+  assert.ok(r.by_dimension.every((d) => d.max_spread === 2));
+  // B was 1 from all three, so half the cells are unanimous and half span two points.
+  assert.equal(r.unanimous_cells, 0.5);
+});
+
+test("a panel scoring a different problem is refused", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  addRater(dir, 2, { A: 2, B: 2 }, "hash-other");
+  assert.throws(() => raterPanel(cfg, dir), /problem_hash mismatch on rater2/);
+});
+
+test("a run with no second scoring is still a panel of one", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  const r = raterPanel(cfg, dir);
+  assert.deepEqual(r.raters, ["shipped"]);
+  assert.equal(r.unanimous_cells, 1, "one critic agrees with itself on every cell");
+  assert.equal(r.clusters[0]!.unanimous, true);
+});
+
+test("rater files are ordered numerically, not by string", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  for (const n of [10, 2, 3]) addRater(dir, n, { A: 3, B: 1 });
+  assert.deepEqual(raterPanel(cfg, dir).raters, ["shipped", "rater2", "rater3", "rater10"]);
+});
+
+test("an exact tie is reported as no decision, not a close one", () => {
+  const root = tmp();
+  const dir = contestedRun(root);
+  // Both survivors scored identically: `pick` falls through to localeCompare.
+  addRater(dir, 2, { A: 2, B: 2 });
+  const r = raterPanel(cfg, dir);
+  const c = r.clusters[0]!;
+  assert.deepEqual(c.ties, ["rater2"]);
+  assert.equal(c.margins.rater2, 0);
+  assert.equal(c.picks.rater2, "LEDGER", "LEDGER sorts before MECHANIC");
+  assert.match(r.text, /EXACT TIE for rater2/);
+  assert.match(r.text, /sorts first alphabetically. That is not a decision/);
+});
+
+/**
+ * Margins are ratios of small integers, so a margin of exactly one anchor point lands either
+ * side of the bound in floating point. It was silently unflagged before an epsilon was added.
+ */
+test("a margin of exactly one anchor point is flagged despite float representation", () => {
+  const r = weightSensitivity(cfg);
+  const minWeight = Math.min(...cfg.rubric.dimensions.map((d) => d.weight));
+  const step = minWeight / cfg.rubric.dimensions.reduce((sum, d) => sum + d.weight * cfg.rubric.scale.max, 0);
+  const oneAnchor = r.margins.filter((m) => Math.abs(m.margin - step) < 1e-9);
+  assert.ok(oneAnchor.length >= 2, `expected at least two one-anchor margins, got ${oneAnchor.length}`);
+  const flagged = (r.text.match(/!! one anchor point/g) ?? []).length;
+  assert.equal(flagged, oneAnchor.length, "every one-anchor margin should carry the flag");
+});
+
+/**
+ * The finding that reframes "0 flips". Every contested representative in the corpus is separated
+ * from the runner up by two anchor points or fewer out of 48. A no-flip result on decisions that
+ * narrow is not evidence the rubric is decisive.
+ */
+test("every contested decision in the corpus is settled inside two anchor points", () => {
+  const r = weightSensitivity(cfg);
+  assert.equal(r.margins.length, 4);
+  const step = 1 / cfg.rubric.dimensions.reduce((sum, d) => sum + d.weight * cfg.rubric.scale.max, 0);
+  assert.ok(
+    r.margins.every((m) => m.margin <= step * 2 + 1e-9),
+    `widest margin was ${Math.max(...r.margins.map((m) => m.margin))}`,
+  );
+  assert.match(r.text, /they are close enough that any of them could ship/);
+});
+
+/** The four-critic panel on the pack that split. Pinned because D8 quotes it. */
+test("002-kernel-enduser splits evenly across four critics", () => {
+  const r = raterPanel(cfg, join(cfg.root, "evals", "recorded", "002-kernel-enduser"));
+  assert.deepEqual(r.raters, ["shipped", "rater2", "rater3", "rater4"]);
+  assert.equal(r.max_spread, 1, "no cell disagreed by more than one point");
+  const c = r.clusters[0]!;
+  assert.equal(c.unanimous, false);
+  assert.deepEqual(c.split.map((x) => x.raters.length), [2, 2]);
+  assert.deepEqual(c.ties, ["rater4"], "rater4 scored the top two level");
+  assert.match(r.text, /even split: the rubric does not determine the answer/);
 });

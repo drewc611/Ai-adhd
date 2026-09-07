@@ -67,9 +67,21 @@ depends on the critic: the second reader sends PARTICULARIST to deepen instead o
 in the `measure_the_period_first` cluster. Kept as recorded. This run's recommendation is not
 robust to who scored it, and that is worth more visible than a passing eval.
 
+Two more critics were then run on the same pack under the same conditions, kept as
+`pass-a.rater3.yaml` and `pass-a.rater4.yaml`. Four critics split **2-2**: FRAME_BREAKER for the
+shipped critic and rater4, PARTICULARIST for raters 2 and 3. No cell disagreed by more than one
+point and 76% were scored identically, so this is the rubric, not one odd reader.
+
+All four score FRAME_BREAKER at exactly 0.9167 and SABOTEUR at 0.8958; only PARTICULARIST moves,
+and rater4's 0.9167 ties FRAME_BREAKER exactly, so what shipped was decided by `localeCompare`.
+
 ```
 adhd learn --run evals/recorded/002-kernel-enduser --agreement evals/recorded/002-kernel-enduser/critic/pass-a.rater2.yaml
+adhd learn --panel --run evals/recorded/002-kernel-enduser
 adhd learn --agreement-all
 ```
+
+`synthesis.md` here predates the Close call note the synthesiser now renders, and is left as the
+run produced it.
 
 Pooled findings are recorded under D8 in `docs/DECISIONS.md`.

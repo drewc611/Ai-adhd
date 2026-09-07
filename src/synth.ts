@@ -89,6 +89,28 @@ export function renderSynthesis(
     }));
   const forecloses = rec ? [...new Set(rec.survivors.flatMap((m) => byFrame.get(m)?.forecloses ?? []))] : [];
 
+  // How much rubric separated the representative from the runner up in its own cluster. Every
+  // contested decision in the recorded corpus came in at two anchor points or fewer out of 48,
+  // and one was an exact tie broken by `localeCompare`. A reader cannot see that from the
+  // recommendation line, which reads as though a decision was made, so the line says so.
+  const anchorStep = Math.min(...cfg.rubric.dimensions.map((d) => d.weight)) / cfg.rubric.dimensions.reduce((sum, d) => sum + d.weight * cfg.rubric.scale.max, 0);
+  const closeCall = (() => {
+    if (!rec || rec.survivors.length < 2) return "";
+    const passA = (f: string) => score.frames.find((x) => x.frame === f)?.pass_a ?? null;
+    const ordered = rec.survivors
+      .map((f) => ({ frame: f, pass_a: passA(f) }))
+      .filter((x): x is { frame: string; pass_a: number } => x.pass_a !== null)
+      .sort((a, b) => b.pass_a - a.pass_a || a.frame.localeCompare(b.frame));
+    if (ordered.length < 2) return "";
+    const [top, second] = ordered as [{ frame: string; pass_a: number }, { frame: string; pass_a: number }];
+    const margin = top.pass_a - second.pass_a;
+    if (margin > anchorStep * 2 + 1e-9) return "";
+    const scale = `${margin.toFixed(4)} on a scale where one anchor point is ${anchorStep.toFixed(4)}`;
+    return margin <= 1e-9
+      ? `${top.frame} and ${second.frame} scored level in pass A. The tie was broken by frame id, alphabetically, not by the rubric. ${second.frame}'s position in the corroborating block is as well supported as this one.`
+      : `${top.frame} led ${second.frame} by ${scale}. A single anchor read the other way would have sent ${second.frame} here instead.`;
+  })();
+
   let no_recommendation = "";
   if (!rec) {
     if (score.run_level.monoculture) no_recommendation = "Run level monoculture. See below.";
@@ -106,6 +128,7 @@ export function renderSynthesis(
           action: rec.action,
           falsifier: recDeepen?.revised_falsifier ?? recFrame?.falsifier ?? "",
           members: heldBy(rec),
+          close_call: closeCall,
           deepen: recDeepen,
           revised: Boolean(recDeepen?.revised_position && recDeepen.revised_position !== recFrame?.position),
           original_position: recFrame?.position ?? "",

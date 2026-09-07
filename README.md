@@ -99,6 +99,7 @@ node dist/src/cli.js learn --sensitivity     # do the rubric weights change whic
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
 node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?
 node dist/src/cli.js learn --agreement-all   # the same, pooled over every run that has a second scoring
+node dist/src/cli.js learn --panel --run <dir>   # three or more critics on one pack: ambiguous rubric, or odd critic?
 ```
 
 `learn` reads the recorded runs and calls nothing. It is how the frame library, the rubric and
@@ -124,7 +125,8 @@ Library, CLI, MCP server, and plugin are implemented and tested against the cont
 Five real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail. Every real run has been scored a second time by a
 fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
-recommendation depends on which critic read it (D8).
+recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
+contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
 
 - `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
   MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on

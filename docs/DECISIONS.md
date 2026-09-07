@@ -383,6 +383,65 @@ and 1 of 5 outcomes did. So cell agreement and ranking agreement both overstate 
 critic decides, and `adhd learn --agreement` prints all three with the weakest ones labelled as
 such. That is a stronger argument for clustering than the design reasoning that produced it.
 
-**Five runs, one second critic each.** 225 cells is a first corpus, not a reliability figure. Two
-raters give no way to separate a rubric that is ambiguous from a critic that is idiosyncratic; a
-third rater on one pack would. Quote 79% with the sample size attached or not at all.
+**Five runs, one second critic each, and four on the pack that split.** 225 cells is a first
+corpus, not a reliability figure. Quote 79% with the sample size attached or not at all.
+
+---
+
+**Finding 4: pass A separates cluster survivors by almost nothing, and one decision was an exact
+tie.** Two raters cannot tell an ambiguous rubric from an idiosyncratic critic, so
+`002-kernel-enduser` was scored twice more, blind, same conditions. `adhd learn --panel` reads a
+panel of any size.
+
+Four critics, 76% of cells scored identically, no cell off by more than one point, and the
+cluster splits **2-2**: FRAME_BREAKER for the shipped critic and rater4, PARTICULARIST for raters
+2 and 3. Not one critic reading it oddly. The rubric does not determine the answer.
+
+The weighted totals say why. All four critics score FRAME_BREAKER at exactly 0.9167 and SABOTEUR
+at exactly 0.8958. Only PARTICULARIST moves, across 0.8750, 0.9375, 0.9375, 0.9167 — and rater4's
+0.9167 is an **exact tie** with FRAME_BREAKER, so what shipped was decided by `localeCompare` in
+`pick()`, not by the rubric. That is not a close decision. It is no decision.
+
+It is not one cluster. Every contested representative decision in the corpus is settled inside
+two anchor points out of 48:
+
+| run | cluster | margin |
+|---|---|---|
+| 002-kernel-enduser | measure_the_period_first | 0.0208 (one anchor point) |
+| 001-first-run | caller_owned_deadline | 0.0208 (one anchor point) |
+| 002-first-run | find_the_sawtooth | 0.0417 |
+| 003-kernel-strategy | extract_one_then_gate | 0.0417 |
+
+**This reframes Finding 1.** "0 of 4 representatives flip under ±1 weight moves" reads as
+stability and is not stability: these decisions were never wide. A weight move rescales every
+artifact's total in the same direction, so it moves ranking far less than a single anchor read
+differently does. The representatives are not stable because the rubric is decisive; they are
+close enough that any of them could ship. `--sensitivity` now prints the margins directly beneath
+the flip count, because the flip count alone is misleading.
+
+**What it does not settle, and what should not be done about it.** The obvious fix, spreading the
+anchors so survivors separate further, would manufacture confidence rather than measure it: the
+positions genuinely are close, and a rubric that says so is telling the truth. Three candidate
+responses, none taken here:
+
+1. Send every survivor within one anchor point to deepen, not just the top one. Costs a subagent
+   per extra position and admits the tie instead of hiding it.
+2. Break ties on something meaningful (fewest fired traps, widest `forecloses`) rather than
+   alphabetically. Cheap, and at least the rule would be defensible.
+3. Leave it, and print the margin in the synthesis so a reader sees the representative won by a
+   hair.
+
+Options 1 and 2 change what ships and belong to the owner. **Option 3 was taken**, because it
+changes no decision and the alternative was silence: `pick()` breaks ties alphabetically, nothing
+downstream said so, and the run read as though a decision had been made. The synthesis now carries
+a **Close call** line under the recommendation whenever the representative led its runner up by
+two anchor points or fewer:
+
+- at an exact tie, that the two scored level and the winner was chosen by frame id, and that the
+  runner up's position in the corroborating block is as well supported;
+- otherwise, the margin against the anchor step, and that one anchor read the other way would
+  have sent the other frame instead.
+
+`--sensitivity` prints the same margins beneath the flip count. The recorded runs' `synthesis.md`
+files predate the note and are left as they were rendered: they are the record of what those runs
+produced, not a place to backfill.

@@ -124,6 +124,7 @@ test("deepen is refused on monoculture and synth still renders with the run leve
   const frames = plan.branches.map((b) => b.frame);
   for (const b of plan.branches) writeFileSync(join(runDir, b.artifact_path), yaml(artifact(b.frame, H)));
   phaseCritique(cfg, runDir);
+  clustered = [frames[0]!, frames[1]!];
   const letters = Object.keys(JSON.parse(readFileSync(join(runDir, "critic/blind-map.json"), "utf8")));
   writeFileSync(join(runDir, "critic/pass-a.yaml"), yaml(passA(H, letters)));
   phaseCritique(cfg, runDir);
@@ -142,4 +143,68 @@ test("decline writes nothing", () => {
   const r = phaseCompile(cfg, { problemPath, decision: { problem_class: "factual_lookup" }, runsDir: join(dir, "runs") });
   assert.equal(r.exitCode, 2);
   assert.ok(!existsSync(join(dir, "runs")));
+});
+
+/**
+ * A representative wins its cluster by a hair. Every contested decision in the recorded corpus
+ * came in at two anchor points or fewer out of 48, and one was an exact tie broken by frame id.
+ * The recommendation line reads as though a decision was made, so the synthesis says otherwise.
+ */
+/** The two frames the pass B below groups into one cluster, so a test can score them apart. */
+let clustered: [string, string] = ["", ""];
+
+function runToSynth(scoreFor: (frame: string, dimension: string) => number): string {
+  const { runDir, plan } = compileRun();
+  const H = plan.problem_hash;
+  const frames = plan.branches.map((b) => b.frame);
+  for (const b of plan.branches) writeFileSync(join(runDir, b.artifact_path), yaml(artifact(b.frame, H)));
+  phaseCritique(cfg, runDir);
+  clustered = [frames[0]!, frames[1]!];
+  const blindMap = JSON.parse(readFileSync(join(runDir, "critic/blind-map.json"), "utf8")) as Record<string, string>;
+
+  const scores: Record<string, Record<string, { score: number; evidence: string }>> = {};
+  for (const [letter, frame] of Object.entries(blindMap)) {
+    scores[letter] = {};
+    for (const d of cfg.rubric.dimensions) scores[letter]![d.id] = { score: scoreFor(frame, d.id), evidence: `evidence for ${letter}.${d.id}` };
+  }
+  writeFileSync(join(runDir, "critic/pass-a.yaml"), yaml({ problem_hash: H, pass: "A", scores }));
+  phaseCritique(cfg, runDir);
+  writeFileSync(
+    join(runDir, "critic/pass-b.yaml"),
+    yaml(passB(H, [{ id: "shared", members: [frames[0]!, frames[1]!], action: "Expose cancel before any timer fires." }, ...frames.slice(2).map((f) => ({ id: `lone_${f}`, members: [f] }))])),
+  );
+  phaseCritique(cfg, runDir);
+  const d = phaseDeepen(cfg, runDir);
+  for (const n of d.next!) {
+    const own = n.brief.match(/deepen\/([A-Z_]+)\.brief\.md$/)![1]!;
+    writeFileSync(n.artifact, yaml({ problem_hash: H, frame: own, verdict: "defend", response: "The objection assumes the user waits.", revised_position: `Do the ${own} thing, with cancel first.`, revised_falsifier: null, confidence: "high" }));
+  }
+  phaseSynth(cfg, runDir);
+  return readFileSync(join(runDir, "synthesis.md"), "utf8");
+}
+
+test("a representative that tied its runner up is not presented as a decision", () => {
+  const synth = runToSynth(() => 2);
+  const rec = sections(synth)["Recommendation"]!;
+  assert.match(rec, /\*\*Close call\.\*\*/);
+  assert.match(rec, /scored level in pass A/);
+  assert.match(rec, /broken by frame id, alphabetically, not by the rubric/);
+  assert.match(rec, /as well supported as this one/);
+});
+
+test("a one anchor point margin is named in the recommendation", () => {
+  // The cluster's first member scores one point higher on one weight-1 dimension. That is the
+  // smallest separation the rubric can express, and it decided two of the four contested
+  // clusters in the recorded corpus.
+  const cheapest = cfg.rubric.dimensions.find((d) => d.weight === 1)!.id;
+  const synth = runToSynth((frame, dim) => (frame === clustered[0] && dim === cheapest ? 3 : 2));
+  const rec = sections(synth)["Recommendation"]!;
+  assert.match(rec, /\*\*Close call\.\*\*/);
+  assert.match(rec, /A single anchor read the other way would have sent/);
+});
+
+test("a comfortable margin gets no close call note", () => {
+  const synth = runToSynth((frame) => (frame === clustered[0] ? 3 : 0));
+  const rec = sections(synth)["Recommendation"]!;
+  assert.ok(!/Close call/.test(rec), "a wide margin should say nothing");
 });

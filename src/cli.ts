@@ -5,7 +5,7 @@ import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { diffRuns, frameStats, listFrames, orthogonality } from "./frames.js";
-import { dimensionCorrelation, interRater, interRaterCorpus, weightSensitivity } from "./learn.js";
+import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort } from "./errors.js";
@@ -155,14 +155,21 @@ program
   .option("--correlation", "do two dimensions measure the same thing?")
   .option("--agreement <passA.yaml>", "a second blind pass A over the same pack; needs --run")
   .option("--run <dir>", "the recorded run whose pass A the second scoring is compared against")
-  .option("--agreement-all", "pool every run that has a critic/pass-a.rater2.yaml")
+  .option("--agreement-all", "pool every run that has a second scoring on disk")
+  .option("--panel", "three or more critics on one pack; needs --run. Separates an ambiguous rubric from an odd critic")
   .option("--recorded <dir>")
   .option("--delta <n>", "weight perturbation for --sensitivity", "1")
   .option("--json")
-  .action((o: { sensitivity?: boolean; correlation?: boolean; agreement?: string; agreementAll?: boolean; run?: string; recorded?: string; delta: string; json?: boolean }) => {
+  .action((o: { sensitivity?: boolean; correlation?: boolean; agreement?: string; agreementAll?: boolean; panel?: boolean; run?: string; recorded?: string; delta: string; json?: boolean }) => {
     try {
       const cfg = loadConfig(program.opts().root);
       if (o.agreement && !o.run) throw new ConfigError(["--agreement needs --run: a second scoring is only meaningful against the run it re-scores"]);
+      if (o.panel) {
+        if (!o.run) throw new ConfigError(["--panel needs --run: a panel scores one artifact pack"]);
+        const r = raterPanel(cfg, o.run);
+        console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+        return;
+      }
       if (o.agreementAll) {
         const r = interRaterCorpus(cfg, o.recorded);
         console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
