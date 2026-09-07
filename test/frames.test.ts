@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { diffRuns, frameStats, labelCollisions, orthogonality } from "../src/frames.js";
@@ -258,4 +258,47 @@ test("no recorded artifacts reports nothing rather than claiming every label is 
   const r = labelCollisions(cfg, join(tmp(), "nope"));
   assert.equal(r.artifacts, 0);
   assert.match(r.text, /no recorded artifacts to read/);
+});
+
+/**
+ * docs/RETIREMENT.md states numbers about the current library. A policy doc whose figures have
+ * drifted from the tooling is worse than no policy: someone reads it, believes it, and retires a
+ * frame on a stale count. These check the claims that would cause that.
+ */
+test("the retirement policy's stated standing matches what the tooling reports", () => {
+  const doc = readFileSync(join(cfg.root, "docs", "RETIREMENT.md"), "utf8");
+  const stats = frameStats(cfg);
+  const by = new Map(stats.frames.map((f) => [f.frame, f]));
+
+  // "Nothing meets the bar. Every frame is under the five-run floor except FRAME_BREAKER."
+  assert.match(doc, /Nothing meets the bar/);
+  const atOrOverFloor = stats.frames.filter((f) => f.runs >= 5).map((f) => f.frame);
+  assert.deepEqual(atOrOverFloor, ["FRAME_BREAKER"], "the doc names FRAME_BREAKER as the only frame at the floor");
+
+  // The END_USER exemption, which is the whole point of the section it sits in.
+  const endUser = by.get("END_USER")!;
+  assert.equal(endUser.runs, endUser.pruned, "END_USER is pruned in every appearance");
+  assert.equal(endUser.recommended, 0);
+  assert.match(doc, /`END_USER` is the live example/);
+  assert.match(doc, /through the pruned block/);
+
+  // The never-pruned three, named as a D6 worry rather than a retirement criterion.
+  const neverPruned = stats.frames.filter((f) => f.runs >= 2 && f.pruned === 0).map((f) => f.frame).sort();
+  assert.deepEqual(neverPruned, ["DOOR_KEEPER", "HORIZON", "MECHANIC"]);
+  for (const f of neverPruned) assert.match(doc, new RegExp(`\`${f}\``), `${f} is never pruned and the doc does not mention it`);
+
+  // Criterion 4 rests on which traps have never fired.
+  const neverFired = stats.traps.filter((t) => t.fired === 0).map((t) => t.trap).sort();
+  assert.deepEqual(neverFired, ["T3", "T5"], "the doc's criterion 4 table is written against exactly these");
+  for (const fr of cfg.frames.frames) {
+    if (fr.attacks.every((a) => neverFired.includes(a))) assert.match(doc, new RegExp(`\`${fr.id}\`[^\n]*only`), `${fr.id} attacks only never-fired traps and the doc does not say so`);
+  }
+});
+
+test("the frame the doc singles out under criterion 4 still attacks only a trap that never fires", () => {
+  const stats = frameStats(cfg);
+  const neverFired = new Set(stats.traps.filter((t) => t.fired === 0).map((t) => t.trap));
+  const mechanic = cfg.frames.frames.find((f) => f.id === "MECHANIC")!;
+  assert.deepEqual(mechanic.attacks, ["T3"]);
+  assert.ok(neverFired.has("T3"), "if T3 has fired, MECHANIC's entry in RETIREMENT.md is stale");
 });

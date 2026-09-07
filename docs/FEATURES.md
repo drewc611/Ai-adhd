@@ -44,8 +44,12 @@ can be wrong without saying so.
    dimensions, plus per-dimension mean, sd, distinct values, and ceiling rate. The ceiling rate
    was added after the first run: a dimension can vary, so the flat check misses it, and still
    score the maximum almost every time, so no correlation catches it either.
-6. **Frame retirement policy**, written, with the evidence bar stated. The library has no way
-   to shrink, which is how frame sets rot.
+6. ~~**Frame retirement policy**~~, written as `docs/RETIREMENT.md` with the bar stated: two of
+    five criteria across at least five dispatched runs, plus the exemption that matters most,
+    which is that a frame pruned every time and still producing the question nobody else asked is
+    doing its job. `END_USER` is that case and is exempt. Nothing currently meets the bar. A test
+    checks the doc's stated numbers against `frames --stats`, so a policy nobody can trust
+    because its figures drifted fails the suite instead.
 7. **Per-frame unit fixtures.** One fixture per frame that the frame should obviously win.
 8. ~~**`adhd why <run> <frame>`.**~~ **Built.** Everything that happened to one frame in one run,
    in order: axis and tool allowlist, the blind pass A row weakest dimension first with the

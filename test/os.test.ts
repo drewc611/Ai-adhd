@@ -11,8 +11,9 @@ const PROBLEM = "What timeouts should I set on this HTTP client?";
 
 function kernel(opts: { leaseSeconds?: number; maxAttempts?: number; clock?: { t: number } } = {}) {
   const clock = opts.clock ?? { t: Date.parse("2026-09-06T00:00:00Z") };
-  const k = new Kernel(cfg, { root: join(tmp(), "root"), leaseSeconds: opts.leaseSeconds ?? 60, maxAttempts: opts.maxAttempts ?? 3, now: () => new Date(clock.t) });
-  return { k, clock };
+  const root = join(tmp(), "root");
+  const k = new Kernel(cfg, { root, leaseSeconds: opts.leaseSeconds ?? 60, maxAttempts: opts.maxAttempts ?? 3, now: () => new Date(clock.t) });
+  return { k, clock, root };
 }
 
 test("submit stops at the D5 gate; confirm mints one task per branch", () => {
@@ -163,6 +164,35 @@ test("cancel mid-diverge renders the returned branches unscored (D5)", () => {
   assert.match(res.synthesis!, /UNSCORED, divergence only/);
   assert.match(res.synthesis!, /branches returned: 2 of 5/);
   assert.equal(k.claim("w1"), null);
+});
+
+/**
+ * The non-negotiable is that the pruned block always ships with trap ids and detector output.
+ * A cancelled run has no pruned block because no critic ran, and the dangerous failure is
+ * shipping that silently: a reader who has learned to look for the pruned block sees a clean
+ * output and concludes nothing was pruned. The partial has to say the sweep did not happen.
+ */
+test("a cancelled run ships no pruned block and says why, rather than omitting it quietly", () => {
+  const { k, root } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  for (let i = 0; i < 2; i++) {
+    const t = k.claim("w1")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w1");
+  }
+  k.cancel("r1", "user pressed stop");
+  const synth = k.result("r1").synthesis!;
+
+  assert.ok(!/## Pruned, with reason/.test(synth), "no critic ran, so there is nothing to prune with");
+  assert.ok(!/## Recommendation/.test(synth), "an unscored run must not recommend");
+  assert.match(synth, /no blind scoring, no clustering, no trap sweep by a critic, no\s+recommendation/i, "the absence has to be stated, not just true");
+  assert.match(synth, /one unverified angle, not a finding/);
+
+  // The frames that never returned are named, so the reader knows what the run did not hear.
+  assert.match(synth, /## Not returned/);
+  const planned = JSON.parse(readFileSync(join(root, "r1", "plan.json"), "utf8")) as { branches: { frame: string }[] };
+  const returned = synth.match(/^## ([A-Z_]+)$/gm)!.map((h) => h.slice(3));
+  for (const b of planned.branches) if (!returned.includes(b.frame)) assert.match(synth, new RegExp(`- ${b.frame}`), `${b.frame} never returned and is not listed as missing`);
 });
 
 test("cancel before confirm spends nothing and renders nothing", () => {

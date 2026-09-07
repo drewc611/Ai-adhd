@@ -193,8 +193,10 @@ process model and the syscall table.
 ## Contributing
 
 Read `CONTRIBUTING.md`. Frames are the expensive part and have a proposal process (D6 in
-`docs/DECISIONS.md`). Fixtures are claims about what a good run must surface; tighten them,
-never loosen them.
+`docs/DECISIONS.md`) and a retirement bar (`docs/RETIREMENT.md`), because a library that only
+grows eventually contains three frames producing one answer, which is the monoculture this exists
+to prevent arriving by the back door. Fixtures are claims about what a good run must surface;
+tighten them, never loosen them.
 
 ## License
 
