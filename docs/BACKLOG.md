@@ -118,9 +118,12 @@ yet enough to know whether they work.
 40. **`adhd replay <run>`.** Re-render the synthesis from artifacts without re-running phases.
 41. **`adhd cost`.** Token spend across recorded runs, by phase and by frame.
 42. **TTY colour and progress** for `adhd os` while a run advances.
-43. **`--json` on every command** that lacks it, for scripting. Still open, and now specific:
-    `run`, `traps`, `viewer` and `validate` lack it. `wizard` is interactive and should not
-    have it.
+43. ~~**`--json` on every command** that lacks it, for scripting.~~
+    **Built. `run`, `traps`, `viewer` and `validate` gained it; `wizard` is interactive and is
+    excluded on purpose. `run --phase compile --json` returns `run_dir` and the briefs to spawn,
+    which meant widening `PhaseResult`: the run directory was only ever in the prose, so a driver
+    had to match a path out of a sentence. `traps --json` carries the exit code rather than
+    replacing it. A test asserts no non-interactive command is missing the flag.**
 44. **`adhd lint <fixture>`.** Check a fixture's regexes compile, and warn on patterns that
     match the fixture's own `why` text (a common way to write an assertion that cannot fail).
 45. ~~**Exit codes** that distinguish contract failure, hash mismatch, and eval failure.~~ Built, documented in the README, tested against the built binary.

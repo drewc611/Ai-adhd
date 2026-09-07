@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { artifact, cfg, tmp, writeProblem } from "./helpers.js";
@@ -160,4 +160,72 @@ test("a run abort exits 3, distinct from a config error and a contract failure",
   const r = run(["run", "--phase", "critique", "--run", runDir]);
   assert.equal(r.code, 3, `expected a run abort, got ${r.code}: ${r.out}${r.err}`);
   assert.match(r.err, /ABORT/);
+});
+
+/**
+ * Backlog 43. Every command that can produce structured output now does, because the alternative
+ * for a driver is regexing a path out of a sentence. `wizard` is interactive and is excluded on
+ * purpose rather than by oversight.
+ */
+test("every non-interactive command offers --json", () => {
+  const cli = readFileSync(join(cfg.root, "src", "cli.ts"), "utf8");
+  const lacking: string[] = [];
+  for (const part of cli.split(/\n(?=program\n {2}\.command\()/).slice(1)) {
+    const name = part.match(/\.command\("([\w-]+)/)?.[1];
+    if (!name || name === "wizard") continue;
+    const end = part.indexOf("\n});");
+    if (!part.slice(0, end === -1 ? part.length : end).includes("--json")) lacking.push(name);
+  }
+  assert.deepEqual(lacking, []);
+});
+
+test("validate --json reports the counts it prints as prose", () => {
+  const r = run(["validate", "--json"]);
+  assert.equal(r.code, 0, r.err);
+  const j = JSON.parse(r.out) as { ok: boolean; frames: number; dimensions: number };
+  assert.equal(j.ok, true);
+  assert.equal(j.frames, cfg.frames.frames.length);
+  assert.equal(j.dimensions, cfg.rubric.dimensions.length);
+});
+
+/** The exit code is the contract, so --json carries the verdict rather than replacing it. */
+test("traps --json keeps the exit code and states the verdict in the payload", () => {
+  const p = join(tmp(), "bad.yaml");
+  const { falsifier: _f, ...missing } = artifact("LEDGER", HASH);
+  writeFileSync(p, stringify(missing));
+  const r = run(["traps", p, "--json"]);
+  assert.equal(r.code, 1, "the exit code still says what happened");
+  const j = JSON.parse(r.out) as { ok: boolean; exit_code: number; report: string };
+  assert.equal(j.ok, false);
+  assert.equal(j.exit_code, 1);
+  assert.match(j.report, /VIOLATED/);
+});
+
+/**
+ * The field a driver actually needs. Before this, finding the directory compile had just created
+ * meant matching a path out of prose, which is what the CLI test for run aborts had to do.
+ */
+test("run compile --json names the run directory and the briefs to spawn", () => {
+  const dir = tmp();
+  const problemPath = writeProblem(join(dir, "in"), "What timeouts should I set on this HTTP client?");
+  const r = run(["run", "--phase", "compile", "--problem", problemPath, "--decision", '{"problem_class":"design_decision"}', "--runs-dir", join(dir, "runs"), "--seed", "1", "--json"]);
+  assert.equal(r.code, 0, r.err);
+  const j = JSON.parse(r.out) as { run_dir: string; next: { agent: string; brief: string; artifact: string }[] };
+  assert.ok(j.run_dir && existsSync(j.run_dir), `run_dir ${j.run_dir} does not exist`);
+  assert.equal(j.next.length, 5);
+  for (const n of j.next) {
+    assert.match(n.agent, /^adhd-branch/);
+    assert.ok(existsSync(n.brief), `brief ${n.brief} does not exist`);
+  }
+});
+
+test("viewer --json reports what it wrote", () => {
+  const out = join(tmp(), "page.html");
+  const r = run(["viewer", "--out", out, "--json"]);
+  assert.equal(r.code, 0, r.err);
+  const j = JSON.parse(r.out) as { path: string; runs: number; bytes: number };
+  assert.equal(j.path, out);
+  assert.ok(j.runs >= 9);
+  assert.ok(j.bytes > 1000);
+  assert.ok(existsSync(out));
 });

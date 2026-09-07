@@ -28,6 +28,11 @@ export interface PhaseResult {
   text: string;
   /** Files the host must now act on, if any. */
   next?: { kind: "spawn"; agent: string; brief: string; artifact: string }[];
+  /**
+   * Where compile put the run. It was only ever in the prose, so a driver had to regex a path
+   * out of a sentence to find the directory it had just been told to use.
+   */
+  runDir?: string;
   exitCode: 0 | 1 | 2;
 }
 
@@ -57,7 +62,7 @@ export function loadPlan(runDir: string): Plan {
 
 // ---- compile ----------------------------------------------------------------------------
 
-export function phaseCompile(cfg: Config, args: CompileArgs): PhaseResult & { runDir?: string } {
+export function phaseCompile(cfg: Config, args: CompileArgs): PhaseResult {
   const problemBytes = readFileSync(args.problemPath); // exact bytes, never trimmed
   const problem = problemBytes.toString("utf8");
   const decision = parseDecision(cfg, args.decision);

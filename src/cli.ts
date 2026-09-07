@@ -53,6 +53,7 @@ program
   .option("--run-id <id>", "override the generated run id (compile)")
   .option("--yes", "compile only: acknowledge the plan preview non-interactively (the CLI never blocks anyway; this records intent)")
   .option("--partial", "synth only: render returned branches unscored (D5 cancel path)")
+  .option("--json")
   .action((o) => {
     const phase = o.phase as Phase;
     if (!["compile", "critique", "deepen", "synth"].includes(phase)) fail(new ContractError("run", [`unknown phase ${phase}`]));
@@ -67,7 +68,9 @@ program
         runId: o.runId,
         partial: o.partial,
       });
-      console.log(r.text);
+      // `next` is the whole point for a driver: it names the briefs to spawn and where their
+      // artifacts go. Printing it as text means parsing prose to find a path.
+      console.log(o.json ? JSON.stringify({ phase, exit_code: r.exitCode, run_dir: r.runDir ?? null, next: r.next ?? null, text: r.text }, null, 2) : r.text);
       process.exit(r.exitCode);
     } catch (e) {
       fail(e);
@@ -78,10 +81,13 @@ program
   .command("traps <file>")
   .description("run the contract check and code lints over one branch artifact")
   .option("--hash <problem_hash>", "expected problem_hash")
-  .action((file, o) => {
+  .option("--json")
+  .action((file, o: { hash?: string; json?: boolean }) => {
     try {
       const r = trapsReport(file, { expectHash: o.hash, frames: loadConfig(program.opts().root).frames.frames.map((f) => f.id) });
-      console.log(r.text);
+      // The exit code is the contract a script branches on, so --json carries it too rather
+      // than replacing it. A caller that only reads stdout still gets the verdict.
+      console.log(o.json ? JSON.stringify({ file, ok: r.exitCode === 0, exit_code: r.exitCode, report: r.text }, null, 2) : r.text);
       process.exit(r.exitCode);
     } catch (e) {
       fail(e);
@@ -249,9 +255,11 @@ program
   .description("build one self-contained HTML page over the recorded runs. Reads runs; never calls a model")
   .option("--out <file>", "where to write it", "adhd-runs.html")
   .option("--recorded <dir>")
-  .action((o: { out: string; recorded?: string }) => {
+  .option("--json")
+  .action((o: { out: string; recorded?: string; json?: boolean }) => {
     try {
       const r = writeViewer(loadConfig(program.opts().root), o.out, { recordedDir: o.recorded });
+      if (o.json) return void console.log(JSON.stringify(r, null, 2));
       console.log(
         `wrote ${r.path} (${(r.bytes / 1024).toFixed(0)} KB): ${r.runs} run(s), ${r.frames} frame(s).`,
         "\nSelf-contained. Open it from disk; there is nothing to serve and nothing to fetch.",
@@ -328,10 +336,18 @@ os.command("reap").option("--os-root <dir>", "kernel root").action((o) => { try 
 program
   .command("validate")
   .description("load and validate config/ and prompts/ (the first thing every other command does)")
-  .action(() => {
+  .option("--json")
+  .action((o: { json?: boolean }) => {
     try {
       const cfg = loadConfig(program.opts().root);
-      console.log(`ok: ${cfg.frames.frames.length} frames, ${Object.keys(cfg.routing.classes).length} classes, ${cfg.rubric.dimensions.length} rubric dimensions`);
+      const summary = {
+        ok: true,
+        frames: cfg.frames.frames.length,
+        classes: Object.keys(cfg.routing.classes).length,
+        dimensions: cfg.rubric.dimensions.length,
+      };
+      if (o.json) return void console.log(JSON.stringify(summary, null, 2));
+      console.log(`ok: ${summary.frames} frames, ${summary.classes} classes, ${summary.dimensions} rubric dimensions`);
     } catch (e) {
       fail(e);
     }
