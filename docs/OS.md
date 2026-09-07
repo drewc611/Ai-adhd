@@ -59,6 +59,18 @@ phase functions.
 | `adhd_record` / `adhd os record` | promote a finished run into `evals/recorded/` with provenance generated from the journal and an `expected.json` recording the eval outcome as observed |
 | `adhd os reap` | expire leases (also runs on every claim, status, and list) |
 
+### Two roots, and why they are named apart
+
+Every kernel tool takes both. `root` is the repository root holding `config/` and `prompts/`;
+`os_root` is the kernel's runs directory (default `$ADHD_OS_ROOT`, else `./runs`).
+
+They were both called `root` and meant different things depending on which tool you called: the
+repository root in `adhd_run`, `adhd_traps`, `adhd_eval` and `adhd_frames`, the runs directory in
+the ten kernel tools. A host that passed its repository root to `adhd_submit`, reasonably, got
+that directory treated as the runs root and never learned it had. The kernel tools now take
+`os_root` for the runs directory and `root` means the same thing everywhere. A host that was
+passing `root` to a kernel tool must rename it.
+
 `return` accepts `tokens`, the usage the subagent reported. When a run finishes the kernel sums
 reported tokens by phase into `cost.json`, so the synthesis shows real spend when workers
 report it and the compile estimate when they do not.

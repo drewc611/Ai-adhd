@@ -81,7 +81,7 @@ The plugin registers the `/adhd` skill, the branch, critic, and deepen agents, a
 server. The MCP server can also be used on its own by any MCP host:
 
 ```
-node dist/src/mcp.js           # stdio; tools: adhd_run, adhd_traps, adhd_eval, adhd_frames
+node dist/src/mcp.js           # stdio; the four commands plus the ten kernel verbs, 14 tools
 ```
 
 ## Quickstart
@@ -117,7 +117,9 @@ adhd run --phase synth    --run runs/<id>     # add --partial after a cancel
 ```
 
 The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `adhd_traps`,
-`adhd_eval`, `adhd_frames`.
+`adhd_eval`, `adhd_frames`, plus the ten kernel verbs. Kernel tools take `root` (the repository
+holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate arguments; see
+`docs/OS.md`.
 
 ## Status
 
