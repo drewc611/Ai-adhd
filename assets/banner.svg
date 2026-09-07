@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-labelledby="banner-title banner-desc">
+  <title id="banner-title">ADHD: Anchoring Defeat by Heterogeneous Divergence</title>
+  <desc id="banner-desc">The project mark beside the name, the expansion of the acronym, and the four phases of a run: scatter, diverge, critique, deepen.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#151A24"/>
+      <stop offset="1" stop-color="#0A0C11"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#222937"/>
+      <stop offset="1" stop-color="#11141B"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="340" fill="url(#bg)"/>
+
+  <!-- mark, scaled from assets/mark.svg -->
+  <g transform="translate(80 62) scale(0.844)">
+    <rect width="256" height="256" rx="56" fill="url(#tile)"/>
+    <g fill="none" stroke="#3C4453" stroke-width="13" stroke-linecap="round">
+      <path d="M82.8 107.1 L166.3 41.8"/>
+      <path d="M88.5 137.9 L189.9 168.9"/>
+    </g>
+    <g fill="none" stroke="#7E8899" stroke-width="10" stroke-linecap="round">
+      <path d="M158.3 31.6 L174.3 52.1"/>
+      <path d="M193.7 156.5 L186.1 181.4"/>
+    </g>
+    <g fill="none" stroke-width="13" stroke-linecap="round">
+      <path d="M88.1 116.9 L188.4 82.4" stroke="#F0C24B"/>
+      <path d="M90.0 126.8 L195.9 123.1" stroke="#45D0C0"/>
+      <path d="M83.2 148.5 L167.8 212.3" stroke="#F97B6B"/>
+    </g>
+    <circle cx="188.4" cy="82.4" r="13" fill="#F0C24B"/>
+    <circle cx="195.9" cy="123.1" r="13" fill="#45D0C0"/>
+    <circle cx="167.8" cy="212.3" r="13" fill="#F97B6B"/>
+    <circle cx="56" cy="128" r="16" fill="#E9EFF6"/>
+  </g>
+
+  <g font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif">
+    <text x="380" y="146" fill="#E9EFF6" font-size="104" font-weight="700" letter-spacing="10">ADHD</text>
+    <text x="386" y="196" fill="#9AA6B8" font-size="27" font-weight="500" letter-spacing="0.6">Anchoring Defeat by Heterogeneous Divergence</text>
+
+    <line x1="386" y1="228" x2="1200" y2="228" stroke="#252C3A" stroke-width="2"/>
+
+    <!-- One text element with tspans, so the browser flows the run and the separators cannot
+         collide with the words. Hardcoded x positions did exactly that at the first attempt. -->
+    <text x="386" y="270" font-size="23" font-weight="600" letter-spacing="3.2" fill="#E9EFF6">SCATTER<tspan fill="#3C4453">  /  </tspan><tspan fill="#F0C24B">DIVERGE</tspan><tspan fill="#3C4453">  /  </tspan><tspan fill="#45D0C0">CRITIQUE</tspan><tspan fill="#3C4453">  /  </tspan><tspan fill="#F97B6B">DEEPEN</tspan></text>
+  </g>
+</svg>

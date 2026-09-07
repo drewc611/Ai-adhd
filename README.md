@@ -1,6 +1,8 @@
-# ADHD
+<p align="center">
+  <img src="assets/banner.svg" alt="ADHD, Anchoring Defeat by Heterogeneous Divergence" width="860">
+</p>
 
-**Anchoring Defeat by Heterogeneous Divergence**
+# ADHD
 
 A reasoning architecture for Claude Code. Not a prompting technique.
 
@@ -12,6 +14,27 @@ the branches and the tree explores variations of one idea instead of several ide
 
 Self consistency and best of N have the same defect: sampling the same conditioned
 distribution N times gives you N draws from one basin.
+
+```mermaid
+flowchart LR
+  subgraph tot["Tree of thought, self-consistency, best-of-N: ONE context window"]
+    direction LR
+    P1(["prompt"]) --> S1["first framing<br/><b>the anchor</b>"]
+    S1 --> B1["branch"] --> R1["variation<br/>of one idea"]
+    S1 --> B2["branch"] --> R2["variation<br/>of one idea"]
+    S1 --> B3["branch"] --> R3["variation<br/>of one idea"]
+  end
+  subgraph adhd["ADHD: N context windows, no channel between them"]
+    direction LR
+    P2(["prompt"]) -.->|"brief, one way"| C1["LEDGER<br/><i>who pays</i>"] --> O1["position"]
+    P2 -.->|"brief, one way"| C2["SABOTEUR<br/><i>how it breaks</i>"] --> O2["position"]
+    P2 -.->|"brief, one way"| C3["END_USER<br/><i>who is hurt</i>"] --> O3["position"]
+  end
+  R2 ~~~ P2
+```
+
+The dotted arrows go one way. A branch receives its brief and returns an artifact; it
+never learns that the others exist, how many there are, or what they said.
 
 ADHD treats this as an architecture problem. It spawns N isolated reasoning processes
 under deliberately distorted cognitive frames, with **zero shared context during
@@ -55,6 +78,55 @@ isolation is real, not simulated by an instruction to ignore prior text.
 The library and the MCP server never call a model. They compile plans, enforce the
 isolation contract, score outputs against the rubric, and run the eval harness. Inference
 is supplied by the host.
+
+```mermaid
+flowchart TB
+  P(["problem.txt, hashed byte for byte"]) --> C["compile: routing picks N frames on N distinct axes"]
+  C --> G{"D5 gate"}
+  G -->|"class declined"| X(["answer directly, no branches"])
+  G -->|"confirmed"| D
+  subgraph D["diverge &mdash; N context windows, no channel between them"]
+    direction LR
+    F1["LEDGER"] ~~~ F2["SABOTEUR"] ~~~ F3["DOOR_KEEPER"] ~~~ F4["END_USER"] ~~~ F5["FRAME_BREAKER"]
+  end
+  D --> A["critic pass A &mdash; <b>blind</b><br/>artifacts as letters, frame labels redacted"]
+  A --> B["critic pass B &mdash; unblind<br/>cluster by action, run all 8 trap detectors"]
+  B --> K["deepen: each cluster's representative<br/>against its strongest objection"]
+  K --> S(["synthesis"])
+  B -.->|"pruned, with trap ids and detector output"| S
+```
+
+Nothing is spent before the gate. The preview shows the problem verbatim with its hash and
+a token estimate, and the run does not start until a human agrees to it.
+
+### What reaches the user
+
+A pruned position is not a discarded one. Every path through the critic ends at the reader,
+which is why the pruned block is a non-negotiable rather than a debugging aid.
+
+```mermaid
+flowchart LR
+  A["one branch<br/>returns a position"] --> T{"any of the 8<br/>detectors fire?"}
+  T -->|"yes"| PR["<b>pruned block</b><br/>position, trap ids,<br/>detector output"]
+  T -->|"no"| CL{"clustered with<br/>another frame?"}
+  CL -->|"no"| SG["live singletons<br/><i>unverified</i>"]
+  CL -->|"yes"| RP{"cluster<br/>representative?"}
+  RP -->|"no"| CO["corroborated findings"]
+  RP -->|"yes"| DP{"survives its<br/>strongest objection?"}
+  DP -->|"folds"| FD["folded<br/><i>and what it should<br/>have been instead</i>"]
+  DP -->|"defends"| RC["<b>recommendation</b>"]
+
+  PR --> U(["the user reads all of it"])
+  SG --> U
+  CO --> U
+  FD --> U
+  RC --> U
+```
+
+`END_USER` is the case that justifies the rule. It has been pruned in both runs it appeared
+in, and it is also the frame that closed the who-is-hurt gap in `002-kernel-enduser`. The
+question reached the user through the pruned block, after the critic rejected the position
+carrying it.
 
 ## Layout
 
@@ -176,6 +248,35 @@ Each run's `README.md` says how it was produced and what it did not surface.
 
 The four phases can run unattended. `src/os.ts` is a kernel over run directories: it owns
 state, leases, phase advancement, the D5 gate, and cancellation, and it never calls a model.
+
+```mermaid
+stateDiagram-v2
+  [*] --> awaiting_confirm: submit
+  awaiting_confirm --> cancelled: cancel, nothing spent
+  awaiting_confirm --> running: confirm
+
+  state "running" as running {
+    [*] --> diverge
+    diverge --> critique_a: every branch returned
+    critique_a --> critique_b: blind scores in
+    critique_b --> deepen: clusters and trap sweep in
+  }
+
+  running --> done: every survivor answered
+  running --> done_run_level: monoculture or scatter
+  running --> cancelled: cancel, at any point
+  running --> aborted: hash mismatch, third lease expiry, contract violation
+
+  done --> [*]
+  done_run_level --> [*]
+  cancelled --> [*]
+  aborted --> [*]
+```
+
+A cancel is not a discard. Every branch that already returned is rendered as a partial,
+marked UNSCORED, with the pruned block absent and said to be absent, so a reader who has
+learned to look for that block is told why there isn't one.
+
 Hosts supply inference by claiming tasks and returning artifacts, over MCP or the CLI:
 
 ```

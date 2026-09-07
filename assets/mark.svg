@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="mark-title mark-desc">
+  <title id="mark-title">ADHD</title>
+  <desc id="mark-desc">One question fans into five reasoning branches at uneven angles. None touches the origin or any sibling. Two are cut short by trap detectors; three survive, each carrying its own colour.</desc>
+
+  <!-- The mark is the architecture, not decoration.
+       The gap between the origin and every ray is the isolation: no branch shares context.
+       The angles are uneven on purpose. Evenly spaced rays would be a tree of thought, which is
+       one idea sampled N times. Heterogeneous means the spacing is wrong deliberately.
+       Three survivors carry three colours because they are three kinds of reasoning, not three
+       draws from one. Two rays end in a cut, and the cuts stay visible, because the pruned
+       block always ships. -->
+
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B202B"/>
+      <stop offset="1" stop-color="#0C0E13"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="url(#tile)"/>
+
+  <!-- pruned, dim -->
+  <g fill="none" stroke="#3C4453" stroke-width="13" stroke-linecap="round">
+    <path d="M82.8 107.1 L166.3 41.8"/>
+    <path d="M88.5 137.9 L189.9 168.9"/>
+  </g>
+  <!-- the cut: a detector fired, the position stops, the reader still sees where -->
+  <g fill="none" stroke="#7E8899" stroke-width="10" stroke-linecap="round">
+    <path d="M158.3 31.6 L174.3 52.1"/>
+    <path d="M193.7 156.5 L186.1 181.4"/>
+  </g>
+
+  <!-- survivors -->
+  <g fill="none" stroke-width="13" stroke-linecap="round">
+    <path d="M88.1 116.9 L188.4 82.4" stroke="#F0C24B"/>
+    <path d="M90.0 126.8 L195.9 123.1" stroke="#45D0C0"/>
+    <path d="M83.2 148.5 L167.8 212.3" stroke="#F97B6B"/>
+  </g>
+  <circle cx="188.4" cy="82.4" r="13" fill="#F0C24B"/>
+  <circle cx="195.9" cy="123.1" r="13" fill="#45D0C0"/>
+  <circle cx="167.8" cy="212.3" r="13" fill="#F97B6B"/>
+
+  <!-- the question. Nothing reaches back to it during divergence. -->
+  <circle cx="56" cy="128" r="16" fill="#E9EFF6"/>
+</svg>
