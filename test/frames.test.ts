@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { frameStats, orthogonality } from "../src/frames.js";
+import { diffRuns, frameStats, orthogonality } from "../src/frames.js";
 
 /** A recorded run is a directory with score.json and, optionally, deepen/<frame>.yaml. */
 function recordRun(
@@ -124,4 +124,65 @@ test("stats and orthogonality both report zero runs against an empty directory r
   const o = orthogonality(cfg, root);
   assert.equal(o.runs, 0);
   assert.deepEqual(o.flagged, []);
+});
+
+test("diff refuses to blame the seed when the frame sets also differ", () => {
+  const root = join(tmp(), "recorded");
+  mkdirSync(root, { recursive: true });
+  const H = "sha256:" + "c".repeat(64);
+  const plan = (seed: number) => JSON.stringify({ problem_hash: H, seed });
+  const mk = (id: string, seed: number, frames: { frame: string; status: "survivor" | "pruned"; pass_a: number }[], rec: string) => {
+    const dir = join(root, id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "plan.json"), plan(seed));
+    writeFileSync(
+      join(dir, "score.json"),
+      JSON.stringify({
+        n: frames.length,
+        frames: frames.map((f) => ({ frame: f.frame, status: f.status, cluster: null, pass_a: f.pass_a, fired: [], violations: [], lint_disagreements: [], position: "p", forecloses: [], falsifier: null, missing_actor: null })),
+        clusters: [],
+        run_level: { monoculture: false, scatter: false, notes: [] },
+        proceed: true,
+      }),
+    );
+    writeFileSync(join(dir, "synthesis.md"), `# ADHD synthesis\n\n## Recommendation\n\n**${rec}**\n`);
+    return dir;
+  };
+
+  // Same frames, different seed: the change is attributable.
+  const clean = [
+    mk("900-a", 1, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "HORIZON", status: "pruned", pass_a: 0.5 }], "Do X."),
+    mk("900-b", 2, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "HORIZON", status: "survivor", pass_a: 0.7 }], "Do Y."),
+  ] as const;
+  const ok = diffRuns(clean[0], clean[1]);
+  assert.equal(ok.same_problem, true);
+  assert.deepEqual(ok.status_changed, [{ frame: "HORIZON", a: "pruned", b: "survivor" }]);
+  assert.match(ok.text, /this change is the seed's doing/);
+  assert.match(ok.text, /That is a seed effect/);
+  assert.ok(!/CONFOUNDED/.test(ok.text));
+  assert.equal(ok.pass_a_moved.find((m) => m.frame === "HORIZON")?.delta.toFixed(2), "0.20");
+
+  // Different frames as well as a different seed: it is not.
+  const c = mk("901-c", 3, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "MECHANIC", status: "survivor", pass_a: 0.7 }], "Do Z.");
+  const confounded = diffRuns(clean[0], c);
+  assert.deepEqual(confounded.only_a, ["HORIZON"]);
+  assert.deepEqual(confounded.only_b, ["MECHANIC"]);
+  assert.match(confounded.text, /CONFOUNDED/);
+  assert.match(confounded.text, /cannot say which caused it/);
+});
+
+test("diff says plainly when two runs are not of the same problem", () => {
+  const root = join(tmp(), "recorded");
+  mkdirSync(root, { recursive: true });
+  const mk = (id: string, hash: string) => {
+    const dir = join(root, id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "plan.json"), JSON.stringify({ problem_hash: hash, seed: 1 }));
+    writeFileSync(join(dir, "synthesis.md"), "# ADHD synthesis\n\n## Recommendation\n\n**Do it.**\n");
+    return dir;
+  };
+  const r = diffRuns(mk("902-a", "sha256:" + "1".repeat(64)), mk("902-b", "sha256:" + "2".repeat(64)));
+  assert.equal(r.same_problem, false);
+  assert.match(r.text, /DIFFERENT problem_hash/);
+  assert.match(r.text, /nothing below is a comparison/);
 });

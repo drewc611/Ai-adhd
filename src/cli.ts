@@ -4,7 +4,7 @@ import { loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
-import { frameStats, listFrames, orthogonality } from "./frames.js";
+import { diffRuns, frameStats, listFrames, orthogonality } from "./frames.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort } from "./errors.js";
@@ -124,6 +124,24 @@ program
         process.exit(r.flagged.length ? 1 : 0);
       }
       console.log(listFrames(cfg, Boolean(o.json)));
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("diff")
+  .description("compare two recorded runs of the same fixture: what survived, what moved, what was the seed")
+  .argument("<runA>", "a recorded run directory")
+  .argument("<runB>", "another recorded run directory")
+  .option("--json")
+  .action((runA: string, runB: string, o: { json?: boolean }) => {
+    try {
+      const r = diffRuns(runA, runB);
+      console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+      // A mismatched problem_hash means the two are not runs of one problem, so the comparison
+      // is meaningless rather than merely uninteresting. Say so with an exit code.
+      process.exit(r.same_problem ? 0 : 1);
     } catch (e) {
       fail(e);
     }

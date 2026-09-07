@@ -36,8 +36,9 @@ can be wrong without saying so.
 7. **Per-frame unit fixtures.** One fixture per frame that the frame should obviously win.
 8. **`adhd why <run> <frame>`.** Print exactly why a frame was pruned: detector output, pass A
    row, cluster, and what the synthesis did with it.
-9. **`adhd diff <runA> <runB>`.** Two runs of one fixture side by side: shared findings, seed
-   artifacts, frames that changed status.
+9. ~~**`adhd diff <runA> <runB>`.**~~ **Built.** Two runs of one fixture side by side: frames
+   only in one, status changes, pass A movement, and both recommendations. Refuses to attribute
+   a change to the seed when the frame sets also differ, and says so.
 10. **Decline-path fixtures** for `factual_lookup`, `mechanical_refactor` and
     `single_correct_answer`. A decline is a first-class outcome and no recorded run declines.
 11. **A deliberate monoculture fixture.** The detector has only ever fired in unit tests.

@@ -221,3 +221,134 @@ export function frameStats(
 
   return { frames, traps, runs, text: lines.join("\n") };
 }
+
+export interface RunSummary {
+  dir: string;
+  id: string;
+  fixture: string | null;
+  seed: number | null;
+  frames: { frame: string; status: string; pass_a: number | null; fired: string[] }[];
+  clusters: { id: string; action: string; members: string[] }[];
+  recommendation: string;
+}
+
+export interface RunDiff {
+  a: RunSummary;
+  b: RunSummary;
+  same_problem: boolean;
+  shared_frames: string[];
+  only_a: string[];
+  only_b: string[];
+  status_changed: { frame: string; a: string; b: string }[];
+  pass_a_moved: { frame: string; a: number; b: number; delta: number }[];
+  text: string;
+}
+
+function summarise(dir: string): RunSummary {
+  const read = (f: string) => (existsSync(join(dir, f)) ? readFileSync(join(dir, f), "utf8") : null);
+  const plan = read("plan.json");
+  const p = plan ? (JSON.parse(plan) as { problem_hash?: string; seed?: number }) : {};
+  const scoreRaw = read("score.json");
+  const score = scoreRaw ? (JSON.parse(scoreRaw) as ScoreResult) : null;
+  const synth = read("synthesis.md") ?? "";
+  const bold = synth.match(/## Recommendation\s*\n+\*\*([\s\S]*?)\*\*/);
+  const id = dir.split("/").filter(Boolean).pop() ?? dir;
+  return {
+    dir,
+    id,
+    fixture: /^(\d+)-/.exec(id)?.[1] ?? null,
+    seed: typeof p.seed === "number" ? p.seed : null,
+    frames: (score?.frames ?? []).map((f) => ({ frame: f.frame, status: f.status, pass_a: f.pass_a, fired: (f.fired ?? []).map((t) => t.trap) })),
+    clusters: (score?.clusters ?? []).map((c) => ({ id: c.id, action: c.action, members: c.members })),
+    recommendation: bold ? bold[1]!.replace(/\s+/g, " ").trim() : "(none rendered)",
+  };
+}
+
+/**
+ * Two runs of the same fixture, side by side. The question this answers is the one the repo
+ * cannot currently answer at all: when a finding appears, is it the frame set or the seed?
+ * A frame that survives at one seed and is pruned at another is a fact about the seed.
+ */
+export function diffRuns(dirA: string, dirB: string): RunDiff {
+  const a = summarise(dirA);
+  const b = summarise(dirB);
+  const hash = (d: string) => {
+    const p = join(d, "plan.json");
+    return existsSync(p) ? ((JSON.parse(readFileSync(p, "utf8")) as { problem_hash?: string }).problem_hash ?? null) : null;
+  };
+  const same_problem = hash(dirA) !== null && hash(dirA) === hash(dirB);
+
+  const byFrameA = new Map(a.frames.map((f) => [f.frame, f]));
+  const byFrameB = new Map(b.frames.map((f) => [f.frame, f]));
+  const shared_frames = [...byFrameA.keys()].filter((f) => byFrameB.has(f)).sort();
+  const only_a = [...byFrameA.keys()].filter((f) => !byFrameB.has(f)).sort();
+  const only_b = [...byFrameB.keys()].filter((f) => !byFrameA.has(f)).sort();
+
+  const status_changed = shared_frames
+    .filter((f) => byFrameA.get(f)!.status !== byFrameB.get(f)!.status)
+    .map((f) => ({ frame: f, a: byFrameA.get(f)!.status, b: byFrameB.get(f)!.status }));
+  const pass_a_moved = shared_frames
+    .filter((f) => byFrameA.get(f)!.pass_a !== null && byFrameB.get(f)!.pass_a !== null)
+    .map((f) => {
+      const x = byFrameA.get(f)!.pass_a!;
+      const y = byFrameB.get(f)!.pass_a!;
+      return { frame: f, a: x, b: y, delta: y - x };
+    })
+    .filter((r) => Math.abs(r.delta) >= 0.01)
+    .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+
+  const lines = [
+    `${a.id}  (seed ${a.seed ?? "?"})`,
+    `${b.id}  (seed ${b.seed ?? "?"})`,
+    "",
+    same_problem
+      ? "same problem_hash: these runs are comparable."
+      : "!! DIFFERENT problem_hash. These are not two runs of one problem, so nothing below is a comparison.",
+    "",
+  ];
+  if (only_a.length || only_b.length) {
+    lines.push(`frames only in ${a.id}: ${only_a.join(", ") || "(none)"}`);
+    lines.push(`frames only in ${b.id}: ${only_b.join(", ") || "(none)"}`);
+    // Two runs can differ in more than one way. Attributing anything below to the seed when
+    // the frame set also changed is the unearned attribution this repo exists to catch, and
+    // it is true of the whole comparison, not only of the frames whose status moved.
+    lines.push(
+      "CONFOUNDED: the frame sets differ, so nothing below can be attributed to the seed.",
+      "Compare two runs with the same frames at different seeds to separate them.",
+      "",
+    );
+  }
+  lines.push(`shared frames: ${shared_frames.length}`);
+  if (status_changed.length) {
+    lines.push("", "status changed between the runs:");
+    for (const c of status_changed) lines.push(`  ${c.frame.padEnd(17)} ${c.a} -> ${c.b}`);
+    if (only_a.length || only_b.length) {
+      /* the confound is reported once, above, for the whole comparison */
+    } else if (a.seed !== null && b.seed !== null && a.seed !== b.seed)
+      lines.push("  Same frames, different seed, so this change is the seed's doing.");
+    else lines.push("  Same frames and the same seed, so this change is run-to-run variance in the critic.");
+  } else if (shared_frames.length) {
+    lines.push("", "no frame changed status between the runs.");
+  }
+  if (pass_a_moved.length) {
+    lines.push("", "pass A moved (>= 0.01):");
+    for (const m of pass_a_moved.slice(0, 12)) lines.push(`  ${m.frame.padEnd(17)} ${m.a.toFixed(2)} -> ${m.b.toFixed(2)}  ${m.delta > 0 ? "+" : ""}${m.delta.toFixed(2)}`);
+    const biggest = Math.max(...pass_a_moved.map((m) => Math.abs(m.delta)));
+    lines.push(
+      `  Largest move ${biggest.toFixed(2)} on an unchanged artifact-producing frame. Until the`,
+      "  run-to-run noise floor is measured, a move this size cannot be called signal.",
+    );
+  }
+  lines.push("", "recommendation:", `  ${a.id}: ${a.recommendation.slice(0, 160)}`, `  ${b.id}: ${b.recommendation.slice(0, 160)}`);
+  lines.push(
+    "",
+    a.recommendation === b.recommendation
+      ? "The recommendations are identical."
+      : only_a.length || only_b.length
+        ? "The recommendations differ, but so do the frame sets: this pair cannot say which caused it."
+        : a.seed !== b.seed
+          ? "The recommendations differ at different seeds with the same frames. That is a seed effect."
+          : "The recommendations differ with the same frames and the same seed. That is critic variance.",
+  );
+  return { a, b, same_problem, shared_frames, only_a, only_b, status_changed, pass_a_moved, text: lines.join("\n") };
+}
