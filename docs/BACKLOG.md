@@ -43,8 +43,13 @@ yet enough to know whether they work.
    never fired in five runs is either well-designed prevention or dead weight, and the two
    look identical until counted.~~
    **Built into `frames --stats`. T3 and T5 have never fired.**
-7. **`adhd frames --health`**: flag frames pruned in every run they appear in, and frames that
-   have never once been pruned. Both are suspicious for opposite reasons.
+7. ~~**`adhd frames --health`**: flag frames pruned in every run they appear in, and frames that
+   have never once been pruned. Both are suspicious for opposite reasons.~~
+   **Built, and against `docs/RETIREMENT.md` rather than the two lines this item asked for: all five
+   criteria counted, the five-run floor applied, and criteria 2 and 3 always carrying the pruned-block
+   exemption. It reports and never concludes, which is that document's own instruction. Building it
+   found `NIGHT_OPERATOR` meeting criteria 2 and 3 and named nowhere in the standing table; a test now
+   fails when the tooling puts a frame on the list and the doc does not.**
 
 ## 2. Coverage gaps in the fixture set
 
@@ -82,7 +87,10 @@ yet enough to know whether they work.
     unit test for the frame's own stance.
 20. **Probe ordering experiment.** Do the numbered probes change the answer if reordered?
 21. **Forbidden-list audit.** Which `forbidden` entries have ever been violated in a real run?
-22. **Axis coverage report.** Ten axes, thirteen frames. Which axes are thin?
+22. ~~**Axis coverage report.** Ten axes, thirteen frames. Which axes are thin?~~
+    **Built as `adhd frames --axes`. Seven of the ten axes carry one frame, and because a run never
+    contains two frames from one axis (D6), routing has no alternative to offer on any of them.
+    `mechanism` is the only axis with a member no run has ever dispatched.**
 23. **A frame that reasons about the negative case generally** (what the absence of the thing
     asserts), candidate name NEGATIVE_SPACE, subject to the orthogonality check.
 

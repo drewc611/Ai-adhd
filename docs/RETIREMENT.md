@@ -80,6 +80,12 @@ retirement, and rewriting them would destroy the argument.
 
 ## Current standing, as of seven runs
 
+`adhd frames --health` counts every criterion below over the recorded corpus. Read it before
+this section rather than after: the table is a snapshot and the command is the current state.
+The table exists because a reader needs the argument, not because it is the source of truth —
+a test fails if the command puts a frame at two criteria and this table does not name it, which
+is how `NIGHT_OPERATOR` got its row.
+
 Nothing meets the bar, and one thing changed that is worth reading before the table.
 
 **D6's orthogonality check has flagged its first pair.** `FRAME_BREAKER` and `SABOTEUR`
@@ -97,6 +103,7 @@ needs shared runs in the high single digits before it means anything.
 |---|---|---|
 | `FRAME_BREAKER` + `SABOTEUR` | 3 shared | criterion 1 met at 67%, on the minimum sample. Watch, do not act. |
 | `SUPPLICANT`, `PRIOR_ART` | 2 each | pruned in every appearance. `SUPPLICANT` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
+| `NIGHT_OPERATOR` | 1 | pruned in its only appearance and never held the recommendation, so criteria 2 and 3 both read as met on a single sample. One run is a coin flip and not a property; it is here so the list is complete, not because it means anything yet. |
 | `DOOR_KEEPER`, `MECHANIC`, `SUCCESSOR` | 3, 3, 2 | never pruned. Not a retirement criterion, and the opposite worry, which belongs in D6. |
 | `FIRST_PRINCIPLES` | 0 | never dispatched; criterion 5's count has not started. |
 

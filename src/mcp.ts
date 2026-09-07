@@ -9,7 +9,7 @@ import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
-import { frameStats, listFrames, orthogonality } from "./frames.js";
+import { axisCoverage, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { openKernel, recordRun } from "./os.js";
 
 const text = (s: string, isError = false) => ({ content: [{ type: "text" as const, text: s }], isError });
@@ -67,11 +67,26 @@ export function buildServer(): McpServer {
 
   server.registerTool(
     "adhd_frames",
-    { description: "List the frame library; with orthogonality=true report pairwise co-clustering across recorded runs, or with stats=true report per-frame prune, fold and recommendation rates and detector fire counts (D6).", inputSchema: { orthogonality: z.boolean().optional(), stats: z.boolean().optional(), recorded_dir: z.string().optional(), root: z.string().optional() } },
+    {
+      description:
+        "List the frame library, or report how it has behaved across recorded runs. Exactly one report at a time: stats=true for per-frame prune, fold and recommendation rates with detector fire counts; orthogonality=true for pairwise co-clustering (D6); health=true for docs/RETIREMENT.md's five criteria counted, which reports and never concludes; axes=true for frames per axis and the axes no run has exercised; collisions=true for frame labels that are also ordinary prose, which the pass A redactor removes from artifacts that did not write them.",
+      inputSchema: {
+        orthogonality: z.boolean().optional(),
+        stats: z.boolean().optional(),
+        health: z.boolean().optional(),
+        axes: z.boolean().optional(),
+        collisions: z.boolean().optional(),
+        recorded_dir: z.string().optional(),
+        root: z.string().optional(),
+      },
+    },
     async (a) =>
       wrap(() => {
         const cfg = loadConfig(a.root);
         if (a.stats) return frameStats(cfg, a.recorded_dir).text;
+        if (a.health) return frameHealth(cfg, a.recorded_dir).text;
+        if (a.axes) return axisCoverage(cfg, a.recorded_dir).text;
+        if (a.collisions) return labelCollisions(cfg, a.recorded_dir).text;
         return a.orthogonality ? orthogonality(cfg, a.recorded_dir).text : listFrames(cfg);
       }),
   );

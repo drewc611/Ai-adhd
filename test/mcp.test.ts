@@ -194,3 +194,18 @@ test("running the file directly still speaks stdio", () => {
   assert.match(src, /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/);
   assert.ok(existsSync(join(cfg.root, "dist", "src", "mcp.js")), "the built entry point exists");
 });
+
+test("adhd_frames exposes every report the CLI has, and picks one at a time", async () => {
+  // The CLI grew --health and --axes; the MCP surface had stats and orthogonality only, and
+  // --collisions had been missing since it shipped. A host driving this server should not have
+  // a smaller view of the corpus than a terminal does.
+  const client = await connect();
+  const frames = (await client.listTools()).tools.find((t) => t.name === "adhd_frames")!;
+  const props = Object.keys((frames.inputSchema as { properties?: Record<string, unknown> }).properties ?? {});
+  for (const flag of ["stats", "orthogonality", "health", "axes", "collisions"]) assert.ok(props.includes(flag), `adhd_frames cannot ${flag}`);
+
+  assert.match(body(await call(client, "adhd_frames", { health: true })), /against docs\/RETIREMENT\.md/);
+  assert.match(body(await call(client, "adhd_frames", { axes: true })), /axis coverage/);
+  assert.match(body(await call(client, "adhd_frames", { collisions: true })), /collision/i);
+  assert.match(body(await call(client, "adhd_frames")), /frames, \d+ axes/);
+});
