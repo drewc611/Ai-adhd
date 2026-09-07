@@ -117,10 +117,20 @@ yet enough to know whether they work.
 
 ## 5. Kernel (D7)
 
-30. **Two workers, concurrently.** Real concurrency has never run; the lease logic has only
-    been unit-tested against a fake clock.
-31. **Worker dies mid-task.** Kill a worker holding a lease and assert the task is reclaimed.
-32. **Kernel restart mid-run.** Kill the process, restart, resume from the journal.
+30. ~~**Two workers, concurrently.** Real concurrency has never run, and the lease logic has only
+    been unit-tested against a fake clock.~~
+   **Done. `os.test.ts` already had one claim race — six processes contending for a single round,
+   asserting no task reaches two of them — and that was the whole of it. Two workers now drive a
+   run to done across every phase, including the two that hand off through a continuation.**
+31. ~~**Worker dies mid-task.** Kill a worker holding a lease and assert the task is reclaimed.~~
+   **Done. A worker process claims and exits without returning; the lease holds against a second
+   worker until it expires, then the task returns to the queue and the run finishes.**
+32. ~~**Kernel restart mid-run.** Kill the process, restart, resume from the journal.~~
+   **Done. The first process returns two branches and exits; a kernel object that never saw the
+   run start resumes it from disk and does not redo the completed work. State was already on
+   disk by design, so this changed no code — it is the test that makes the design worth
+   something. `save` is still `tmp` + `rename` without an fsync: atomic against a concurrent
+   reader, not durable against power loss, and nothing yet shows that it matters.**
 33. **Token budget enforcement.** Halt a run that exceeds N tokens and render partial.
 34. **`adhd os stats`.** Throughput, mean phase duration, expiry rate across the journal.
 35. **Run priority.** Two queued runs, one urgent.
@@ -207,6 +217,13 @@ Findings from a full sweep, all fixed. Recorded because the first one would have
 66. **`result` read the record under the lock and the synthesis outside it.** A cancel landing
     between the two returned a state from before it with a rendering from after: the caller was
     told the run was still deepening and handed the partial. Both are read under one lock now.
+
+67. **The first two-worker test was flaky one run in three, and the flake was the test.**
+    Whichever process won the first lock race could burn through all five branch tasks before
+    the other was scheduled, so asserting that both did work was asserting the operating
+    system's scheduler. Capping each worker at two tasks per wave makes the split structural.
+    Recorded because the tempting fix — rerun until green, or drop the assertion — would have
+    left a test that passes without checking that the run can actually be shared.
 
 Two of the six tests for these pin intent rather than catch a regression, and say so in place:
 64 has no single-process reproduction once 63 is fixed, and the atomicity in 66 is not
