@@ -239,7 +239,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       272 tests over all of it
+test/       278 tests over all of it
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
@@ -280,6 +280,8 @@ node dist/src/cli.js why <run> <frame>      # everything that happened to one fr
 node dist/src/cli.js frames --stats          # how each frame has behaved across recorded runs
 node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates in practice
 node dist/src/cli.js frames --collisions     # which frame names are also ordinary prose
+node dist/src/cli.js frames --health         # docs/RETIREMENT.md's bar, counted
+node dist/src/cli.js frames --axes           # frames per axis, and axes no run has exercised
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
 node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { diffRuns, frameStats, labelCollisions, orthogonality } from "../src/frames.js";
+import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameHealth, frameStats, labelCollisions, orthogonality } from "../src/frames.js";
 
 /** A recorded run is a directory with score.json and, optionally, deepen/<frame>.yaml. */
 function recordRun(
@@ -324,4 +324,70 @@ test("the doc records that T3 fired and stops counting it against MECHANIC", () 
   assert.match(doc, /untriggered rather than useless/);
   const mechanic = cfg.frames.frames.find((f) => f.id === "MECHANIC")!;
   assert.deepEqual(mechanic.attacks, ["T3"], "MECHANIC's attacks list is what made it the example");
+});
+
+// ---- retirement health and axis coverage --------------------------------------------------
+
+test("frame health counts docs/RETIREMENT.md's five criteria and refuses to conclude", () => {
+  const h = frameHealth(cfg);
+  assert.equal(h.frames.length, cfg.frames.frames.length, "every frame in the library is assessed, dispatched or not");
+  for (const f of h.frames) {
+    assert.deepEqual(f.criteria.map((c) => c.id), [1, 2, 3, 4, 5], "all five criteria are evaluated for every frame");
+    assert.equal(f.met, f.criteria.filter((c) => c.met).length);
+    for (const c of f.criteria) assert.ok(c.detail.length > 0, `criterion ${c.id} on ${f.frame} met=${c.met} with no detail`);
+  }
+  // The policy's own instruction: nothing fires automatically. No exit code, no verdict.
+  assert.match(h.text, /Retirement is the owner's call and nothing here fires automatically/);
+});
+
+test("the five-run floor is what stops a coin flip retiring a frame", () => {
+  const h = frameHealth(cfg);
+  // Every frame meeting two criteria today is under the floor, and none is a candidate for it.
+  const twoOrMore = h.frames.filter((f) => f.met >= 2);
+  assert.ok(twoOrMore.length > 0, "the corpus has no frame at two criteria, so this asserts nothing");
+  for (const f of twoOrMore) {
+    if (f.runs >= RETIREMENT_FLOOR || f.criteria[4]!.met) assert.equal(f.candidate, true);
+    else assert.equal(f.candidate, false, `${f.frame} is a candidate on ${f.runs} run(s), under the ${RETIREMENT_FLOOR}-run floor`);
+  }
+  assert.deepEqual(h.candidates, [], "a frame meets the bar and docs/RETIREMENT.md's standing section has not been rewritten");
+  assert.match(h.text, new RegExp(`No frame meets the bar: two criteria across at least ${RETIREMENT_FLOOR} dispatched runs`));
+});
+
+test("criteria 2 and 3 always carry the pruned-block exemption, because SUPPLICANT is why they exist", () => {
+  const h = frameHealth(cfg);
+  const supplicant = h.frames.find((f) => f.frame === "SUPPLICANT")!;
+  assert.equal(supplicant.criteria[1]!.met, true, "SUPPLICANT is pruned in every appearance");
+  assert.equal(supplicant.criteria[2]!.met, true, "SUPPLICANT has never held a recommendation");
+  assert.equal(supplicant.needs_pruned_block_read, true);
+  // The flag is a property of the criteria met, never of which frame it is.
+  for (const f of h.frames) assert.equal(f.needs_pruned_block_read, f.criteria[1]!.met || f.criteria[2]!.met, f.frame);
+});
+
+test("every frame the health report puts at two criteria is named in docs/RETIREMENT.md's standing table", () => {
+  // The table is what a reader consults before retiring anything. A frame the tooling has put on
+  // the list and the table has not is exactly the drift this test exists to catch: it found
+  // NIGHT_OPERATOR, which met criteria 2 and 3 and appeared nowhere in the document.
+  const doc = readFileSync(join(cfg.root, "docs", "RETIREMENT.md"), "utf8");
+  const standing = doc.slice(doc.indexOf("## Current standing"));
+  for (const f of frameHealth(cfg).frames.filter((x) => x.met >= 2))
+    assert.match(standing, new RegExp(`\`${f.frame}\``), `${f.frame} meets ${f.met} criteria and the standing section does not name it`);
+});
+
+test("axis coverage names every axis in the library and marks the ones no run has exercised", () => {
+  const a = axisCoverage(cfg);
+  const axesInLibrary = new Set(cfg.frames.frames.map((f) => f.axis));
+  assert.deepEqual(new Set(a.axes.map((x) => x.axis)), axesInLibrary);
+  assert.equal(a.axes.reduce((n, x) => n + x.frames.length, 0), cfg.frames.frames.length, "every frame sits on exactly one axis");
+  for (const x of a.axes) assert.ok(x.exercised.every((f) => x.frames.includes(f)));
+
+  // D6 forbids two frames from one axis in a single run, so a one-frame axis is one routing has
+  // no alternative on. That is worth naming and is not a defect.
+  const thin = a.axes.filter((x) => x.frames.length === 1);
+  assert.ok(thin.length > 0, "the library has no thin axis, so the report asserts nothing");
+  assert.match(a.text, /A run never carries two frames from one axis \(D6\)/);
+
+  // FIRST_PRINCIPLES has never been dispatched; its axis is shared with MECHANIC, which has.
+  const mechanism = a.axes.find((x) => x.axis === "mechanism")!;
+  assert.deepEqual(mechanism.frames.sort(), ["FIRST_PRINCIPLES", "MECHANIC"]);
+  assert.deepEqual(mechanism.exercised, ["MECHANIC"]);
 });

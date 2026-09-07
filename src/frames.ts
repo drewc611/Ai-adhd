@@ -443,3 +443,200 @@ export function labelCollisions(cfg: Config, recordedDir = join(cfg.root, "evals
   }
   return { artifacts, collisions, text: lines.join("\n") };
 }
+
+// ---- retirement health (backlog 7) ---------------------------------------------------------
+
+/**
+ * The floor in `docs/RETIREMENT.md`: a frame has no case either way under five dispatched runs.
+ * E1a is why — an identical frame set at a different seed moved ACTOR_CENSUS from holding the
+ * recommendation to pruned, so at one or two samples a prune rate is a coin flip.
+ */
+export const RETIREMENT_FLOOR = 5;
+
+export interface Criterion {
+  id: 1 | 2 | 3 | 4 | 5;
+  met: boolean;
+  detail: string;
+}
+
+export interface FrameHealth {
+  frame: string;
+  axis: string;
+  runs: number;
+  pruned: number;
+  recommended: number;
+  criteria: Criterion[];
+  met: number;
+  at_floor: boolean;
+  candidate: boolean;
+  /** Met criterion 2 or 3, which `RETIREMENT.md` will not accept without reading the pruned block. */
+  needs_pruned_block_read: boolean;
+}
+
+export interface HealthReport {
+  frames: FrameHealth[];
+  runs: number;
+  classes: string[];
+  candidates: FrameHealth[];
+  text: string;
+}
+
+/**
+ * `docs/RETIREMENT.md`'s bar, evaluated mechanically. Every criterion there is a counting
+ * question over the recorded corpus, so leaving it to be read off three separate reports by
+ * hand is how the standing table in that document goes stale between runs.
+ *
+ * It reports and never concludes, which is the policy's own instruction: "Nothing here fires
+ * automatically, and nothing should." Two criteria met is a case to examine, and criteria 2 and
+ * 3 carry the exemption that a frame pruned every time may be doing its job through the pruned
+ * block. No exit code, no flag, no verdict.
+ */
+export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): HealthReport {
+  const stats = frameStats(cfg, recordedDir);
+  const ortho = orthogonality(cfg, recordedDir);
+  const statOf = new Map(stats.frames.map((f) => [f.frame, f]));
+  const firedEver = new Map(stats.traps.map((t) => [t.trap, t.fired]));
+
+  // Criterion 5 counts only once the corpus is big enough and varied enough to support it.
+  const classes = new Set<string>();
+  if (existsSync(recordedDir))
+    for (const d of readdirSync(recordedDir).sort()) {
+      const p = join(recordedDir, d, "plan.json");
+      if (!existsSync(p)) continue;
+      try {
+        const plan = JSON.parse(readFileSync(p, "utf8")) as { problem_class?: string };
+        if (plan.problem_class) classes.add(plan.problem_class);
+      } catch {
+        /* a run without a readable plan contributes no class */
+      }
+    }
+
+  const frames: FrameHealth[] = cfg.frames.frames.map((f) => {
+    const s = statOf.get(f.id);
+    const runs = s?.runs ?? 0;
+    const pruned = s?.pruned ?? 0;
+    const recommended = s?.recommended ?? 0;
+
+    const partners = ortho.flagged.filter((p) => p.a === f.id || p.b === f.id);
+    const deadTraps = f.attacks.filter((t) => (firedEver.get(t) ?? 0) === 0);
+
+    const criteria: Criterion[] = [
+      {
+        id: 1,
+        met: partners.length > 0,
+        detail: partners.length
+          ? partners.map((p) => `co-clusters with ${p.a === f.id ? p.b : p.a} in ${p.co_clustered}/${p.together} shared runs (${Math.round(p.rate * 100)}%)`).join("; ")
+          : "no partner over the 60% threshold with three shared runs",
+      },
+      {
+        id: 2,
+        met: runs > 0 && pruned === runs,
+        detail: runs === 0 ? "never dispatched" : `pruned in ${pruned}/${runs}`,
+      },
+      { id: 3, met: runs > 0 && recommended === 0, detail: runs === 0 ? "never dispatched" : `held the recommendation ${recommended}/${runs}` },
+      {
+        id: 4,
+        met: deadTraps.length === f.attacks.length,
+        detail:
+          deadTraps.length === f.attacks.length
+            ? `every trap it attacks has never fired: ${f.attacks.join(", ")}`
+            : `${f.attacks.filter((t) => !deadTraps.includes(t)).join(", ")} ${f.attacks.length - deadTraps.length === 1 ? "has" : "have"} fired`,
+      },
+      {
+        id: 5,
+        met: runs === 0 && stats.runs >= RETIREMENT_FLOOR && classes.size >= 2,
+        detail: runs > 0 ? `dispatched ${runs} time(s)` : `never dispatched across ${stats.runs} run(s) in ${classes.size} problem class(es)`,
+      },
+    ];
+
+    const met = criteria.filter((c) => c.met).length;
+    const atFloor = runs >= RETIREMENT_FLOOR;
+    return {
+      frame: f.id,
+      axis: f.axis,
+      runs,
+      pruned,
+      recommended,
+      criteria,
+      met,
+      at_floor: atFloor,
+      // Criterion 5 is about a frame nothing routes to, so it cannot also require five runs of
+      // its own. Every other path to candidacy does.
+      candidate: met >= 2 && (atFloor || criteria[4]!.met),
+      needs_pruned_block_read: criteria[1]!.met || criteria[2]!.met,
+    };
+  });
+
+  const candidates = frames.filter((f) => f.candidate);
+  const lines = [`frame health over ${stats.runs} recorded run(s) in ${classes.size} problem class(es), against docs/RETIREMENT.md`];
+  lines.push("");
+  lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  met  criteria         standing`);
+  for (const f of [...frames].sort((a, b) => b.met - a.met || b.runs - a.runs || a.frame.localeCompare(b.frame))) {
+    const which = f.criteria.filter((c) => c.met).map((c) => c.id).join(",") || "-";
+    const standing = f.candidate ? "CANDIDATE" : f.met >= 2 ? `${f.met} met, under the ${RETIREMENT_FLOOR}-run floor` : f.met === 1 ? "one criterion: a pattern, not a case" : "clear";
+    lines.push(`${f.frame.padEnd(17)} ${f.axis.padEnd(15)} ${String(f.runs).padStart(4)}  ${String(f.met).padStart(3)}  ${which.padEnd(15)}  ${standing}`);
+  }
+  lines.push("");
+  for (const f of frames.filter((x) => x.met > 0).sort((a, b) => b.met - a.met || a.frame.localeCompare(b.frame))) {
+    lines.push(`${f.frame}:`);
+    for (const c of f.criteria.filter((x) => x.met)) lines.push(`  ${c.id}. ${c.detail}`);
+  }
+  lines.push("");
+  if (!candidates.length) lines.push(`No frame meets the bar: two criteria across at least ${RETIREMENT_FLOOR} dispatched runs.`);
+  else {
+    lines.push(`${candidates.length} frame(s) meet the bar: ${candidates.map((c) => c.frame).join(", ")}.`);
+    const exempt = candidates.filter((c) => c.needs_pruned_block_read).map((c) => c.frame);
+    if (exempt.length)
+      lines.push(
+        `Before acting on ${exempt.join(", ")}, read the pruned block of every run each appeared in and answer one question: did anything reach the user through this frame that no other frame produced? SUPPLICANT is the live example of a yes. \`adhd why <run> <frame>\` prints what it needs.`,
+      );
+  }
+  lines.push("Meeting the bar makes a frame a candidate to examine, not a frame to remove. Retirement is the owner's call and nothing here fires automatically.");
+
+  return { frames, runs: stats.runs, classes: [...classes].sort(), candidates, text: lines.join("\n") };
+}
+
+// ---- axis coverage (backlog 22) ------------------------------------------------------------
+
+export interface AxisStat {
+  axis: string;
+  frames: string[];
+  /** Frames on this axis that a recorded run has actually dispatched. */
+  exercised: string[];
+  dispatches: number;
+}
+
+/**
+ * Ten axes, thirteen frames. An axis is the dimension a frame distorts along, and a run never
+ * contains two frames on the same axis (D6) — so an axis with one frame is a coin the routing
+ * can only flip one way, and an axis no run has ever exercised is a claim about the library
+ * that no run has tested.
+ */
+export function axisCoverage(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): { axes: AxisStat[]; runs: number; text: string } {
+  const stats = frameStats(cfg, recordedDir);
+  const dispatchedRuns = new Map(stats.frames.map((f) => [f.frame, f.runs]));
+  const byAxis = new Map<string, AxisStat>();
+  for (const f of cfg.frames.frames) {
+    const a = byAxis.get(f.axis) ?? { axis: f.axis, frames: [], exercised: [], dispatches: 0 };
+    a.frames.push(f.id);
+    const n = dispatchedRuns.get(f.id) ?? 0;
+    if (n > 0) a.exercised.push(f.id);
+    a.dispatches += n;
+    byAxis.set(f.axis, a);
+  }
+  const axes = [...byAxis.values()].sort((a, b) => b.dispatches - a.dispatches || a.axis.localeCompare(b.axis));
+
+  const lines = [`axis coverage: ${cfg.frames.frames.length} frames on ${axes.length} axes, over ${stats.runs} recorded run(s)`];
+  lines.push("");
+  lines.push(`${"axis".padEnd(17)} frames  dispatches  members`);
+  for (const a of axes) lines.push(`${a.axis.padEnd(17)} ${String(a.frames.length).padStart(6)}  ${String(a.dispatches).padStart(10)}  ${a.frames.map((f) => (a.exercised.includes(f) ? f : `${f}*`)).join(", ")}`);
+  lines.push("");
+  lines.push("* never dispatched in a recorded run.");
+  const thin = axes.filter((a) => a.frames.length === 1).map((a) => a.axis);
+  const cold = axes.filter((a) => a.dispatches === 0).map((a) => a.axis);
+  if (thin.length) lines.push(`one frame only: ${thin.join(", ")}. A run never carries two frames from one axis (D6), so routing has no alternative to offer on these.`);
+  if (cold.length) lines.push(`never exercised: ${cold.join(", ")}. Whatever the library claims these distort along, no recorded run has tested it.`);
+  lines.push("Counts, not verdicts. Adding a frame to a thin axis is a D6 decision and needs the orthogonality check first.");
+
+  return { axes, runs: stats.runs, text: lines.join("\n") };
+}
