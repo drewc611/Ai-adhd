@@ -156,7 +156,15 @@ yet enough to know whether they work.
     output and the pass A row.
 39. **`adhd diff <runA> <runB>`.** Two runs of the same fixture, side by side: which frames
     survived in both, which findings are shared, which are seed artifacts.
-40. **`adhd replay <run>`.** Re-render the synthesis from artifacts without re-running phases.
+40. ~~**`adhd replay <run>`.** Re-render the synthesis from artifacts without re-running phases.~~
+    **Built, and as a drift check rather than a re-render. `run --phase synth` already re-rendered;
+    what did not exist was any check that a recorded synthesis still follows from its artifacts. Four
+    of seven do not, all from renderer changes made after they were recorded: the Close call line, the
+    split of folds out of the pruned block, `defend` -> `defended`, and the explicit attribution of a
+    pruned corroborator. The recordings are kept as written, on the same argument as `former_ids` — a
+    recorded synthesis is what the reader was shown — and `evals/replay-baseline.json` carries the
+    reason for each. `replay` exits non-zero on drift with no entry, and equally on a baseline entry
+    that has gone stale.**
 41. ~~**`adhd cost`.** Token spend across recorded runs, by phase and by frame.~~
     **Built, and it found that the D5 gate under-quotes every run. Seven recorded runs cost 2.6x
     to 3.3x their estimate, mean 3.0x: the gate says 156,000 tokens and the run costs around

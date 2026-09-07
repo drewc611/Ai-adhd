@@ -1,0 +1,9 @@
+{
+  "why": "Runs whose recorded synthesis.md no longer matches what today's renderer produces from the same artifacts. `adhd replay` fails on any drift NOT listed here, and also fails when a listed run starts matching again, because a stale baseline is how a real regression gets waved through. Recordings are never re-rendered to make this file shorter: a recorded synthesis is what the reader was actually shown, and rewriting it would make the corpus claim a run displayed something that did not exist when it ran. That is the same argument as former_ids in config/frames.yaml.",
+  "drifted": {
+    "001-first-run": "Recorded 2026-09-04, before three renderer changes: the Close call line naming the margin, the split of folded positions out of the pruned block into their own section, and defend -> defended. The run's findings are unchanged.",
+    "002-first-run": "As 001-first-run, plus the cluster line now attributes a pruned corroborator explicitly: `(frames: FRAME_BREAKER (pruned after corroborating: NIGHT_OPERATOR))` where the recording says `(frames: NIGHT_OPERATOR, FRAME_BREAKER)`. The recording reads as though both frames survived, which is exactly the confusion the change fixed.",
+    "002-kernel-enduser": "As 001-first-run. MECHANIC's fold moves out of the pruned block into Folded under objection, so the pruned block renders as (none).",
+    "003-kernel-strategy": "As 001-first-run. The Close call line records DOOR_KEEPER leading LEDGER by 0.0417, two anchor points."
+  }
+}
