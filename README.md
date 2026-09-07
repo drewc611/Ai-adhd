@@ -59,6 +59,13 @@ What it never surfaces:
 That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
 the whole system. If a run only returns the timeout triple, the run failed.
 
+**It does not pass reliably.** The same problem run at seed 2, with the same five frames, misses
+two of the four bullets above: the human who can cancel, and who pays for the retry. Both are
+recorded in `evals/recorded/001-seed2`, which is kept as failing. Those two findings were
+properties of one sample, not of the frame library, and no claim in this repo rests on a single
+run without saying so. `docs/EXPERIMENTS.md` registers what that experiment was testing, before
+it ran.
+
 ## When to reach for it
 
 Design decisions. Fuzzy debugging where the symptom does not name the cause. Naming.
@@ -322,7 +329,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D8 are resolved in `docs/DECISIONS.md`.
 
-Five real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
+Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
 refuses a class rather than spending on it. Every real run has been scored a second time by a
 fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
@@ -364,9 +371,12 @@ Each run's `README.md` says how it was produced and what it did not surface.
 
 A reader should start here rather than discover it.
 
-- **Five runs, and no seed has ever been repeated.** Nothing separates "the frame set found
-  this" from "the seed found this". `adhd diff` reads that comparison; the runs it needs do not
-  exist.
+- **Fixture 001 has passed once, in the run it was written against.** Re-run at seed 2 with the
+  same five frames it misses two of its four assertions; run with four of five frames swapped it
+  misses two others. Different assertions turn out to have different dependencies, and the only
+  one robust across all three runs is the weakest one. `docs/EXPERIMENTS.md` has the table.
+- **Every per-frame rate here is a one-to-three-sample figure.** At least one of them moves:
+  `ACTOR_CENSUS` went from holding the recommendation to pruned on a reseed alone.
 - **Four critics on one pack, two on the rest.** 225 cells is a first corpus, not a reliability
   figure.
 - **`002-kernel-enduser` is not robust to who scored it.** Four critics split 2-2 on which

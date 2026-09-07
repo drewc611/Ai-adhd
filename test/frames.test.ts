@@ -287,18 +287,29 @@ test("the retirement policy's stated standing matches what the tooling reports",
   assert.deepEqual(neverPruned, ["DOOR_KEEPER", "HORIZON", "MECHANIC"]);
   for (const f of neverPruned) assert.match(doc, new RegExp(`\`${f}\``), `${f} is never pruned and the doc does not mention it`);
 
-  // Criterion 4 rests on which traps have never fired.
+  // Criterion 4 rests on which traps have never fired, and that set shrank when T3 fired in E1b.
   const neverFired = stats.traps.filter((t) => t.fired === 0).map((t) => t.trap).sort();
-  assert.deepEqual(neverFired, ["T3", "T5"], "the doc's criterion 4 table is written against exactly these");
-  for (const fr of cfg.frames.frames) {
-    if (fr.attacks.every((a) => neverFired.includes(a))) assert.match(doc, new RegExp(`\`${fr.id}\`[^\n]*only`), `${fr.id} attacks only never-fired traps and the doc does not say so`);
-  }
+  assert.deepEqual(neverFired, ["T5"], "the doc's criterion 4 section is written against exactly these");
+  for (const t of neverFired) assert.match(doc, new RegExp(`\`${t}\``), `${t} has never fired and the doc does not name it`);
+  // Any frame whose whole attacks list has never fired fully meets criterion 4 and must be named.
+  for (const fr of cfg.frames.frames)
+    if (fr.attacks.every((a) => neverFired.includes(a)))
+      assert.match(doc, new RegExp(`\`${fr.id}\``), `${fr.id} attacks only never-fired traps and the doc does not mention it`);
 });
 
-test("the frame the doc singles out under criterion 4 still attacks only a trap that never fires", () => {
+/**
+ * MECHANIC was the one frame fully meeting criterion 4, because T3 had never fired. T3 fired in
+ * E1b on PRIOR_ART, the first run where any frame reached adhd-branch-search with web tools. The
+ * doc has to keep saying that, because "a detector with no evidence may be untriggered rather
+ * than useless" is the lesson, and it is only legible while the example is named.
+ */
+test("the doc records that T3 fired and stops counting it against MECHANIC", () => {
   const stats = frameStats(cfg);
-  const neverFired = new Set(stats.traps.filter((t) => t.fired === 0).map((t) => t.trap));
+  const t3 = stats.traps.find((t) => t.trap === "T3")!;
+  assert.ok(t3.fired > 0, "T3 has fired; if that ever reverts, RETIREMENT.md needs rereading");
+  const doc = readFileSync(join(cfg.root, "docs", "RETIREMENT.md"), "utf8");
+  assert.match(doc, /T3 fired in E1b/);
+  assert.match(doc, /untriggered rather than useless/);
   const mechanic = cfg.frames.frames.find((f) => f.id === "MECHANIC")!;
-  assert.deepEqual(mechanic.attacks, ["T3"]);
-  assert.ok(neverFired.has("T3"), "if T3 has fired, MECHANIC's entry in RETIREMENT.md is stale");
+  assert.deepEqual(mechanic.attacks, ["T3"], "MECHANIC's attacks list is what made it the example");
 });

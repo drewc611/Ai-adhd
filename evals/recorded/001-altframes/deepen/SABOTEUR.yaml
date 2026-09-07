@@ -1,0 +1,51 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: SABOTEUR
+verdict: defend
+response: |
+  The objection lands on three of its four points, and none of the three restores the constant.
+
+  Phase blindness is not a hit. The position is already phase-shaped: a roughly one second
+  connect and handshake ceiling, pool checkout charged against the budget, an inactivity cap,
+  and a hard total. The call that has burned two of five seconds on a SYN into a black hole is
+  shed by the connect cap in one round trip, not at the end of the budget; that is what the
+  connect cap is for. What the objection is right about is ordering. I presented the budget as
+  primary and the phase caps as its decomposition. It is the other way round: the phase caps
+  are the load-bearing part, they are what distinguishes a dead peer from a slow one, and the
+  remaining budget is the envelope that stops them summing to something the caller can no
+  longer use.
+
+  Authority stopping at the edge of what I control is real, and I named that actor myself. The
+  propagated number is advisory at the load balancer, the ingress and the sidecar. But this
+  cuts harder against the constant than against the deadline. An ingress with a fifteen second
+  request limit makes a thirty second client constant a lie in the most expensive way
+  available: the client observes a reset rather than a timeout, the failure is attributed to
+  the dependency, and nobody who owns the client can see the number that actually fired. The
+  operational form of the position is therefore not "propagate everywhere and hope." It is:
+  find the tightest enforced limit on the path, set the client's total ceiling strictly below
+  it, and alert when that limit moves. That is assertable from inside one service, and it
+  converts a platform team's silent change from an unexplained reset into a named
+  configuration conflict.
+
+  The genuine hit is cancellation. A timer that fires on the caller sends nothing; the handler
+  keeps its worker, its transaction and its row locks. My retry-amplification argument claimed
+  a capacity benefit that a caller-only implementation does not deliver, and the objection is
+  right to charge that. Two things survive it. First, a retry budget reduces the arrival rate
+  of new work, and metastable failure is sustained by offered load exceeding capacity, so
+  declining to retry breaks the loop even when in-flight work cannot be reclaimed. That is half
+  the mechanism, but it is the half that decides whether the system stays down after the
+  trigger is gone. Second, the repair is inside the scheme rather than outside it: the deadline
+  has to travel in band and be honoured by the receiving handler, which checks it on entry and
+  at each commit boundary and abandons work that can no longer be useful. That is a real cost.
+  The capacity claim requires both ends to be built, and I should have stated that as a
+  requirement instead of assuming the caller's clock reached the server.
+
+  On "what value goes into this config today," the objection is fair and the answer does not
+  wait for an organisation-wide change. Monotonic measurement, a one second connect cap,
+  charging pool checkout against the total, a hard total ceiling alongside the idle timeout,
+  and retries capped as a fraction of traffic are all a single deploy of a single client. The
+  number that goes in today is the tightest observed limit on the path minus headroom,
+  decomposed into those phases. Propagation and server-side honouring are the next increment,
+  and they buy capacity rather than correctness.
+revised_position: "Set phase-shaped limits first inside the one client you control today - roughly 1s connect, pool checkout charged against the total, a body-idle cap, and a hard total ceiling on a monotonic clock, with that ceiling set strictly below the tightest limit actually enforced by the load balancer, ingress or sidecar on the path, and retries gated on remaining budget plus a retry budget of about 10 percent of traffic - then, as a second increment, carry the deadline in band and have the receiving handler honour it, since only the server-side half reclaims workers, transactions and locks."
+revised_falsifier: "Instrument three things rather than two: requests the caller abandoned as timed out whose server-side handler nevertheless ran to completion, in-flight concurrency against the dependency, and the terminating cause of each failed call attributed to the layer that produced it (client deadline, intermediary idle or request limit, or peer reset). During the next real degradation, with a flat constant timeout in force: if the orphaned-completion counter stays near zero and in-flight concurrency stays flat, retry amplification and orphaned work are not happening here and a single constant is right. Independently, if an intermediary limit is the terminating cause in effectively every failed call, then the intermediary already is the deadline system, the client-side scheme adds nothing over one constant set below that limit, and the correct move is to defer to that layer rather than build a second one."
+confidence: medium

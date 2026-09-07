@@ -122,6 +122,54 @@ found the thing; the critic threw it away.
 - The D8 agreement figures stand, because those compared two critics on one fixed pack. This
   varies the pack. They measure different things and neither rescues the other.
 
+### E1b result, 2026-09-07
+
+Recorded as `evals/recorded/001-altframes`, also as failing. Same problem, same hash,
+`FRAME_BREAKER` held and the other four replaced by alternates on axes seed 1 never used.
+
+Put beside the other two, fixture 001 has passed exactly once: in the run it was written
+against.
+
+| assertion | seed 1 | seed 2 | alt frames |
+|---|---|---|---|
+| `human_cancel` | ok | **miss** | ok |
+| `retry_target_questioned` | ok | ok | **miss** |
+| `retry_cost` | ok | **miss** | **miss** |
+| `trap_named` | ok | ok | ok |
+
+Neither pre-registered reading is right on its own, and the mixture is the finding: **different
+assertions have different dependencies.**
+
+- `human_cancel` survived a whole new frame set but not a reseed. It is a property of the
+  problem that the machinery finds unreliably.
+- `retry_target_questioned` survived a reseed but not the frame swap. It is the frame set doing
+  work, and `FRAME_BREAKER` being present was not enough.
+- `retry_cost` has passed once. It was `LEDGER`'s at seed 1; `LEDGER` was pruned at seed 2 and
+  not dispatched at all in E1b. On this evidence it needs a specific frame, alive.
+- `trap_named` passed everywhere, and it is the assertion that asks almost nothing: any `T[1-8]`
+  anywhere in the pruned block. The only robust assertion in the fixture is the weakest one.
+
+**What this does to "the config is the product".** The README calls `config/` the actual IP.
+Partly earned: one assertion is clearly frame-dependent. But at this sample size the frame set
+and the sample are entangled, and the corpus cannot yet separate "this frame finds this" from
+"this run found this".
+
+**T3 fired for the first time.** `PRIOR_ART` was dispatched to `adhd-branch-search` with real web
+tools, borrowed authority, and the detector caught it. T3 was not dead weight; no frame that
+could trigger it had ever been given the tools. That retires the criterion-4 note against
+`MECHANIC` in `docs/RETIREMENT.md`, whose only stated reason was attacking T3. T5 remains the
+only detector that has never fired, and it is the one the output contract may make unfireable.
+
+**Deadline propagation, twice, from disjoint frames.** At seed 2 `LEDGER`, `ACTOR_CENSUS` and
+`FRAME_BREAKER` clustered on it. In E1b `SABOTEUR`, `FRAME_BREAKER` and `PRIOR_ART` clustered on
+it again. Six frames across two runs, one shared. Whatever else is unstable, the problem has an
+answer the machinery keeps reaching.
+
+**Not done, and it is the obvious next thing.** Three runs of one fixture is still three runs.
+Nothing here justifies changing `config/frames.yaml`, the rubric anchors, or a fixture
+assertion. It justifies distrusting every single-run number in this repository, which is what
+the corrections in `docs/DECISIONS.md` and `docs/RETIREMENT.md` now say.
+
 ### What neither answers
 
 Two runs against one baseline. A finding that survives E1a is not thereby robust; it survived

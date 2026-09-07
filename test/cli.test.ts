@@ -51,11 +51,18 @@ test("frames lists the library, and --json emits parseable JSON", () => {
   assert.ok(parsed.every((f) => typeof f.id === "string"));
 });
 
-/** The D6 check is meant to be usable as a gate, so a flagged pair has to be a non-zero exit. */
-test("frames --orthogonality exits 0 when nothing is flagged", () => {
+/**
+ * The D6 check is a gate, so its exit code has to follow the finding rather than always being 0.
+ * It exited 0 for the first five runs because nothing was flagged; E1b gave FRAME_BREAKER and
+ * SABOTEUR their third shared run and the pair crossed 60%. The test asserts the coupling, not
+ * either outcome, so it keeps working whichever side of the threshold the corpus lands on.
+ */
+test("frames --orthogonality exits non-zero exactly when it flags a pair", () => {
   const r = run(["frames", "--orthogonality"]);
-  assert.equal(r.code, 0, "no pair is currently flagged; a flagged pair must exit 1");
   assert.match(r.out, /co-clustered/);
+  const flagged = /(\d+) pair\(s\) above/.exec(r.out);
+  const count = flagged ? Number(flagged[1]) : 0;
+  assert.equal(r.code, count > 0 ? 1 : 0, `${count} pair(s) flagged but exit was ${r.code}`);
 });
 
 test("traps exits 1 on a contract violation and 0 on a clean artifact", () => {

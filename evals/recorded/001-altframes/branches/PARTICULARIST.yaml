@@ -1,0 +1,39 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: PARTICULARIST
+position: "Open this client and find out whether it can bound a whole call or only single socket operations, then set one whole-call limit equal to the deadline the code above it is already holding, and if that library has no whole-call knob, wrap the call in an external cancellation instead of tuning its per-socket numbers."
+reasoning: |
+  1. The three most specific things in the statement are: the word "this", which says the
+  client already exists in front of you with a chosen library and a fixed set of knob names;
+  the plural "timeouts", which says you already know there is more than one number and are
+  asking how they divide; and "client", which says you are the side holding a socket, a
+  thread and a caller while the other end decides whether to answer.
+
+  2. "This" is the detail that moves the answer, and it moves it through one property: does
+  this particular library expose a limit on the entire call, or only on connect, on write,
+  and on each read? If it has a whole-call limit, the answer is a single number and every
+  other knob is decoration. If it only has per-read limits, then a server that drips one byte
+  before each read deadline holds your thread forever, and no assignment of connect/read/write
+  values bounds the call at all - the answer stops being a number and becomes a cancellation
+  wrapped around the call.
+
+  3. The thirty-second answer is "connect 5s, read 30s, total 60s". What makes that wrong here
+  is the same word "this". Those three numbers are a claim about how long the call is allowed
+  to take, and nothing in the statement establishes that anyone has sixty seconds to give. The
+  statement also does not say whether the client sits under a caller that is already counting
+  down, which is the missing detail whose value flips the answer:
+    - If this call runs inside a request that already carries a deadline: the whole-call limit
+      is not chosen, it is inherited. It is the remaining time on that deadline divided by the
+      number of attempts you will make, and any number larger than that is a lie you tell your
+      own caller, because they will abandon you before you time out.
+    - If nothing above this call is counting down (a cron entry point, a queue worker): there
+      is no deadline to inherit, so the limit is set by what a stuck call costs you - the
+      point where one hung request occupying a connection and a worker slot hurts more than a
+      slow request finishing. Set the whole-call limit there and keep the connect limit short,
+      because a connect that has not completed has produced nothing you would want to wait for.
+forecloses:
+  - Copying a connect/read/write triple from another service in the same codebase into this client, on the grounds that it works there.
+  - Leaving this client on its shipped values, which for several HTTP libraries means no bound on the total call at all.
+  - Adding a retry policy on top without shrinking the per-attempt limit, so that three attempts silently spend three times the caller's remaining budget.
+falsifier: Open one real call site of this client. If the code above it already creates a deadline or cancellation token, passes it in, and this library honours it, then the whole-call limit is already bound from above and setting it on the client changes nothing observable - this position was wasted work.
+missing_actor: The team operating the server this client calls - they hold a server-side request limit and a load-shedding threshold of their own, and if theirs is shorter than the number you set, your number never fires and their behaviour, not your config, decides what your client sees.
+confidence: medium

@@ -19,6 +19,9 @@ five runs in which it was dispatched**. One is a pattern; two is a case.
    costs a subagent every run.
 2. **It is pruned in every appearance.** `adhd frames --stats`, the `pruned` column. A frame the
    critic always rejects is spending a branch to produce something the run then throws away.
+   **The five-run floor exists for this criterion above all.** E1a re-ran fixture 001 at seed 2
+   with an identical frame set and ACTOR_CENSUS went from holding the recommendation to pruned.
+   At one or two samples a prune rate is a coin flip, not a property.
 3. **It never survives to hold a recommendation.** The `rec` column at 0. Weaker than 2, and only
    counts alongside another item.
 4. **Its detectors never fire on anyone else.** A frame exists to attack a trap. If the traps in
@@ -73,32 +76,52 @@ A retired frame is not dispatched and does not count towards `n`. `adhd frames` 
 separate heading. Its recorded runs stay exactly as they are: they are the evidence for the
 retirement, and rewriting them would destroy the argument.
 
-## Current standing, as of five runs
+## Current standing, as of seven runs
 
-Nothing meets the bar. Every frame in the library is under the five-run floor except
-`FRAME_BREAKER`, which is at five and meets none of the criteria.
+Nothing meets the bar, and one thing changed that is worth reading before the table.
 
-Worth watching, none actionable:
+**D6's orthogonality check has flagged its first pair.** `FRAME_BREAKER` and `SABOTEUR`
+co-clustered in 2 of the 3 runs they shared, which is 67% against a 60% threshold with the
+three-run minimum exactly met. Criterion 1 is technically satisfied.
+
+**It is not being acted on, and the reason is E1a.** Re-running fixture 001 at seed 2 with an
+identical frame set turned two of five pruned into four of five and moved `ACTOR_CENSUS` from
+holding the recommendation to pruned. Cluster membership at this sample size is not stable, and
+2 of 3 is one run away from 1 of 3. Acting on a threshold that a single reseed could cross in
+either direction is the failure this document exists to prevent. The flag is recorded; the pair
+needs shared runs in the high single digits before it means anything.
 
 | frame | runs | why it is on the list |
 |---|---|---|
-| `END_USER` | 2 | pruned 2/2, rec 0. Exempt under the section above until the pruned-block reading says otherwise. |
-| `DOOR_KEEPER`, `HORIZON`, `MECHANIC` | 2 each | never pruned. Not a retirement criterion, and the opposite worry: a frame the critic never rejects may not be diverging from consensus at all. That belongs in D6, not here. |
-| `FIRST_PRINCIPLES` | 0 | never dispatched. Criterion 5 needs five consecutive runs across two classes; it has had none, so the count has not started. |
+| `FRAME_BREAKER` + `SABOTEUR` | 3 shared | criterion 1 met at 67%, on the minimum sample. Watch, do not act. |
+| `END_USER`, `PRIOR_ART` | 2 each | pruned in every appearance. `END_USER` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
+| `DOOR_KEEPER`, `MECHANIC`, `HORIZON` | 3, 3, 2 | never pruned. Not a retirement criterion, and the opposite worry, which belongs in D6. |
+| `FIRST_PRINCIPLES` | 0 | never dispatched; criterion 5's count has not started. |
+
+`FRAME_BREAKER` is the only frame at or past the five-run floor, at seven, and it meets no
+criterion on its own.
 
 ### Criterion 4, spelled out against the current library
 
-`T3` and `T5` have never fired in any run. Three frames list them:
+
+
+`T5` is the only detector that has never fired. One frame lists it:
 
 | frame | attacks | fired ever | runs | note |
 |---|---|---|---|---|
-| `MECHANIC` | `[T3]` | never | 2 | Its **only** stated reason for being in the library has no evidence behind it, and it has also never been pruned. Two soft signals, both under the five-run floor. |
-| `FIRST_PRINCIPLES` | `[T3, T1]` | T1 yes, T3 never | 0 | Never dispatched, so nothing to say. |
-| `MINIMALIST` | `[T4, T5, T1]` | T4 and T1 yes, T5 never | 2 | Two of its three traps fire. Criterion 4 asks whether *the* traps have never fired, not one of them. |
+| `MINIMALIST` | `[T4, T5, T1]` | T4 and T1 yes, T5 never | 3 | Two of its three traps fire. Criterion 4 asks whether *the* traps have never fired, not one of them, so it does not apply. |
 
-`MECHANIC` is the only frame where criterion 4 is fully met, and it is at 2 runs against a floor
-of 5. Do not act on it. What it does mean is that the next time `MECHANIC` is dispatched, the
-thing to read is whether it caught anything T3 describes.
+`MECHANIC` was the one frame fully meeting criterion 4, on the strength of T3 never having
+fired. **T3 fired in E1b**, on `PRIOR_ART`, the first time any frame reached
+`adhd-branch-search` with real web tools. The trap was never dead weight; no frame that could
+trigger it had been given the tools to. That is the general lesson for criterion 4: a detector
+with no evidence may be untriggered rather than useless, and the way to tell is to run the
+frames that attack it under the conditions they need.
+
+No frame now meets criterion 4. `MECHANIC` did until E1b, when T3 fired for the first time on
+`PRIOR_ART` — the first run in which any frame was dispatched to `adhd-branch-search` with web
+tools. A detector with no evidence may be untriggered rather than useless, and the way to tell
+is to run the frames that attack it under the conditions they need. T5 is the remaining case.
 
 `T5` is close to structurally unable to fire, because the output contract demands a committal
 position. A trap that cannot fire is a trap-definition problem, not a frame problem, and counting

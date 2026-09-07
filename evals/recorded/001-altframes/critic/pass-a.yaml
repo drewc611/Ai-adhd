@@ -1,0 +1,53 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One imperative sentence naming four specific timers plus a decrementing deadline, with no conditional and nothing handed back to the reader." }
+    foreclosure: { score: 3, evidence: "Rules out the single total timeout, automatic retry of non-idempotent calls, and the long connect timeout as cushion, each with the concrete reason it fails." }
+    falsifiability: { score: 3, evidence: "One day of logging connect, time-to-first-byte and body gaps is cheap, and the stated comparison would show the phases are inseparable and collapse the four-timer position to one number." }
+    specificity: { score: 2, evidence: "The argument is built on connection pools, SYN retries, middlebox idle clocks and resend safety, so it bends hard around HTTP call mechanics though it would transfer to any other HTTP client." }
+    assumption_attack: { score: 2, evidence: "It names and disproves the assumption that a timeout cancels remote work and that one number can span the call, but still answers inside the question's framing of choosing timer values." }
+    reasoning_carries: { score: 3, evidence: "No authority, standard or benchmark is cited anywhere; every claim is derived from what is physically held during the wait." }
+    actor_coverage: { score: 3, evidence: "The far-side and middlebox owners are named with two actions, publishing their caps and abandoning work on close, and the decrementing-deadline half of the position cannot function without them." }
+    reversibility: { score: 2, evidence: "The committed-versus-not-yet-committed line at the moment request bytes are written is used to order what may be retried and which timer absorbs slowness, but recommendations are not otherwise sequenced by cost of reversal." }
+    substance: { score: 3, evidence: "Flattened to split the timers by what each phase physically measures and carry a shrinking deadline, it is the same claim and still worth making." }
+  B:
+    committal: { score: 2, evidence: "One sentence with a real verb, but it routes through an investigation and then forks on what the library turns out to expose, which softens the commitment." }
+    foreclosure: { score: 2, evidence: "Copying a triple from a sibling service and stacking retries without shrinking the per-attempt limit are real and tempting, while leaving shipped defaults is closer to an option nobody defends." }
+    falsifiability: { score: 3, evidence: "Opening a single call site costs minutes and a deadline already passed in and honoured would make the whole position wasted work by its own admission." }
+    specificity: { score: 2, evidence: "The reasoning is explicitly hung on the words of the question and on which knobs this particular library exposes, but the resulting procedure would serve any client of the same shape." }
+    assumption_attack: { score: 3, evidence: "It identifies the unexamined assumption that per-socket numbers can bound a call, tests it against the dripping-server case, and the answer flips from a number to an external cancellation when the test fails." }
+    reasoning_carries: { score: 3, evidence: "Nothing is borrowed from authority; the case rests on what a per-read deadline does against a server that sends one byte at a time." }
+    actor_coverage: { score: 2, evidence: "The server team is named and holds a shorter limit that decides what the client sees, but the position inherits its budget from the caller above and does not depend on that team acting." }
+    reversibility: { score: 1, evidence: "It notes only that an incomplete connect has produced nothing worth waiting for, and never separates cheap reversible moves from committed ones when ordering what to do." }
+    substance: { score: 3, evidence: "Stripped flat it says find out what your library actually bounds and inherit the caller's remaining deadline, which stands as the same claim without the framing." }
+  C:
+    committal: { score: 3, evidence: "A single sentence that names the derivation rule, the connect ceiling, the pool charge, the body caps and the retry budget, with no hedge or reader-returned choice." }
+    foreclosure: { score: 3, evidence: "It kills the shared tunable constant, the fixed retry count at multiple layers, reliance on library read timeouts, and long synchronous requests, each in operationally concrete terms." }
+    falsifiability: { score: 2, evidence: "The orphaned-work counter and in-flight gauge are relevant and would settle the question, but the reading only arrives during the next real degradation, which makes the observation slow and costly rather than cheap." }
+    specificity: { score: 2, evidence: "It leans on details a general timeout argument would not have, such as idle timers resetting per byte and pool checkout starting outside the clock, so the reasoning bends around this problem without being unusable elsewhere." }
+    assumption_attack: { score: 3, evidence: "It enumerates what the constant-timeout answer assumes, breaks each assumption against a concrete failure, and derives the deadline design from which break is worst." }
+    reasoning_carries: { score: 3, evidence: "No authorities appear; the mechanism of metastable retry amplification and the clock-jump case carry the argument by themselves." }
+    actor_coverage: { score: 3, evidence: "The intermediary operator is named with concrete actions and numbers, and the position is explicitly only advisory unless that layer asserts the deadline too." }
+    reversibility: { score: 2, evidence: "The three failure modes are ranked by how expensive recovery is, restart versus revert versus a self-sustaining loop, and that ranking is what selects the design." }
+    substance: { score: 3, evidence: "Flat, it says derive timeouts from a propagated deadline on a monotonic clock and budget retries as a traffic fraction, and that claim survives losing the narrative." }
+  D:
+    committal: { score: 3, evidence: "One sentence, stop doing one thing and stamp, propagate and subtract instead, with no escape hatch." }
+    foreclosure: { score: 3, evidence: "It rules out the p99-derived pinned timeout, the generous-timeout-plus-three-retries shape, and the platform-wide default, naming the last as the natural answer it rejects." }
+    falsifiability: { score: 3, evidence: "A day of logging entry points and outbound calls is cheap, and a single-hop leaf with no upstream promise would concede that a flat per-client timeout was right." }
+    specificity: { score: 1, evidence: "Only the phrase about localizing the decision to one component is load bearing; the rest is a general argument about budget ownership that would read identically for any downstream call." }
+    assumption_attack: { score: 3, evidence: "It states the load-bearing assumption that a timeout is a property of the client, shows the client lacks the information that would make a number correct, and the whole answer follows from dropping it." }
+    reasoning_carries: { score: 3, evidence: "It cites nothing and no authority is needed; the two-seconds-against-a-200ms-budget case does the work." }
+    actor_coverage: { score: 2, evidence: "The called service owner is named with real actions like publishing an objective and honouring a deadline header, but the caller-side scheme proceeds without them." }
+    reversibility: { score: 1, evidence: "Starting at one entry point and logging from day one gestures at a cheap first move, but nothing separates reversible steps from committed ones or orders the advice by that." }
+    substance: { score: 3, evidence: "Flattened to the deadline belongs to the request rather than the client, and retry budget is part of the same decision, it remains the same worthwhile claim." }
+  E:
+    committal: { score: 3, evidence: "One sentence directing a single entry deadline, propagated remainder, and abandonment below a reserve, with the rejected alternative named rather than offered." }
+    foreclosure: { score: 3, evidence: "It forecloses the per-dependency table tuned to each dependency's own p99, retries that each get a fresh full timeout, and any unbounded library default, all in concrete terms." }
+    falsifiability: { score: 3, evidence: "Logging elapsed-since-entry and whether the caller is still connected is cheap for a day, and the stated threshold would show propagation buys nothing here." }
+    specificity: { score: 1, evidence: "It opens by declaring this is not a networking question and the body is fuel and resuscitation policy; only the shared-capacity and fan-out remarks depend on the problem at hand." }
+    assumption_attack: { score: 2, evidence: "It names the assumption that timeouts are per-leg numbers chosen by the leg's owner, but the test is that other fields abandoned that practice rather than any check run against this problem." }
+    reasoning_carries: { score: 1, evidence: "Strip ICAO, EASA, the two accident case histories and the termination-of-resuscitation criteria and the case for a reserve and a declared budget largely goes with them, leaving only the disanalogy section standing." }
+    actor_coverage: { score: 3, evidence: "The edge owner is named with the action of stamping and enforcing a deadline header, and the position states that budget propagation is impossible without it." }
+    reversibility: { score: 2, evidence: "Commit points and an unspendable reserve set aside so failure can still be declared in time are used to order the spending rule, though the position is not built as a sequence of escalating commitment." }
+    substance: { score: 2, evidence: "Flat it says stamp an end-to-end deadline, spend down from it, and keep an unspendable reserve for failing gracefully, which is worth saying although the borrowed framing supplied the reserve idea." }

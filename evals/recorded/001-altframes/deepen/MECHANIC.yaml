@@ -1,0 +1,56 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MECHANIC
+verdict: defend
+response: |
+  The objection makes three moves. One relocates my enforcement point, one is answered by a
+  clause the position already carries, and one is a real omission that adds a companion
+  mechanism without unseating the timers. None of them shows that the four phases are the
+  same phase.
+
+  1. Two-knob libraries. The mechanism does not change because the API is poorer: the wait
+  for a pool slot, the DNS lookup, the SYN exchange, the handshake, the far side's work, and
+  the gap between body bytes are six distinct physical intervals whether or not the library
+  names them. What a connect option plus a byte-resetting read option actually buys is more
+  than the objection allows - the read timer, before any byte has arrived, is the header-wait
+  bound, and after the first byte it is exactly my gap-between-body-bytes timer. So the
+  library covers phases 3 and 4 with one number, at the price of conflating them: a single
+  value is either too tight for legitimate server work or too loose to notice a stalled body.
+  What it genuinely cannot bound is total call time (a slow trickle resets forever), the
+  handshake separately, and the pool-acquisition and DNS waits, which happen before any
+  socket the option applies to exists. The objection's remedy - a cancellation wrapped around
+  the call - is not a different action from mine. It is the second half of my position: the
+  absolute deadline carried with the request. The objection correctly removes an assumption I
+  left implicit, that the deadline is enforced by the transport. It is not. It is enforced by
+  a cancel token or context around the call, and it must start at admission, before pool
+  acquisition and before DNS, because those are precisely the intervals no knob reaches. That
+  is a cost to the position's wording, not to its content.
+
+  2. Composition. The position already stated that fixed per-hop numbers do not add up, which
+  is why the deadline travels and each hop decrements it. The amendment the objection forces
+  is to say what the phase timers are relative to it: they are ceilings that detect a phase
+  dying, never permissions to wait. The bound actually applied to any phase is min(phase
+  ceiling, deadline remaining), so the worst case is not the sum of four numbers - it is the
+  deadline, which is the one number an upstream caller did agree to. This also disposes of
+  the header wait objection. Sizing that ceiling from the server's work distribution is how
+  you learn what silence means, not a promise to wait that long: if p99 server work is three
+  seconds and the caller has left two hundred milliseconds on the deadline, the correct
+  behaviour is to decline to start the call, which is the same rule I already applied to a
+  hop that cannot finish inside its remaining budget.
+
+  3. Retry amplification. A fair hit. The forecloses ruled out only the correctness failure
+  (non-idempotent resend) and said nothing about the load failure, and the objection is right
+  that the amplifying retries are the safe ones and that the loop outlives the original
+  slowdown. Following the same causal chain: a retry is a work multiplier at a far side that
+  is already saturated, and independently configured layers multiply, so three layers each
+  retrying twice offers eight times the load at the worst possible moment. The deadline
+  already caps this per call - a retry that cannot complete inside the remaining budget must
+  not be started, so retries self-extinguish as the dependency slows - but that is not
+  sufficient across layers. Two rules are needed alongside the timers: retry at exactly one
+  layer, the layer that owns the deadline, with every other layer failing straight through;
+  and cap retries as a token-bucket fraction of successful traffic, so that when everything
+  fails the offered load converges to roughly the original rate rather than a multiple of it.
+  This is an addition to the prescription, not a correction of it - the timers determine when
+  a call is abandoned, the budget determines what is allowed to happen next.
+revised_position: "Bound each physical phase of the call separately - pool acquisition and DNS, connect, handshake, wait for response headers, and gap between body bytes - sizing each ceiling from the interval it measures, but enforce all of them under one absolute deadline started at admission and carried with the request, which every hop decrements and refuses to start work against; where the library exposes too few knobs, that deadline is enforced by a cancellation around the call rather than by the transport, and retry is permitted at exactly one layer, only within the remaining deadline, and only inside a token-bucket budget expressed as a fraction of successful traffic."
+revised_falsifier: "For one day, log six intervals per call - pool-slot wait, DNS, connect, handshake, time-to-first-byte, and largest mid-body gap - plus the deadline remaining at admission. The phase split is falsified if the 99.9th percentile of pool wait, DNS, connect, and handshake all sit inside the noise band of the median time-to-first-byte, and no completed response shows a mid-body gap longer than its own first-byte wait; then one number plus a deadline loses nothing on this path. The deadline clause is falsified if no call ever ends with less remaining budget than its own p99 phase ceilings, meaning the ceilings and the deadline never disagree. The retry clause is falsified if, during a measured slowdown, the ratio of upstream attempts to originating calls against the slow dependency stays at or near one without a budget in place."
+confidence: high

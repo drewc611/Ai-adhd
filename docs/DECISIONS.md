@@ -202,6 +202,13 @@ runs behind it. Still the owner's.
 twelve of thirteen frames have been dispatched at least once and the counts are already
 saying three things, none of them yet a verdict:
 
+> **Corrected 2026-09-07 by E1a.** Every rate in this section is a one-or-two-sample figure and
+> at least one of them is now known to move. Running fixture 001 again at seed 2 with the same
+> five frames turned two of five pruned into four of five: ACTOR_CENSUS went from holding the
+> recommendation to pruned, and FRAME_BREAKER from survivor to pruned. Read what follows as what
+> the corpus happened to show, not as per-frame behaviour. `docs/EXPERIMENTS.md` has the result.
+
+
 - **END_USER is pruned every time it appears (2/2).** It is also the frame that closed the
   `who_is_hurt` gap in `002-kernel-enduser`, and it did so *through the pruned block*. A frame
   that reliably fails the rubric and reliably produces the missing question is not a bad frame;

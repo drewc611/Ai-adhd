@@ -1,0 +1,69 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MECHANIC
+position: "Set four separate timers on this client - connect, TLS handshake, wait-for-response-headers, and gap-between-body-bytes - size each one from the thing it physically measures (path round trips for the first two, the far side's work distribution for the third, liveness for the fourth), and carry one absolute deadline inside the request that every hop decrements and refuses to start work against."
+reasoning: |
+  1. What is physically there while the call waits.
+     On this side: a task or thread parked with its stack and its buffers; a file
+     descriptor; an ephemeral port; a slot in the connection pool; kernel send and
+     receive buffers; a copy of the request body if a resend is possible. In the
+     middle: TCP state on every box that keeps flow state - the load balancer, the
+     proxy, the NAT - each with its own idle clock that this client did not set. On
+     the far side: an accept queue entry, a worker, and whatever that worker is
+     holding while it works: a database transaction, a row lock, a downstream call
+     of its own. None of these things stop existing because we stopped caring. The
+     timer only ends the waiting on this side of the wire.
+  2. What is held, consumed, or leaked during the interval.
+     The fd, the port, and the pool slot are held for the whole wait, so the timeout
+     value is the exchange rate that turns a remote stall into local queue growth: if
+     the pool has N slots and the far side goes quiet, N calls of latency times one
+     stall fills the pool and calls to healthy routes stop too. Memory for buffered
+     bodies is held the same way. On the far side the worker and its locks are held
+     past our timeout, because our timer fires locally and sends nothing; the server
+     learns only if it happens to write into a closed socket, and only then if it
+     checks. So a timeout does not cancel work, and a timeout plus a retry
+     manufactures a second copy of work that may already have committed.
+  3. What happens at each boundary when something stops answering.
+     Name resolution can hang on its own clock, before any socket exists, and a timer
+     set on the HTTP call may not cover it. At connect: if the host is up and closed,
+     an RST comes back in one round trip; if packets are being dropped into a hole,
+     nothing comes back at all and only our own timer ends it - the kernel will retry
+     SYNs for tens of seconds first. So the connect wait is bounded by round trip
+     time, a property of the path, and it is short and stable. TLS adds round trips
+     and CPU on both ends but is still path-shaped. Once the request bytes are
+     written, the boundary changes character: the far side now has the request, and
+     everything after this point is work time, which is workload-shaped and has a
+     long tail. Waiting for the first response byte measures that work. Once bytes
+     start flowing, total elapsed time stops being evidence of anything - a large
+     healthy response takes long - and the only signal of death is a gap: bytes
+     stopped arriving. A pooled idle connection is a special case: a middlebox can
+     drop the flow silently, and we find out only when we write and hear nothing, one
+     full timer later, on a request that may not be safe to resend. Our pool idle
+     timer must therefore be shorter than the shortest idle clock in the path, none
+     of which we own.
+  4. Where the habitual answer stops following the mechanism.
+     The habitual answer is one number for the whole call, or two numbers copied from
+     a template. It parts company at exactly the step in (3) where the boundary
+     changes character - the moment the request bytes are written. Before that moment
+     the timer measures the network; after it, the timer measures somebody's work.
+     Setting both from the same intuition makes the connect wait far too long, so a
+     dead node is held rather than shed in one round trip, and makes the work wait
+     either too tight for a legitimate slow call or too loose to shed anything. The
+     second departure is composition: fixed per-hop numbers do not add up. Three hops
+     each holding a thirty second timer means the outermost caller has already given
+     up while the third hop spends thirty seconds producing an answer nobody will
+     read - work that still holds its locks. Only a deadline that travels with the
+     request and shrinks at each hop lets a hop see that it has two seconds left and
+     decline to start a four second job. The third departure is that the habitual
+     answer stops at the timer and does not follow the causal chain to what the timer
+     causes: a timeout without a cap on in-flight calls converts a slow dependency
+     into local fd and thread exhaustion, and a timeout with an automatic retry and
+     no idempotency key converts a slow dependency into duplicate writes, because
+     after the request is written a timeout cannot tell "not done yet" from "done,
+     reply lost".
+forecloses:
+  - A single total timeout on the client object covering the whole call - which also forecloses streaming or large downloads, since any total figure large enough for the biggest legitimate body is too large to detect a dead peer.
+  - Automatic retry of any non-idempotent request on timeout, because past the point where request bytes were written the timer carries no information about whether the far side committed.
+  - Using a long connect timeout as a cushion for a slow dependency - connect is capped at a few path round trips, so slowness must be absorbed by the header-wait timer or not at all.
+falsifier: For one day, log connect duration, time-to-first-byte, and the largest gap between body bytes for every call. If the 99.9th percentile of connect sits inside the noise band of the median time-to-first-byte, and no completed response ever shows a mid-body gap longer than its own first-byte wait, then these phases are not separable on this path and one number loses nothing.
+missing_actor: The owner of the far side and of the boxes between - load balancer, proxy, NAT - who already enforce request and idle timeouts that silently cap anything this client chooses; they can publish those numbers so the client's timers are set beneath them, and can make the server abandon work and release its locks when the client's connection closes or its deadline passes.
+confidence: high
