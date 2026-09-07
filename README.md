@@ -107,6 +107,19 @@ node dist/src/cli.js learn --panel --run <dir>   # three or more critics on one 
 `learn` reads the recorded runs and calls nothing. It is how the frame library, the rubric and
 the fixtures get changed on evidence rather than on taste. Current findings are in D8.
 
+### Exit codes
+
+A script driving a run branches on these, so each means one thing.
+
+| code | meaning |
+|---|---|
+| 0 | ok |
+| 1 | a contract violation (`traps`), a failing eval, a flagged orthogonality pair, a `diff` of two different problems, or an unexpected error |
+| 2 | `ContractError`: an artifact broke the contract where the run needed it not to |
+| 3 | `RunAbort`: the run is over. A `problem_hash` mismatch is the usual cause. Also returned by `os claim` with nothing claimable and `os result` with no synthesis yet |
+| 4 | the repository is invalid: a missing or malformed file under `config/`, `prompts/` or `docs/` |
+| 5 | the command line is wrong. The repository is fine |
+
 A run is four commands driven by the host (see `skills/adhd/SKILL.md`):
 
 ```

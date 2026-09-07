@@ -109,7 +109,7 @@ yet enough to know whether they work.
 43. **`--json` on every command** that lacks it, for scripting.
 44. **`adhd lint <fixture>`.** Check a fixture's regexes compile, and warn on patterns that
     match the fixture's own `why` text (a common way to write an assertion that cannot fail).
-45. **Exit codes** that distinguish contract failure, hash mismatch, and eval failure.
+45. ~~**Exit codes** that distinguish contract failure, hash mismatch, and eval failure.~~ Built, documented in the README, tested against the built binary.
 
 ## 7. Documentation
 

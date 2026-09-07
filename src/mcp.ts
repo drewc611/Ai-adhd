@@ -55,8 +55,8 @@ export function buildServer(): McpServer {
 
   server.registerTool(
     "adhd_traps",
-    { description: "Contract check and code lints over one branch artifact file.", inputSchema: { file: z.string(), expect_hash: z.string().optional() } },
-    async (a) => wrap(() => trapsReport(a.file, { expectHash: a.expect_hash }).text),
+    { description: "Contract check and code lints over one branch artifact file.", inputSchema: { file: z.string(), expect_hash: z.string().optional(), root: z.string().optional().describe("repository root holding config/ and prompts/") } },
+    async (a) => wrap(() => trapsReport(a.file, { expectHash: a.expect_hash, frames: loadConfig(a.root).frames.frames.map((f) => f.id) }).text),
   );
 
   server.registerTool(

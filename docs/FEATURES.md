@@ -94,7 +94,10 @@ can be wrong without saying so.
 26. `adhd cost` — token spend across recorded runs, by phase and by frame.
 27. `adhd lint <fixture>` — the audit and pattern checks for one fixture, before recording.
 28. `--json` on every command that lacks it.
-29. Exit codes that distinguish contract failure, hash mismatch and eval failure.
+29. ~~Exit codes that distinguish contract failure, hash mismatch and eval failure.~~ **Built and
+    documented** in the README, and tested against the real binary. Adding the table found that
+    a wrong flag raised `ConfigError` and printed "config invalid:" at a reader whose config was
+    fine; usage errors are now their own code.
 30. TTY colour and a progress line while `adhd os` advances.
 31. `adhd init` — scaffold a `config/` directory from the shipped one.
 32. `adhd doctor` — check config, prompts, plugin manifest and build output agree.

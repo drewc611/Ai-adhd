@@ -9,7 +9,7 @@ import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightS
 import { explainFrame } from "./why.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
-import { ConfigError, ContractError, RunAbort } from "./errors.js";
+import { ConfigError, ContractError, RunAbort, UsageError } from "./errors.js";
 
 const program = new Command();
 program
@@ -30,6 +30,10 @@ function fail(e: unknown): never {
   if (e instanceof ConfigError) {
     console.error(e.message);
     process.exit(4);
+  }
+  if (e instanceof UsageError) {
+    console.error(`usage: ${e.message}`);
+    process.exit(5);
   }
   console.error(e instanceof Error ? e.stack ?? e.message : String(e));
   process.exit(1);
@@ -74,7 +78,7 @@ program
   .option("--hash <problem_hash>", "expected problem_hash")
   .action((file, o) => {
     try {
-      const r = trapsReport(file, { expectHash: o.hash });
+      const r = trapsReport(file, { expectHash: o.hash, frames: loadConfig(program.opts().root).frames.frames.map((f) => f.id) });
       console.log(r.text);
       process.exit(r.exitCode);
     } catch (e) {
@@ -170,9 +174,9 @@ program
   .action((o: { sensitivity?: boolean; correlation?: boolean; agreement?: string; agreementAll?: boolean; panel?: boolean; run?: string; recorded?: string; delta: string; json?: boolean }) => {
     try {
       const cfg = loadConfig(program.opts().root);
-      if (o.agreement && !o.run) throw new ConfigError(["--agreement needs --run: a second scoring is only meaningful against the run it re-scores"]);
+      if (o.agreement && !o.run) throw new UsageError("--agreement needs --run: a second scoring is only meaningful against the run it re-scores");
       if (o.panel) {
-        if (!o.run) throw new ConfigError(["--panel needs --run: a panel scores one artifact pack"]);
+        if (!o.run) throw new UsageError("--panel needs --run: a panel scores one artifact pack");
         const r = raterPanel(cfg, o.run);
         console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
         return;

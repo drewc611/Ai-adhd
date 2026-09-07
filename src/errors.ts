@@ -20,6 +20,17 @@ export class HashMismatch extends RunAbort {
   }
 }
 
+/**
+ * The command line was wrong, not the repository. These were ConfigErrors, so `adhd learn
+ * --agreement` without `--run` printed "config invalid:" at a reader whose config was fine.
+ */
+export class UsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageError";
+  }
+}
+
 export class ContractError extends Error {
   constructor(public readonly where: string, public readonly problems: string[]) {
     super(`${where}: ${problems.join("; ")}`);

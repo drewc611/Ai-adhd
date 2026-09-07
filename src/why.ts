@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
-import { ConfigError } from "./errors.js";
+import { UsageError } from "./errors.js";
 import { DeepenArtifactSchema, PassASchema, PlanSchema, type PassA, type Plan } from "./schema.js";
 import type { ScoreResult, ScoredCluster, ScoredFrame } from "./score.js";
 import { unfence } from "./validate.js";
@@ -56,7 +56,7 @@ const body = (lines: string[]): string => lines.map(trunc).join("\n");
 export function explainFrame(cfg: Config, runDir: string, frameId: string): WhyReport {
   const frame = frameId.toUpperCase();
   if (!cfg.frames.frames.some((f) => f.id === frame))
-    throw new ConfigError([`unknown frame ${frame}. The library has: ${cfg.frames.frames.map((f) => f.id).join(", ")}`]);
+    throw new UsageError(`unknown frame ${frame}. The library has: ${cfg.frames.frames.map((f) => f.id).join(", ")}`);
 
   const plan = read<Plan>(join(runDir, "plan.json"), (r) => PlanSchema.parse(JSON.parse(r)));
   const score = read<ScoreResult>(join(runDir, "score.json"), (r) => JSON.parse(r) as ScoreResult);

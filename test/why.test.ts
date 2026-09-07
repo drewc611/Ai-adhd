@@ -3,16 +3,18 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { cfg } from "./helpers.js";
 import { explainFrame } from "../src/why.js";
-import { ConfigError } from "../src/errors.js";
+import { UsageError } from "../src/errors.js";
 
 const run = (id: string) => join(cfg.root, "evals", "recorded", id);
 
+/** A frame that does not exist is a wrong command line, not a broken repository. */
 test("an unknown frame is refused with the library listed, not explained as absent", () => {
-  assert.throws(() => explainFrame(cfg, run("002-kernel-enduser"), "NOT_A_FRAME"), ConfigError);
+  assert.throws(() => explainFrame(cfg, run("002-kernel-enduser"), "NOT_A_FRAME"), UsageError);
   try {
     explainFrame(cfg, run("002-kernel-enduser"), "NOT_A_FRAME");
   } catch (e) {
-    assert.match((e as ConfigError).message, /PARTICULARIST/);
+    assert.match((e as UsageError).message, /PARTICULARIST/);
+    assert.ok(!/config invalid/.test((e as UsageError).message));
   }
 });
 
