@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import { stringify } from "yaml";
 import assert from "node:assert/strict";
+import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
 import { artifact, cfg, passA, passB, yaml } from "./helpers.js";
-import { validateBranchArtifact, validatePassA, validatePassB, checkBlind, redactFrameLabels, unfence } from "../src/validate.js";
+import { checkBlind, redactFrameLabels, unfence, validateBranchArtifact, validatePassA, validatePassB } from "../src/validate.js";
 import { HashMismatch, ContractError } from "../src/errors.js";
 
 const H = "sha256:" + "a".repeat(64);
@@ -150,4 +152,58 @@ test("unfence is linear on every fence CodeQL called out, and reads the shapes s
     ["```yaml\nno closing fence", "```yaml\nno closing fence"],
   ] as const)
     assert.equal(unfence(input), want, `unfence(${JSON.stringify(input)})`);
+});
+
+// ---- critic refusal (backlog 28) ------------------------------------------------------------
+
+test("a critic that declines to score is reported as a refusal, not as malformed output", () => {
+  // These used to be the same failure to a reader: `critic pass A: scores: Required`, a schema
+  // complaint aimed at a critic that was being perfectly clear. A refusal is a judgement with a
+  // reason someone should read before rerunning; malformed output is a contract violation to fix.
+  const H = "sha256:" + "a".repeat(64);
+  const letters = ["A", "B"];
+  const dims = cfg.rubric.dimensions.map((d) => d.id);
+
+  const explicit = `problem_hash: ${H}\npass: A\nrefused: true\nreason: two artifacts are byte-identical, so blind scoring would be scoring one text twice\n`;
+  assert.throws(
+    () => validatePassA(explicit, H, letters, dims),
+    (e: Error) => e.name === "CriticRefusal" && /byte-identical/.test(e.message) && (e as { code?: string }).code === "CRITIC_REFUSED",
+  );
+
+  // A critic writing its own refusal has not been told a field name for it.
+  const bare = `problem_hash: ${H}\npass: A\nreason: I cannot score these blind; every artifact names its own frame\n`;
+  assert.throws(() => validatePassA(bare, H, letters, dims), (e: Error) => e.name === "CriticRefusal");
+
+  // Pass B refuses through the same path.
+  const passBRefusal = `problem_hash: ${H}\npass: B\nrefused: true\nreason: pass A scored a pack I was not given\n`;
+  assert.throws(
+    () => validatePassB(passBRefusal, H, ["LEDGER"], 0),
+    (e: Error) => e.name === "CriticRefusal" && /pass B refused/.test(e.message),
+  );
+});
+
+test("a half-scored pack calling itself a refusal is still a contract violation", () => {
+  // The one shape that could hide a real failure behind the new path. Anything carrying the
+  // fields a real pass has is validated as a real pass, whatever it calls itself.
+  const H = "sha256:" + "b".repeat(64);
+  const dims = cfg.rubric.dimensions.map((d) => d.id);
+  const half = `problem_hash: ${H}\npass: A\nrefused: true\nreason: partway through\nscores:\n  A:\n    ${dims[0]}:\n      score: 2\n      evidence: something\n`;
+  assert.throws(() => validatePassA(half, H, ["A", "B"], dims), (e: Error) => e.name === "ContractError");
+});
+
+test("a refusal never masks a hash mismatch", () => {
+  // Order matters: paraphrase drift invalidates the run whatever the critic then says about it.
+  const H = "sha256:" + "c".repeat(64);
+  const wrongHash = `problem_hash: sha256:${"d".repeat(64)}\npass: A\nrefused: true\nreason: anything\n`;
+  assert.throws(() => validatePassA(wrongHash, H, ["A"], cfg.rubric.dimensions.map((d) => d.id)), (e: Error) => e.name === "HashMismatch");
+});
+
+test("nothing in prompts/ invites the critic to refuse", () => {
+  // The receiving half only. An escape hatch a critic is told about is easier to take than
+  // scoring, and the critique phase is where the consensus trap gets caught. Offering one is a
+  // change to the product and is backlog 69, not something to slip in beside the handler.
+  for (const f of readdirSync(join(cfg.root, "prompts")).filter((x) => x.endsWith(".md"))) {
+    const text = readFileSync(join(cfg.root, "prompts", f), "utf8");
+    assert.ok(!/\brefus(e|al)\b/i.test(text), `prompts/${f} mentions refusing; that is a product change and needs D-level agreement first`);
+  }
 });

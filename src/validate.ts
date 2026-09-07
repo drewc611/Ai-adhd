@@ -12,7 +12,7 @@ import {
   type PassB,
 } from "./schema.js";
 import type { Config } from "./config.js";
-import { ContractError, HashMismatch } from "./errors.js";
+import { ContractError, CriticRefusal, HashMismatch } from "./errors.js";
 
 // ---- the routing decision --------------------------------------------------------------
 
@@ -230,10 +230,32 @@ export function validateBranchArtifact(text: string, expectedHash: string, expec
   return { ok: true, artifact: r.data };
 }
 
+/**
+ * Did the critic decline to score, rather than return something malformed?
+ *
+ * Recognised two ways: an explicit `refused: true` with a reason, and a document that carries a
+ * `reason` or `refusal` string and none of the fields a real pass has. The second exists because
+ * a critic writing its own refusal will not have been told a field name for it.
+ *
+ * Deliberately narrow. Anything with partial scores is a contract violation and stays one: a
+ * half-scored pack that calls itself a refusal is the one shape that could hide a real failure.
+ */
+function refusalReason(raw: unknown, pass: "A" | "B"): string | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const d = raw as Record<string, unknown>;
+  const hasReal = pass === "A" ? d.scores !== undefined : d.clusters !== undefined || d.traps !== undefined;
+  if (hasReal) return null;
+  const reason = [d.reason, d.refusal, d.refused_because, d.error].find((v) => typeof v === "string" && v.trim().length > 0);
+  if (d.refused === true) return typeof reason === "string" ? reason : "no reason given";
+  return typeof reason === "string" ? reason : null;
+}
+
 export function validatePassA(text: string, expectedHash: string, letters: string[], dimensionIds: string[]): PassA {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
   if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass A");
+  const refused = refusalReason(raw, "A");
+  if (refused !== null) throw new CriticRefusal("A", refused);
   const r = PassASchema.safeParse(raw);
   if (!r.success) throw new ContractError("critic pass A", r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`));
   const problems: string[] = [];
@@ -255,6 +277,8 @@ export function validatePassB(text: string, expectedHash: string, frameIds: stri
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
   if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass B");
+  const refusedB = refusalReason(raw, "B");
+  if (refusedB !== null) throw new CriticRefusal("B", refusedB);
   const r = PassBSchema.safeParse(raw);
   if (!r.success) throw new ContractError("critic pass B", r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`));
   const problems: string[] = [];

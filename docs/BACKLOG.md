@@ -109,8 +109,21 @@ yet enough to know whether they work.
 27. ~~**Second critic on the same pack.** Disagreement is recorded, not resolved — but nothing
     currently records it.~~
    **Built. Recorded rather than resolved: `002-kernel-enduser` splits 2-2 across four critics.**
-28. **Critic refusal path.** What happens when the critic returns "I cannot score this"?
-    Currently a contract violation; it should be a distinct, reported state.
+28. ~~**Critic refusal path.** What happens when the critic returns "I cannot score this"?
+    Currently a contract violation; it should be a distinct, reported state.~~
+    **Built, receiving half only. A refusal reached the reader as `critic pass A: scores: Required`
+    — a schema complaint aimed at a critic that was being perfectly clear. `CriticRefusal` carries
+    the reason, the kernel aborts with `CRITIC_REFUSED: <reason>` rather than `CONTRACT`, and the CLI
+    exits 3 rather than 2. A pack carrying any real scoring fields is still a contract violation
+    whatever it calls itself, because a half-scored pack claiming to be a refusal is the one shape
+    that could hide a real failure. Hash mismatch still wins: paraphrase drift invalidates the run
+    whatever the critic then says about it.**
+69. **Decide whether to tell the critic it may refuse** (owner's call). Nothing in `prompts/` mentions
+    refusing, and a test asserts that, so today the handler only catches a refusal a critic produces
+    unprompted. Offering one explicitly is a change to the product with a real cost: an escape hatch a
+    critic is told about is easier to take than scoring, and the critique phase is where T1 gets caught.
+    The argument for is that a critic with no way to say "these two artifacts are byte-identical" will
+    invent a score instead, which is worse than refusing. Neither side is settled by anything recorded.
 29. ~~**Detector output quality check.** Some evidence strings are one clause. Set a floor and
     reject pass B if a fired trap's evidence is under N words.~~
    **Built. Floor set from data: real fired evidence runs 29 to 50 words.**
