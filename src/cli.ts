@@ -5,11 +5,12 @@ import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { axisCoverage, diffRuns, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
+import { costReport } from "./cost.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
 import { wizard } from "./tui.js";
-import { openKernel, recordRun } from "./os.js";
+import { kernelStats, openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort, UsageError } from "./errors.js";
 
@@ -344,6 +345,29 @@ os.command("result <run_id>").option("--os-root <dir>", "kernel root").action((i
 os.command("cancel <run_id>").option("--reason <text>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).cancel(id, o.reason)); } catch (e) { fail(e); } });
 os.command("list").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).list()); } catch (e) { fail(e); } });
 os.command("reap").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).reap()); } catch (e) { fail(e); } });
+os.command("stats")
+  .description("throughput, phase timing and lease expiry rate across the journal")
+  .option("--os-root <dir>", "kernel root")
+  .option("--json")
+  .action((o) => {
+    try {
+      const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
+      const r = kernelStats(root);
+      console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("cost")
+  .description("token spend across recorded runs, by phase and by frame, against the estimate the D5 gate showed")
+  .option("--recorded <dir>")
+  .option("--json")
+  .action((o) => {
+    try {
+      const r = costReport(loadConfig(program.opts().root), o.recorded);
+      console.log(o.json ? JSON.stringify({ runs: r.runs, total: r.total, total_estimate: r.total_estimate, by_phase: r.by_phase, unbroken: r.unbroken }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
 
 program
   .command("validate")

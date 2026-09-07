@@ -140,7 +140,11 @@ yet enough to know whether they work.
    something. `save` is still `tmp` + `rename` without an fsync: atomic against a concurrent
    reader, not durable against power loss, and nothing yet shows that it matters.**
 33. **Token budget enforcement.** Halt a run that exceeds N tokens and render partial.
-34. **`adhd os stats`.** Throughput, mean phase duration, expiry rate across the journal.
+34. ~~**`adhd os stats`.** Throughput, mean phase duration, expiry rate across the journal.~~
+    **Built. Over five kernel runs the longest task the journal has seen is 280s (`critique_b`),
+    against a 900s default lease — so the default is roughly 3x the worst observed task, which is
+    a defensible margin and is now a measured one rather than a guess. No lease has ever expired
+    in a real run; the reclaim path is exercised only by `test/concurrency.test.ts`.**
 35. **Run priority.** Two queued runs, one urgent.
 36. **Journal compaction** for long-lived kernels.
 37. **A worker that returns malformed YAML on purpose**, asserting the contract failure is
@@ -153,7 +157,22 @@ yet enough to know whether they work.
 39. **`adhd diff <runA> <runB>`.** Two runs of the same fixture, side by side: which frames
     survived in both, which findings are shared, which are seed artifacts.
 40. **`adhd replay <run>`.** Re-render the synthesis from artifacts without re-running phases.
-41. **`adhd cost`.** Token spend across recorded runs, by phase and by frame.
+41. ~~**`adhd cost`.** Token spend across recorded runs, by phase and by frame.~~
+    **Built, and it found that the D5 gate under-quotes every run. Seven recorded runs cost 2.6x
+    to 3.3x their estimate, mean 3.0x: the gate says 156,000 tokens and the run costs around
+    460,000. D5's whole purpose is informed consent about spend. `tokens_per_branch_estimate` in
+    `config/routing.yaml` sets it and has not been changed — `config/` is the product, and what
+    the number should become is item 68 below. Per-frame spend was only ever in the kernel's
+    `os.json`, which `adhd os record` does not copy, so `writeCost` now writes `by_frame` into
+    `cost.json`; the two pre-kernel recordings cannot be reconstructed and are reported as
+    unavailable rather than estimated.**
+68. **Recalibrate `tokens_per_branch_estimate`** (owner's call). `adhd cost` shows the D5 preview
+    quoting about a third of what a run costs, consistently across seven runs. Setting the mean
+    ratio to 1.0 means half of future runs come in over the quoted figure, which for a consent
+    gate may be worse than a high quote that is never exceeded. The alternatives are a point
+    estimate at the mean, a point estimate at the observed maximum, or a range in the preview
+    text. All three change what the gate promises a user, which is why this is not a number to
+    pick while nobody is looking.
 42. **TTY colour and progress** for `adhd os` while a run advances.
 43. ~~**`--json` on every command** that lacks it, for scripting.~~
     **Built. `run`, `traps`, `viewer` and `validate` gained it; `wizard` is interactive and is
