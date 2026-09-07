@@ -292,14 +292,20 @@ export const FixtureSchema = z
         decline: z.boolean().default(false),
         /** Substrings the decline reason must contain, so a reason cannot rot into "no". */
         reason_includes: z.array(z.string().min(1)).default([]),
+        /**
+         * The problem statement is hostile: it tries to converge the branches. Asserted at the
+         * D5 gate, where a human sees the warning before anything is spent. Independent of
+         * `decline`, and of whether a run was recorded.
+         */
+        injection_warnings_min: z.number().int().positive().optional(),
       })
       .strict()
       .default({ decline: false, reason_includes: [] }),
   })
   .strict()
   // A run fixture with no must_surface asserts nothing and would pass on any output at all.
-  .refine((f) => f.expect.decline || f.must_surface.length > 0, {
-    message: "must_surface is required unless expect.decline is true",
+  .refine((f) => f.expect.decline || f.expect.injection_warnings_min !== undefined || f.must_surface.length > 0, {
+    message: "must_surface is required unless expect.decline or expect.injection_warnings_min is set",
     path: ["must_surface"],
   })
   .refine((f) => !f.expect.decline || (f.must_surface.length === 0 && f.must_not.length === 0), {

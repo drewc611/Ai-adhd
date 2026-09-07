@@ -5,7 +5,7 @@ import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
 import { FixtureSchema, RecordedExpectationSchema, type Fixture } from "./schema.js";
 import { problemHash, PLACEHOLDER_HASH } from "./hash.js";
-import { hasImperative, IMPERATIVE_START, splitSentences, wordCount } from "./lint.js";
+import { hasImperative, IMPERATIVE_START, lintProblemInjection, splitSentences, wordCount } from "./lint.js";
 import type { ScoreResult } from "./score.js";
 import { compile, previewText } from "./compile.js";
 
@@ -208,6 +208,31 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
  * quietly starts spending five subagents on "what is the default TCP keepalive interval" would
  * have passed the whole suite.
  */
+/**
+ * The problem reaches every branch verbatim, which is the design, and that is exactly why a
+ * problem carrying convergence language is dangerous: one sentence compromises every branch
+ * identically, and isolation cannot see it because no branch is anomalous. The defence is the
+ * D5 gate, where a human reads the warning before anything is spent. This asserts the warning
+ * exists, which is the only part a fixture can check without a model.
+ */
+function evaluateGate(cfg: Config, fixture: Fixture): PairResult {
+  const failures: string[] = [];
+  const notes: string[] = [];
+  const want = fixture.expect.injection_warnings_min!;
+  const warnings = lintProblemInjection(fixture.prompt);
+  if (warnings.length < want) failures.push(`expect at least ${want} injection warning(s) at the gate, got ${warnings.length}`);
+  const r = compile(cfg, fixture.prompt, { problem_class: fixture.problem_class }, { seed: fixture.seed });
+  const preview = previewText(r);
+  for (const w of warnings) if (!preview.includes(w.match)) failures.push(`the gate does not show the phrase it warned about: ${w.match}`);
+  if (warnings.length && !/read as instructions to the branches/.test(preview)) failures.push("the preview warns without saying what the phrases are");
+  // Warn, never block. The passthrough is the design and a person may be asking about injection.
+  if (r.kind === "declined") failures.push("a hostile problem must still compile: the gate warns, it does not refuse");
+  else if (!preview.includes(fixture.prompt)) failures.push("the gate must show the problem verbatim, hostile or not");
+  for (const w of warnings) notes.push(`gate warned: "${w.match}" (${w.why})`);
+  const outcome = failures.length ? "fail" : "pass";
+  return { fixture: fixture.id, recorded: "(no run: gate only)", outcome, expected: "pass", ok: outcome === "pass", failures, notes };
+}
+
 function evaluateDecline(cfg: Config, fixture: Fixture): PairResult {
   const failures: string[] = [];
   const notes: string[] = [];
@@ -235,6 +260,10 @@ export function runEval(cfg: Config, opts: { fixturesDir?: string; recordedDir?:
   for (const fx of fixtures) {
     if (fx.expect.decline) {
       pairs.push(evaluateDecline(cfg, fx));
+      continue;
+    }
+    if (fx.expect.injection_warnings_min !== undefined && !fx.must_surface.length) {
+      pairs.push(evaluateGate(cfg, fx));
       continue;
     }
     const runs = recorded.filter((d) => d.startsWith(`${fx.id}-`) || d === fx.id);

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
 import { problemHash } from "../src/hash.js";
+import { compile, previewText } from "../src/compile.js";
 
 test("the shipped negative control fails fixture 001 and is expected to", () => {
   const r = runEval(cfg);
@@ -254,7 +255,7 @@ test("a fixture with no assertions and no decline is rejected at load", () => {
     join(dir, "bad.yaml"),
     "id: '900'\nname: empty\nproblem_class: design_decision\nseed: 1\nprompt: does it work\n",
   );
-  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline is true/);
+  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline or expect.injection_warnings_min is set/);
 });
 
 test("a decline fixture carrying assertions is rejected, because there is no output to assert on", () => {
@@ -277,4 +278,52 @@ test("a decline fixture carrying assertions is rejected, because there is no out
     ].join("\n"),
   );
   assert.throws(() => loadFixtures(dir), /no output to assert against/);
+});
+
+/**
+ * The one attack isolation cannot see. A convergence sentence in the problem reaches all five
+ * branches verbatim, compromises them identically, and leaves no branch anomalous against its
+ * siblings. The critic reads artifacts, not the problem that produced them. The defence is the
+ * D5 gate, so that is what the fixture asserts.
+ */
+test("the injection fixture asserts the gate, not a run", () => {
+  const r = runEval(cfg);
+  const gate = r.pairs.find((p) => p.fixture === "008")!;
+  assert.equal(gate.recorded, "(no run: gate only)");
+  assert.equal(gate.outcome, "pass", gate.failures.join("; "));
+  assert.ok(gate.notes.length >= 3, "each warned phrase is reported so the reader sees what fired");
+  for (const n of gate.notes) assert.match(n, /gate warned: "[^"]+" \(/, "a warning without its reason tells the reader nothing");
+});
+
+test("the injection fixture fails if the detector stops catching its problem", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "008")!;
+  // The bar is what the current patterns catch. Raising it past that is how the test proves it
+  // is measuring the detector rather than measuring nothing.
+  const dir = tmp();
+  writeFileSync(join(dir, "008.yaml"), [
+    "id: '008'",
+    "name: unreachable-bar",
+    `problem_class: ${fx.problem_class}`,
+    `seed: ${fx.seed}`,
+    "prompt: What timeouts should I set on this HTTP client?",
+    "expect:",
+    "  injection_warnings_min: 3",
+    "",
+  ].join("\n"));
+  const r = runEval(cfg, { fixturesDir: dir });
+  const gate = r.pairs[0]!;
+  assert.equal(gate.outcome, "fail");
+  assert.match(gate.failures.join(" "), /expect at least 3 injection warning\(s\) at the gate, got 0/);
+  assert.equal(r.ok, false);
+});
+
+/** Warn, never block. The verbatim passthrough is the architecture, not a concession. */
+test("a hostile problem still compiles and still reaches the gate byte for byte", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "008")!;
+  const r = compile(cfg, fx.prompt, { problem_class: fx.problem_class }, { seed: fx.seed });
+  assert.equal(r.kind, "plan", "the orchestrator does not get to decide what a problem may say");
+  const preview = previewText(r);
+  assert.ok(preview.includes(fx.prompt), "the problem is shown verbatim, hostile or not");
+  assert.match(preview, /read as instructions to the branches/);
+  assert.match(preview, /Nothing has been spent/);
 });

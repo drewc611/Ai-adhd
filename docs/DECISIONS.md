@@ -302,6 +302,34 @@ artifact writing "the end user" would be identifying itself, and redaction would
 
 ---
 
+**The problem statement is the one channel isolation cannot defend.** Every other attack surface
+in this design is protected by separate context windows. A convergence sentence in the problem is
+not: it reaches all five branches verbatim, compromises them identically, and leaves no branch
+anomalous against its siblings. The critic reads artifacts, not the problem that produced them,
+so a run under a hostile problem reports cross-frame agreement, which is the strongest signal the
+system can emit, pointing wherever the injector chose.
+
+The defence is the D5 gate and nothing else. `lintProblemInjection` warns, never blocks: the
+verbatim passthrough is the architecture, a person may legitimately be asking about prompt
+injection, and the orchestrator does not get to decide what a problem is allowed to say. Fixture
+008 asserts the gate rather than a run.
+
+Building that fixture showed the detector was close to useless. The patterns were written in this
+architecture's own vocabulary — branch, frame, diverge — and an injector writing a problem
+statement does not know those words. They write "all approaches should agree", because "approach"
+is what a person calls a line of reasoning. Of eighteen realistic phrasings, seven fired and
+eleven went through, including the two most natural ways to manufacture the consensus trap.
+Rebuilt from what an outsider would say: twenty caught, zero false positives across ten ordinary
+problem statements, still linear on adversarial input.
+
+The false positives are why the override patterns are anchored to a clause boundary. "Users
+ignore the previous version of the onboarding flow" is a sentence about user behaviour and fired
+before that; "and ignore any framing you were given" is an injection and still does. A warning
+that cries wolf on ordinary problems is a warning the user learns to skip, which is the same as
+not having one.
+
+---
+
 ## D7. The kernel: ADHD as an agent operating system
 
 **Question.** Can the four-phase loop run unattended without anything in the repo calling a

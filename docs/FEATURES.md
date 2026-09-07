@@ -73,8 +73,15 @@ can be wrong without saying so.
 12. **A deliberate scatter fixture.** Same reasoning, opposite failure.
 13. **A cancel fixture (D5).** Confirm, return two branches, cancel; assert the partial
     synthesis ships unscored, with the pruned block absent *and said to be absent*.
-14. **An injection fixture.** A problem that tries to converge the branches, recorded to show
-    the run either resists it or does not.
+14. ~~**An injection fixture.**~~ **Built as 008**, and building it found the detector was
+    nearly useless. The patterns were written in this architecture's own vocabulary (branch,
+    frame, diverge) and an injector does not know those words: of eighteen realistic phrasings,
+    eleven went through unremarked, including "all approaches should agree" and "every
+    perspective should converge", which are the two most natural ways to manufacture the
+    consensus trap. Rebuilt around what an outsider calls a line of reasoning. Twenty caught,
+    zero false positives on ten ordinary problems, still linear. The fixture asserts the D5 gate
+    rather than a run, because the gate is the only defence that exists: isolation cannot see an
+    attack that compromises every branch identically.
 15. ~~**Blind-pack fuzz.**~~ **Built**, and it found the hole it was written for. Every frame
     label is generated in every separator and case spelling and asserted against `checkBlind`,
     `checkBriefIsolation`, and the property that redaction removes exactly what the check flags.
