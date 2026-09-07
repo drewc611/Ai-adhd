@@ -160,6 +160,8 @@ node dist/src/mcp.js           # stdio; the four commands plus the ten kernel ve
 
 ```
 npm install && npm test          # builds, then runs the contract tests and the eval harness
+node dist/src/cli.js wizard       # menus over every verb below; each screen prints the command it ran
+node dist/src/cli.js viewer       # one self-contained HTML page over every recorded run
 node dist/src/cli.js validate    # loads config/ and prompts/, runs the D6 static check
 node dist/src/cli.js frames      # the library
 node dist/src/cli.js eval        # replays evals/recorded/ against evals/fixtures/
@@ -179,9 +181,8 @@ node dist/src/cli.js learn --panel --run <dir>   # three or more critics on one 
 `learn` reads the recorded runs and calls nothing. It is how the frame library, the rubric and
 the fixtures get changed on evidence rather than on taste. Current findings are in D8.
 
-### Exit codes
-
-A script driving a run branches on these, so each means one thing.
+<details>
+<summary><b>Exit codes</b> — a script driving a run branches on these, so each means one thing</summary>
 
 | code | meaning |
 |---|---|
@@ -191,6 +192,14 @@ A script driving a run branches on these, so each means one thing.
 | 3 | `RunAbort`: the run is over. A `problem_hash` mismatch is the usual cause. Also returned by `os claim` with nothing claimable and `os result` with no synthesis yet |
 | 4 | the repository is invalid: a missing or malformed file under `config/`, `prompts/` or `docs/` |
 | 5 | the command line is wrong. The repository is fine |
+
+</details>
+
+`wizard` needs a terminal and says so when piped, so it never blocks in CI. `viewer` inlines
+the run data rather than fetching it, so the page opens from disk with nothing to serve: pick a
+run and a frame and you get the blind pass A row with the critic's evidence, every detector that
+fired with the text that fired it, the cluster and its margin, and the deepen verdict. Filter by
+trap to see everything T1 caught across a run, or by status to read only what was pruned.
 
 A run is four commands driven by the host (see `skills/adhd/SKILL.md`):
 
@@ -218,6 +227,9 @@ fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
 
+<details>
+<summary><b>What each recorded run found</b>, including the two recorded as failing</summary>
+
 - `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
   MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on
   caller-owned deadlines and the cancel path; both survivors defended under objection.
@@ -241,6 +253,8 @@ contested decision in the corpus turns out to be settled inside two anchor point
   four clusters, two positions that cannot both be acted on. Two folded under objection and
   said what they should have been instead. Nobody asked what the flag's name asserts when it
   is false, which is a frame-set gap, kept visible rather than patched out of the fixture.
+
+</details>
 
 Each run's `README.md` says how it was produced and what it did not surface.
 
@@ -279,6 +293,9 @@ learned to look for that block is told why there isn't one.
 
 Hosts supply inference by claiming tasks and returning artifacts, over MCP or the CLI:
 
+<details>
+<summary><b>The syscalls</b>, over MCP or the CLI</summary>
+
 ```
 adhd os submit --problem p.txt --decision '{"problem_class":"design_decision"}'   # preview, awaiting_confirm
 adhd os confirm <run_id>                                                           # branch tasks claimable
@@ -291,6 +308,8 @@ The same verbs are MCP tools (`adhd_submit`, `adhd_confirm`, `adhd_claim`, `adhd
 `adhd_status`, `adhd_result`, `adhd_cancel`, `adhd_list`), so any MCP host can submit work and
 any Claude Code session running the `adhd-worker` skill can execute it. `docs/OS.md` has the
 process model and the syscall table.
+
+</details>
 
 ## Contributing
 

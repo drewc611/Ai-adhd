@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADHD run explorer</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #FBFBFC; --panel: #FFFFFF; --line: #E3E6EB; --ink: #14171D; --dim: #616B7D;
+    --amber: #B07D12; --teal: #0E8577; --coral: #C4453A; --slate: #6C7789;
+    --pruned-bg: #FDF3F2; --live-bg: #F1FAF8; --sel: #EEF1F6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0C0E13; --panel: #141821; --line: #252C3A; --ink: #E9EFF6; --dim: #8A94A6;
+      --amber: #F0C24B; --teal: #45D0C0; --coral: #F97B6B; --slate: #6C7789;
+      --pruned-bg: #1E1518; --live-bg: #10201E; --sel: #1D2431;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C0E13; --panel: #141821; --line: #252C3A; --ink: #E9EFF6; --dim: #8A94A6;
+    --amber: #F0C24B; --teal: #45D0C0; --coral: #F97B6B; --slate: #6C7789;
+    --pruned-bg: #1E1518; --live-bg: #10201E; --sel: #1D2431;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
+  a { color: inherit; }
+  h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+
+  header { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 14px 20px;
+           border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  .mark { width: 30px; height: 30px; flex: none; }
+  .title { font-weight: 700; letter-spacing: 0.02em; }
+  .sub { color: var(--dim); font-size: 13px; }
+  .spacer { flex: 1 1 auto; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+  label.f { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
+  select, input[type="search"], button {
+    font: inherit; font-size: 13px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px;
+  }
+  select { cursor: pointer; }
+  button { cursor: pointer; }
+  button:hover, select:hover { border-color: var(--dim); }
+  button[aria-pressed="true"] { background: var(--sel); border-color: var(--dim); }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  main { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 0; min-height: calc(100vh - 61px); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } aside { border-right: 0 !important; border-bottom: 1px solid var(--line); } }
+
+  aside { border-right: 1px solid var(--line); background: var(--panel); padding: 14px; overflow-y: auto; }
+  .runmeta { font-size: 13px; color: var(--dim); margin: 10px 0 16px; }
+  .runmeta b { color: var(--ink); font-weight: 600; }
+  .problem { font: 13px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--line);
+             border-radius: 8px; padding: 10px; white-space: pre-wrap; margin-bottom: 14px; }
+
+  .frames { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  .frames button { width: 100%; text-align: left; display: flex; gap: 9px; align-items: baseline;
+                   padding: 9px 10px; border-radius: 8px; background: transparent; border: 1px solid transparent; }
+  .frames button:hover { background: var(--sel); }
+  .frames button[aria-current="true"] { background: var(--sel); border-color: var(--line); }
+  .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--slate); align-self: center; }
+  .dot.survivor { background: var(--teal); } .dot.pruned { background: var(--coral); }
+  .dot.rec { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 25%, transparent); }
+  .fid { font: 600 13px var(--mono); letter-spacing: 0.01em; }
+  .fmeta { margin-left: auto; font-size: 11px; color: var(--dim); font-family: var(--mono); white-space: nowrap; }
+
+  section.detail { padding: 20px 26px 60px; overflow-y: auto; max-width: 900px; }
+  .crumb { font: 12px var(--mono); color: var(--dim); margin-bottom: 4px; }
+  .headline { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; margin-bottom: 14px; }
+  .tag { font: 600 11px var(--mono); letter-spacing: 0.04em; text-transform: uppercase;
+         border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--dim); }
+  .tag.pruned { color: var(--coral); border-color: color-mix(in srgb, var(--coral) 45%, transparent); background: var(--pruned-bg); }
+  .tag.survivor { color: var(--teal); border-color: color-mix(in srgb, var(--teal) 45%, transparent); background: var(--live-bg); }
+  .tag.rec { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 50%, transparent); }
+
+  .card { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 14px 16px; margin: 0 0 14px; }
+  .card > h3 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); margin-bottom: 9px; }
+  .quote { font-size: 15px; line-height: 1.55; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font: 600 11px var(--mono); letter-spacing: 0.04em; text-transform: uppercase;
+       color: var(--dim); border-bottom: 1px solid var(--line); padding: 0 8px 6px 0; }
+  td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+  .bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--teal); vertical-align: middle; margin-left: 6px; }
+  .bar.low { background: var(--coral); }
+
+  .trap { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .trap:last-child { border-bottom: 0; }
+  .tid { font: 700 12px var(--mono); color: var(--coral); flex: none; padding-top: 2px; }
+
+  details { border-top: 1px solid var(--line); }
+  details > summary { cursor: pointer; padding: 9px 0; font-size: 13px; color: var(--dim); list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸ "; }
+  details[open] > summary::before { content: "▾ "; }
+  details > summary:hover { color: var(--ink); }
+  .body { font-size: 14px; line-height: 1.6; white-space: pre-wrap; padding-bottom: 10px; }
+
+  .note { font-size: 13px; color: var(--dim); }
+  .warn { color: var(--coral); }
+  .empty { color: var(--dim); font-style: italic; }
+  mark { background: color-mix(in srgb, var(--amber) 35%, transparent); color: inherit; border-radius: 2px; }
+  kbd { font: 11px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+<script id="adhd-data" type="application/json">/*__ADHD_DATA__*/null</script>
+
+<header>
+  <svg class="mark" viewBox="0 0 256 256" aria-hidden="true">
+    <rect width="256" height="256" rx="56" fill="#141821"/>
+    <g fill="none" stroke="#3C4453" stroke-width="13" stroke-linecap="round">
+      <path d="M82.8 107.1 L166.3 41.8"/><path d="M88.5 137.9 L189.9 168.9"/>
+    </g>
+    <g fill="none" stroke="#7E8899" stroke-width="10" stroke-linecap="round">
+      <path d="M158.3 31.6 L174.3 52.1"/><path d="M193.7 156.5 L186.1 181.4"/>
+    </g>
+    <g fill="none" stroke-width="13" stroke-linecap="round">
+      <path d="M88.1 116.9 L188.4 82.4" stroke="#F0C24B"/>
+      <path d="M90.0 126.8 L195.9 123.1" stroke="#45D0C0"/>
+      <path d="M83.2 148.5 L167.8 212.3" stroke="#F97B6B"/>
+    </g>
+    <circle cx="188.4" cy="82.4" r="13" fill="#F0C24B"/><circle cx="195.9" cy="123.1" r="13" fill="#45D0C0"/>
+    <circle cx="167.8" cy="212.3" r="13" fill="#F97B6B"/><circle cx="56" cy="128" r="16" fill="#E9EFF6"/>
+  </svg>
+  <div>
+    <div class="title">ADHD run explorer</div>
+    <div class="sub" id="stamp"></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="controls">
+    <label class="f">Run <select id="run"></select></label>
+    <label class="f">Trap <select id="trap"></select></label>
+    <label class="f">Status <select id="status"></select></label>
+    <label class="f">Find <input type="search" id="q" placeholder="in evidence…" size="12"></label>
+    <button id="theme" title="Light, dark, or follow the system">◑</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="runmeta" id="runmeta"></div>
+    <div class="problem" id="problem"></div>
+    <ul class="frames" id="frames"></ul>
+  </aside>
+  <section class="detail" id="detail"></section>
+</main>
+
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("adhd-data").textContent);
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+const state = { run: DATA.runs.findIndex(r => !r.control) >= 0 ? DATA.runs.findIndex(r => !r.control) : 0, frame: 0, trap: "", status: "", q: "" };
+
+// ---- filters -------------------------------------------------------------------------------
+$("run").append(...DATA.runs.map((r, i) => {
+  const o = el("option", null, r.id + (r.control ? "  (control)" : ""));
+  o.value = String(i); return o;
+}));
+$("trap").append(...["", ...DATA.traps].map(t => { const o = el("option", null, t || "any"); o.value = t; return o; }));
+$("status").append(...[["", "any"], ["survivor", "survivors"], ["pruned", "pruned"], ["rec", "held the recommendation"]]
+  .map(([v, label]) => { const o = el("option", null, label); o.value = v; return o; }));
+
+$("run").value = String(state.run);
+$("run").onchange = (e) => { state.run = +e.target.value; state.frame = 0; render(); };
+$("trap").onchange = (e) => { state.trap = e.target.value; state.frame = 0; render(); };
+$("status").onchange = (e) => { state.status = e.target.value; state.frame = 0; render(); };
+$("q").oninput = (e) => { state.q = e.target.value.trim().toLowerCase(); render(); };
+$("theme").onclick = () => {
+  const now = document.documentElement.getAttribute("data-theme");
+  const next = now === "dark" ? "light" : now === "light" ? null : "dark";
+  if (next) document.documentElement.setAttribute("data-theme", next); else document.documentElement.removeAttribute("data-theme");
+  try { next ? localStorage.setItem("adhd-theme", next) : localStorage.removeItem("adhd-theme"); } catch {}
+};
+try { const t = localStorage.getItem("adhd-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch {}
+
+const run = () => DATA.runs[state.run];
+// Decided by the collector, using the same ordering the synthesis uses, so the page cannot
+// disagree with the run it is displaying. Every cluster has a representative; only one holds
+// the answer.
+const heldRecommendation = (r, f) => r.recommendation === f.frame;
+
+function visibleFrames() {
+  const r = run();
+  return r.frames.filter(f => {
+    if (state.trap && !f.fired.some(t => t.trap === state.trap)) return false;
+    if (state.status === "survivor" && f.status !== "survivor") return false;
+    if (state.status === "pruned" && f.status !== "pruned") return false;
+    if (state.status === "rec" && !heldRecommendation(r, f)) return false;
+    if (state.q) {
+      const hay = [f.frame, f.axis, f.position ?? "", f.falsifier ?? "", f.missing_actor ?? "", ...f.forecloses,
+                   ...f.fired.map(t => t.trap + " " + t.evidence), ...f.dimensions.map(d => d.evidence),
+                   f.deepen?.response ?? "", f.cluster?.action ?? ""].join(" ").toLowerCase();
+      if (!hay.includes(state.q)) return false;
+    }
+    return true;
+  });
+}
+
+// ---- render --------------------------------------------------------------------------------
+function render() {
+  const r = run();
+  $("stamp").textContent = `${DATA.runs.length} recorded runs · ${DATA.frames.length} frames in the library · built ${DATA.generated}`;
+
+  const meta = $("runmeta"); meta.replaceChildren();
+  const line = (label, value, cls) => { const d = el("div", cls); d.append(el("b", null, label + " "), document.createTextNode(value)); meta.append(d); };
+  if (r.problem_class) line("class", `${r.problem_class}, seed ${r.seed}`);
+  if (r.expected) line("recorded as", r.expected.outcome + (r.control ? ", a negative control that must fail" : ""));
+  if (r.eval && r.eval.outcome !== (r.expected?.outcome ?? "pass")) line("eval", `${r.eval.outcome} — does not match its expectation`, "warn");
+  if (r.run_level?.monoculture) line("run level", "MONOCULTURE", "warn");
+  if (r.run_level?.scatter) line("run level", "SCATTER", "warn");
+  if (r.raters > 1) line("critics", `${r.raters} blind scorings of this pack`);
+  if (r.cost?.tokens) line("cost", r.cost.tokens.toLocaleString() + " tokens");
+  if (r.problem_hash) { const d = el("div", "note"); d.style.fontFamily = "var(--mono)"; d.style.fontSize = "11px"; d.style.marginTop = "6px"; d.textContent = r.problem_hash; meta.append(d); }
+
+  $("problem").textContent = r.problem.trim() || "(no problem.txt recorded)";
+
+  const list = $("frames"); list.replaceChildren();
+  const vis = visibleFrames();
+  if (!vis.length) list.append(el("li", "empty", "No frame in this run matches the filters."));
+  vis.forEach((f, i) => {
+    const li = el("li");
+    const b = el("button");
+    b.setAttribute("aria-current", String(i === state.frame));
+    const rec = heldRecommendation(r, f);
+    b.append(el("span", "dot " + (rec ? "rec" : f.status === "survivor" ? "survivor" : f.status === "pruned" ? "pruned" : "")),
+             el("span", "fid", f.frame),
+             el("span", "fmeta", f.fired.length ? f.fired.map(t => t.trap).join(" ") : f.standing.pass_a != null ? f.standing.pass_a.toFixed(2) : ""));
+    b.onclick = () => { state.frame = i; render(); };
+    li.append(b); list.append(li);
+  });
+
+  renderDetail(vis[Math.min(state.frame, vis.length - 1)]);
+}
+
+function highlight(text) {
+  if (!state.q) return document.createTextNode(text);
+  const frag = document.createDocumentFragment();
+  const low = text.toLowerCase(); let at = 0;
+  for (let i = low.indexOf(state.q); i !== -1; i = low.indexOf(state.q, at)) {
+    frag.append(text.slice(at, i)); frag.append(el("mark", null, text.slice(i, i + state.q.length)));
+    at = i + state.q.length;
+  }
+  frag.append(text.slice(at));
+  return frag;
+}
+
+function card(title, ...nodes) { const c = el("div", "card"); if (title) c.append(el("h3", null, title)); c.append(...nodes); return c; }
+
+function renderDetail(f) {
+  const out = $("detail"); out.replaceChildren();
+  const r = run();
+  if (!f) { out.append(el("p", "empty", "Pick a frame, or clear the filters.")); return; }
+
+  out.append(el("div", "crumb", `${r.id} · axis ${f.axis ?? "not dispatched"}`));
+
+  const head = el("div", "headline");
+  head.append(el("h2", null, f.frame));
+  const rec = heldRecommendation(r, f);
+  if (rec) head.append(el("span", "tag rec", "held the recommendation"));
+  head.append(el("span", "tag " + f.status, f.status));
+  if (f.deepen) head.append(el("span", "tag", f.deepen.verdict === "fold" ? "folded under objection" : "defended"));
+  if (f.standing.pass_a != null) head.append(el("span", "tag", "pass A " + f.standing.pass_a.toFixed(4)));
+  out.append(head);
+
+  if (!f.dispatched) {
+    out.append(card(null, el("p", null, "Routing never selected this frame for this run, so it was not rejected. A frame that was never asked cannot have been.")));
+    return;
+  }
+
+  if (f.position) {
+    const c = card("Position", el("p", "quote", f.position));
+    if (f.forecloses.length) {
+      const d = el("details"); d.append(el("summary", null, `forecloses ${f.forecloses.length} thing(s)`));
+      const ul = el("ul"); ul.style.margin = "0 0 10px"; ul.style.paddingLeft = "20px";
+      for (const x of f.forecloses) ul.append(el("li", null, x));
+      d.append(ul); c.append(d);
+    }
+    if (f.falsifier) {
+      const d = el("details"); d.append(el("summary", null, "falsifier"));
+      const b = el("div", "body"); b.textContent = f.falsifier; d.append(b); c.append(d);
+    }
+    const d = el("details");
+    d.append(el("summary", null, f.missing_actor ? "missing actor" : "missing actor: none named"));
+    const b = el("div", "body");
+    b.textContent = f.missing_actor ?? "This branch named nobody. If every branch does it, run level T6 fires.";
+    d.append(b); c.append(d);
+    out.append(c);
+  }
+
+  // Traps first when they fired: that is why the frame is not in the recommendation.
+  if (f.fired.length) {
+    const c = card("Pruned by these detectors");
+    for (const t of f.fired) {
+      const row = el("div", "trap");
+      row.append(el("span", "tid", t.trap));
+      const p = el("span"); p.append(highlight(t.evidence)); row.append(p);
+      c.append(row);
+    }
+    out.append(c);
+  } else if (f.violations.length) {
+    const c = card("Contract violations");
+    for (const v of f.violations) c.append(el("div", "trap", v));
+    out.append(c);
+  }
+
+  // Pass A, weakest contribution first, which is how `adhd why` orders it.
+  if (f.dimensions.length) {
+    const c = card("Blind pass A, weakest first");
+    const t = el("table");
+    const thead = el("thead"); const hr = el("tr");
+    for (const h of ["dimension", "score", "the critic's evidence"]) hr.append(el("th", null, h));
+    thead.append(hr); t.append(thead);
+    const tb = el("tbody");
+    for (const d of f.dimensions) {
+      const tr = el("tr");
+      tr.append(el("td", null, d.dimension));
+      const sc = el("td", "num", `${d.score}/3 ×${d.weight}`);
+      const bar = el("span", "bar" + (d.score <= 1 ? " low" : "")); bar.style.width = (6 + d.score * 9) + "px";
+      sc.append(bar); tr.append(sc);
+      const ev = el("td"); ev.append(highlight(d.evidence)); tr.append(ev);
+      tb.append(tr);
+    }
+    t.append(tb); c.append(t); out.append(c);
+  }
+
+  if (f.cluster) {
+    const c = card("Cluster");
+    c.append(el("p", "quote", f.cluster.action));
+    const members = el("p", "note");
+    members.textContent = `members: ${f.cluster.members.join(", ")} · survivors: ${f.cluster.survivors.join(", ") || "none"}`;
+    c.append(members);
+    if (f.standing.rank_in_cluster) {
+      const s = el("p", "note");
+      s.textContent = `${f.frame} ranked ${f.standing.rank_in_cluster} of ${f.cluster.survivors.length} survivor(s)` + (f.standing.representative ? ", and represented the cluster in deepen" : "");
+      c.append(s);
+    }
+    if (f.standing.tie) c.append(el("p", "note warn", "Scored level with its neighbour. The order came from the frame id, alphabetically, not from the rubric."));
+    else if (f.standing.margin_to_next != null && f.standing.margin_to_next <= 2 / 48 + 1e-9)
+      c.append(el("p", "note warn", `Margin to its neighbour is ${f.standing.margin_to_next.toFixed(4)}, at most two anchor points out of 48. One dimension read the other way would have changed this.`));
+    out.append(c);
+  }
+
+  if (f.deepen) {
+    const c = card(f.deepen.verdict === "fold" ? "Folded under its strongest objection" : "Defended its strongest objection");
+    const d = el("details"); d.append(el("summary", null, "full response"));
+    const b = el("div", "body"); b.append(highlight(f.deepen.response)); d.append(b);
+    c.append(d);
+    if (f.deepen.revised_position) c.append(card("Revised position", el("p", "quote", f.deepen.revised_position)));
+    out.append(c);
+  }
+
+  if (f.in_synthesis.length) {
+    const c = card("Where it appears in the synthesis");
+    const d = el("details"); d.append(el("summary", null, `${f.in_synthesis.length} line(s)`));
+    const b = el("div", "body"); b.textContent = f.in_synthesis.join("\n\n"); d.append(b);
+    c.append(d); out.append(c);
+  }
+
+  if (r.synthesis) {
+    const c = card(null);
+    const d = el("details"); d.append(el("summary", null, "the whole synthesis for this run"));
+    const b = el("div", "body"); b.textContent = r.synthesis; d.append(b);
+    c.append(d); out.append(c);
+  }
+}
+
+// j/k and arrows move down the frame list, which is faster than reaching for the mouse when
+// what you are doing is reading five frames in a row.
+addEventListener("keydown", (e) => {
+  if (e.target.matches("input, select, textarea")) return;
+  const n = visibleFrames().length;
+  if (!n) return;
+  if (e.key === "j" || e.key === "ArrowDown") { state.frame = (state.frame + 1) % n; render(); e.preventDefault(); }
+  else if (e.key === "k" || e.key === "ArrowUp") { state.frame = (state.frame - 1 + n) % n; render(); e.preventDefault(); }
+  else if (e.key === "/") { $("q").focus(); e.preventDefault(); }
+});
+
+render();
+</script>
+</body>
+</html>

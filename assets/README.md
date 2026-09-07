@@ -25,3 +25,21 @@ holds up to about 48px and turns to mush below that, which is what five rays cos
 
 Colours: `#F0C24B` amber, `#45D0C0` teal, `#F97B6B` coral, `#3C4453` pruned, `#E9EFF6` origin,
 on a `#1B202B` to `#0C0E13` tile.
+
+# The viewer shell
+
+`viewer.html` is the page `adhd viewer` fills in. It carries a `/*__ADHD_DATA__*/null` placeholder
+inside a `type="application/json"` block; the command replaces it with every recorded run and
+writes one self-contained file.
+
+Inlined rather than fetched, so the page opens from a `file://` path with no server and no CORS,
+and it still reads years from now with nothing to install. That constraint is also why the type
+is a system stack rather than a webfont: a font request would break the only property the file
+really has.
+
+Palette is the mark's, so the two read as one thing. Teal is a survivor, coral is pruned, amber
+is the position that shipped. Those are semantic and separate from anything decorative, because
+in a tool the state has to read before the text does.
+
+To change the layout, edit this file and re-run `adhd viewer`. A test fails if the placeholder
+goes missing, and another fails if either theme is only half declared.

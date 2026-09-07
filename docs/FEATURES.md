@@ -212,3 +212,21 @@ itself. Tier 3 is thirty-five items and almost none of them should be built. Tha
 useful output of writing a catalogue this size: the interesting work is small, specific, and
 mostly about measurement, and the long tail is surface area that would make the thing harder
 to reason about without making it better at reasoning.
+
+---
+
+## Built after the catalogue
+
+Three surfaces the list did not have, because the list was written from inside the terminal.
+
+- **`adhd viewer`.** One self-contained HTML page over every recorded run. Pick a run and a
+  frame; read its position, the detectors that fired with their evidence, the blind pass A row
+  weakest first, the cluster and its margin, and the deepen verdict. Filter by trap or status,
+  search the evidence. Data is inlined, so it opens from disk with nothing to serve. The reason
+  it exists: reading the pruned block meant `adhd why` twenty-five times.
+- **`adhd wizard`.** The same verbs behind menus, with no new dependency. Every screen prints
+  the command it ran, so the flags get learned rather than hidden. Refuses with a usage error
+  when there is no terminal, so it never blocks in CI.
+- **Collapsible README sections.** `<details>` is the only dropdown GitHub renders. The exit
+  code table, the per-run notes and the syscall list are reference material, folded so the page
+  opens short.

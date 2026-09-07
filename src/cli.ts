@@ -7,6 +7,8 @@ import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { diffRuns, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
+import { writeViewer } from "./viewer.js";
+import { wizard } from "./tui.js";
 import { openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort, UsageError } from "./errors.js";
@@ -226,6 +228,34 @@ program
     try {
       const r = explainFrame(loadConfig(program.opts().root), run, frame);
       console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("wizard")
+  .description("the commands without the flags: menus over the same verbs, each printing what it ran")
+  .action(async () => {
+    try {
+      await wizard(loadConfig(program.opts().root));
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("viewer")
+  .description("build one self-contained HTML page over the recorded runs. Reads runs; never calls a model")
+  .option("--out <file>", "where to write it", "adhd-runs.html")
+  .option("--recorded <dir>")
+  .action((o: { out: string; recorded?: string }) => {
+    try {
+      const r = writeViewer(loadConfig(program.opts().root), o.out, { recordedDir: o.recorded });
+      console.log(
+        `wrote ${r.path} (${(r.bytes / 1024).toFixed(0)} KB): ${r.runs} run(s), ${r.frames} frame(s).`,
+        "\nSelf-contained. Open it from disk; there is nothing to serve and nothing to fetch.",
+      );
     } catch (e) {
       fail(e);
     }
