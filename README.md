@@ -96,6 +96,7 @@ node dist/src/cli.js diff <runA> <runB>      # two runs of one fixture: what mov
 node dist/src/cli.js why <run> <frame>      # everything that happened to one frame: pass A row, cluster, detectors, deepen
 node dist/src/cli.js frames --stats          # how each frame has behaved across recorded runs
 node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates in practice
+node dist/src/cli.js frames --collisions     # which frame names are also ordinary prose
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
 node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?

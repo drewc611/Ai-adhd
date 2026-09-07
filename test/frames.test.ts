@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { diffRuns, frameStats, orthogonality } from "../src/frames.js";
+import { diffRuns, frameStats, labelCollisions, orthogonality } from "../src/frames.js";
 
 /** A recorded run is a directory with score.json and, optionally, deepen/<frame>.yaml. */
 function recordRun(
@@ -185,4 +185,77 @@ test("diff says plainly when two runs are not of the same problem", () => {
   assert.equal(r.same_problem, false);
   assert.match(r.text, /DIFFERENT problem_hash/);
   assert.match(r.text, /nothing below is a comparison/);
+});
+
+/** A recorded run with just a branches/ directory, which is all labelCollisions reads. */
+function recordBranches(root: string, id: string, artifacts: Record<string, string>) {
+  const dir = join(root, id, "branches");
+  mkdirSync(dir, { recursive: true });
+  for (const [frame, body] of Object.entries(artifacts)) writeFileSync(join(dir, `${frame}.yaml`), `frame: ${frame}\n${body}\n`);
+}
+
+test("a label used only by its own frame is discriminating and not reported", () => {
+  const root = tmp();
+  recordBranches(root, "001", {
+    LEDGER: 'reasoning: "The ledger says someone pays for the retry."',
+    MECHANIC: 'reasoning: "Look at what the machine actually does."',
+  });
+  const r = labelCollisions(cfg, root);
+  assert.equal(r.artifacts, 2);
+  assert.deepEqual(r.collisions, []);
+  assert.match(r.text, /Every label is discriminating/);
+});
+
+/**
+ * The case that damages a run. ACTOR_CENSUS writing "the end user behind that caller" is naming
+ * an actor, not identifying itself, and the redactor removes it anyway.
+ */
+test("a label used by a frame that does not own it is reported with the text that matched", () => {
+  const root = tmp();
+  recordBranches(root, "001", {
+    ACTOR_CENSUS: 'missing_actor: "The end user behind that caller, who can cancel."',
+    END_USER: 'reasoning: "Whoever is waiting should get an answer or a clean failure."',
+  });
+  const r = labelCollisions(cfg, root);
+  const c = r.collisions.find((x) => x.label === "End user")!;
+  assert.equal(c.frame, "END_USER");
+  assert.equal(c.foreign, 1);
+  assert.equal(c.own, 0);
+  // The example shows the text as it actually appeared, not the label as configured.
+  assert.match(c.examples[0]!, /001\/ACTOR_CENSUS: "end user"/);
+  assert.match(r.text, /a phrase the redactor removes/);
+});
+
+/** Counting it would put every label at own >= 1 and hide the real signal. */
+test("the mandatory frame field is not counted as a use", () => {
+  const root = tmp();
+  recordBranches(root, "001", { LEDGER: 'position: "Do the thing."' });
+  const r = labelCollisions(cfg, root);
+  assert.deepEqual(r.collisions, []);
+  assert.equal(r.artifacts, 1);
+});
+
+test("separator spellings count as the same label", () => {
+  const root = tmp();
+  recordBranches(root, "001", {
+    LEDGER: 'reasoning: "The door-keeper pattern and the doorkeeper idea are the same."',
+    DOOR_KEEPER: 'position: "Gate it."',
+  });
+  const c = labelCollisions(cfg, root).collisions.find((x) => x.frame === "DOOR_KEEPER" && x.label === "Door keeper")!;
+  assert.equal(c.foreign, 2, "door-keeper and doorkeeper are both the label");
+});
+
+test("the recorded corpus reports END_USER as the worst collision", () => {
+  const r = labelCollisions(cfg);
+  assert.ok(r.artifacts >= 25, `only ${r.artifacts} artifacts read`);
+  const worst = r.collisions[0]!;
+  assert.equal(worst.frame, "END_USER");
+  assert.ok(worst.foreign > worst.own, "the label is used more by frames that are not it");
+  assert.equal(worst.own, 0, "END_USER has never written its own label");
+});
+
+test("no recorded artifacts reports nothing rather than claiming every label is clean", () => {
+  const r = labelCollisions(cfg, join(tmp(), "nope"));
+  assert.equal(r.artifacts, 0);
+  assert.match(r.text, /no recorded artifacts to read/);
 });

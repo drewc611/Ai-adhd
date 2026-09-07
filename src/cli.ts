@@ -4,7 +4,7 @@ import { loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
-import { diffRuns, frameStats, listFrames, orthogonality } from "./frames.js";
+import { diffRuns, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { openKernel, recordRun } from "./os.js";
@@ -110,6 +110,7 @@ program
   .description("list the frame library, or report how it has behaved across recorded runs")
   .option("--orthogonality", "D6 empirical check: pairwise co-clustering")
   .option("--stats", "per-frame prune, fold and recommendation rates, and detector fire counts")
+  .option("--collisions", "which frame labels are also ordinary prose, so the redactor removes real text")
   .option("--recorded <dir>")
   .option("--json")
   .action((o) => {
@@ -118,6 +119,11 @@ program
       if (o.stats) {
         const r = frameStats(cfg, o.recorded);
         console.log(o.json ? JSON.stringify({ runs: r.runs, frames: r.frames, traps: r.traps }, null, 2) : r.text);
+        return;
+      }
+      if (o.collisions) {
+        const r = labelCollisions(cfg, o.recorded);
+        console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
         return;
       }
       if (o.orthogonality) {

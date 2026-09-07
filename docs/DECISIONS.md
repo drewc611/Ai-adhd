@@ -259,6 +259,33 @@ three shared runs yet.
 
 ---
 
+**Blindness costs text, and two labels cost more than they protect.** Redaction removes every
+frame label from what pass A reads, ids and display names alike, and it cannot tell "from inside
+the End user stance" from "the end user behind that caller". `adhd frames --collisions` counts
+which labels turn up in artifacts their frame did not write, across 29 recorded artifacts:
+
+| label | foreign uses | own uses |
+|---|---|---|
+| End user / END_USER | 5 | 0 |
+| Horizon / HORIZON | 1 | 0 |
+
+Nothing else collides. END_USER has never written its own label; ACTOR_CENSUS and LEDGER wrote
+it five times between them, once inside a `missing_actor` field, and the redactor removes all
+five. The critic then scores an actor census that appears not to name an actor, on
+`actor_coverage`.
+
+Two things were done and one was not. The pass A prompt now tells the critic that `[frame]` is
+machine redaction of a real noun phrase, to be read through rather than scored as vagueness.
+Separator spellings are now caught, which made redaction stricter, not looser: "door-keeper",
+"doorkeeper", "DoorKeeper" and a line break between the words all leaked before, which is nine of
+thirteen frames.
+
+What was not done is renaming END_USER and HORIZON. That is a D6 change to the library and it
+belongs to the owner. Zero own uses across five runs is also a small sample: a future END_USER
+artifact writing "the end user" would be identifying itself, and redaction would be right.
+
+---
+
 ## D7. The kernel: ADHD as an agent operating system
 
 **Question.** Can the four-phase loop run unattended without anything in the repo calling a

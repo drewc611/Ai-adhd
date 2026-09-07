@@ -67,8 +67,12 @@ can be wrong without saying so.
     synthesis ships unscored, with the pruned block absent *and said to be absent*.
 14. **An injection fixture.** A problem that tries to converge the branches, recorded to show
     the run either resists it or does not.
-15. **Blind-pack fuzz.** Generate artifacts that name their own frame a dozen ways and assert
-    pass A redaction catches all of them.
+15. ~~**Blind-pack fuzz.**~~ **Built**, and it found the hole it was written for. Every frame
+    label is generated in every separator and case spelling and asserted against `checkBlind`,
+    `checkBriefIsolation`, and the property that redaction removes exactly what the check flags.
+    Before the fix, every two-word name leaked under any separator: "door-keeper", "doorkeeper",
+    "DoorKeeper", "Door  keeper", and a line break between the words. Nine of thirteen frames.
+    Also flagged the reverse cost, which is now `frames --collisions`.
 16. **Second critic on the same pack, recorded.** Disagreement is reported, not resolved — but
     nothing currently records it.
 17. **Critic refusal path.** "I cannot score this" is currently a contract violation; it

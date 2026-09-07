@@ -352,3 +352,92 @@ export function diffRuns(dirA: string, dirB: string): RunDiff {
   );
   return { a, b, same_problem, shared_frames, only_a, only_b, status_changed, pass_a_moved, text: lines.join("\n") };
 }
+
+export interface Collision {
+  frame: string;
+  label: string;
+  own: number;
+  foreign: number;
+  examples: string[];
+}
+
+export interface CollisionReport {
+  artifacts: number;
+  collisions: Collision[];
+  text: string;
+}
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const pattern = (label: string) =>
+  label
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map(esc)
+    .join("[\\s_-]*");
+
+/**
+ * Which frame labels are also ordinary English. The redactor cannot tell "from inside the End
+ * user stance" from "the end user behind that caller", so it removes both, and the second was
+ * the artifact naming an actor. That damages the text pass A scores, on the very dimension the
+ * phrase was demonstrating.
+ *
+ * A label found in artifacts other than its own frame's is not identifying anything: any branch
+ * could have written it. A label found only in its own frame's artifact is doing its job. Both
+ * are counted from the recorded corpus rather than guessed at by reading the names.
+ */
+export function labelCollisions(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): CollisionReport {
+  const labels = cfg.frames.frames.flatMap((f) => [
+    { frame: f.id, label: f.id },
+    { frame: f.id, label: f.name },
+  ]);
+  const tally = new Map<string, Collision>(labels.map((l) => [`${l.frame} ${l.label}`, { ...l, own: 0, foreign: 0, examples: [] }]));
+
+  let artifacts = 0;
+  if (existsSync(recordedDir))
+    for (const id of readdirSync(recordedDir).sort()) {
+      const dir = join(recordedDir, id);
+      if (!statSync(dir).isDirectory()) continue;
+      const branches = join(dir, "branches");
+      if (!existsSync(branches)) continue;
+      for (const file of readdirSync(branches)) {
+        if (!file.endsWith(".yaml")) continue;
+        const writer = file.slice(0, -".yaml".length);
+        // The mandatory `frame:` field is stripped before the critic sees anything, so counting
+        // it would put every label at own >= 1 for free and hide the real signal.
+        const body = readFileSync(join(branches, file), "utf8").replace(/^frame:.*$/m, "");
+        artifacts++;
+        for (const l of labels) {
+          const hits = [...body.matchAll(new RegExp(`\\b${pattern(l.label)}\\b`, "gi"))];
+          if (!hits.length) continue;
+          const rec = tally.get(`${l.frame} ${l.label}`)!;
+          if (writer === l.frame) rec.own += hits.length;
+          else {
+            rec.foreign += hits.length;
+            if (rec.examples.length < 3) rec.examples.push(`${id}/${writer}: "${hits[0]![0]}"`);
+          }
+        }
+      }
+    }
+
+  const collisions = [...tally.values()].filter((c) => c.foreign > 0).sort((a, b) => b.foreign - a.foreign);
+  const lines = [`frame label collisions across ${artifacts} recorded artifact(s)`, ""];
+  if (!artifacts) lines.push("no recorded artifacts to read.");
+  else if (!collisions.length) lines.push("No label appeared in an artifact other than its own frame's. Every label is discriminating.");
+  else {
+    lines.push("labels that appeared in artifacts they do not identify:", "");
+    for (const c of collisions) {
+      lines.push(`  ${c.label.padEnd(18)} (${c.frame})  ${c.foreign} foreign use(s), ${c.own} own`);
+      for (const e of c.examples) lines.push(`      ${e}`);
+    }
+    lines.push(
+      "",
+      "Each foreign use is a phrase the redactor removes from an artifact that frame did not write.",
+      "The critic then reads [frame] where a real noun phrase stood. The pass A prompt tells it to",
+      "read through the redaction, which limits the damage but does not undo it.",
+      "",
+      "The fix is a display name that is not also a common noun. Renaming a frame is a D6 change,",
+      "so this counts the problem and stops there.",
+    );
+  }
+  return { artifacts, collisions, text: lines.join("\n") };
+}

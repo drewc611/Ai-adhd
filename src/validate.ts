@@ -90,7 +90,25 @@ interface LabelToken {
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const wordRe = (t: string) => new RegExp(`\\b${escapeRe(t)}\\b`, "i");
+
+/**
+ * A frame label survives any separator a writer might reach for. DOOR_KEEPER is also written
+ * "Door keeper", "door-keeper", "doorkeeper", "DoorKeeper", and across a line break, and all of
+ * them identify the frame just as well as the id does. Matching the literal token left every
+ * two-word name in the library leaking, which is nine of thirteen frames.
+ *
+ * Words are joined by an optional run of whitespace, underscores or hyphens. Zero separator is
+ * allowed deliberately: over-redaction is the safe direction here, and a label the problem
+ * itself uses is exempted before this is ever reached.
+ */
+const SEPARATOR = "[\\s_-]*";
+const labelPattern = (token: string) =>
+  token
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map(escapeRe)
+    .join(SEPARATOR);
+const wordRe = (t: string) => new RegExp(`\\b${labelPattern(t)}\\b`, "i");
 
 function tokensFor(frames: FrameLabel[]): LabelToken[] {
   return frames.flatMap((f) => [
@@ -118,7 +136,7 @@ export function redactFrameLabels(
   let out = text;
   for (const t of discriminating(tokensFor(frames), opts.problem ?? "")) {
     if (t.frame === opts.keep) continue;
-    out = out.replace(new RegExp(`\\b${escapeRe(t.token)}\\b`, "gi"), replacement);
+    out = out.replace(new RegExp(`\\b${labelPattern(t.token)}\\b`, "gi"), replacement);
   }
   return out;
 }
