@@ -616,9 +616,18 @@ export class Kernel {
     const secs = Math.max(0, Math.round((this.now().getTime() - started) / 1000));
     const byPhase: Record<string, number> = {};
     for (const t of reported) byPhase[t.phase] = (byPhase[t.phase] ?? 0) + (t.tokens ?? 0);
+    // Per-frame spend used to exist only in os.json, which `adhd os record` does not copy into
+    // a recording, so `adhd cost` could say what a run cost and never which frame cost it.
+    // Branch and deepen tasks are the ones labelled by frame; critic tasks are labelled by pass.
+    const byFrame: Record<string, number> = {};
+    for (const t of reported) if (t.phase === "diverge" || t.phase === "deepen") byFrame[t.label] = (byFrame[t.label] ?? 0) + (t.tokens ?? 0);
     writeFileSync(
       join(this.runDir(rec.run_id), "cost.json"),
-      JSON.stringify({ tokens, wall: `${secs}s from confirm`, reported_tasks: reported.length, of_tasks: rec.tasks.filter((t) => t.status === "done").length, by_phase: byPhase }, null, 2) + "\n",
+      JSON.stringify(
+        { tokens, wall: `${secs}s from confirm`, reported_tasks: reported.length, of_tasks: rec.tasks.filter((t) => t.status === "done").length, by_phase: byPhase, by_frame: byFrame },
+        null,
+        2,
+      ) + "\n",
     );
   }
 
@@ -717,3 +726,134 @@ export function recordRun(cfg: Config, kernel: Kernel, runId: string, opts: { fi
 }
 
 export { problemHash };
+
+// ---- kernel statistics over the journal (backlog 34) ----------------------------------------
+
+export interface PhaseTiming {
+  phase: Task["phase"];
+  tasks: number;
+  mean_seconds: number;
+  median_seconds: number;
+  max_seconds: number;
+}
+
+export interface KernelStats {
+  runs: number;
+  by_outcome: Record<string, number>;
+  claims: number;
+  returns: number;
+  expiries: number;
+  /** Expiries per claim. A worker that never dies makes this zero and the leases untested. */
+  expiry_rate: number;
+  lock_breaks: number;
+  workers: string[];
+  phases: PhaseTiming[];
+  span_hours: number | null;
+  text: string;
+}
+
+/**
+ * Throughput and phase timing read off the append-only journal (backlog 34).
+ *
+ * The journal is the only record of what a kernel did rather than what it holds now, and
+ * nothing has ever read it in aggregate. The numbers that matter are the ones a host would use
+ * to size a lease: how long a task of each phase actually takes, and how often the current
+ * lease length is wrong. A default of 900 seconds was chosen before any of this was measurable.
+ */
+export function kernelStats(root: string): KernelStats {
+  const p = join(root, "journal.jsonl");
+  const entries: Record<string, unknown>[] = existsSync(p)
+    ? readFileSync(p, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .flatMap((l) => {
+          try {
+            return [JSON.parse(l) as Record<string, unknown>];
+          } catch {
+            return []; // a truncated final line is ordinary on an append-only file
+          }
+        })
+    : [];
+
+  const str = (e: Record<string, unknown>, k: string) => (typeof e[k] === "string" ? (e[k] as string) : null);
+  const at = (e: Record<string, unknown>) => Date.parse(str(e, "at") ?? "");
+  const count = (event: string) => entries.filter((e) => e["event"] === event).length;
+
+  const runIds = new Set(entries.filter((e) => e["event"] === "submitted").map((e) => str(e, "run_id")).filter((x): x is string => x !== null));
+  const byOutcome: Record<string, number> = {};
+  for (const ev of ["done", "done_run_level", "cancelled", "aborted"]) {
+    const n = new Set(entries.filter((e) => e["event"] === ev).map((e) => str(e, "run_id"))).size;
+    if (n) byOutcome[ev] = n;
+  }
+
+  // Claim to return, per task. The journal carries both events with the task id, so a task that
+  // was claimed twice after an expiry is measured from its last claim, which is the one that
+  // produced the artifact.
+  const claimedAt = new Map<string, number>();
+  const durations = new Map<Task["phase"], number[]>();
+  const phaseOf = new Map<string, Task["phase"]>();
+  for (const e of entries) {
+    const task = str(e, "task");
+    if (!task) continue;
+    // Task ids are `<run>:<phase>:<label>`, and run ids cannot contain a colon.
+    const phase = task.split(":")[1] as Task["phase"] | undefined;
+    if (phase) phaseOf.set(task, phase);
+    if (e["event"] === "claimed") claimedAt.set(task, at(e));
+    else if (e["event"] === "returned") {
+      const start = claimedAt.get(task);
+      const ph = phaseOf.get(task);
+      if (start !== undefined && ph && Number.isFinite(start)) {
+        const secs = (at(e) - start) / 1000;
+        if (Number.isFinite(secs) && secs >= 0) durations.set(ph, [...(durations.get(ph) ?? []), secs]);
+      }
+      claimedAt.delete(task);
+    }
+  }
+
+  const phases: PhaseTiming[] = (["diverge", "critique_a", "critique_b", "deepen"] as const)
+    .filter((ph) => (durations.get(ph) ?? []).length > 0)
+    .map((ph) => {
+      const d = [...durations.get(ph)!].sort((a, b) => a - b);
+      return {
+        phase: ph,
+        tasks: d.length,
+        mean_seconds: d.reduce((a, x) => a + x, 0) / d.length,
+        median_seconds: d[Math.floor(d.length / 2)]!,
+        max_seconds: d[d.length - 1]!,
+      };
+    });
+
+  const times = entries.map(at).filter((t) => Number.isFinite(t));
+  const spanHours = times.length >= 2 ? (Math.max(...times) - Math.min(...times)) / 3_600_000 : null;
+  const claims = count("claimed");
+  const expiries = count("lease_expired");
+  const workers = [...new Set(entries.filter((e) => e["event"] === "claimed").map((e) => str(e, "worker")).filter((x): x is string => x !== null))].sort();
+
+  const lines = [`kernel journal at ${p}`];
+  if (!entries.length) {
+    lines.push("no journal yet. Submit a run to populate this.");
+    return { runs: 0, by_outcome: {}, claims: 0, returns: 0, expiries: 0, expiry_rate: 0, lock_breaks: 0, workers: [], phases: [], span_hours: null, text: lines.join("\n") };
+  }
+  lines.push("");
+  lines.push(`${runIds.size} run(s) submitted${spanHours === null ? "" : ` over ${spanHours.toFixed(1)}h`}: ${Object.entries(byOutcome).map(([k, v]) => `${v} ${k}`).join(", ") || "none finished"}`);
+  const unfinished = runIds.size - Object.values(byOutcome).reduce((a, v) => a + v, 0);
+  if (unfinished > 0) lines.push(`${unfinished} still open.`);
+  lines.push(`${claims} claim(s), ${count("returned")} return(s), by ${workers.length} worker(s): ${workers.join(", ") || "-"}`);
+  lines.push(`${expiries} lease expiry(ies)${claims ? `, ${((expiries / claims) * 100).toFixed(0)}% of claims` : ""}. ${count("lock_broken")} lock break(s), ${count("lock_lost")} lock loss(es).`);
+
+  if (phases.length) {
+    lines.push("");
+    lines.push(`${"phase".padEnd(12)} tasks    mean   median      max  (seconds, claim to return)`);
+    for (const ph of phases)
+      lines.push(`${ph.phase.padEnd(12)} ${String(ph.tasks).padStart(5)}  ${ph.mean_seconds.toFixed(0).padStart(6)}  ${ph.median_seconds.toFixed(0).padStart(7)}  ${ph.max_seconds.toFixed(0).padStart(7)}`);
+    const worst = phases.reduce((a, b) => (b.max_seconds > a.max_seconds ? b : a));
+    lines.push("");
+    lines.push(
+      `The longest task the journal has seen took ${worst.max_seconds.toFixed(0)}s (${worst.phase}). A lease shorter than that hands live work to a second subagent; the default is 900s.`,
+    );
+  } else lines.push("no completed task has both a claim and a return in the journal, so there is nothing to time.");
+
+  if (expiries === 0 && claims > 0) lines.push("No lease has ever expired here, so nothing in this journal exercises the reclaim path. test/concurrency.test.ts does.");
+
+  return { runs: runIds.size, by_outcome: byOutcome, claims, returns: count("returned"), expiries, expiry_rate: claims ? expiries / claims : 0, lock_breaks: count("lock_broken"), workers, phases, span_hours: spanHours, text: lines.join("\n") };
+}
