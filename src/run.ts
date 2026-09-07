@@ -345,15 +345,18 @@ function costFor(runDir: string, plan: Plan): { tokens: number | string; wall: s
   return { tokens: `~${plan.estimate.tokens_total.toLocaleString()} (estimate)`, wall: `${secs}s since compile` };
 }
 
-export function phaseSynth(cfg: Config, runDir: string, opts: { partial?: boolean } = {}): PhaseResult {
+/**
+ * The synthesis a run's artifacts produce, without writing anything.
+ *
+ * Split out of `phaseSynth` so a recorded run can be re-rendered and compared against the
+ * synthesis it shipped with (`adhd replay`). A recorded synthesis is evidence, and a check that
+ * has to overwrite the evidence to run is not a check.
+ */
+export function renderRun(cfg: Config, runDir: string, opts: { partial?: boolean } = {}): string {
   const plan = loadPlan(runDir);
-  const out = join(runDir, "synthesis.md");
   if (opts.partial) {
     const { branches } = loadBranches(runDir, plan, { allowMissing: true });
-    const lints = collectLints(branches);
-    const text = renderPartial(cfg, plan, branches, lints, costFor(runDir, plan));
-    wr(out, text);
-    return { text, exitCode: 0 };
+    return renderPartial(cfg, plan, branches, collectLints(branches), costFor(runDir, plan));
   }
   const { plan: p2, score } = computeScore(cfg, runDir);
   const deepenDir = join(runDir, "deepen");
@@ -364,8 +367,12 @@ export function phaseSynth(cfg: Config, runDir: string, opts: { partial?: boolea
       deepen[frame] = validateDeepen(rd(join(deepenDir, f)), p2.problem_hash, frame);
     }
   }
-  const text = renderSynthesis(cfg, p2, score, deepen, costFor(runDir, p2));
-  wr(out, text);
+  return renderSynthesis(cfg, p2, score, deepen, costFor(runDir, p2));
+}
+
+export function phaseSynth(cfg: Config, runDir: string, opts: { partial?: boolean } = {}): PhaseResult {
+  const text = renderRun(cfg, runDir, opts);
+  wr(join(runDir, "synthesis.md"), text);
   return { text, exitCode: 0 };
 }
 

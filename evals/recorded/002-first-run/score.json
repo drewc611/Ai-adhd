@@ -155,5 +155,6 @@
     },
     "notes": []
   },
-  "proceed": true
+  "proceed": true,
+  "rubric_version": 0
 }

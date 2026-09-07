@@ -6,6 +6,7 @@ import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { axisCoverage, diffRuns, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { costReport } from "./cost.js";
+import { replayAll, replayRun } from "./replay.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
@@ -354,6 +355,28 @@ os.command("stats")
       const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
       const r = kernelStats(root);
       console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("replay [run_dir]")
+  .description("re-render a run's synthesis from its artifacts and report whether it still matches; no argument replays every recorded run")
+  .option("--recorded <dir>")
+  .option("--print", "print the re-rendered synthesis instead of the comparison")
+  .option("--write", "overwrite synthesis.md with the current rendering (never the default: a recording is evidence)")
+  .option("--json")
+  .action((runDir, o) => {
+    try {
+      const cfg = loadConfig(program.opts().root);
+      if (runDir) {
+        const r = replayRun(cfg, runDir, { write: o.write });
+        if (o.print) { console.log(r.rendered); return; }
+        console.log(o.json ? JSON.stringify({ ...r, rendered: undefined }, null, 2) : `${r.run}: ${r.error ? `ERROR ${r.error}` : !r.had_recorded ? "no synthesis.md recorded" : r.same ? "same" : `DRIFTED, first differs at line ${r.first_diff_line}`}`);
+        process.exit(r.error || (r.had_recorded && !r.same && !r.expected_drift) ? 1 : 0);
+      }
+      const rep = replayAll(cfg, o.recorded, { write: o.write });
+      console.log(o.json ? JSON.stringify({ runs: rep.runs.map((x) => ({ ...x, rendered: undefined })), drifted: rep.drifted.map((x) => x.run), expected: rep.expected.map((x) => x.run), stale_baseline: rep.stale_baseline, failed: rep.failed.map((x) => x.run) }, null, 2) : rep.text);
+      process.exit(rep.drifted.length || rep.failed.length || rep.stale_baseline.length ? 1 : 0);
     } catch (e) { fail(e); }
   });
 

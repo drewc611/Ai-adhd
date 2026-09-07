@@ -173,5 +173,6 @@
       "singleton FRAME_BREAKER escalated to deepen, flagged unverified"
     ]
   },
-  "proceed": true
+  "proceed": true,
+  "rubric_version": 0
 }
