@@ -1,0 +1,68 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: B
+clusters:
+  - id: deadline_propagation
+    action: "Thread an explicit end-to-end deadline from the request entry point through every outbound call, derive each call's timeout from the time remaining, spend retries out of that same budget, and keep only a few fixed ceilings."
+    members: [LEDGER, ACTOR_CENSUS, FRAME_BREAKER]
+    singleton: false
+    strongest_objection: null
+  - id: bounded_defaults_then_measure
+    action: "Put conservative connect, read and total values into hot-reloadable config today, add a latency histogram and per-timeout counters for a week, then tighten from the measured tail, and leave retry-on-timeout off until idempotency keys exist."
+    members: [DOOR_KEEPER]
+    singleton: true
+    strongest_objection: "The week of measurement is aimed at the wrong variable. A histogram of this dependency tells you how long it takes to answer; it cannot tell you how long the answer is still worth having, and that second quantity is the one that decides the number. The plan concedes as much by requiring the total to sit under the caller's deadline, but that deadline is asserted as a side constraint and never obtained, derived, or carried anywhere, so the central input is the one thing nobody measures during the week. Sizing from p99.9 plus headroom then optimizes for the dependency's convenience rather than the patience being spent, and it fails in the case that actually causes outages: two or three such calls stacked inside one inbound request, each comfortably inside its own configured limit while the request as a whole blows past anything the waiting party would tolerate. A static per-call number cannot see that composition no matter how good the histogram is. There is also a self-inflicted cost in the sequencing: the caller's tolerance is usually knowable today from what the product already promises, at no instrumentation cost, so a week of waiting buys data about the dependency while the cheaper and more decisive input sits unused. The reversibility analysis is real and the retry gate on idempotency keys is right, but neither requires deferring the number, and a conservative static ceiling shipped now hardens into the permanent answer precisely because it stops the bleeding well enough that nobody returns for step three."
+  - id: single_total_timeout
+    action: "Set one total request timeout, generously sized from the worst response you have seen, and change nothing else until it misfires."
+    members: [MINIMALIST]
+    singleton: true
+    strongest_objection: null
+traps:
+  LEDGER:
+    T1: { fired: false, evidence: "Strip the prompt to a bare what-should-I-do and the answer breaks: the connect cap justified by TCP establishment, the deadline header per hop, and the retry-budget-as-percentage-of-traffic are all specific to this call path and do not survive the deletion." }
+    T2: { fired: false, evidence: "This detector fires only run level and the run level condition is not met; for the record this branch does displace the assumption that a timeout is a number you pick, replacing it with dividing an inherited budget, though it never states the assumption as a claim." }
+    T3: { fired: false, evidence: "There are no citations or authorities to remove, and the chain from sockets held to pool queueing to a partial outage to tripled arrival rate stands on stated mechanism alone." }
+    T4: { fired: false, evidence: "It closes at least four decisions the reader would otherwise keep making: whether to keep the library default, whether retries restart the clock, what the connect cap is, and whether one global number covers every endpoint." }
+    T5: { fired: false, evidence: "The position is a do-X imperative: set one end-to-end deadline, propagate it to every hop, cap retries with a retry budget." }
+    T6: { fired: false, evidence: "It names the end user, the on-call owner of this service, the downstream team, and the customer, and populates missing_actor with the downstream operator plus a real action; the attacker and the retry layer go unnamed but the total deadline and retry budget already bound both, so the omission does not change the recommendation." }
+    T7: { fired: true, evidence: "Every recommendation is priced in currency and payer, but nothing asks what it costs to be wrong or how long until you find out, and no move is sorted into cheap-and-undoable versus committed, so the whole position ships at one level of commitment." }
+    T8: { fired: false, evidence: "Flat restatement is propagate one end-to-end deadline and cap retries as a fraction of traffic rather than per request, which is the same claim and worth saying without the ledger framing." }
+  ACTOR_CENSUS:
+    T1: { fired: false, evidence: "Delete the specifics and the answer collapses: the response-header and between-bytes ceilings, the proxy idle timeout that silently overrides, and the trickle attacker holding a socket are load bearing and problem bound." }
+    T2: { fired: false, evidence: "Run level condition not met; this branch attacked the assumption head on by naming the framing of the client as an autonomous thing with a naturally correct setting and rejecting it." }
+    T3: { fired: false, evidence: "No citations appear anywhere; the argument runs entirely on who can act, how fast, and at what cost." }
+    T4: { fired: false, evidence: "It closes the constant-versus-derived question, the retry clock question, which fixed numbers survive and why, and who gets the incident lever, leaving the reader with arithmetic rather than choices." }
+    T5: { fired: false, evidence: "The position is imperative: derive every timeout from the inherited deadline and hardcode only the named ceilings." }
+    T6: { fired: false, evidence: "It enumerates developer, operator, caller, upstream service, scheduler and retry layer, attacker, payer, and platform, covering every actor on the detector list, and missing_actor names the caller with a concrete free action." }
+    T7: { fired: true, evidence: "Moves are ranked by speed and cost of the actor who makes them, but no recommendation is examined for cost of being wrong or detection latency, and nothing separates a reversible change from a committed one." }
+    T8: { fired: false, evidence: "Stripped flat it says inherit the caller's deadline and keep fixed numbers only as defenses against parties who send none, which is a substantive claim independent of the census framing." }
+  MINIMALIST:
+    T1: { fired: false, evidence: "The detector does not fire, since the unfixed list and the split-later trigger depend on connect stalls, slow-drip responses and pool occupancy; noted with reservation, because this is the closest of the five to the conventional thirty-second answer and it scored lowest on problem-boundness in the blind pass." }
+    T2: { fired: false, evidence: "Run level condition not met; this branch did not attack the assumption, it defended it, treating the timeout as a number the asker picks on this client." }
+    T3: { fired: false, evidence: "No authorities are invoked; the case rests on the claim that the pain is unbounded waiting and that a bounded wrong number is a fixable bug." }
+    T4: { fired: false, evidence: "It closes more decisions than any other branch: one number, do not split by phase, do not add retries, do not add a breaker, and it names the observation that reopens them." }
+    T5: { fired: false, evidence: "The position is a do-X sentence: set one total request timeout, pick a number a few times your worst observed response, stop there." }
+    T6: { fired: true, evidence: "Only the asker and the downstream owner appear; the caller upstream is never named, and that omission is load bearing because the advice to pick something plainly generous when data is missing is exactly the choice a caller's own deadline would overturn, since a total longer than the waiting party will wait converts a slow dependency into thread and connection exhaustion." }
+    T7: { fired: false, evidence: "It turns on the distinction explicitly, treating a bounded wrong number as a normal bug you fix later and an unbounded wait as the failure that takes the caller down, and uses that asymmetry to defer splitting until an observation demands it." }
+    T8: { fired: false, evidence: "There is no angle to strip; flattened it says set one generous total timeout and split it only when evidence says so, which is the same claim and the most contrarian one in the set." }
+  FRAME_BREAKER:
+    T1: { fired: false, evidence: "The stacking case, several slow calls inside one request each individually within its own configured limit, is specific to this problem and load bearing, as is the refuse-to-start rule keyed to the dependency p99." }
+    T2: { fired: false, evidence: "Run level condition not met; this branch named the load bearing assumption outright, that the right number is a property of this client and its dependency, and derived its answer from rejecting it." }
+    T3: { fired: false, evidence: "No citations to remove; the derivation from who owns the latency budget to timeouts being arithmetic stands on its own." }
+    T4: { fired: false, evidence: "It closes the constant question, the retry placement question, the refuse-to-start threshold, and forces the per-endpoint fallback to be written down, which is a decision the reader would otherwise defer indefinitely." }
+    T5: { fired: false, evidence: "The position is imperative and the fourth section is a tomorrow-morning instruction: put a deadline object on the request context at the service boundary." }
+    T6: { fired: false, evidence: "It names the downstream owner (with an action in missing_actor), the person shipping the change, and the user who sees the degraded response; the attacker, operator and scheduler are absent, but a propagated deadline bounds all three, so the recommendation would not change." }
+    T7: { fired: true, evidence: "No recommendation is examined for cost of being wrong or detection latency, and threading a deadline through a call path is treated as equivalent in commitment to editing a constant, when it is the more expensive and less reversible of the two." }
+    T8: { fired: false, evidence: "Flattened to propagate a deadline from the entry point and decide what the caller gets when it expires, the claim survives intact, and the fallback half is a real deliverable rather than a rhetorical move." }
+  DOOR_KEEPER:
+    T1: { fired: false, evidence: "Concrete starting values, p99.9 plus headroom, the config-versus-compiled distinction and the idempotency key gate are all specific to this problem and the plan is unusable once they are deleted." }
+    T2: { fired: false, evidence: "Run level condition not met; this branch works inside the question's frame, treating the value as the asker's to pick and only constraining it to sit under the caller's deadline without asking where that deadline comes from." }
+    T3: { fired: false, evidence: "No citations; the duplicate-charge argument and the detection-latency argument carry themselves on stated causal mechanism." }
+    T4: { fired: false, evidence: "It closes the unbounded question today, the config-versus-code question, the retry question until a named precondition is met, and the publication question, and gives an explicit five-step ordering." }
+    T5: { fired: false, evidence: "The position is a do-X sequence and states outright that shipping the bounded conservative default today is itself the decision, not a plan to decide later." }
+    T6: { fired: false, evidence: "It names the caller upstream, the upstream service owner, the client library retry policy as an automatic actor, the config-pushing operator, and finance reconciliation as the detector of duplicates; the attacker is unnamed but a bounded total already covers that case." }
+    T7: { fired: false, evidence: "The entire structure is the distinction, sorting moves into two way and one way doors and pricing each irreversible one by cost of being wrong and detection latency." }
+    T8: { fired: false, evidence: "Flattened it says bound everything in config now, measure for a week, and never retry a non-idempotent timeout until idempotency keys exist, which is the same claim without the door framing." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "Two branches attacked the load bearing assumption explicitly, that a timeout is a value chosen on this client independent of whoever is waiting, one by naming it as the assumption and one by showing the question named a single actor and framed the client as autonomous; a third displaced it without naming it." }
+  T6_all_missing_actor_null: { fired: false, evidence: "All five branches populated missing_actor with a named party and an action: four name the operator or owner of the service being called, and one names the caller upstream of this client." }
+lint_verdicts: []

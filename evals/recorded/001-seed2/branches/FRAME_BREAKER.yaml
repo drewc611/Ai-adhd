@@ -1,0 +1,42 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: FRAME_BREAKER
+position: 'Stop choosing timeout values on the client and instead thread an explicit end-to-end deadline from the request entry point through every outbound call, deriving each call''s timeout from the remaining budget and defining the degraded response you return when that budget is spent.'
+reasoning: |
+  1. The load bearing assumption. The question treats a timeout as a value you pick and
+  configure on one client, as if the right number is a property of that HTTP client and its
+  dependency. It is not. A timeout is only ever meaningful relative to how long the caller
+  above you is willing to wait, and that caller is not in the question at all. The phrasing
+  also smuggles in a second assumption, that waiting is the correct behavior and the only
+  question is how long, when the real decision is what you do instead of waiting.
+
+  2. Who benefits from it going unexamined. The owner of the downstream service benefits
+  most, because a client-side number converts their missing latency SLO into your
+  configuration problem. Nobody has to state how slow the dependency is allowed to be, and
+  nobody has to shed load or fail fast on their side. The person shipping the change also
+  benefits in the short term, because setting a constant is a one-line diff that closes a
+  ticket, while naming a latency budget and a fallback forces a product conversation about
+  what the user sees when the dependency is slow.
+
+  3. What the question is actually about. It is about who owns the latency budget for the
+  user-facing request this call sits inside, and what happens when that budget runs out.
+  Timeouts are derived quantities. Once a deadline exists at the entry point, every value
+  further down is arithmetic on the time left, not a judgment call. Without a deadline, the
+  numbers you pick will be wrong in the only case that matters, which is the case where
+  several slow calls stack up in one request and each of them is individually inside its
+  own configured limit.
+
+  4. First concrete action. Tomorrow, put a deadline object on the request context at the
+  service boundary, seeded from the latency target for that endpoint, and pass it into the
+  HTTP client so each call is bounded by the time remaining rather than by a constant. Make
+  the client refuse to start a call when the remaining budget is smaller than the observed
+  p99 for that dependency, and make it return the fallback immediately instead. Put retries
+  and connection acquisition inside the same budget so a retry can never extend the request
+  past its deadline. Then write down, per endpoint, what the caller gets when the deadline
+  expires, because that answer is the actual deliverable and the numbers fall out of it.
+forecloses:
+  - 'A single tuned constant per client, per environment, kept in config and revised after incidents.'
+  - 'Retry policies layered on top of a fixed timeout, where the worst case latency is timeout times attempts and nobody has computed it.'
+  - 'Raising the timeout as the remedy when the dependency gets slow, which is the standard response and the one that converts a slow dependency into a thread and connection exhaustion outage.'
+falsifier: 'Trace one hundred real invocations of this call. If it is the sole outbound call in a detached batch or cron path with no caller waiting on it and no latency target anywhere upstream, then there is no budget to propagate, and a single generous ceiling plus a concurrency cap is the correct and cheaper answer.'
+missing_actor: 'The owner or operator of the downstream service, who can publish a latency SLO and enforce a server side deadline that sheds load and returns an error rather than letting requests queue, which turns every client timeout in the fleet from a guess into a derivation.'
+confidence: medium

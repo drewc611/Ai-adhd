@@ -1,0 +1,66 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: LEDGER
+position: Set one end-to-end deadline for the whole call, sized from the user-facing latency budget (roughly 1s to connect, the rest of the remaining budget for the total attempt), propagate that deadline to every downstream hop, and cap retries with a retry budget of a few percent of traffic.
+reasoning: |
+  1. What the obvious answer costs, in what currency, paid by whom, when.
+  The obvious answer is a comfortable round number — 30s or 60s, or whatever the library
+  ships with, which in several clients is "wait forever" — plus "retry three times" for
+  safety. That is not free. Each in-flight request holds a connection, a socket, a thread
+  or task, and a slice of memory for as long as the timeout allows, so a long timeout is a
+  standing purchase of capacity. The currencies are: latency, paid by the end user sitting
+  behind this call, immediately; capacity and on-call sleep, paid by whoever owns this
+  service, at 3am on the night the dependency gets slow rather than down; downstream load,
+  paid by the team running the service being called, exactly when they can least afford it,
+  because three retries against a struggling server triple its arrival rate at the moment
+  it is already failing; and user trust, paid by the customer, who learns that this product
+  hangs.
+
+  2. Which of those costs is invisible from where the asker is standing.
+  From inside a single client, the timeout looks like a private choice about one request:
+  the only visible cost is "sometimes I give up too early". Everything expensive is
+  off-screen. Invisible item one is the pool: a slow dependency plus a long timeout means
+  every worker parks on the same wait, the queue backs up, and requests that had nothing to
+  do with that dependency start failing — a partial outage that reads as "our whole service
+  went down" and is bought with somebody's night. Invisible item two is that the retry
+  multiplier is spent on someone else's ledger; the downstream owner never agreed to a 3x
+  surge and cannot see who authored it. Invisible item three is the human upstream: past
+  roughly ten seconds the user has already refreshed or left, so all the capacity spent
+  after that is paid for and thrown away. Invisible item four is that a long timeout is
+  usually a guess borrowed from a tutorial, which means the real bill was never priced by
+  anyone.
+
+  3. The cheapest option that still resolves the pain in the question.
+  The pain is "I do not know what number to type." The cheapest resolution is to stop
+  choosing a number and start dividing a budget. Take the deadline the caller is already
+  under — the latency the end user will tolerate for this action — subtract time already
+  spent, and give the remainder to this call as one total deadline covering connect, TLS,
+  send, wait, and read. Give connect its own short cap, around a second, because a TCP
+  connection that has not been established in a second is a dead path, not a slow one.
+  Pass the remaining deadline downstream in a header so every hop spends from the same
+  budget instead of each hop starting a fresh clock. Retry only idempotent calls, only
+  inside the remaining budget, with jitter, and only while a retry budget — a few percent
+  of traffic, not per-request attempts — has room. This costs no new infrastructure and no
+  measurement campaign: the budget number already exists implicitly in what the product
+  promises.
+
+  4. What that option costs instead, and whether the trade is explicit.
+  It costs real money in three places, and the trade should be stated out loud. First, some
+  requests that would have succeeded at second twelve are now killed at second three; that
+  moves cost from invisible queueing into visible errors, paid by the users on the slow
+  tail, and it is a good trade only because those users had mostly abandoned the request
+  anyway. Second, it costs engineering time: someone must decide the user-facing budget,
+  thread a deadline through the call path, and give the retry budget a home — call it a day
+  of work, paid once by this team. Third, it costs the comfort of a single global constant;
+  different endpoints will end up with different remainders, which is more to hold in your
+  head. What it buys is that the pool never fills with corpses, the downstream service is
+  never surged by this client's optimism, and the pager stays quiet during dependency
+  brownouts. Payer named: this team pays a day of work and a slightly higher visible error
+  rate on the tail, so that the downstream team, the on-call engineer, and the waiting user
+  stop paying in capacity, sleep, and trust.
+forecloses:
+  - Leaving the client's default timeout in place, including any default that is effectively infinite (no read timeout, or a socket timeout with no total-call cap).
+  - Fixed per-attempt retries where each attempt restarts the clock, so worst-case wait is attempts x timeout and a struggling dependency gets a multiplied arrival rate.
+  - One generous global timeout applied uniformly to every endpoint regardless of what the user is waiting on, which prices a background refresh the same as a checkout button.
+falsifier: Pull the latency histogram of successful responses from this dependency for a week, and the abandonment or client-cancel rate by elapsed time. If a material share of successful responses land after the proposed deadline and users are still there waiting for them, the deadline is converting paying work into errors and this position is wrong. Equally, if the connection pool has never queued and the dependency has never had a slow-but-up period, the cascade cost being priced here does not exist and a plain generous timeout is cheaper than the plumbing.
+missing_actor: The team that operates the service being called. They can publish a server-side latency SLO and enforce it themselves with a server-side deadline plus load-shedding, which turns every client's timeout from a guess into a documented number and stops retry storms at the door rather than at each caller.
+confidence: medium
