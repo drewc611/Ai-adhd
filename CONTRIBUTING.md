@@ -51,6 +51,13 @@ say why.
 - Prompts are templates rendered by `src/template.ts`; values are inserted once and never
   rescanned. A problem statement containing `{{` must pass through byte for byte.
 - Commit messages say what changed and why. No model names in commits, PR titles, or code.
+- Docs make claims with numbers in them, and numbers rot. Several tests read a doc and check its
+  figures against the code: `docs/RETIREMENT.md` against `frames --stats`, the README's diagrams
+  against `config/frames.yaml` and `src/os.ts`. If you add a documented figure, pin it the same
+  way, or it becomes a confident sentence nobody rechecks.
+- `npm run build && node dist/src/cli.js validate && node dist/src/cli.js eval` is the fast
+  loop. `adhd wizard` drives the same verbs behind menus and prints the command it ran, which is
+  the quickest way to learn the flags.
 
 ## Recording a run
 

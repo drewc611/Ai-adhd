@@ -94,6 +94,26 @@ renders whatever branch artifacts exist with code lints only: no critic, no clus
 recommendation. The output is labelled `UNSCORED, divergence only`. Give it to the user. The
 spend they already made is theirs.
 
+## Reading a run afterwards
+
+The recommendation is not the interesting part; the pruned block usually is. Two commands read
+a finished run without spending anything:
+
+```
+adhd why runs/<run_id> <FRAME>   # everything that happened to one frame, in order
+adhd viewer --out runs.html      # one self-contained page over every recorded run
+```
+
+`why` prints the frame's position, its blind pass A row weakest dimension first with the
+critic's evidence, every detector that fired with the text that fired it, its cluster and how
+narrowly it won or lost, and the deepen verdict. `viewer` is the same thing for every run at
+once, with filters by trap and status.
+
+Offer the viewer when the user asks why a position is missing from the recommendation. A frame
+routing never selected was not rejected, a pruned member of a cluster others hold corroborated
+the action, and a pruned singleton took its action with it. The pruned block alone cannot draw
+those apart; `why` says which happened.
+
 ## Aborts you must honour
 
 - `problem_hash` mismatch in any artifact: the phase exits non zero. Do not fix the artifact.

@@ -131,13 +131,19 @@ carrying it.
 ## Layout
 
 ```
-config/       frames, routing, critic rubric      <- the actual IP
-prompts/      orchestrator, branch, critic, deepen
-docs/         architecture, trap taxonomy, open decisions
-evals/        fixtures with must_surface assertions, recorded runs
-skills/adhd/  Claude Code skill
-agents/       subagent definitions
+config/     frames, routing, critic rubric      <- the actual IP
+prompts/    orchestrator, branch, critic, deepen, synthesis
+docs/       architecture, traps, decisions, features, backlog, retirement
+evals/      fixtures with must_surface assertions, recorded runs and controls
+src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
+test/       249 tests over all of it
+skills/     adhd (drives a run), adhd-worker (executes one)
+agents/     the four subagent definitions and their tool grants
+assets/     the mark, the banner, the run explorer shell
 ```
+
+Nothing under `src/` calls a model. It compiles briefs, enforces the isolation contract, scores
+what comes back, and refuses to proceed when a record is missing.
 
 ## Install
 
@@ -257,6 +263,26 @@ contested decision in the corpus turns out to be settled inside two anchor point
 </details>
 
 Each run's `README.md` says how it was produced and what it did not surface.
+
+### What this cannot tell you yet
+
+A reader should start here rather than discover it.
+
+- **Five runs, and no seed has ever been repeated.** Nothing separates "the frame set found
+  this" from "the seed found this". `adhd diff` reads that comparison; the runs it needs do not
+  exist.
+- **Four critics on one pack, two on the rest.** 225 cells is a first corpus, not a reliability
+  figure.
+- **`002-kernel-enduser` is not robust to who scored it.** Four critics split 2-2 on which
+  position goes to deepen. Left that way on purpose.
+- **`TaskList` is the one isolation claim that is argued rather than demonstrated.** It is the
+  launch permit every isolated agent carries, and what it shows a branch inside a running
+  dispatch has never been observed. D4 says so.
+- **The plugin agents have never run as plugin agents.** Every recorded run used general-purpose
+  subagents, so the manifest and the tool grants are checked mechanically and never end to end.
+- **Four of twenty-one fixture assertions do not discriminate**, and are recorded rather than
+  fixed. Rewriting an assertion after learning which ones the control cleared is how a harness
+  gets tuned until it always passes.
 
 ## As an agent operating system
 

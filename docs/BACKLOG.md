@@ -17,22 +17,26 @@ yet enough to know whether they work.
 0. **Decide the four non-discriminating assertions** that `adhd eval --audit` flags
    (`002/periodic_actor`, `003/reframe`, `003/who_pays`, `004/false_means`). Each on its own
    argument, each with a fresh run showing the change measures something. See D6 in DECISIONS.
-1. **`adhd frames --stats`** (evidence). Per-frame rates across recorded runs: appearances,
+1. ~~**`adhd frames --stats`** (evidence). Per-frame rates across recorded runs: appearances,
    prune rate, which traps prune it, mean pass A, survivor rate, fold rate, how often it holds
-   the recommendation. Five runs is thin but the command is what makes run six worth anything.
-2. **Negative controls for 002, 003, 004.** Only 001 has a linear-CoT control. Without one per
-   fixture, a passing run has nothing to beat.
+   the recommendation. Five runs is thin but the command is what makes run six worth anything.~~
+   **Built. Also `--collisions`, which counts the frame labels that are also ordinary prose.**
+2. ~~**Negative controls for 002, 003, 004.** Only 001 has a linear-CoT control. Without one per
+   fixture, a passing run has nothing to beat.~~
+   **Built. One linear-CoT control per fixture.**
 3. **Same fixture, different seed.** Run 001 at seed 2 and seed 3. If the frame set is the
    mechanism, the findings should survive a reshuffle; if they are seed artifacts, that is the
    most important thing this repo could learn about itself.
 4. **Same fixture, same seed, different day.** Run-to-run variance with everything fixed.
    Establishes the noise floor against which every other comparison is read.
-5. **Critic self-consistency.** Score one artifact pack twice with two fresh critics and
+5. ~~**Critic self-consistency.** Score one artifact pack twice with two fresh critics and
    report per-dimension agreement. The rubric is only as good as its inter-rater reliability
-   and nobody has measured it.
-6. **Trap frequency table across all runs.** Which detectors ever fire? A detector that has
+   and nobody has measured it.~~
+   **Built as `adhd learn --agreement` and `--agreement-all`, plus `--panel` for three or more critics. 79% exact over 225 cells, and one run in five would have shipped a different answer.**
+6. ~~**Trap frequency table across all runs.** Which detectors ever fire? A detector that has
    never fired in five runs is either well-designed prevention or dead weight, and the two
-   look identical until counted.
+   look identical until counted.~~
+   **Built into `frames --stats`. T3 and T5 have never fired.**
 7. **`adhd frames --health`**: flag frames pruned in every run they appear in, and frames that
    have never once been pruned. Both are suspicious for opposite reasons.
 
@@ -41,15 +45,17 @@ yet enough to know whether they work.
 8. **006, `enumerate_options`** (n=7). The wide path has never run. Seven branches, seven
    briefs, a critic pack twice the size of any yet, and the frame-selection logic above five.
 9. **007, `api_surface`.** The last run class with no fixture.
-10. **008 through 010, the decline classes.** `factual_lookup`, `mechanical_refactor`,
-    `single_correct_answer`. A decline is a first-class outcome and no recorded run declines.
+10. ~~**008 through 010, the decline classes.** `factual_lookup`, `mechanical_refactor`,
+    `single_correct_answer`. A decline is a first-class outcome and no recorded run declines.~~
+   **Built as fixtures 005, 006 and 007. A decline has no run to record, so `expect.decline` asserts the routing decision and its reason directly.**
 11. **A fixture designed to produce a monoculture.** The detector has only ever fired in unit
     tests. Pick a problem where every frame lands on the same action and record it.
 12. **A fixture designed to produce scatter.** Same reasoning, opposite failure.
 13. **A cancel fixture** (D5). Confirm, return two branches, cancel, and assert the partial
     synthesis ships unscored with the pruned block absent and said to be absent.
-14. **A fixture whose problem contains an injection attempt** ("ignore the frame above").
-    Asserts the branch contract holds against adversarial problem text.
+14. ~~**A fixture whose problem contains an injection attempt** ("ignore the frame above").
+    Asserts the branch contract holds against adversarial problem text.~~
+   **Built as fixture 008, asserting the D5 gate rather than a run. Building it found the detector caught only injections phrased in this repo's own vocabulary.**
 15. **A fixture with a very long problem** (several thousand words) to exercise brief size.
 16. **A fixture whose problem is one word.** The compiler should still hash and dispatch it.
 
@@ -58,8 +64,9 @@ yet enough to know whether they work.
 17. **Close the `false_means` gap** found by run 004: no frame asks what a name asserts in its
     negative case. Either a probe on an existing frame or a new frame with the orthogonality
     check run first.
-18. **Frame retirement policy.** Written rule for when a frame leaves the library, with the
-    evidence bar stated. Currently there is no way for the library to shrink.
+18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
+    evidence bar stated. Currently there is no way for the library to shrink.~~
+   **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**
 19. **Per-frame fixtures.** One fixture per frame that the frame should obviously win, as a
     unit test for the frame's own stance.
 20. **Probe ordering experiment.** Do the numbered probes change the answer if reordered?
@@ -70,19 +77,24 @@ yet enough to know whether they work.
 
 ## 4. Critic and scoring
 
-24. **Rubric weight sensitivity.** Re-score every recorded run under perturbed weights and
+24. ~~**Rubric weight sensitivity.** Re-score every recorded run under perturbed weights and
     report which prune decisions flip. A prune that flips under a small weight change was
-    never a prune.
-25. **Dimension correlation matrix.** If two dimensions always move together across runs, one
-    of them is not measuring anything.
-26. **Blind-pack integrity fuzz.** Generate artifacts that mention their own frame in a dozen
-    ways and assert pass A redaction catches all of them.
-27. **Second critic on the same pack.** Disagreement is recorded, not resolved — but nothing
-    currently records it.
+    never a prune.~~
+   **Built as `adhd learn --sensitivity`. 0 of 4 contested representatives flip, and the report says why that is not stability: every contested decision is settled inside two anchor points out of 48.**
+25. ~~**Dimension correlation matrix.** If two dimensions always move together across runs, one
+    of them is not measuring anything.~~
+   **Built as `adhd learn --correlation`. Max |r| is 0.47, but `foreclosure` and `reasoning_carries` sit at the ceiling on 96% of artifacts, which correlation cannot see.**
+26. ~~**Blind-pack integrity fuzz.** Generate artifacts that mention their own frame in a dozen
+    ways and assert pass A redaction catches all of them.~~
+   **Built, and it found the hole it was written for: every two-word frame name leaked under any separator.**
+27. ~~**Second critic on the same pack.** Disagreement is recorded, not resolved — but nothing
+    currently records it.~~
+   **Built. Recorded rather than resolved: `002-kernel-enduser` splits 2-2 across four critics.**
 28. **Critic refusal path.** What happens when the critic returns "I cannot score this"?
     Currently a contract violation; it should be a distinct, reported state.
-29. **Detector output quality check.** Some evidence strings are one clause. Set a floor and
-    reject pass B if a fired trap's evidence is under N words.
+29. ~~**Detector output quality check.** Some evidence strings are one clause. Set a floor and
+    reject pass B if a fired trap's evidence is under N words.~~
+   **Built. Floor set from data: real fired evidence runs 29 to 50 words.**
 
 ## 5. Kernel (D7)
 
@@ -106,7 +118,9 @@ yet enough to know whether they work.
 40. **`adhd replay <run>`.** Re-render the synthesis from artifacts without re-running phases.
 41. **`adhd cost`.** Token spend across recorded runs, by phase and by frame.
 42. **TTY colour and progress** for `adhd os` while a run advances.
-43. **`--json` on every command** that lacks it, for scripting.
+43. **`--json` on every command** that lacks it, for scripting. Still open, and now specific:
+    `run`, `traps`, `viewer` and `validate` lack it. `wizard` is interactive and should not
+    have it.
 44. **`adhd lint <fixture>`.** Check a fixture's regexes compile, and warn on patterns that
     match the fixture's own `why` text (a common way to write an assertion that cannot fail).
 45. ~~**Exit codes** that distinguish contract failure, hash mismatch, and eval failure.~~ Built, documented in the README, tested against the built binary.
