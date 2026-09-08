@@ -324,6 +324,21 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     5120MB. At this corpus size order 4 is the only one that fits a hosted runner. A smaller corpus
     or a larger runner changes the answer, and D13 has the measured table to re-decide from.
 
+75. **Rust RFCs and Kubernetes KEPs, if the network boundary may widen** (owner's call). Both
+    licences are read and correct — MIT OR Apache-2.0 and Apache-2.0, better provenance than the
+    IETF RFCs already in the corpus — and both are the same genre. Neither is numerically
+    enumerable: `text/0002-rfc-process.md` and `keps/sig-node/1234-some-feature/README.md` carry a
+    slug the number does not determine, and `rust-lang/rfcs` checks in no index (`SUMMARY.md` and
+    `text/SUMMARY.md` are both 404, checked 2026-09-08). The only listing mechanism is GitHub's tree
+    API, which means allowing `api.github.com` in the fetcher's prefix allowlist and accepting a
+    JSON response where the fetcher today accepts `text/plain` and nothing else.
+
+    That content-type rule is not decoration. D10 banned network in a scheduled job because a job
+    that can fetch is a job that can fetch weights, and `text/plain` only is one of the four things
+    that keeps the exception small. A JSON carve-out is a real widening of it, so it is the owner's
+    call rather than a table entry. What it would buy: roughly 600 more documents under freer
+    licences than the largest source currently in the corpus.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

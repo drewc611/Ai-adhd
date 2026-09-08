@@ -27,6 +27,7 @@ source, under the source's own terms, with the source's own attribution intact.
 | source | licence | terms | verified from |
 |---|---|---|---|
 | `eip` — Ethereum EIPs | **CC0-1.0** | public domain dedication | [`ethereum/EIPs/LICENSE.md`](https://github.com/ethereum/EIPs/blob/master/LICENSE.md) |
+| `erc` — Ethereum ERCs | **CC0-1.0** | public domain dedication | [`ethereum/ERCs/LICENSE.md`](https://github.com/ethereum/ERCs/blob/master/LICENSE.md) |
 | `pep` — Python PEPs | **public domain and CC0-1.0** | dual, mandatory for every PEP | [PEP 1 §15](https://peps.python.org/pep-0001/#pep-header-preamble) |
 | `rfc` — IETF RFCs | IETF Trust copyright, BCP 78 | freely readable and redistributable in full; **derivatives restricted** | [RFC 5378](https://www.rfc-editor.org/rfc/rfc5378.txt), [TLP](https://trustee.ietf.org/documents/trust-legal-provisions/) |
 
@@ -36,6 +37,35 @@ cd analysis && python scripts/fetch_corpus.py --licences
 
 That prints the same table from the code, so the code and this document cannot drift apart without
 one of them being obviously wrong.
+
+### 43% of the EIP corpus was a forwarding stub
+
+Found while looking for more text, and it is a correction to a number this repository has published.
+The `eip` corpus held 529 files. 225 of them were 128 to 132 bytes:
+
+```
+---
+eip: 20
+category: ERC
+status: Moved
+---
+
+This file was moved to https://github.com/ethereum/ercs/blob/master/ERCS/erc-20.md
+```
+
+Ethereum moved application-layer standards into `ethereum/ERCs` and left one of those at each
+vacated number. So the real EIP count was 304 documents, and 225 documents' worth of text — ERC-20,
+ERC-721, ERC-1155, the most-argued documents in the series — was in a repository the fetcher had
+never been pointed at.
+
+Two consequences, and the second is the one that matters. The count was wrong, which is a
+correction. And 225 copies of identical four-line boilerplate were in the training text of a model
+whose entire job is to say how predictable a document is. That is not a neutral absence of text; it
+is a small pile of the most template-like prose available, teaching the background model that
+engineering documents are repetitive. `fetch_corpus.py` refuses a stub now, deletes a cached one
+rather than counting it as a valid cache hit, and the `erc` source takes the real text from where it
+went. The two series share a number space and cannot overlap: a number lives in one repository or
+the other, and the one it left holds a stub.
 
 ### Yield, because the numbers are sparse
 
@@ -81,6 +111,26 @@ Both need a directory listing, because the filename carries a slug the number do
 API at 60 unauthenticated requests an hour, and that call could not be exercised from the
 environment the rest of the fetcher was tested in. An enumeration path nobody has run is one that
 fails on somebody else's machine, so these are recorded rather than guessed at.
+
+Adding them means allowing `api.github.com` and accepting a JSON response, which is a change to the
+network boundary D10 built rather than another entry in a table. It is the owner's call and it is
+recorded in `docs/BACKLOG.md` rather than taken.
+
+## Refused for a licensing reason, not a plumbing one
+
+Worth separating from the section above, because the two look alike in a table and are not alike.
+
+**Bitcoin BIPs.** Numerically enumerable at
+`raw.githubusercontent.com/bitcoin/bips/master/bip-{n:04d}.mediawiki`, reachable, `text/plain`, same
+genre. The plumbing already in this file would fetch them. They are absent because `bitcoin/bips`
+has no repository licence file — `LICENSE`, `LICENSE.md` and `COPYING` are all 404, checked
+2026-09-08 — and each BIP carries its own `License:` header instead. Those headers are not uniform
+and not all of them are free. Fetching the series would mean reading a licence per document at fetch
+time, or asserting terms this repository has not read. The second is how a corpus acquires text
+nobody checked, so the series is recorded in `UNLICENSED_AT_SOURCE` and not fetched.
+
+The XMPP XEPs were looked at and dropped for a duller reason: the source form is XML, and a
+word-frequency model trained on it learns tag names.
 
 ## How the fetcher is constrained
 

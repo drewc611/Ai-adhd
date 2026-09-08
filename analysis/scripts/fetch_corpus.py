@@ -76,6 +76,18 @@ class Source:
     #: What the local filename should be, so a mixed corpus stays legible on disk.
     filename: str
     notes: str = ""
+    #: A body containing this is a forwarding stub, not a document, and is never written to disk.
+    #:
+    #: Ethereum split application-layer standards out into `ethereum/ERCs` and left a 130-byte
+    #: file behind at every moved number: four lines of front matter and a URL. Those are not
+    #: documents. 225 of them were sitting in this repository's EIP corpus, 43% of its file count,
+    #: and they are worse than absent — identical boilerplate repeated 225 times is exactly the
+    #: template text that teaches a background model to find engineering prose predictable.
+    #:
+    #: A cached stub is deleted rather than counted as a cache hit, which costs one wasted request
+    #: per stub on the run after a cleanup. That is the price of not hard-coding a list of moved
+    #: numbers that drifts every time upstream moves another one.
+    stub_marker: str = ""
 
 
 #: Verified 2026-09-08 by reading each project's own licence file, not from memory.
@@ -112,13 +124,31 @@ SOURCES: dict[str, Source] = {
         template="https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/eip-{n}.md",
         highest=8000,
         filename="eip{n:05d}.md",
+        stub_marker="This file was moved to https://github.com/ethereum/ercs",
         notes=(
             "CC0 1.0 Universal: a public domain dedication, the freest terms of any source here. "
+            "Application-layer standards moved to `ethereum/ERCs` and left forwarding stubs behind; "
+            "those are refused here and the real text comes from the `erc` source. "
             "Numbers are sparse across the whole range, measured 2026-09-08 at 17% assigned in "
             "1-200, 0% in 200-600, 21% in 600-1200, 8% in 1200-2000, 0% in 2000-4000, 4% above. "
             "So probing yields roughly one document in ten and no `highest` fixes that: reaching N "
             "documents costs about 10N requests. The `missing` count in the output is that yield, "
             "not a fault."
+        ),
+    ),
+    "erc": Source(
+        name="erc",
+        licence="CC0-1.0",
+        licence_url="https://github.com/ethereum/ERCs/blob/master/LICENSE.md",
+        prefixes=("https://raw.githubusercontent.com/ethereum/ERCs/master/ERCS/",),
+        template="https://raw.githubusercontent.com/ethereum/ERCs/master/ERCS/erc-{n}.md",
+        highest=8000,
+        filename="erc{n:05d}.md",
+        notes=(
+            "Where the EIP corpus's forwarding stubs point. Same process, same CC0 dedication, read "
+            "from `ethereum/ERCs`'s own LICENSE.md, and no overlap with `eip`: a number lives in "
+            "one repository or the other, and the one it left holds a stub this fetcher refuses. "
+            "Numbers are sparse for the same reason EIP numbers are, so expect the same yield."
         ),
     ),
 }
@@ -135,6 +165,17 @@ SOURCES: dict[str, Source] = {
 UNIMPLEMENTED = {
     "rust-rfcs": ("MIT OR Apache-2.0", "https://github.com/rust-lang/rfcs/blob/master/LICENSE-MIT"),
     "k8s-keps": ("Apache-2.0", "https://github.com/kubernetes/enhancements/blob/master/LICENSE"),
+}
+
+#: Bitcoin BIPs are numerically enumerable and reachable, so the plumbing above would work. They are
+#: absent for a licensing reason instead: `bitcoin/bips` has no repository licence file at all —
+#: LICENSE, LICENSE.md and COPYING are all 404 — and each BIP carries its own `License:` header.
+#: Those headers are not uniform and some are not free. Fetching the series would mean either
+#: reading a licence per document at fetch time or asserting terms this repository has not read, and
+#: the second is how a corpus acquires text nobody checked. Recorded, not fetched.
+UNLICENSED_AT_SOURCE = {
+    "bitcoin-bips": ("no repository licence; per-document `License:` headers, not uniform",
+                     "https://github.com/bitcoin/bips"),
 }
 
 
@@ -184,6 +225,7 @@ class Fetched:
     bytes: int = 0
     skipped: int = 0
     missing: int = 0
+    stubs: int = 0
     refused: list[str] = field(default_factory=list)
 
 
@@ -200,9 +242,31 @@ def candidates(source: Source, limit: int, spread: bool) -> list[int]:
     return sorted({max(1, int(i * step)) for i in range(1, limit + 1)})
 
 
+def sweep_stubs(source: Source, out: Path) -> int:
+    """Delete every cached forwarding stub in this source's directory. Costs no request.
+
+    A sweep rather than a check inside the probe loop, because whether a stub gets removed should
+    not depend on whether this run's spread happened to land on its number. The first version did it
+    in the loop and left 214 of 225 in place.
+    """
+    if not source.stub_marker or not out.is_dir():
+        return 0
+    removed = 0
+    for path in out.glob("*"):
+        if not path.is_file() or path.name == "MANIFEST.sha256":
+            continue
+        # Stubs are ~130 bytes. The size check is what keeps this from reading a 141KB document off
+        # disk for every file in a 5,000-file corpus on every run.
+        if path.stat().st_size <= 4096 and source.stub_marker in path.read_text(errors="replace"):
+            path.unlink()
+            removed += 1
+    return removed
+
+
 def fetch_source(source: Source, out: Path, limit: int, delay: float, max_bytes: int, spread: bool = True) -> Fetched:
     out.mkdir(parents=True, exist_ok=True)
     result = Fetched(source=source.name)
+    result.stubs = sweep_stubs(source, out)
     total = sum(p.stat().st_size for p in out.glob("*") if p.is_file() and p.name != "MANIFEST.sha256")
 
     for n in candidates(source, limit, spread):
@@ -225,6 +289,10 @@ def fetch_source(source: Source, out: Path, limit: int, delay: float, max_bytes:
             # series has gaps, and a run that aborted on the first would fetch nothing.
             result.missing += 1
             print(f"{source.name} {n}: {e}", file=sys.stderr)
+            time.sleep(delay)
+            continue
+        if source.stub_marker and source.stub_marker in body.decode("utf-8", errors="replace"):
+            result.stubs += 1
             time.sleep(delay)
             continue
         dest.write_bytes(body)
@@ -267,12 +335,18 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{'':12} {s.notes}")
         for name, (lic, url) in sorted(UNIMPLEMENTED.items()):
             print(f"{name:12} {lic:52} {url}  (licence verified, enumeration not implemented)")
+        for name, (why, url) in sorted(UNLICENSED_AT_SOURCE.items()):
+            print(f"{name:12} {why:52} {url}  (refused: licence not verifiable per repository)")
         return 0
 
     chosen = [SOURCES[n] for n in (args.source or sorted(SOURCES))]
     for s in chosen:
         r = fetch_source(s, Path(args.out) / s.name, args.limit, args.delay, args.max_bytes, spread=not args.no_spread)
-        print(f"{r.source}: fetched {r.files}, cached {r.skipped}, missing {r.missing}, {r.bytes:,} bytes  [{s.licence}]")
+        stubs = f", stubs {r.stubs}" if r.stubs else ""
+        print(
+            f"{r.source}: fetched {r.files}, cached {r.skipped}, missing {r.missing}{stubs}, "
+            f"{r.bytes:,} bytes  [{s.licence}]"
+        )
     return 0
 
 
