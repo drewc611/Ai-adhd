@@ -7,6 +7,7 @@ import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
 import { axisCoverage, diffRuns, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { costReport } from "./cost.js";
 import { replayAll, replayRun } from "./replay.js";
+import { doctor } from "./doctor.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
@@ -355,6 +356,18 @@ os.command("stats")
       const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
       const r = kernelStats(root);
       console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("doctor")
+  .description("check that config, prompts, the plugin manifest, the tool grants and the build output agree with each other")
+  .option("--json")
+  .action((o) => {
+    try {
+      const r = doctor(loadConfig(program.opts().root));
+      console.log(o.json ? JSON.stringify({ errors: r.errors, warnings: r.warnings, checked: r.checked }, null, 2) : r.text);
+      process.exit(r.errors.length ? 1 : 0);
     } catch (e) { fail(e); }
   });
 

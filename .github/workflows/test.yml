@@ -27,3 +27,6 @@ jobs:
       # evals/replay-baseline.json with a reason. Fails equally on a baseline entry that has
       # gone stale, because one that forgives drift no longer happening waves the next one through.
       - run: node dist/src/cli.js replay
+      # config, prompts, agents, D4 tool grants, published entry points and the recorded corpus
+      # all agree with each other. Warnings do not fail; errors do.
+      - run: node dist/src/cli.js doctor

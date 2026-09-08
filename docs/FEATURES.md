@@ -90,14 +90,27 @@ can be wrong without saying so.
     Also flagged the reverse cost, which is now `frames --collisions`.
 16. **Second critic on the same pack, recorded.** Disagreement is reported, not resolved — but
     nothing currently records it.
-17. **Critic refusal path.** "I cannot score this" is currently a contract violation; it
-    should be a distinct reported state.
-18. **Kernel restart mid-run.** Kill the process, restart, resume from the journal.
-19. **Worker dies holding a lease.** Kill it and assert the task is reclaimed and re-run.
+17. ~~**Critic refusal path.**~~ **Built.** `CriticRefusal` carries the reason, the kernel aborts
+    with `CRITIC_REFUSED` rather than `CONTRACT`, and the CLI exits 3 rather than 2. Receiving half
+    only: nothing in `prompts/` invites a refusal and a test holds that line, because an escape
+    hatch a critic is told about is easier to take than scoring.
+18. ~~**Kernel restart mid-run.**~~ **Built** in `test/concurrency.test.ts`. One process returns
+    two branches and exits; a `Kernel` that never saw the run start finishes it from disk and does
+    not redo the completed work. It changed no source: state was already on disk by design, and the
+    point of the test is that a design worth having is worth demonstrating.
+19. ~~**Worker dies holding a lease.**~~ **Built.** A real worker process claims and exits without
+    returning. The lease holds against a second worker while it stands, expires, and the task is
+    redone by someone else. Before this the lease logic had only ever met a fake clock inside the
+    process that set it.
 20. **Token budget enforcement.** Halt a run past N tokens and render partial.
-21. **Trap frequency table across all runs.** A detector that has never fired is either good
-    prevention or dead weight, and the two are indistinguishable until counted.
-22. **Axis coverage report.** Ten axes, thirteen frames. Which axes are one frame deep?
+21. ~~**Trap frequency table across all runs.**~~ **Built** into `frames --stats`. T5 is the only
+    detector that has never fired, and it is close to structurally unable to: the output contract
+    demands a committal position. T3 fired for the first time in E1b, on the first run where any
+    frame reached `adhd-branch-search` with web tools — so a detector with no evidence may be
+    untriggered rather than useless.
+22. ~~**Axis coverage report.**~~ **Built** as `frames --axes`. Seven of ten axes carry one frame,
+    and since a run never holds two frames from one axis (D6), routing has no alternative to offer
+    on any of them. `mechanism` is the only axis with a member no run has dispatched.
 23. **Forbidden-list audit.** Which `forbidden` entries has a real branch ever violated?
 24. **Plugin agents exercised as plugin agents.** Every recorded run used general-purpose
     subagents; the shipped agent definitions are untested in their real role.
@@ -105,8 +118,16 @@ can be wrong without saying so.
 ## Tier 2 — capability
 
 ### Command line
-25. `adhd replay <run>` — re-render the synthesis from artifacts without re-running a phase.
-26. `adhd cost` — token spend across recorded runs, by phase and by frame.
+25. ~~`adhd replay <run>`~~ **Built**, and as a drift check rather than a re-render, which is the
+    part that had no coverage. Four of seven recorded syntheses no longer render from their own
+    artifacts, all from renderer changes made after recording. The recordings are kept as written and
+    `evals/replay-baseline.json` carries the reason for each; `replay` fails on drift with no entry
+    and equally on an entry gone stale. It runs in CI.
+26. ~~`adhd cost`~~ **Built, and it found the D5 gate under-quoting every run**: seven recorded runs
+    at 2.6x to 3.3x their estimate, mean 3.0x, 156,000 quoted against roughly 460,000 spent. D5 exists
+    so nobody spends five subagents without agreeing to it, and a quote that far under looks like
+    informed consent without being it. `tokens_per_branch_estimate` is unchanged: what it should
+    become is backlog 68 and the owner's call.
 27. `adhd lint <fixture>` — the audit and pattern checks for one fixture, before recording.
 28. `--json` on every command that lacks it.
 29. ~~Exit codes that distinguish contract failure, hash mismatch and eval failure.~~ **Built and
@@ -115,13 +136,21 @@ can be wrong without saying so.
     fine; usage errors are now their own code.
 30. TTY colour and a progress line while `adhd os` advances.
 31. `adhd init` — scaffold a `config/` directory from the shipped one.
-32. `adhd doctor` — check config, prompts, plugin manifest and build output agree.
+32. ~~`adhd doctor`~~ **Built.** Eight checks: config files parse, rubric arithmetic and shape,
+    plugin manifest against `agents/` on disk, D4 tool grants both ways, published entry points,
+    trap sections `docs/TRAPS.md` must carry, routing fill, and recorded-corpus shape. Building it
+    found four of its own routing rules were dead, because `crossCheck` already raises `ConfigError`
+    for them at load — a harder failure than a report. They were deleted rather than left in to
+    imply coverage that lives elsewhere, and a test pins that so a future loosening of `crossCheck`
+    fails here instead of leaving the case uncovered by anything.
 33. Shell completions for bash and zsh.
 34. `--quiet` and `--verbose` levels applied consistently.
 35. `adhd open <run>` — print the run directory's file tree with sizes.
 
 ### Kernel
-36. `adhd os stats` — throughput, mean phase duration, expiry rate from the journal.
+36. ~~`adhd os stats`~~ **Built.** The longest task the journal has seen is 280s (`critique_b`)
+    against a 900s default lease, so that default is about 3x the worst observed task — still a
+    guess, but a measured one. No lease has ever expired in a real run.
 37. Run priority, so an urgent run jumps a queued one.
 38. Journal compaction for long-lived kernels.
 39. Configurable lease length per phase; deepen legitimately takes longer than diverge.
@@ -143,9 +172,16 @@ can be wrong without saying so.
 ### Config and library
 52. Config overlays, so a team can extend the shipped frames without forking.
 53. Frame versioning, so a stance edit does not silently invalidate old recordings.
-54. A rubric linter: weights sum sanely, no dimension unreferenced.
+54. ~~A rubric linter~~ **Built** into `adhd doctor`, and deliberately not a quality judgement:
+    CLAUDE.md forbids replacing the critic rubric with one. It checks arithmetic and shape —
+    anchors contiguous from zero, weights positive, every dimension on the same anchor range
+    (`pass_a` is a weighted total, so a wider scale counts for more than its weight states), and no
+    two dimensions asking the same question.
 55. Per-class rubric weights, since specificity matters more in `fuzzy_debugging` than naming.
-56. Frame aliases for renames, so recorded runs keep resolving.
+56. ~~Frame aliases for renames~~ **Built** as `former_ids`, when `END_USER` became `SUPPLICANT` and
+    `HORIZON` became `SUCCESSOR`. Every reader forwards at the point it reads; the recorded runs are
+    not rewritten. Without it the corpus split and `frames --stats` listed the old and new ids as
+    separate frames with one marked "not in library".
 57. A `config/` schema doc generated from the zod schemas.
 
 ### Distribution
@@ -227,6 +263,13 @@ Three surfaces the list did not have, because the list was written from inside t
 - **`adhd wizard`.** The same verbs behind menus, with no new dependency. Every screen prints
   the command it ran, so the flags get learned rather than hidden. Refuses with a usage error
   when there is no terminal, so it never blocks in CI.
+- **`adhd frames --health`.** `docs/RETIREMENT.md`'s five criteria counted over the corpus, with
+  the five-run floor applied and the pruned-block exemption attached to criteria 2 and 3. It reports
+  and never concludes, which is that document's own instruction. Building it found `NIGHT_OPERATOR`
+  meeting two criteria and named nowhere in the standing table.
+- **Real-process kernel tests.** `test/worker.ts` is an independent host spawned as its own process.
+  Two workers drive one run to done across every phase; a worker killed holding a lease loses it to
+  the reaper; a kernel resumes a run from disk after the process that started it exited.
 - **Collapsible README sections.** `<details>` is the only dropdown GitHub renders. The exit
   code table, the per-run notes and the syscall list are reference material, folded so the page
   opens short.

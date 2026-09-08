@@ -239,7 +239,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       298 tests over all of it
+test/       308 tests over all of it
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
@@ -285,6 +285,7 @@ node dist/src/cli.js frames --axes           # frames per axis, and axes no run 
 node dist/src/cli.js cost                    # token spend per run, by phase and by frame, against the estimate
 node dist/src/cli.js os stats                # throughput, phase timing and lease expiry rate from the journal
 node dist/src/cli.js replay                  # re-render every recorded synthesis and report drift
+node dist/src/cli.js doctor                  # does config, prompts, agents, tool grants and the build agree
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
 node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?
