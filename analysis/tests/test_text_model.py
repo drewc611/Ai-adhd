@@ -155,3 +155,32 @@ def test_vocabulary_min_count_reports_what_it_dropped():
     assert "once" not in v.stoi and "twice" in v.stoi
     assert v.dropped_types == 1 and v.dropped_tokens == 1
     assert v.encode(["once"]) == [v.stoi["<unk>"]]
+
+
+def test_a_vocabulary_ceiling_that_binds_says_so_separately_from_min_count():
+    """Both raise the OOV rate and only one of them is a modelling decision.
+
+    A word dropped for appearing once is a choice. A word that appeared 90 times and was cut because
+    the ceiling filled up is a ceiling that bound without saying so, and it makes perplexity
+    incomparable with a run whose vocabulary was not capped. Before this the two causes landed in one
+    number and the second was invisible.
+    """
+    from collections import Counter
+
+    c = Counter({f"w{i}": 100 - i for i in range(40)} | {"rare": 1})
+    v = Vocab.build(c, min_count=2, max_size=13)
+
+    assert len(v) == 13, "the ceiling did not bind"
+    # 3 specials plus 10 real types, so 30 frequent types were cut and one was below min_count.
+    assert v.truncated_types == 30
+    assert v.truncated_tokens == sum(100 - i for i in range(10, 40))
+    # Truncated is a subset of dropped rather than a disjoint count: dropped is the OOV numerator.
+    assert v.dropped_types == 31 and v.dropped_tokens == v.truncated_tokens + 1
+
+
+def test_min_count_drops_are_not_reported_as_truncation():
+    """The distinction is only useful if it does not fire on the ordinary case."""
+    from collections import Counter
+
+    v = Vocab.build(Counter({"kept": 5, "once": 1}), min_count=2, max_size=1000)
+    assert v.dropped_types == 1 and v.truncated_types == 0 and v.truncated_tokens == 0

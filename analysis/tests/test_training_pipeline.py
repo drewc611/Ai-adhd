@@ -109,6 +109,11 @@ def test_the_shipped_manifest_trains_on_a_clean_checkout(tmp_path):
     assert rec.vocab_size > 500
     assert rec.tokens_seen > 20_000
     assert rec.model_path.exists()
+    # The record has to say whether the vocabulary ceiling bound, not just what the OOV rate was.
+    # A capped vocabulary raises OOV for a reason that makes perplexity incomparable with a run whose
+    # vocabulary was not capped, and the two causes are indistinguishable in the rate alone.
+    assert "vocab_truncated" in rec.to_dict()
+    assert rec.vocab_truncated_types == 0, "the default ceiling should not bind on repository prose"
 
     m = KneserNey.load(rec.model_path)
     total = sum(m.prob((), w) for w in range(len(m.vocab)))

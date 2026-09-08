@@ -37,6 +37,12 @@ class TrainingRecord:
     tokens_seen: int
     ngrams: int
     oov_rate: float
+    #: How much of that OOV rate is the `max_vocab` ceiling rather than `min_count`. Nonzero means
+    #: the vocabulary was capped, which changes the OOV rate and makes perplexity incomparable with
+    #: a run whose vocabulary was not — the same failure mode as a truncated n-gram table, and
+    #: previously invisible because both causes landed in one number.
+    vocab_truncated_types: int
+    vocab_truncated_tokens: int
     discounts: list[tuple[float, float, float]]
     budget_pass1: dict
     budget_pass2: dict
@@ -53,6 +59,10 @@ class TrainingRecord:
             "tokens_seen": self.tokens_seen,
             "ngrams": self.ngrams,
             "oov_rate": round(self.oov_rate, 5),
+            "vocab_truncated": {
+                "types": self.vocab_truncated_types,
+                "tokens": self.vocab_truncated_tokens,
+            },
             "discounts": [[round(x, 4) for x in d] for d in self.discounts],
             "budget": {"vocabulary": self.budget_pass1, "counts": self.budget_pass2},
             "sources": self.sources,
@@ -112,6 +122,7 @@ def train(
             "order": order,
             "min_count": min_count,
             "oov_rate": round(oov, 5),
+            "vocab_truncated": {"types": vocab.truncated_types, "tokens": vocab.truncated_tokens},
             "sources": library.describe(),
             "budget": {"vocabulary": b1.report(), "counts": b2.report()},
         }
@@ -127,6 +138,8 @@ def train(
         tokens_seen=b2.tokens,
         ngrams=sum(len(t) for t in model.counts),
         oov_rate=oov,
+        vocab_truncated_types=vocab.truncated_types,
+        vocab_truncated_tokens=vocab.truncated_tokens,
         discounts=model.discounts,
         budget_pass1=b1.report(),
         budget_pass2=b2.report(),
