@@ -134,7 +134,12 @@ yet enough to know whether they work.
     frame having had them. Bump `version` in `config/critic-rubric.yaml` when either lands —
     `score.json` records `rubric_version`, so the split in the corpus will be legible. Owner's
     call: it makes the 35 artifacts scored under version 0 non-comparable with everything
-    after. Evidence in D8 finding 5.
+    after. Evidence in D8 finding 5, and now with a sign on it: chance-corrected, `foreclosure`
+    scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96% exact
+    agreement, and the interval for `committal` also contains zero. `python -m adhd_analysis`
+    reports both. A dimension whose interval spans chance is unmeasured, not weak, which raises a
+    third option for this item: drop `foreclosure` rather than rewrite it, since the contract
+    validator already enforces what it is scoring.
 
 ## 5. Kernel (D7)
 
@@ -297,10 +302,22 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     it? Each answer changes what `frame_hash` means for a run under a merged library, and one of
     them quietly makes the drift report unable to say which definition ran.
 
-72. **Publishing to npm** (owner's action). The package is verified — a test reconstructs the
-    tarball's file list and asserts the CLI, `adhd doctor` and `scripts/demo.sh` all work from it —
-    but publishing needs credentials and a decision about the name, which `package.json` currently
-    leaves as the unscoped `adhd`.
+72. ~~**Publishing to npm** (owner's action).~~ **The name decided itself and the pipeline is
+    built; one secret remains.** npm already serves `adhd`: a 2022 stub at 0.0.0, description
+    "unstable wip, do not use atm". Publishing under it is a 403 that reads like a permissions
+    problem, so the package is now `ai-adhd` and the CLI binary is still `adhd`.
+    `.github/workflows/release.yml` publishes on a `v*` tag and then registers the same version
+    with the official MCP Registry, which needs no secret because it verifies the
+    `io.github.drewc611/*` namespace from the workflow's own OIDC identity. **npm still needs an
+    `NPM_TOKEN` repository secret, which only the owner can add.** Until it is there, a tag fails
+    at the npm step with that sentence. See `docs/DISTRIBUTION.md`.
+
+73. **A mission that runs the whole loop end to end** (evidence). Every part of the SuperAgent is
+    tested and `adhd super` drives a real mission through plan, confirm, claim, a contract
+    rejection, a retry and done. Nothing has yet run a `deep` mission with live subagents, so the
+    stage graph's central claim — that a second research pass after the divergence catches the
+    direction chosen too early — is a design argument and not a finding. It needs one real
+    mission, which costs real tokens, and is the owner's call for the same reason D5 exists.
 
 ## Not doing, and why
 

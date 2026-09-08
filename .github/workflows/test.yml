@@ -35,3 +35,23 @@ jobs:
       # An assertion that used to hold on a run still holds on it. Finer than `eval`, which
       # compares a run against its own recorded expectation and so stays green as it degrades.
       - run: node dist/src/cli.js eval --gate
+
+  # The corpus statistics. Separate job because it shares nothing with the TypeScript build: it
+  # reads evals/recorded/ and writes text, nothing under src/ imports it, and it never runs during
+  # a run. If this job ever needs the Node build to have happened first, that is the signal that
+  # the D9 boundary has been crossed.
+  analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -e '.[dev]'
+        working-directory: analysis
+      - run: pytest
+        working-directory: analysis
+      # The report runs end to end against the real corpus, so a loader change that drops a rater
+      # or mis-joins a blind letter fails here rather than being discovered in a figure.
+      - run: python -m adhd_analysis --root .. --json > /dev/null
+        working-directory: analysis

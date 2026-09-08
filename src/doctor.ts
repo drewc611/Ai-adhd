@@ -10,6 +10,7 @@
 // manifest and the build output, and reports what disagrees.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { STAGE_AGENT, STAGE_TOOLS } from "./super/index.js";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
 import { TRAP_IDS } from "./schema.js";
@@ -106,7 +107,40 @@ function checkPlugin(cfg: Config): Finding[] {
   // spawn something that is not there. The plan's agent names come from routing.
   const dispatchable = new Set<string>(["adhd-branch", "adhd-branch-search", "adhd-critic", "adhd-deepen"]);
   for (const a of dispatchable) if (!onDisk.includes(a)) out.push({ severity: "error", check: "plugin", message: `a run can dispatch to ${a} and agents/${a}.md does not exist` });
-  for (const a of onDisk) if (!dispatchable.has(a)) out.push({ severity: "warn", check: "plugin", message: `agents/${a}.md is never dispatched by any phase` });
+  // Maintenance agents are deliberately outside the run. They are dispatched by the scheduled
+  // workflows, not by a plan, and warning on them would train a reader to ignore this check. The
+  // ban that matters for them is the reverse one below: they must not be reachable from a run.
+  const maintenance = new Set<string>(["adhd-trainer", "adhd-governor", "adhd-steward"]);
+  // Mission agents are dispatched by SuperAgent stages rather than run phases. Unlike the two sets
+  // above this one is derived rather than listed: STAGE_AGENT is what the scheduler actually hands
+  // a host, so a stage kind pointing at an agent nobody wrote is an error and not a warning.
+  const mission = new Set(Object.values(STAGE_AGENT).filter((a): a is string => a !== null));
+  for (const [kind, agent] of Object.entries(STAGE_AGENT)) {
+    if (agent && !onDisk.includes(agent)) out.push({ severity: "error", check: "plugin", message: `stage kind ${kind} dispatches to ${agent} and agents/${agent}.md does not exist` });
+  }
+  for (const a of onDisk) if (!dispatchable.has(a) && !maintenance.has(a) && !mission.has(a)) out.push({ severity: "warn", check: "plugin", message: `agents/${a}.md is never dispatched by any phase or stage` });
+
+  // The D4 argument, applied to stages. A stage's tool grant is data in STAGE_TOOLS, and the agent
+  // that runs it declares its own in front matter; a stage granted a tool its agent does not carry
+  // reasons without it and looks like an agent that chose not to use it.
+  for (const [kind, tools] of Object.entries(STAGE_TOOLS)) {
+    const agent = STAGE_AGENT[kind as keyof typeof STAGE_AGENT];
+    if (!agent || !onDisk.includes(agent) || !mission.has(agent)) continue;
+    const front = (read(join(cfg.root, "agents", `${agent}.md`)) ?? "").split("---")[1] ?? "";
+    const declared = new Set((front.match(/^\s*tools:\s*(.+)$/m)?.[1] ?? "").split(",").map((t) => t.trim()).filter(Boolean));
+    for (const t of tools)
+      if (!declared.has(t))
+        out.push({ severity: "error", check: "tools", message: `stage kind ${kind} grants ${t} and agents/${agent}.md does not declare it` });
+    for (const t of declared)
+      if (!(tools as readonly string[]).includes(t))
+        out.push({ severity: "error", check: "tools", message: `agents/${agent}.md declares ${t} and no stage kind grants it` });
+  }
+  for (const a of maintenance) {
+    if (!onDisk.includes(a)) continue;
+    const body = read(join(cfg.root, "agents", `${a}.md`)) ?? "";
+    if (/^\s*tools:.*\b(Task|Agent)\b/m.test(body))
+      out.push({ severity: "error", check: "plugin", message: `agents/${a}.md can spawn agents; a maintenance agent that can start a run is a path from a scheduled job into the reasoning the run is supposed to isolate` });
+  }
   return out;
 }
 

@@ -639,3 +639,406 @@ comparable if the same weights and anchors produced them. Rewriting anchors mid-
 1 through 4 is drawn from that pool. The prerequisite shipped instead: `score.json` now records
 `rubric_version`, so a future rubric change is legible in the corpus rather than invisible. The
 rubric change itself is the owner's call and belongs in `docs/BACKLOG.md` until it is made.
+
+## D9. Where the D2 boundary actually falls, given the ask was "build a transformer into this"
+
+**Asked.** Build a transformer into the architecture and add Python ML trained for it.
+
+**Resolved.** No transformer in the run path. A Python package under `analysis/` that measures the
+recorded corpus, including one small supervised model used as an instrument.
+
+The ask has three readings and they do not have the same answer.
+
+**A transformer in the run path is D2 with extra steps.** A transformer that produced or scored
+reasoning would have to be pretrained, because 35 artifacts is not a training set, and a
+pretrained model shipped with the repository is an inference client whether it arrives as an API
+key or as a weights file. CLAUDE.md's line is "no API, no provider SDK, no keys anywhere" and D2's
+argument for it is not about cost or vendor lock-in. It is that branch isolation is the entire
+mechanism, and isolation is a property of separate context windows, not of an instruction to
+ignore what you read above. A local model scoring branches would sit outside that guarantee and
+the repository would no longer be a demonstration of the thing it claims.
+
+**Training a transformer on this corpus is arithmetic, not policy.** The corpus is roughly 35,000
+tokens across seven runs. A model small enough to train on it cannot do anything, and a model
+large enough to do something cannot be trained on it. That is true regardless of what D2 says.
+
+**Measuring the corpus with statistics and one small model is neither.** `analysis/` reads
+`evals/recorded/` and writes text. It runs after runs, never during one. Nothing under `src/`
+imports it, and a test in the TypeScript suite would be the place to enforce that if it ever
+looks like changing. It makes no decision a run depends on: delete the directory and every run
+behaves identically.
+
+The line, stated so a future change can be checked against it: **a model that changes what a run
+outputs is banned; a model that describes what runs already output is a measuring instrument.**
+`signal.py` is on the second side of it because the outcome it predicts is `pruned`, which is
+decided by trap detectors, and its output goes into a report a human reads. Move it into the
+prune decision and it crosses the line, and at 71% leave-one-run-out accuracy it would also be
+worse than the detectors it replaced.
+
+**What it found, which is why the boundary was worth drawing rather than just declining.** The
+repository's headline reliability figure — 79% exact critic agreement over 225 cells — is highest
+on the dimensions that vary least. Corrected for chance, `foreclosure` has alpha -0.017 with a
+95% interval of [-0.04, +0.00] and 96% exact agreement; `reversibility` has alpha +0.850 and 76%
+exact agreement. The two rankings invert. D8 finding 5 named `foreclosure` and `reasoning_carries`
+as scoring the output contract and the D4 tool allowlist rather than the reasoning, and got there
+from ceiling rates; alpha gets there without being told which dimensions to suspect. `committal`
+and `foreclosure` have intervals containing zero, which at seven runs means unmeasured rather than
+weak. And all nine dimensions load the same direction on whether an artifact is pruned, which the
+pairwise correlation matrix in `learn --correlation` cannot see: it reports max |r| = 0.51, so no
+two dimensions are redundant with each other, while every one of them tracks the same latent
+thing.
+
+None of that changes `config/critic-rubric.yaml`. It is evidence for backlog item 60, which is the
+owner's call, and rewriting anchors mid-corpus would split the 35 scored artifacts into two halves
+that look comparable and are not. Same reason D8 gave.
+
+## D10. Training on a document library, and the two agents that keep it from running the repo
+
+**Asked.** Train against libraries of text and documents so the model is worth something. Have the
+repository run its own agents for updates and code checks. Add an agent that trains weekly and a
+subagent that stops it over-computing.
+
+**Resolved.** All four, with the model on the analysis side of the D9 line and the two new agents
+outside every run.
+
+### What "training" means here, precisely
+
+Modified Kneser-Ney over a document library, in the standard library, from scratch. Every
+parameter is a count taken from a corpus this machine can point at. Nothing is downloaded: no
+weights, no tokenizer, no corpus. That is what keeps it a description of a corpus rather than an
+inference client that shipped its weights instead of a key, and it is why `analysis/pyproject.toml`
+gained no dependency for any of it.
+
+Not a transformer, and the reason is arithmetic rather than policy. A transformer trained from
+scratch needs somewhere north of 10^8 tokens before its perplexity beats a well-smoothed 5-gram,
+and a GPU to get there. Kneser-Ney reaches useful perplexity at 10^6 to 10^7 tokens, trains in one
+pass on a CPU, and its parameters are inspectable: a suspicious score traces to the exact context
+that produced it. On a weekly CPU job over a document library it is not the compromise, it is the
+better model. (Chen & Goodman, 1999.)
+
+### What it is for
+
+T1, the consensus trap, is the one trap whose detector cannot see the thing the trap is about:
+prose that reads like every other document on the subject. A background model can. Mean surprisal
+under it is low exactly where the writing was predictable from everything else written on the
+topic, and the per-token vector says which clauses those were, which is the form a T1 finding has
+to take to be actionable.
+
+Two properties decide whether the measure is worth anything, and both are reported rather than
+assumed. It is **relative to the corpus**: against this repository's own docs, "it is important to
+note that this is a comprehensive solution" scores as surprising, because the docs never write
+that way, and against a general library it scores as generic. And **out-of-vocabulary words are
+not evidence of originality**: a closed vocabulary maps invented words to `<unk>`, which is common
+in the training data by construction, so a sentence of nonsense reads as unremarkable. Mean
+surprisal is therefore taken over in-vocabulary tokens only, with the OOV rate beside it.
+
+**First result, against the repository's own prose as a placeholder corpus.** Pruned artifacts
+mean 8.16 bits, kept artifacts 8.13, permutation p = 0.74. T1-fired artifacts 8.23 against 8.12,
+p = 0.25. Both null, and null is the better outcome: it says the detectors are catching something
+the surface statistics miss, which is what a detector sweep is for. The corpus is 88,000 tokens,
+far too small to conclude anything, which is exactly why `analysis/corpora.yaml` exists as a
+checked-in manifest rather than a command-line path.
+
+### The corpus manifest
+
+Declared in `analysis/corpora.yaml`, not passed as an argument. A weekly job that takes a path
+argument trains on whatever the argument said that week; one that reads a checked-in manifest
+trains on something a diff can show changing. A manifest naming a path that is not there raises
+`CorpusError` rather than training on the remainder, because a corpus that silently resolves to
+zero files produces a perplexity that looks like a result.
+
+### The ceiling is an object, not a timeout
+
+`Budget` is consulted by the trainer rather than wrapped around it, and the difference is the
+whole design. A refused `allows()` stops the read and seals the model that exists, with the reason
+in its metadata: a legitimate model of a truncated corpus. A timeout kills the process and leaves
+nothing, on the week the corpus grew rather than the week the code changed, which reads as flake
+and gets the job disabled.
+
+Four ceilings, each protecting a different failure: tokens against corpus growth, wall clock
+against the runner's job limit, distinct n-grams against table growth (which tracks contexts, not
+documents, so it climbs on a corpus that only got more varied), and resident set against the
+runner's 7GB. `relieve()` clears only a size refusal, checked on the stored reason rather than the
+caller's intentions, because clearing a wall-clock refusal would let one batch of work through
+before the next check re-derived it and turn a hard ceiling into a leak.
+
+**Two defects the tests caught, both of the kind that produce plausible numbers.** The counting
+pass was charging every token twice, so it stopped at half the corpus the vocabulary pass read and
+counted n-grams over words the vocabulary was never built from — the `<unk>` rate would have
+climbed through training and perplexity would have improved the less of the corpus the model saw.
+And `relieve()` originally cleared any refusal, which meant a wall-clock ceiling could be bought
+back one `check_every` batch at a time. The docstring claiming otherwise was the worse half of
+that bug.
+
+### The two agents
+
+`adhd-trainer` (Bash, Read, Glob, Grep) runs the weekly training and reports the four record
+fields that each detect a specific failure: `tokens_seen` falling means the ceiling bit earlier,
+`oov_rate` climbing means `min_count` is dropping words the artifacts are judged on,
+`stopped_because` names a truncated corpus, and a discount row fallen back to `[0.75, 0.75, 0.75]`
+means a count-of-counts was zero and modified Kneser-Ney degraded to the unmodified kind.
+
+`adhd-governor` (Read, Glob, Grep) sets and audits the ceilings. **It has no Bash**, and that is
+the point: a governor that can run the thing it governs will eventually run it to check, and the
+check is the cost it exists to prevent. It raises a ceiling only from evidence in a record, never
+above 5120MB or 1800s on a hosted runner, and prefers `min_count` and `order` over ceilings
+because both cut the table superlinearly and are modelling decisions with a stated effect.
+
+Neither is dispatched by a run phase. `adhd doctor` now knows the difference, and
+`test/agents.test.ts` keeps them in a separate allowlist rather than relaxing the run agents' one:
+the four run agents still carry no filesystem tool, and the two maintenance agents can carry no
+network tool and no agent-spawning tool. Network on a scheduled job is the one way this repository
+acquires an inference client without anyone deciding to.
+
+### Self-running checks
+
+`.github/workflows/maintenance.yml` runs every gate weekly against the default branch and opens or
+comments on one labelled issue when a gate that passed last week fails. That is not redundant with
+`test.yml`: `replay` and `frames --drift` measure the library against the recorded runs, so they
+can start failing in a week nobody pushed anything.
+
+Dependency state is reported and never applied. An unattended job that bumps a dependency and
+merges it is a supply-chain path into a repository whose whole claim is that it runs no untrusted
+code, and `test/boundary.test.ts` fails if either scheduled workflow gains a `git push` or an
+`npm audit fix`.
+
+### D10 amendment: where the corpus comes from
+
+The manifest shipped with a disabled placeholder and the model trained on this repository's own
+88,000 tokens, which proves the pipeline and measures nothing. Asked to make it actually train,
+the choice was between a corpus the owner supplies by hand and one the job fetches. It fetches.
+
+**RFCs, not literature.** The artifacts being scored are engineering arguments with a fixed shape:
+a position, what it costs, what it forecloses, what would falsify it. That is the RFC genre almost
+exactly — design rationale, trade-offs, security considerations, the paragraph explaining why the
+obvious approach was not taken. A model trained on public-domain novels would faithfully report
+that a branch artifact reads unlike a Victorian novel. True, and useless: T1 is consensus in
+technical argument, so the background distribution has to be technical argument.
+
+**The network ban moved rather than lifted.** D10 banned network in a scheduled job on the grounds
+that a job which can fetch is a job which can fetch weights. That argument still holds, so the
+capability was made small enough to check:
+
+- Exactly one file in the repository imports a networking module, `analysis/scripts/fetch_corpus.py`.
+  It sits outside `adhd_analysis/`, nothing imports it, and the package's own absolute ban is
+  unchanged.
+- It talks to one allowlisted host over https, refuses any response that is not `text/plain`, and
+  refuses the file extensions weights arrive in (`.safetensors`, `.gguf`, `.ckpt`, `.pt`, `.onnx`,
+  `.bin`, plus archives and shared objects).
+- `test/boundary.test.ts` pins all of it, including that the list of network-reaching files is
+  exactly one entry long. Adding a second is a test failure, not a review comment.
+- Neither maintenance agent gained a network tool. The fetch is a workflow step; the agents still
+  cannot reach anything.
+
+The corpus is gitignored and cached in CI. A clean checkout has none, and `required: false` on the
+entry means that checkout trains on repository prose rather than failing — the same reason the
+first three entries exist.
+
+**The first real run.** 492 RFCs plus the repository's own prose: 5.63M tokens, a 39,268-word
+vocabulary, 5.41M distinct 4-grams, 57 seconds, 1413MB peak resident set. No ceiling bit, OOV fell
+from 13-24% per artifact on the placeholder corpus to 1-5%, and every discount row is a genuine
+modified-Kneser-Ney estimate rather than the `0.75` fallback. That fixes the ceiling arithmetic at
+roughly **250MB and 10 seconds per million tokens at order 4**, which is now in the governor's
+brief: at `Budget.weekly()`'s 5120MB the resident set binds at about 20M tokens, well before the
+40M token ceiling does, so raising the token ceiling on a growing corpus changes nothing.
+
+**And a result with the sign pointing the wrong way.** Pruned artifacts mean 9.62 bits against
+9.59 for kept, p = 0.72 — null, and null is the better outcome, because it says the detectors are
+catching something the surface statistics miss. But T1-fired artifacts mean 9.78 bits against 9.55
+for the rest, p = 0.048, and **higher is less predictable**. T1 is the consensus trap. If its
+detector were finding surface genericity, the artifacts it fires on would be the predictable ones.
+They are the surprising ones.
+
+The reading that fits the code: the T1 detector is a written rule over what an artifact *claims* —
+whether its position is the one anyone would give — and not over how the artifact reads. Those are
+different properties and this says so with a number for the first time.
+
+The reading that also fits: two unpreregistered comparisons on 35 artifacts, 7 of them in the
+fired group, and a nominal p of 0.048. `docs/EXPERIMENTS.md` refuses to act on figures like this
+and so does this entry. It is a reason to want more runs, which is backlog item 1, and it is not a
+finding. The report prints that caveat in its own output every time it prints the number, because
+the number will otherwise be quoted without it.
+
+## D11. Distribution: which marketplaces this can be on, and one it cannot
+
+**Asked.** Get it onto the Claude marketplace, and onto every marketplace possible including
+OpenAI's and Anthropic's.
+
+**Resolved.** Live on the Claude Code plugin surface. Built and one secret away on npm and the
+official MCP Registry. Refused on OpenAI, for a reason that is architecture rather than paperwork.
+
+### There is no Anthropic marketplace to submit to, and that is not a problem
+
+Claude Code ships Anthropic's own marketplace pre-registered and reserves its names
+(`claude-code-marketplace`, `claude-plugins-official`, `anthropic-plugins` and others). There is no
+public submission process for third parties. Distribution works the other way round: a marketplace
+*is* a git repository with a `.claude-plugin/marketplace.json` in it, and users add it by name.
+
+So this repository is now its own marketplace. `/plugin marketplace add drewc611/Ai-adhd`, then
+`/plugin install adhd@adhd`. Nothing is pending and nobody has to approve it.
+
+**A defect the packaging work exposed.** `dist/` is a build artifact and is gitignored, so a plugin
+installed from the git source had an `mcpServers` entry pointing at a file that was not there. The
+host would have reported `ERR_MODULE_NOT_FOUND` with a path inside its own plugin cache, which
+tells a user nothing. `bin/adhd-mcp.mjs` now sits in front of it and prints what is missing and the
+one or two commands that fix it, varying on whether `node_modules` is present. It deliberately does
+not build: hosts start MCP servers without asking, and a server that runs `npm install` on first
+start is a surprise with a network fetch in it.
+
+**The plugin ships four agents, not six.** `agents/` also holds `adhd-trainer` and `adhd-governor`,
+which maintain this repository's own background model. Shipping `./agents` wholesale would hand a
+plugin user two agents referencing paths they do not have, so `plugin.json` names the four run
+agents explicitly and a test fails if a maintenance agent appears in that list.
+
+### The npm name decided itself
+
+npm already serves `adhd` — a 2022 stub at version 0.0.0, description "unstable wip, do not use
+atm". Publishing under it returns a 403 that reads like a permissions problem rather than a name
+collision. Backlog item 72 called the name the owner's decision; the registry made it. The package
+is `ai-adhd`, matching the GitHub repository, and the CLI binary is still `adhd`.
+
+### The registry order is load-bearing
+
+`.github/workflows/release.yml` fires on a `v*` tag: gates, then npm, then the MCP Registry. npm
+first because the registry proves package ownership by reading `mcpName` out of the published
+`package.json` and checking it matches the server name being claimed. Reversed, the publish fails
+naming a missing field rather than the race that caused it.
+
+The registry step needs no secret. It authenticates with GitHub OIDC, which is what proves the
+`io.github.drewc611/*` namespace: that namespace is claimable only by a workflow running in a
+repository owned by drewc611. npm has no equivalent path, so `NPM_TOKEN` is a stored secret and is
+the one thing here the repository cannot create for itself. Until it exists a tag fails at that
+step with exactly that sentence.
+
+Four files carry the version — `package.json`, `server.json`, `plugin.json`, `marketplace.json` —
+and they disagree silently. `test/marketplace.test.ts` checks them against each other on every
+run, and the release workflow checks all four against the tag before publishing anything.
+
+### OpenAI is refused, and not for want of an account
+
+The ChatGPT app directory takes MCP servers. Its requirements are a stable publicly reachable
+HTTPS endpoint serving `/mcp`, domain verification through a token at
+`/.well-known/openai-apps-challenge`, developer identity verification, and an organisation role
+carrying Apps Management write.
+
+The first one does not survive contact with D2. This MCP server is stdio and local because the
+*host* supplies inference by spawning isolated subagents; the server compiles briefs and validates
+contracts and never calls a model. A hosted remote server has no subagents to spawn, so it would
+have to call one to do anything — the inference client CLAUDE.md bans on its first page. And D2's
+argument is not about cost or vendor lock-in: branch isolation is a property of separate context
+windows, and a remote server holding one conversation has none. Publishing there would mean
+shipping something that demonstrates the opposite of what this repository claims.
+
+The other three are things only the owner can supply: a domain they control, their own verified
+identity, and a role assignment in their OpenAI organisation. They are not the reason for the
+refusal, but they would each independently block it.
+
+The nearest thing that is possible: any MCP host that reads the official registry will find this
+server once the npm publish lands, and that includes hosts other than Claude Code. That is
+distribution to the MCP ecosystem, which is the part of "everywhere possible" that does not require
+becoming a different project.
+
+## D12. The SuperAgent: a harness for hours of work that still never reasons
+
+**Asked.** A SuperAgent that researches, codes and creates, using sandboxes, memory, tools, skills,
+subagents and a message gateway, handling tasks that take minutes to hours.
+
+**Resolved.** Built as a layer above the kernel, with all six pieces, and with the three
+CLAUDE.md non-negotiables holding unchanged. Two of the six pieces turned out to be the interesting
+part, and not for the reason the ask suggests.
+
+### Above the kernel, not inside it
+
+`src/os.ts` already schedules long multi-agent work: leases, heartbeat, drain, priority, budgets,
+a journal. Its `phase` enum is the four ADHD phases, and widening that enum to hold `research` and
+`build` would weaken the invariants the enum encodes.
+
+So a mission owns a stage graph and, when a stage needs a hard decision made well, submits an
+ordinary run to the kernel and adopts the synthesis. `decide` is a stage kind that spawns no
+agent. That is the whole reason a mission beats a long prompt: the decision is made by N isolated
+frames and a blind critic instead of by one agent being thorough, which is the thing this
+repository is.
+
+### Memory and the gateway are the same problem twice
+
+The ask lists them as features. They are the two mechanisms by which a sibling's output would reach
+a branch, which makes them the two ways to lose the property the architecture exists to
+demonstrate — and to lose it through components nobody was watching, because a memory store has a
+database's air of neutrality and a message bus reads as plumbing.
+
+So both refuse, mechanically and at the point of delivery rather than on read:
+
+- `Memory.forBrief` withholds every entry written by a `diverge` participant from every `diverge`
+  brief. Global scope does not exempt it, and neither does coming from a different run: a branch
+  of last week's run is still a branch, and its conclusion on a related question is exactly the
+  anchor being defeated. The brief is told the count and never the content, because a list of
+  titles is a list of what siblings thought worth writing down.
+- `Gateway.send` refuses any delivery whose two ends are both `diverge` participants, in either
+  direction, and journals the refusal. Direction does not matter: a branch asking a sibling a
+  question leaks the question, and a question is a claim about what the asker thinks matters.
+  Refused at send rather than dropped on read, because a message accepted and then hidden is a
+  message the sender believes arrived.
+
+`adhd super memory --audit` and `adhd super gateway <mission>` report what each rule actually did.
+A gateway that has never refused anything is one whose rule is not being exercised.
+
+### The sandbox is not a security boundary and says so
+
+A stage with Bash walks out of any directory this creates. Claiming otherwise would be the more
+dangerous error, because someone would then rely on it.
+
+What it is: an honest stage's work made reviewable and revertible. Changes in one place, a diff by
+content hash rather than mtime (`cpSync` does not preserve mtimes across filesystems, so an mtime
+diff reports the whole tree on some machines and nothing on others), and one deliberate promote
+back. `promote` checks every path against the writable list before moving anything, so a refusal
+moves nothing — a partial promote leaves a tree matching neither the sandbox nor the source.
+
+The command allowlist matches the whole command string. Prefix matching on `npm test` lets
+`npm test && curl somewhere` through, and a verify stage runs what it is told.
+
+### Two tool-grant holes the doctor check found on its first run
+
+`adhd doctor` gained a check comparing `STAGE_TOOLS` against the agents' own front matter in both
+directions, and it failed immediately on the code that had just been written.
+
+`review` was mapped to `adhd-critic` and `diverge` to `adhd-branch`. Both are run agents whose
+grant is fixed by D4 at `TaskList` and nothing else, so the stage grants either had to be empty or
+had to widen an agent whose emptiness is the point. Fixed by giving `review` its own agent and
+`diverge` none.
+
+`build` and `verify` were one agent. A tool grant is per agent, so one agent serving both kinds
+carries the union — and the union means a verify stage can write. **A stage that checks its own
+work and can edit it is not a check.** Split into `adhd-builder` and `adhd-verifier`, and
+`test/agents.test.ts` derives the expected grants from `STAGE_TOOLS` rather than restating them,
+so a stage kind that gains a tool fails until its agent declares the same one.
+
+### The gate, and the reason it is dumb on purpose
+
+Every stage names its artifact, required headings, a word floor and optionally a command that must
+exit zero, all fixed before the stage runs. `verifyStage` runs exactly that. Nobody judges whether
+the artifact is good: "good" is what the review stage is for, and a gate that asks for it passes
+whatever it is given.
+
+`assertNoReasoning` runs on every brief the planner emits and on every orchestrator message. An
+orchestrator that formed a view would put it in every brief it compiled, and every stage
+downstream would reason from a premise nobody scored — the anchor arriving through the one
+component that talks to everything.
+
+`goal_hash` is checked on every return, aborting with `GOAL_HASH_MISMATCH` at exit code 3. A
+worker returning against a paraphrased goal is the mission-level `problem_hash` drift.
+
+### Classes, and what minutes-to-hours means concretely
+
+`quick` is research and a write-up. `standard` adds the divergent decision and a build behind it.
+`deep` adds a second research stage **after** the divergence, because the most common way an
+hour-long piece of work goes wrong is committing to a direction chosen before the hard part was
+understood, and the second pass is where the branches' disagreement gets checked against the world
+rather than against each other.
+
+Leases and budgets come from the class rather than a flag, and everything is on disk: a mission
+that takes an hour outlives the process that started it, so the record is the truth and the object
+is a view of it. A test starts a second `SuperAgent` on the same root and resumes mid-mission.
+
+`plan` prints the graph and stops. D5 said a system that spawns seven subagents and gives the user
+no way out fails its own fixture 001; a deep mission is seven stages, one of which is itself a
+seven-branch run, so the objection applies with an order of magnitude on it.

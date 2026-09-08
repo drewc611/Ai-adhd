@@ -20,6 +20,8 @@ import { wizard } from "./tui.js";
 import { kernelStats, openKernel, recordRun } from "./os.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort, UsageError } from "./errors.js";
+import { join } from "node:path";
+import { MISSION_CLASSES, Sandbox, missionPreview, openSuper, operator, type MissionClass } from "./super/index.js";
 
 const program = new Command();
 program
@@ -596,6 +598,129 @@ program
     } catch (e) {
       fail(e);
     }
+  });
+
+const superCmd = program
+  .command("super")
+  .description("the SuperAgent: missions that take minutes to hours, with sandboxes, memory, a message gateway and stages. Never calls a model.");
+const superFor = (o: { superRoot?: string }) => openSuper(o.superRoot ?? process.env["ADHD_SUPER_ROOT"] ?? "./missions");
+
+superCmd
+  .command("plan")
+  .description("compile a goal into a stage graph; prints the preview; state awaiting_confirm")
+  .requiredOption("--goal <file>", "verbatim goal statement")
+  .requiredOption("--id <mission_id>")
+  .option("--class <cls>", "quick | standard | deep", "standard")
+  .option("--super-root <dir>", "mission root (default $ADHD_SUPER_ROOT or ./missions)")
+  .option("--writable <paths>", "comma-separated sandbox paths the build stage may write")
+  .option("--allow <commands>", "semicolon-separated commands verify may run")
+  .option("--budget <tokens>", "ceiling on reported tokens for the whole mission", (v) => Number.parseInt(v, 10))
+  .action((o) => {
+    try {
+      const cls = o.class as MissionClass;
+      if (!(MISSION_CLASSES as readonly string[]).includes(cls)) throw new UsageError(`--class must be one of ${MISSION_CLASSES.join(", ")}`);
+      const m = superFor(o).submit({
+        mission_id: o.id,
+        goal: readFileSync(o.goal, "utf8"),
+        mission_class: cls,
+        budget_tokens: o.budget,
+        sandbox: {
+          writable: o.writable ? String(o.writable).split(",").map((x: string) => x.trim()).filter(Boolean) : [],
+          commands: o.allow ? String(o.allow).split(";").map((x: string) => x.trim()).filter(Boolean) : [],
+        },
+      });
+      out(missionPreview(m));
+      out({ mission_id: m.mission_id, state: m.state, stages: m.stages.length, budget_tokens: m.budget_tokens });
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+superCmd.command("confirm <mission_id>").option("--super-root <dir>").action((id, o) => { try { out(superFor(o).confirm(id)); } catch (e) { fail(e); } });
+
+superCmd
+  .command("claim <mission_id>")
+  .description("lease the next unblocked stage and print its brief")
+  .requiredOption("--worker <id>")
+  .option("--super-root <dir>")
+  .option("--brief-only", "print the brief and nothing else")
+  .action((id, o) => {
+    try {
+      const c = superFor(o).claim(id, o.worker);
+      if (!c) { out({ claimed: null }); return; }
+      if (o.briefOnly) { console.log(c.brief); return; }
+      out({ stage: c.id, kind: c.kind, agent: c.agent, tools: c.tools, sandbox: c.sandbox, lease_until: c.lease_until, goal_hash: c.goal_hash });
+      console.log("\n---\n");
+      console.log(c.brief);
+    } catch (e) { fail(e); }
+  });
+
+superCmd
+  .command("return <mission_id> <stage_id>")
+  .description("check the stage artifact against its contract and advance the mission")
+  .requiredOption("--worker <id>")
+  .requiredOption("--goal-hash <hash>")
+  .option("--tokens <n>", "reported tokens", (v) => Number.parseInt(v, 10))
+  .option("--note <text>")
+  .option("--super-root <dir>")
+  .action((id, stage, o) => {
+    try { out(superFor(o).return_(id, stage, { worker: o.worker, goal_hash: o.goalHash, tokens: o.tokens, note: o.note })); } catch (e) { fail(e); }
+  });
+
+superCmd.command("status <mission_id>").option("--super-root <dir>").action((id, o) => { try { out(superFor(o).status(id)); } catch (e) { fail(e); } });
+superCmd.command("list").option("--super-root <dir>").action((o) => { try { out(superFor(o).list().map((m) => ({ mission_id: m.mission_id, state: m.state, class: m.mission_class, spent: m.spent_tokens, budget: m.budget_tokens }))); } catch (e) { fail(e); } });
+superCmd.command("cancel <mission_id>").option("--reason <text>").option("--super-root <dir>").action((id, o) => { try { out(superFor(o).cancel(id, o.reason)); } catch (e) { fail(e); } });
+
+superCmd
+  .command("memory")
+  .description("read the memory store, or audit what the isolation rule withholds from a diverge brief")
+  .option("--super-root <dir>")
+  .option("--scope <mission_id>")
+  .option("--text <substring>")
+  .option("--audit", "what a diverge brief would not be shown, and why")
+  .action((o) => {
+    try {
+      const s = superFor(o);
+      out(o.audit ? s.memory.audit() : s.memory.query({ scope: o.scope, text: o.text }));
+    } catch (e) { fail(e); }
+  });
+
+superCmd
+  .command("gateway <mission_id>")
+  .description("the message thread, and every delivery the isolation rule refused")
+  .option("--super-root <dir>")
+  .option("--send <body>", "send as the operator")
+  .option("--to <stage_id>")
+  .action((id, o) => {
+    try {
+      const s = superFor(o);
+      if (o.send) {
+        if (!o.to) throw new UsageError("--send needs --to");
+        out(s.gateway.send(id, operator(), s.participant(s.read(id), o.to), "redirect", o.send));
+        return;
+      }
+      out({ thread: s.gateway.thread(id), refused: s.gateway.refusals(id) });
+    } catch (e) { fail(e); }
+  });
+
+superCmd
+  .command("sandbox <mission_id>")
+  .description("create a sandbox from a source tree, diff it, or promote it back")
+  .option("--super-root <dir>")
+  .option("--create <source>", "copy this tree into the mission sandbox")
+  .option("--diff", "what changed against the source")
+  .option("--promote", "copy the changes back, refusing anything outside the writable paths")
+  .option("--dry-run", "with --promote, list what would move and move nothing")
+  .action((id, o) => {
+    try {
+      const s = superFor(o);
+      const m = s.read(id);
+      const box = join(s.root, "missions", id, "sandbox");
+      if (o.create) { out(Sandbox.create(box, o.create, m.sandbox).info); return; }
+      const sb = new Sandbox(box, m.sandbox);
+      if (o.promote) { out(sb.promote({ dryRun: o.dryRun })); return; }
+      out(sb.diff());
+    } catch (e) { fail(e); }
   });
 
 program.parse();

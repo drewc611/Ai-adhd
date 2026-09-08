@@ -35,6 +35,11 @@ can be wrong without saying so.
    `002-kernel-enduser` four critics split 2-2, and one scored the top two level, so what shipped
    was chosen by `localeCompare`. Every contested decision in the corpus is settled inside two
    anchor points out of 48; the synthesis now says so on the recommendation line.
+   **Corrected for chance in `analysis/`** (Krippendorff's alpha, ordinal, bootstrapped over runs):
+   79% is not 79% reliability. `foreclosure` scores -0.017 [-0.04, +0.00] on 96% agreement,
+   `reversibility` +0.850 on 76%, and the two orderings invert. Percent agreement was ranking
+   dimensions by how constant they are, which is why the number looked best on the two dimensions
+   D8 finding 5 had already identified as scoring the output contract and the D4 tool allowlist.
 4. ~~**Rubric weight sensitivity.**~~ **Built** as `adhd learn --sensitivity`. Re-decides every
    contested cluster under each dimension's weight moved by ±1 and lists the representatives
    that change. Corrected in the building: pass A does not prune, a fired trap does. What pass A

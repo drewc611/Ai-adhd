@@ -236,28 +236,52 @@ carrying it.
 ```
 config/     frames, routing, critic rubric      <- the actual IP
 prompts/    orchestrator, branch, critic, deepen, synthesis
-docs/       architecture, traps, decisions, features, backlog, retirement, config (generated)
+docs/       architecture, traps, decisions, superagent, manifest, distribution, backlog, config
 evals/      fixtures with must_surface assertions, recorded runs and controls
+bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       362 tests over all of it
-skills/     adhd (drives a run), adhd-worker (executes one)
-agents/     the four subagent definitions and their tool grants
+test/       405 tests over all of it
+analysis/   Python: reliability, bootstrap intervals, a language model trained from scratch
+skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
+agents/     four run subagents, five mission subagents, the trainer and its governor
 assets/     the mark, the banner, the run explorer shell
 scripts/    demo.sh: what a clean checkout can show without a model
 ```
 
 Nothing under `src/` calls a model. It compiles briefs, enforces the isolation contract, scores
-what comes back, and refuses to proceed when a record is missing.
+what comes back, and refuses to proceed when a record is missing. Nothing under `analysis/` calls
+one either, and nothing under `src/` imports it: it reads the recorded corpus after the fact and
+writes text. Delete the directory and every run behaves identically.
+
+`analysis/` does train a language model, and that is not a contradiction. It is modified
+Kneser-Ney over a document library you point it at, built from counts in the standard library.
+No weights are downloaded and none ship. D9 draws the line and D10 applies it: a model that
+changes what a run outputs is banned, a model that describes what runs already output is a
+measuring instrument.
 
 ## Install
 
-As a Claude Code plugin, from a checkout:
+As a Claude Code plugin, from the marketplace this repository is:
+
+```
+/plugin marketplace add drewc611/Ai-adhd
+/plugin install adhd@adhd
+```
+
+The skill, the four run agents and the commands work immediately. The MCP server needs a build,
+because `dist/` is a build artifact; `bin/adhd-mcp.mjs` says so in a sentence rather than failing
+with a path inside the host's plugin cache.
+
+From a checkout, with everything built:
 
 ```
 git clone https://github.com/drewc611/Ai-adhd.git && cd Ai-adhd
 npm install && npm run build
-claude plugin add .            # or point your plugin marketplace at this directory
+claude plugin marketplace add .
 ```
+
+`docs/DISTRIBUTION.md` covers the other surfaces: npm, the official MCP Registry, and why the
+OpenAI app directory is blocked on architecture rather than on paperwork.
 
 The plugin registers the `/adhd` skill, the branch, critic, and deepen agents, and the MCP
 server. The MCP server can also be used on its own by any MCP host:
@@ -298,6 +322,15 @@ node dist/src/cli.js init <dir>              # scaffold config/ and prompts/ to 
 node dist/src/cli.js completions bash        # generated from the real command list
 node dist/src/cli.js schema-doc              # regenerate docs/CONFIG.md from the zod schemas
 node dist/src/cli.js os watch <run>          # redraw a run's status; one line per change when piped
+
+node dist/src/cli.js super plan --id m --goal g.txt --class deep   # the stage graph, then stop
+node dist/src/cli.js super confirm m         # nothing is claimable until this
+node dist/src/cli.js super claim m --worker w1               # the next stage, its agent, its brief
+node dist/src/cli.js super return m research --worker w1 --goal-hash <h>  # checked against the contract
+node dist/src/cli.js super status m          # what is ready, what is waiting, what was withheld
+node dist/src/cli.js super memory --audit    # what the isolation rule keeps out of a diverge brief
+node dist/src/cli.js super gateway m         # the thread, and every delivery the rule refused
+node dist/src/cli.js super sandbox m --diff  # what a build stage changed, before it reaches the tree
 npm run demo                                 # what a clean checkout can show without a model
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
@@ -346,7 +379,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D8 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D12 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -354,6 +387,13 @@ refuses a class rather than spending on it. Every real run has been scored a sec
 fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
+
+That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
+`foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%
+exact agreement, while `reversibility` scores +0.850 on 76%. The two rankings invert, because
+percent agreement ranks dimensions by how constant they are. `committal` and `foreclosure` have
+intervals containing zero, which at seven runs means unmeasured rather than weak. See
+`analysis/README.md` and D9.
 
 <details>
 <summary><b>What each recorded run found</b>, including the two recorded as failing</summary>

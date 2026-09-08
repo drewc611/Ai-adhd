@@ -1,0 +1,131 @@
+name: release
+# Tag-driven. `git tag v0.1.0 && git push --tags` publishes the npm package and then registers
+# that exact version with the official MCP Registry.
+#
+# Two publishers with different trust models, in the order the registry requires. npm needs a
+# stored token, because npm has no OIDC path for this. The MCP Registry needs none: it verifies
+# the `io.github.drewc611/*` namespace from the workflow's own OIDC identity, so nothing about
+# that step is a secret that can leak.
+#
+# The registry proves package ownership by reading `mcpName` out of the published package.json and
+# checking it matches the server name being claimed. That is why npm goes first: publishing to the
+# registry against a version npm does not yet serve fails, and fails describing a field rather
+# than a race.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: build and validate without publishing anything
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm test
+
+      # The gates, again, on the exact commit being published. A release that skips them because
+      # the branch was green an hour ago is how a broken tarball reaches a registry that has no
+      # unpublish window worth relying on.
+      - run: node dist/src/cli.js validate
+      - run: node dist/src/cli.js doctor
+      - run: node dist/src/cli.js eval
+      - run: node dist/src/cli.js replay
+
+      # Three files carry the version and they disagree silently. package.json is what npm
+      # publishes, server.json is what the registry records, and the marketplace entry is what a
+      # Claude Code user installs; a tag that matches one of them and not the others produces a
+      # release nobody can reproduce.
+      - name: versions agree with the tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          [ "${{ github.event_name }}" = "workflow_dispatch" ] && TAG=""
+          node -e '
+            const fs = require("fs");
+            const tag = process.argv[1];
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const srv = JSON.parse(fs.readFileSync("server.json", "utf8"));
+            const mkt = JSON.parse(fs.readFileSync(".claude-plugin/marketplace.json", "utf8"));
+            const plg = JSON.parse(fs.readFileSync(".claude-plugin/plugin.json", "utf8"));
+            const seen = {
+              "package.json": pkg.version,
+              "server.json": srv.version,
+              "server.json packages[0]": srv.packages[0].version,
+              "plugin.json": plg.version,
+              "marketplace.json": mkt.plugins[0].version,
+            };
+            const wrong = Object.entries(seen).filter(([, v]) => v !== (tag || pkg.version));
+            if (wrong.length) {
+              console.error(`expected ${tag || pkg.version}, found:`);
+              for (const [where, v] of wrong) console.error(`  ${where}: ${v}`);
+              process.exit(1);
+            }
+            if (srv.packages[0].identifier !== pkg.name) {
+              console.error(`server.json names ${srv.packages[0].identifier}, package.json is ${pkg.name}`);
+              process.exit(1);
+            }
+            if (pkg.mcpName !== srv.name) {
+              console.error(`package.json mcpName ${pkg.mcpName} does not match server.json name ${srv.name}`);
+              process.exit(1);
+            }
+            console.log(`versions agree at ${tag || pkg.version}`);
+          ' "$TAG"
+
+      - name: pack and inspect
+        run: |
+          npm pack --dry-run
+          npm publish --dry-run
+
+      - name: publish to npm
+        if: github.event_name == 'push'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not set. Add it under Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+          npm publish --provenance --access public
+
+      # OIDC, so there is no token here to rotate or leak. The namespace is verified from the
+      # workflow's identity: `io.github.drewc611/*` is claimable only by a workflow running in a
+      # repository owned by drewc611.
+      - name: publish to the MCP Registry
+        if: github.event_name == 'push'
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/').tar.gz" \
+            | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
+
+      - name: summary
+        run: |
+          {
+            echo "## Released \`$(node -p 'require("./package.json").version')\`"
+            echo
+            echo "| surface | identifier | how a user gets it |"
+            echo "|---|---|---|"
+            echo "| npm | \`$(node -p 'require("./package.json").name')\` | \`npx ai-adhd --help\` |"
+            echo "| MCP Registry | \`$(node -p 'require("./server.json").name')\` | any registry-aware MCP host |"
+            echo "| Claude Code | \`adhd@adhd\` | \`/plugin marketplace add drewc611/Ai-adhd\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
