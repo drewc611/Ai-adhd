@@ -157,7 +157,11 @@ can be wrong without saying so.
     fails here instead of leaving the case uncovered by anything.
 33. Shell completions for bash and zsh.
 34. `--quiet` and `--verbose` levels applied consistently.
-35. `adhd open <run>` — print the run directory's file tree with sizes.
+35. ~~`adhd open <run>`~~ **Built**, and it is not `ls -R` because it reads the absences: no
+    `critic/pass-b.yaml` means the critic never finished, no `score.json` means any synthesis
+    present is the unscored partial, a planned branch with no artifact returned nothing (which is
+    not the same as scoring badly), and no `plan.json` at all means a hand-written negative control
+    rather than a run missing everything.
 
 ### Kernel
 36. ~~`adhd os stats`~~ **Built.** The longest task the journal has seen is 280s (`critique_b`)
@@ -194,8 +198,16 @@ can be wrong without saying so.
 
 ### Eval and reporting
 45. HTML report for a run: synthesis, branches, scores, detector table, one page.
-46. A run-comparison matrix across every recorded run and fixture.
-47. Export a run as a single self-contained Markdown file.
+46. ~~A run-comparison matrix~~ **Built** as `adhd matrix`. `--history` reads one assertion at a
+    time, which is the right shape for one assertion and the wrong shape for a pattern across runs.
+    The grid states the E1a/E1b finding by itself: `001-altframes` and `001-seed2` each hold an
+    assertion the other misses, so no single "this run is better" reading of the pair is available.
+    An absent cell is distinguished from a failing one, because a run belonging to another fixture
+    has not failed anything.
+47. ~~Export a run as a single Markdown file~~ **Built** as `adhd export`. The pruned block sits
+    above the branch artifacts on purpose: it is what the architecture exists to deliver and it is
+    what a reader skips when it is at the end. The embedded synthesis is demoted a heading level so
+    the document has one H1 and an outline that nests, and a renamed frame is titled by both ids.
 48. `expected.json` schema versioning, so old recordings stay readable.
 49. **Fixture inheritance.** Not built, and I would argue against it at this size. Eight fixtures
     share almost nothing: the duplication it would remove is a handful of `trap_named` and

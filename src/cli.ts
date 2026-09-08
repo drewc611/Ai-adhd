@@ -9,6 +9,7 @@ import { costReport } from "./cost.js";
 import { replayAll, replayRun } from "./replay.js";
 import { doctor } from "./doctor.js";
 import { assertionHistory, lintFixtures, regressionGate } from "./fixtures.js";
+import { comparisonMatrix, exportRun, runTree } from "./report.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
@@ -404,6 +405,41 @@ os.command("stats")
       const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
       const r = kernelStats(root);
       console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("matrix")
+  .description("every assertion against every run of its fixture, as a grid")
+  .option("--fixtures <dir>")
+  .option("--recorded <dir>")
+  .option("--json")
+  .action((o) => {
+    try {
+      const r = comparisonMatrix(loadConfig(program.opts().root), { fixturesDir: o.fixtures, recordedDir: o.recorded });
+      console.log(o.json ? JSON.stringify({ runs: r.runs, items: r.items, cells: r.cells }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("export <run_dir>")
+  .description("one run as a single self-contained Markdown file, on stdout")
+  .option("--json", "the same document wrapped, for a caller that wants the path alongside it")
+  .action((runDir, o) => {
+    try {
+      const markdown = exportRun(loadConfig(program.opts().root), runDir);
+      console.log(o.json ? JSON.stringify({ run: runDir, markdown }, null, 2) : markdown);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("open <run_dir>")
+  .description("what a run directory holds, with sizes, and what its absences mean")
+  .option("--json")
+  .action((runDir, o) => {
+    try {
+      const r = runTree(runDir);
+      console.log(o.json ? JSON.stringify({ entries: r.entries, bytes: r.bytes }, null, 2) : r.text);
     } catch (e) { fail(e); }
   });
 
