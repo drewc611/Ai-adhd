@@ -13,6 +13,10 @@
 # docs, a checkout of a documentation site, a JSONL dump with `jsonl_field` naming the text key.
 # Nothing here downloads anything: if a corpus is not on this machine it does not exist, and a
 # manifest naming a missing path fails loudly rather than training on the remainder.
+#
+# Every third-party corpus carries a `licence` field. It is documentation rather than enforcement —
+# the loader ignores it — but a corpus whose terms nobody wrote down is a corpus nobody checked, and
+# `docs/PROVENANCE.md` records where each one was verified from and on what date.
 
 corpora:
   - name: repo-docs
@@ -39,6 +43,29 @@ corpora:
     path: corpora/rfc
     required: false
     include: ["*.txt"]
+    # IETF Trust copyright under BCP 78. Freely readable and redistributable in full, derivatives
+    # restricted. Nothing here is redistributed: this directory and analysis/models/ are both
+    # gitignored. The least free source in this file and the first one added, which is the opposite
+    # of how it should have gone. docs/PROVENANCE.md has the reasoning.
+    licence: "IETF Trust copyright under BCP 78 (not a free licence)"
+
+  # Python PEPs. PEP 1 requires every PEP to be dual-licensed public domain and CC0-1.0, so this is
+  # about as unencumbered as text gets. Same genre as the RFCs: a numbered proposal with a rationale
+  # section, written to be argued with.
+  - name: pep
+    path: corpora/pep
+    required: false
+    include: ["*.rst"]
+    licence: "public domain and CC0-1.0"
+
+  # Ethereum EIPs, CC0 1.0 Universal: a public domain dedication, the freest terms of any source
+  # here. Heavy on security-considerations and backwards-compatibility argument, which is exactly
+  # the shape the scored artifacts have.
+  - name: eip
+    path: corpora/eip
+    required: false
+    include: ["*.md"]
+    licence: "CC0-1.0"
 
   # Anything else on disk. Replace `path` and set `enabled: true`.
   - name: library
