@@ -58,19 +58,32 @@ Scoring costs about as much memory as training and is not free. A ceiling sized 
 is a ceiling that bites during evaluation, which is how the first order comparison silently scored
 three orders on three different amounts of held-out text and named the wrong winner.
 
-**The n-grams-per-token ratio is a property of the corpus, not of the order, and the table above is
-only true of the corpus it was measured on.** Measured at order 4:
+**Budget memory per n-gram, not per token.** Measured at order 4 on two unpruned runs:
 
-| corpus | tokens | n-grams | per token | peak RSS |
-|---|---|---|---|---|
-| 1,974 RFCs | 22.9M | 17.4M | 0.76 | 4.7GB |
-| 4,901 RFCs + 615 PEPs + 529 EIPs | 40.0M | 21.3M before pruning | 0.53 | 4.2GB |
+| corpus | tokens | n-grams | grams/token | peak RSS | MB per M grams |
+|---|---|---|---|---|---|
+| 1,974 RFCs | 22.9M | 17.4M | 0.76 | 4.7GB | 270 |
+| 4,901 RFCs + 615 PEPs + 529 EIPs | 55.4M | 36.5M | 0.66 | 9.5GB | 260 |
 
-The mixed corpus produces *fewer* distinct contexts per token, because PEPs and EIPs carry heavy
-boilerplate. So a prediction of which ceiling binds does not survive a change of corpus, and the
-one this brief made — "the resident set binds at about 20M tokens, well before the token ceiling" —
-was wrong on the very next run: at 40M tokens the resident set was 4.2GB against an 11GB ceiling and
-the **n-gram ceiling** bound first, pruning 8.9M singletons out of the table.
+**~265MB per million n-grams is stable. Grams-per-token is not** — it is a property of the corpus,
+0.76 on RFC-only text against 0.66 on the mixed corpus, because PEPs and EIPs carry boilerplate that
+repeats. So the memory a run needs is `grams_per_token × tokens × 265MB/M`, and the first factor has
+to be measured on the corpus at hand rather than carried over.
+
+An earlier version of this table said 0.53 for the mixed corpus. That was wrong, and how it was
+wrong is worth keeping: it was derived from a *pruned* run by adding the counts-of-counts snapshot's
+`n1` to the final table size. That snapshot counts singletons inside the table at the moment of
+pruning, not every singleton the run ever saw, so the sum understates the real total and the true
+pre-prune count is not recoverable from that record. **Do not do arithmetic on a pruned run's
+totals.** A record with `prunes > 0` reports what survived, not what was counted.
+
+The prediction this brief made before either clean run — "the resident set binds at about 20M
+tokens, well before the token ceiling" — was falsified immediately: at 40M tokens the resident set
+was 4.2GB against an 11GB ceiling and the **n-gram ceiling** bound first, pruning 8.9M singletons.
+The cost of that was measured: on the identical held-out set, the pruned model scored perplexity
+**17.4** and the unpruned one **6.06**. Pruning singletons is not a small economy — it removes the
+tail modified Kneser-Ney does most of its work on, and it corrupts the discount estimates that tail
+provides.
 
 **Read all four ceilings together before raising one.** Raising `max_rss_mb` alone is what caused
 that: a table pruned under a 12M n-gram ceiling while 7GB of memory sat unused. When a record shows

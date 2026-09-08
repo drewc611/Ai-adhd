@@ -15,7 +15,7 @@
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-416-2ea44f" alt="416 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-58-2ea44f" alt="58 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D13%20resolved-0969da" alt="D1 through D13 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D14%20resolved-0969da" alt="D1 through D14 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -398,7 +398,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D13 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D14 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -407,9 +407,10 @@ fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
 
-`analysis/` also trains a background language model from scratch on a document library — 1,974
-RFCs, 22.9M tokens, modified Kneser-Ney, standard library only, no weights downloaded and none
-shipped. Held-out perplexity is what says whether a training run improved anything, because
+`analysis/` also trains a background language model from scratch on a document library — 4,901
+RFCs, 615 PEPs and 529 EIPs, 55.4M tokens, modified Kneser-Ney, standard library only, no weights
+downloaded and none shipped. `docs/PROVENANCE.md` records every corpus's licence and why nothing is
+redistributed. Held-out perplexity is what says whether a training run improved anything, because
 vocabulary size, table size and wall clock all rise when a model gets worse. See D13 and
 `analysis/README.md`.
 

@@ -1164,3 +1164,83 @@ beside the number every time it prints the number.
 `train.yml` computes held-out perplexity after training and uploads it with the record, so a week
 where the model degrades is visible as a number that went up rather than as three numbers that all
 went up as usual.
+
+## D14. Four corpora, one stable effect size, and three of my own numbers corrected
+
+**Asked.** Keep training on piles of text.
+
+**Resolved.** The corpus is now 6,067 documents and 283MB across three sources; the model trains on
+all 55.4M tokens of it unpruned. The training produced one result worth having and three
+corrections to figures this repository had already published.
+
+### The model
+
+| | tokens | vocab | n-grams | pruned | peak RSS | seconds |
+|---|---|---|---|---|---|---|
+| 1,974 RFCs | 22.9M | 101,051 | 17.4M | no | 4.7GB | 206 |
+| mixed, ceilings wrong | 40.0M | 138,289 | 12.5M | **yes, 8.9M dropped** | 4.2GB | 245 |
+| mixed, ceilings right | **55.4M** | **177,507** | **36.5M** | no | 9.5GB | 622 |
+
+Held-out perplexity **6.06** on 3,097,500 tokens, OOV 0.15%, fingerprint `8487cc7ab947fef6`. No
+ceiling bit on either pass.
+
+### The T1 effect size is stable; its p-value is not
+
+Four corpora, spanning 10x in size and one change of genre:
+
+| corpus | tokens | difference | p |
+|---|---|---|---|
+| 492 RFCs | 5.6M | +0.226 bits | 0.048 |
+| 1,974 RFCs | 22.9M | +0.261 | 0.0455 |
+| mixed, pruned | 40.0M | +0.224 | 0.0950 |
+| mixed, unpruned | 55.4M | +0.243 | 0.0780 |
+
+**The difference sits between +0.22 and +0.26 bits every time.** The p-value wanders across the 0.05
+boundary and never clears it decisively. Pruned against kept stays null throughout, and its tiny
+difference changes sign between runs, which is what noise looks like.
+
+That is a consistent but underpowered signal, and it is a better description than either of the two
+this repository gave before. After the RFC-only 4x it said the effect had *survived a corpus
+increase*; when the genre-diverse corpus moved p to 0.095 it said the effect had *weakened*. Both
+read the p-value as the finding. The effect size did not move in either direction — 10x the text and
+a new genre changed it by 0.04 bits. What is underpowered is n=7 in the fired group against 28, and
+no amount of background text fixes that. Backlog item 1, multi-seed replay, is the only thing that
+would.
+
+### Correction 1: grams-per-token was 0.53 and is 0.66
+
+D13's amendment and the governor's brief said the mixed corpus produced 0.53 distinct 4-grams per
+token against 0.76 for RFC-only text. The real figure is 0.66.
+
+The error is instructive. It was derived from the *pruned* run by adding the counts-of-counts
+snapshot's `n1` (8,880,187) to the final table size (12,453,345). But that snapshot counts singletons
+inside the table at the moment of pruning, not every singleton the run ever saw — counting continued
+afterwards — so the sum understates the total and the true pre-prune count is not recoverable from
+that record at all. **Arithmetic on a pruned run's totals is arithmetic on what survived.**
+
+### Correction 2: budget memory per n-gram, not per token
+
+The stable quantity is **~265MB per million n-grams**: 270 on the RFC-only run, 260 on the mixed
+one. Per *token* it looks unstable only because grams-per-token varies with the corpus. So the memory
+a run needs is `grams_per_token × tokens × 265MB/M`, and the first factor is measured rather than
+carried over.
+
+### Correction 3: 17.4 was not an improvement on 38.6, and 6.06 is
+
+`comparable_heldout` was added because 38.6 on the RFC-only held-out set and 17.4 on the mixed one
+were about to be read as a 2.2x gain when they are numbers about two different tests.
+
+The pruned and unpruned mixed runs were scored on the *same* set, so **17.4 against 6.06 is a real
+comparison**, and it puts a number on what the pruning cost: pruning singletons removes the tail
+modified Kneser-Ney does most of its work on, and corrupts the discount estimates that tail
+provides. A 2.9x perplexity penalty for an economy that saved 7GB of memory the run was not using.
+
+### What the corpus is, and what it is not
+
+4,901 RFCs, 615 PEPs, 529 EIPs. The PEPs and EIPs are CC0 or public domain and the RFCs are not,
+which is recorded in `docs/PROVENANCE.md` along with the position that matters: nothing is
+redistributed, so the question is use rather than distribution.
+
+The mixed corpus is more *genre*-diverse and less *n-gram*-diverse than RFC-only text, which is
+counterintuitive and measured: 0.66 grams per token against 0.76. PEPs and EIPs share a template.
+Adding text is not the same as adding variety, and the ratio is how to tell which one happened.
