@@ -52,8 +52,12 @@ test("nothing under src/ imports or shells out to the analysis package", () => {
 /**
  * The other direction. A local weights file is an inference client with a different delivery
  * mechanism, so the ban is on the libraries that would load one, not on the word "API".
+ *
+ * Scoped to the package. `analysis/scripts/fetch_corpus.py` sits outside it, is imported by
+ * nothing, and has its own rules below — that separation is the reason the package's ban can stay
+ * absolute while a corpus still gets onto disk.
  */
-test("nothing under analysis/ imports a model runtime or the network", () => {
+test("nothing in the analysis package imports a model runtime or the network", () => {
   const banned = [
     "torch",
     "tensorflow",
@@ -66,7 +70,7 @@ test("nothing under analysis/ imports a model runtime or the network", () => {
     "socket",
     "http.client",
   ];
-  const files = walk(ANALYSIS, [".py"]);
+  const files = walk(join(ANALYSIS, "adhd_analysis"), [".py"]);
   assert.ok(files.length >= 5, `expected the analysis modules, found ${files.length}`);
   for (const f of files) {
     const body = readFileSync(f, "utf8");
@@ -147,4 +151,42 @@ test("CI runs the analysis tests, and does not make them depend on the Node buil
   assert.match(wf, /run: pytest/, "CI does not run the Python tests");
   const job = wf.slice(wf.indexOf("  analysis:"));
   assert.ok(!/npm (ci|test|run build)/.test(job), "the analysis job depends on the Node build, which is D9's tripwire");
+});
+
+/**
+ * The fetcher is the single exception, and every part of the exception is checked.
+ *
+ * D10 banned network in a scheduled job because a job that can fetch is a job that can fetch
+ * weights. The ban moved rather than lifted: exactly one file may reach the network, it is not
+ * importable by the package, it talks only to an allowlisted host over https, it refuses anything
+ * that is not text/plain, and it refuses the file extensions a model arrives in.
+ */
+test("exactly one file in analysis/ reaches the network, and it is not in the package", () => {
+  const netUsers = walk(ANALYSIS, [".py"]).filter((f) =>
+    /^\s*(import|from)\s+(urllib|requests|httpx|socket|http\.client)\b/m.test(readFileSync(f, "utf8")),
+  );
+  assert.deepEqual(
+    netUsers.map((f) => relative(ANALYSIS, f)),
+    ["scripts/fetch_corpus.py"],
+    "the network is reachable from somewhere new; the whole D10 argument rests on it being one file",
+  );
+
+  const body = readFileSync(join(ANALYSIS, "scripts", "fetch_corpus.py"), "utf8");
+  assert.match(body, /ALLOWED_HOSTS\s*=\s*\{/, "the fetcher has no host allowlist");
+  assert.match(body, /u\.scheme != "https"/, "the fetcher does not require https");
+  assert.match(body, /ctype != "text\/plain"/, "the fetcher does not require text/plain");
+  for (const ext of [".safetensors", ".gguf", ".ckpt", ".pt", ".onnx", ".bin"])
+    assert.ok(body.includes(`"${ext}"`), `the fetcher does not refuse ${ext}`);
+
+  // Importable from the package would make the exception meaningless: the package's own ban is
+  // enforced by import, so a re-export would carry the network straight back in.
+  const pkg = walk(join(ANALYSIS, "adhd_analysis"), [".py"]).map((f) => readFileSync(f, "utf8")).join("\n");
+  assert.ok(!/fetch_corpus/.test(pkg), "the analysis package references the fetcher");
+});
+
+test("the training workflow fetches before it trains, and caches what it fetched", () => {
+  const wf = readFileSync(join(ROOT, ".github", "workflows", "train.yml"), "utf8");
+  assert.match(wf, /fetch_corpus\.py/, "the weekly job trains on repository prose alone");
+  assert.match(wf, /actions\/cache/, "the weekly job re-downloads the whole corpus every week");
+  assert.ok(wf.indexOf("fetch_corpus.py") < wf.indexOf("adhd_analysis.text.train"), "it trains before it fetches");
 });

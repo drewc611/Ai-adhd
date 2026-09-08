@@ -801,3 +801,60 @@ Dependency state is reported and never applied. An unattended job that bumps a d
 merges it is a supply-chain path into a repository whose whole claim is that it runs no untrusted
 code, and `test/boundary.test.ts` fails if either scheduled workflow gains a `git push` or an
 `npm audit fix`.
+
+### D10 amendment: where the corpus comes from
+
+The manifest shipped with a disabled placeholder and the model trained on this repository's own
+88,000 tokens, which proves the pipeline and measures nothing. Asked to make it actually train,
+the choice was between a corpus the owner supplies by hand and one the job fetches. It fetches.
+
+**RFCs, not literature.** The artifacts being scored are engineering arguments with a fixed shape:
+a position, what it costs, what it forecloses, what would falsify it. That is the RFC genre almost
+exactly — design rationale, trade-offs, security considerations, the paragraph explaining why the
+obvious approach was not taken. A model trained on public-domain novels would faithfully report
+that a branch artifact reads unlike a Victorian novel. True, and useless: T1 is consensus in
+technical argument, so the background distribution has to be technical argument.
+
+**The network ban moved rather than lifted.** D10 banned network in a scheduled job on the grounds
+that a job which can fetch is a job which can fetch weights. That argument still holds, so the
+capability was made small enough to check:
+
+- Exactly one file in the repository imports a networking module, `analysis/scripts/fetch_corpus.py`.
+  It sits outside `adhd_analysis/`, nothing imports it, and the package's own absolute ban is
+  unchanged.
+- It talks to one allowlisted host over https, refuses any response that is not `text/plain`, and
+  refuses the file extensions weights arrive in (`.safetensors`, `.gguf`, `.ckpt`, `.pt`, `.onnx`,
+  `.bin`, plus archives and shared objects).
+- `test/boundary.test.ts` pins all of it, including that the list of network-reaching files is
+  exactly one entry long. Adding a second is a test failure, not a review comment.
+- Neither maintenance agent gained a network tool. The fetch is a workflow step; the agents still
+  cannot reach anything.
+
+The corpus is gitignored and cached in CI. A clean checkout has none, and `required: false` on the
+entry means that checkout trains on repository prose rather than failing — the same reason the
+first three entries exist.
+
+**The first real run.** 492 RFCs plus the repository's own prose: 5.63M tokens, a 39,268-word
+vocabulary, 5.41M distinct 4-grams, 57 seconds, 1413MB peak resident set. No ceiling bit, OOV fell
+from 13-24% per artifact on the placeholder corpus to 1-5%, and every discount row is a genuine
+modified-Kneser-Ney estimate rather than the `0.75` fallback. That fixes the ceiling arithmetic at
+roughly **250MB and 10 seconds per million tokens at order 4**, which is now in the governor's
+brief: at `Budget.weekly()`'s 5120MB the resident set binds at about 20M tokens, well before the
+40M token ceiling does, so raising the token ceiling on a growing corpus changes nothing.
+
+**And a result with the sign pointing the wrong way.** Pruned artifacts mean 9.62 bits against
+9.59 for kept, p = 0.72 — null, and null is the better outcome, because it says the detectors are
+catching something the surface statistics miss. But T1-fired artifacts mean 9.78 bits against 9.55
+for the rest, p = 0.048, and **higher is less predictable**. T1 is the consensus trap. If its
+detector were finding surface genericity, the artifacts it fires on would be the predictable ones.
+They are the surprising ones.
+
+The reading that fits the code: the T1 detector is a written rule over what an artifact *claims* —
+whether its position is the one anyone would give — and not over how the artifact reads. Those are
+different properties and this says so with a number for the first time.
+
+The reading that also fits: two unpreregistered comparisons on 35 artifacts, 7 of them in the
+fired group, and a nominal p of 0.048. `docs/EXPERIMENTS.md` refuses to act on figures like this
+and so does this entry. It is a reason to want more runs, which is backlog item 1, and it is not a
+finding. The report prints that caveat in its own output every time it prints the number, because
+the number will otherwise be quoted without it.

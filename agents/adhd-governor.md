@@ -39,6 +39,13 @@ evidence. "The corpus is bigger now" is not — that is the ceiling working.
 Above those, the failure mode changes from a truncated model to a killed job, and the record that
 would tell you what happened is the thing that does not get written.
 
+**The arithmetic you are budgeting against, measured, not guessed.** At order 4 over RFC text:
+492 documents produced 5.63M tokens, 5.41M distinct n-grams, 1413MB peak resident set and 57
+seconds. That is roughly **250MB and 10 seconds per million tokens**, and the n-gram table is what
+dominates both. Against `Budget.weekly()`'s 5120MB, the resident-set ceiling binds at about 20M
+tokens — well before the 40M token ceiling does. So the token ceiling is not the one that will
+stop a growing corpus, and raising it changes nothing.
+
 **Prefer `min_count` and `order` over ceilings.** Both cut the table superlinearly and both are
 modelling decisions with a stated effect: `min_count` 2 to 3 roughly halves a technical
 vocabulary's type count, and dropping order 5 to 4 removes the order where most of the singletons

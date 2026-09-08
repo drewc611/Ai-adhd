@@ -118,10 +118,12 @@ def report(corpus: Corpus, model: KneserNey, resamples: int = 10_000) -> str:
             f"{r.run:22} {r.frame:18} {r.status:9} {r.mean_surprisal:6.2f} {r.oov_rate:6.0%} {r.words:6}"
         )
 
+    tests = 0
     pruned = [r.mean_surprisal for r in rows if r.pruned]
     kept = [r.mean_surprisal for r in rows if not r.pruned]
     lines += ["", f"pruned n={len(pruned)}, kept n={len(kept)}"]
     if len(pruned) >= 3 and len(kept) >= 3:
+        tests += 1
         obs, p = permutation_test(pruned, kept, resamples=resamples)
         lines += [
             f"  mean pruned {statistics.fmean(pruned):.2f} bits, mean kept {statistics.fmean(kept):.2f} bits",
@@ -136,20 +138,36 @@ def report(corpus: Corpus, model: KneserNey, resamples: int = 10_000) -> str:
     t1 = [r.mean_surprisal for r in rows if "T1" in r.fired]
     rest = [r.mean_surprisal for r in rows if "T1" not in r.fired]
     if len(t1) >= 3 and len(rest) >= 3:
+        tests += 1
         obs, p = permutation_test(t1, rest, resamples=resamples)
         lines += [
             "",
             f"T1 fired on {len(t1)} artifacts: mean {statistics.fmean(t1):.2f} bits against "
             f"{statistics.fmean(rest):.2f} for the rest, difference {obs:+.3f}, p = {p:.4f}.",
         ]
+        if obs > 0:
+            # The direction nobody predicts, and the one worth saying out loud. T1 is the consensus
+            # trap; if its detector were finding surface genericity, the artifacts it fires on
+            # would be the *predictable* ones. They are the surprising ones.
+            lines += [
+                "  The sign is the opposite of the obvious hypothesis. T1 is the consensus trap, so",
+                "  artifacts it fires on should read as more predictable, not less. They read as less.",
+                "  The detector is a written rule over what an artifact claims, not over how it reads,",
+                "  and on this evidence those are measuring different things.",
+            ]
     elif t1:
         lines += ["", f"T1 fired on {len(t1)} artifact(s), too few to test against the rest."]
 
+    names = ", ".join(f"`{s['name']}`" for s in model.meta.get("sources", [])) or "an unrecorded corpus"
     lines += [
         "",
-        "Read the sign before the size. This measure is relative to the training library: against",
-        "a corpus of this repository's own docs, prose that reads like a consultancy report scores",
-        "as surprising rather than generic, and the comparison inverts. Name the corpus or do not",
-        "quote the number.",
+        f"Read the sign before the size, and read both against the corpus. Trained on {names}, this",
+        "measure says how predictable an artifact was *from that*. Swap the library and the ranking",
+        "moves: against this repository's own docs alone, prose that reads like a consultancy report",
+        "scores as surprising rather than generic. Name the corpus or do not quote the number.",
+        "",
+        f"{tests} comparison(s) are reported above and neither is preregistered. A nominal p near",
+        "0.05 among several tests on 35 artifacts is a reason to look again with more runs, not a",
+        "result. `docs/EXPERIMENTS.md` says the same thing about every other figure here.",
     ]
     return "\n".join(lines) + "\n"

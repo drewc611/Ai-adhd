@@ -19,6 +19,12 @@ on:
       max_seconds:
         description: wall-clock ceiling, seconds (the governor's limit is 1800)
         default: "1500"
+      corpus_size:
+        description: how many RFCs to hold, spread across the published range
+        # 1500 rather than the whole archive: at order 4 the table costs about 250MB per million
+        # tokens and 1500 RFCs is roughly 17M tokens, which lands under the governor's 5120MB with
+        # margin. Above that the resident-set ceiling binds and the model describes a prefix.
+        default: "1500"
 
 permissions:
   contents: read
@@ -46,6 +52,26 @@ jobs:
       # push was green will happily train on a broken loader for a month.
       - run: pytest
         working-directory: analysis
+
+      # The corpus is cached across runs, so the first weekly job pays for the download and the
+      # rest top it up. The fetcher skips what is already on disk, which is what makes a partial
+      # cache useful rather than a reason to start over.
+      - uses: actions/cache@v4
+        with:
+          path: analysis/corpora
+          key: corpus-rfc-v1-${{ github.event.inputs.corpus_size || 1500 }}
+          restore-keys: corpus-rfc-v1-
+
+      # The only network access in this repository, and every part of it is constrained: one
+      # allowlisted host, https only, text/plain only, and a refusal list of the extensions a set
+      # of weights arrives in. test/boundary.test.ts pins all four.
+      - name: fetch corpus
+        working-directory: analysis
+        run: |
+          python scripts/fetch_corpus.py \
+            --out corpora/rfc \
+            --limit "${{ github.event.inputs.corpus_size || 1500 }}" \
+            --delay 0.25
 
       - name: train
         working-directory: analysis

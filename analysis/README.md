@@ -10,7 +10,7 @@ cd analysis
 pip install -e '.[dev]'
 python -m adhd_analysis --root ..              # the report
 python -m adhd_analysis --root .. --json       # the same numbers, machine readable
-pytest                                         # 34 tests
+pytest                                         # 43 tests
 ```
 
 ## Why this exists
@@ -154,12 +154,26 @@ the thing the trap is about: prose that reads like every other document on the s
 surprisal under a background model is low exactly there, and the per-token vector says which
 clauses were the predictable ones.
 
-Against the repository's own prose as a placeholder corpus, both comparisons come out null:
-pruned artifacts mean 8.16 bits against 8.13 for kept (permutation p = 0.74), and T1-fired
-artifacts 8.23 against 8.12 (p = 0.25). Null is the better outcome. It says the detectors are
-catching something the surface statistics miss, which is what a detector sweep is for. At 88,000
-tokens the corpus is far too small to conclude anything either way, which is what `corpora.yaml`
-is for: point the `library` entry at a real document set and enable it.
+**The corpus is RFCs**, fetched by `scripts/fetch_corpus.py` and gitignored. Not literature: the
+artifacts being scored are engineering arguments with a fixed shape, and that is the RFC genre
+almost exactly. A model trained on public-domain novels would faithfully report that a branch
+artifact reads unlike a Victorian novel.
+
+492 RFCs plus the repository's own prose: 5.63M tokens, 39,268-word vocabulary, 5.41M n-grams,
+57 seconds, 1413MB peak. No ceiling bit and every discount row is a real modified-Kneser-Ney
+estimate rather than the 0.75 fallback.
+
+Two comparisons, neither preregistered:
+
+- **Pruned against kept**: 9.62 bits against 9.59, permutation p = 0.72. Null, and null is the
+  better outcome — it says the detectors are catching something the surface statistics miss.
+- **T1 fired against the rest**: 9.78 bits against 9.55, p = 0.048, and **the sign is backwards**.
+  T1 is the consensus trap, so the artifacts it fires on should read as *more* predictable. They
+  read as less. The detector is a written rule over what an artifact claims, not over how it
+  reads, and on this evidence those measure different things.
+
+Two comparisons on 35 artifacts, and a nominal 0.048 among them is a reason to look again with
+more runs rather than a result. The report says so itself, in the output, every time.
 
 **Two things the measure will lie about if you let it.** It is relative to what it trained on:
 against these docs, "it is important to note that this is a comprehensive solution" scores as

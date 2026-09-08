@@ -239,8 +239,8 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement, config (generated)
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       374 tests over all of it
-analysis/   Python: reliability, bootstrap intervals, and a language model trained from scratch
+test/       376 tests over all of it
+analysis/   Python: reliability, bootstrap intervals, a language model trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     four run subagents, plus the trainer and its governor
 assets/     the mark, the banner, the run explorer shell
