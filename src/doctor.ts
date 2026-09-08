@@ -106,7 +106,17 @@ function checkPlugin(cfg: Config): Finding[] {
   // spawn something that is not there. The plan's agent names come from routing.
   const dispatchable = new Set<string>(["adhd-branch", "adhd-branch-search", "adhd-critic", "adhd-deepen"]);
   for (const a of dispatchable) if (!onDisk.includes(a)) out.push({ severity: "error", check: "plugin", message: `a run can dispatch to ${a} and agents/${a}.md does not exist` });
-  for (const a of onDisk) if (!dispatchable.has(a)) out.push({ severity: "warn", check: "plugin", message: `agents/${a}.md is never dispatched by any phase` });
+  // Maintenance agents are deliberately outside the run. They are dispatched by the scheduled
+  // workflows, not by a plan, and warning on them would train a reader to ignore this check. The
+  // ban that matters for them is the reverse one below: they must not be reachable from a run.
+  const maintenance = new Set<string>(["adhd-trainer", "adhd-governor", "adhd-steward"]);
+  for (const a of onDisk) if (!dispatchable.has(a) && !maintenance.has(a)) out.push({ severity: "warn", check: "plugin", message: `agents/${a}.md is never dispatched by any phase` });
+  for (const a of maintenance) {
+    if (!onDisk.includes(a)) continue;
+    const body = read(join(cfg.root, "agents", `${a}.md`)) ?? "";
+    if (/^\s*tools:.*\b(Task|Agent)\b/m.test(body))
+      out.push({ severity: "error", check: "plugin", message: `agents/${a}.md can spawn agents; a maintenance agent that can start a run is a path from a scheduled job into the reasoning the run is supposed to isolate` });
+  }
   return out;
 }
 

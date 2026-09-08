@@ -10,7 +10,7 @@ cd analysis
 pip install -e '.[dev]'
 python -m adhd_analysis --root ..              # the report
 python -m adhd_analysis --root .. --json       # the same numbers, machine readable
-pytest                                         # 17 tests
+pytest                                         # 34 tests
 ```
 
 ## Why this exists
@@ -130,3 +130,64 @@ Biology, 9*(1), Article 39. https://doi.org/10.2202/1544-6115.1585
 Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., … Duchesnay, É.
 (2011). Scikit-learn: Machine learning in Python. *Journal of Machine Learning Research, 12*,
 2825–2830.
+
+## The background model
+
+```
+python -m adhd_analysis.text.train --manifest corpora.yaml --out models/background.kn.gz \
+  --record models/training-record.json --order 4 --min-count 2
+python -m adhd_analysis --root .. --model models/background.kn.gz
+```
+
+Modified Kneser-Ney, trained from scratch on the document libraries declared in `corpora.yaml`.
+Standard library only: no weights are downloaded, none ship, and the package gained no dependency
+for any of it. Every parameter is a count taken from a corpus on this machine.
+
+Not a transformer, for a reason that is arithmetic rather than policy. A transformer trained from
+scratch needs somewhere north of 10^8 tokens before its perplexity beats a well-smoothed 5-gram,
+and a GPU to get there. Kneser-Ney reaches useful perplexity at 10^6 to 10^7 tokens, trains in one
+pass on a CPU, and its parameters are inspectable: a suspicious score traces to the exact context
+that produced it.
+
+**What it measures.** T1 is the consensus trap, and it is the one trap whose detector cannot see
+the thing the trap is about: prose that reads like every other document on the subject. Mean
+surprisal under a background model is low exactly there, and the per-token vector says which
+clauses were the predictable ones.
+
+Against the repository's own prose as a placeholder corpus, both comparisons come out null:
+pruned artifacts mean 8.16 bits against 8.13 for kept (permutation p = 0.74), and T1-fired
+artifacts 8.23 against 8.12 (p = 0.25). Null is the better outcome. It says the detectors are
+catching something the surface statistics miss, which is what a detector sweep is for. At 88,000
+tokens the corpus is far too small to conclude anything either way, which is what `corpora.yaml`
+is for: point the `library` entry at a real document set and enable it.
+
+**Two things the measure will lie about if you let it.** It is relative to what it trained on:
+against these docs, "it is important to note that this is a comprehensive solution" scores as
+*surprising*, and against a general library it scores as generic. And a closed vocabulary maps
+invented words to `<unk>`, which is common in the training data by construction, so nonsense reads
+as unremarkable rather than original. Mean surprisal is taken over in-vocabulary tokens only and
+the OOV rate is reported beside it.
+
+### The ceiling
+
+`budget.py` is consulted by the trainer, not wrapped around it. A refused `allows()` stops the
+read and seals the model that exists, with the reason in its metadata — a legitimate model of a
+truncated corpus. A timeout kills the process and leaves nothing, on the week the corpus grew
+rather than the week the code changed, which reads as flake and gets the job disabled.
+
+Four ceilings: tokens against corpus growth, wall clock against the runner's job limit, distinct
+n-grams against table growth, resident set against the runner's memory. `relieve()` clears only a
+size refusal, and checks the stored reason rather than trusting the caller, because a clearable
+wall-clock refusal leaks one batch of work per call.
+
+`agents/adhd-trainer.md` runs it weekly; `agents/adhd-governor.md` sets the ceilings and has no
+Bash, because a governor that can run the job it caps eventually runs it.
+
+### Sources
+
+Chen, S. F., & Goodman, J. (1999). An empirical study of smoothing techniques for language
+modeling. *Computer Speech & Language, 13*(4), 359-394. https://doi.org/10.1006/csla.1999.0128
+
+Kneser, R., & Ney, H. (1995). Improved backing-off for m-gram language modeling. *1995
+International Conference on Acoustics, Speech, and Signal Processing, 1*, 181-184.
+https://doi.org/10.1109/ICASSP.1995.479394

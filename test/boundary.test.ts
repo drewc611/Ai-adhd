@@ -84,16 +84,60 @@ test("nothing under analysis/ imports a model runtime or the network", () => {
 });
 
 /**
- * It reads the corpus and prints. A package that wrote back into `evals/` could move a recorded
- * figure without a diff anyone reviewed, which is the failure mode the replay baseline exists
- * to catch on the TypeScript side.
+ * The trainer writes a model file, so "writes nothing" is no longer the invariant. What still
+ * holds is where it may write: never into `evals/`, `config/` or `prompts/`. A package that wrote
+ * back into the recorded corpus could move a figure the repository quotes without a diff anyone
+ * reviewed, which is the failure mode the replay baseline catches on the TypeScript side.
  */
-test("the analysis package writes nothing", () => {
+test("the analysis package never writes into the corpus, the config or the prompts", () => {
+  const protectedDirs = ["evals", "config", "prompts", "docs"];
   for (const f of walk(join(ANALYSIS, "adhd_analysis"), [".py"])) {
     const body = readFileSync(f, "utf8");
     const where = relative(ROOT, f);
-    assert.ok(!/\.write_text\(|\.write_bytes\(|\bshutil\b|\bos\.remove\b/.test(body), `${where} writes to disk`);
-    assert.ok(!/\bopen\([^)]*["']\s*[wax]/.test(body), `${where} opens a file for writing`);
+    assert.ok(!/\bshutil\.rmtree\b|\bos\.remove\b|\bunlink\(\)/.test(body), `${where} deletes files`);
+    for (const d of protectedDirs) {
+      const re = new RegExp(`["'\`]${d}["'\`][^\\n]*(write_text|write_bytes|mkdir|open\\()`);
+      assert.ok(!re.test(body), `${where} looks like it writes under ${d}/`);
+    }
+  }
+});
+
+/**
+ * Writing is confined to the trainer's own output path. Anything else in the package that opened
+ * a file for writing would be doing it as a side effect of a read, which is how a report ends up
+ * mutating what it reports on.
+ */
+test("only the model file is written, and only by the trainer", () => {
+  const writers = walk(join(ANALYSIS, "adhd_analysis"), [".py"]).filter((f) => {
+    const body = readFileSync(f, "utf8");
+    return /\.write_text\(|\.write_bytes\(|gzip\.open\([^)]*"wt"|open\([^)]*["']w/.test(body);
+  });
+  const names = writers.map((f) => relative(ANALYSIS, f)).sort();
+  assert.deepEqual(names, ["adhd_analysis/ngram.py", "adhd_analysis/text/ngram.py", "adhd_analysis/text/train.py"].filter((n) => names.includes(n)), `unexpected writer: ${names.join(", ")}`);
+});
+
+/**
+ * The maintenance agents are the scheduled jobs' hands. They sit outside a run by construction,
+ * and the one thing that would undo that is a tool grant letting them start one.
+ */
+test("the maintenance agents cannot spawn a run", () => {
+  for (const name of ["adhd-trainer", "adhd-governor"]) {
+    const p = join(ROOT, "agents", `${name}.md`);
+    assert.ok(existsSync(p), `agents/${name}.md is missing`);
+    const front = readFileSync(p, "utf8").split("---")[1] ?? "";
+    assert.match(front, /^tools:/m, `agents/${name}.md declares no tools line`);
+    assert.ok(!/\b(Task|Agent)\b/.test(front), `agents/${name}.md can spawn agents`);
+  }
+  const governor = readFileSync(join(ROOT, "agents", "adhd-governor.md"), "utf8").split("---")[1] ?? "";
+  assert.ok(!/\bBash\b/.test(governor), "the governor has Bash; a ceiling that can run the job it caps will run it");
+});
+
+test("the scheduled workflows exist and neither commits its output", () => {
+  for (const name of ["train.yml", "maintenance.yml"]) {
+    const wf = readFileSync(join(ROOT, ".github", "workflows", name), "utf8");
+    assert.match(wf, /^on:\n(  .*\n)*  schedule:/m, `${name} is not scheduled`);
+    assert.ok(!/git (commit|push)/.test(wf), `${name} pushes to the repository from an unattended job`);
+    assert.ok(!/npm audit fix|--force/.test(wf), `${name} applies a dependency change unattended`);
   }
 });
 

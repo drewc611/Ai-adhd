@@ -1,0 +1,100 @@
+name: train
+# The background model, rebuilt weekly from the document libraries in analysis/corpora.yaml.
+#
+# Scheduled rather than on push because the input that changes is the corpus, not the code. A
+# training run on every commit would rebuild an identical model from an identical library and
+# spend half an hour doing it.
+#
+# The model is a build artifact and is never committed. It is uploaded, kept for a quarter, and
+# compared against the previous run's record. Committing it would put a 100MB binary in the
+# history of a repository whose entire product is 40KB of YAML.
+on:
+  schedule:
+    - cron: "17 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      order:
+        description: n-gram order
+        default: "4"
+      max_seconds:
+        description: wall-clock ceiling, seconds (the governor's limit is 1800)
+        default: "1500"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: train
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    # Twice the trainer's own wall-clock ceiling. The Budget is what stops training; this is only
+    # here so a hang in the report step cannot hold a runner for six hours.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e '.[dev]'
+        working-directory: analysis
+
+      # A model of a corpus the tests never exercised is not worth training. This is the same
+      # suite test.yml runs; it is repeated here because a scheduled job that assumes the last
+      # push was green will happily train on a broken loader for a month.
+      - run: pytest
+        working-directory: analysis
+
+      - name: train
+        working-directory: analysis
+        run: |
+          python -m adhd_analysis.text.train \
+            --manifest corpora.yaml \
+            --out models/background.kn.gz \
+            --record models/training-record.json \
+            --order "${{ github.event.inputs.order || 4 }}" \
+            --max-seconds "${{ github.event.inputs.max_seconds || 1500 }}" \
+            --min-count 2
+
+      - name: report
+        working-directory: analysis
+        run: |
+          python -m adhd_analysis --root .. --model models/background.kn.gz > models/report.txt
+          {
+            echo '## Background model'
+            echo '```json'
+            python -c "import json;d=json.load(open('models/training-record.json'));print(json.dumps({k:d[k] for k in ('order','vocab_size','documents','sentences','tokens_seen','ngrams','oov_rate','seconds')},indent=2))"
+            echo '```'
+            echo '<details><summary>ceilings and whether any bit</summary>'; echo
+            echo '```json'; python -c "import json;print(json.dumps(json.load(open('models/training-record.json'))['budget'],indent=2))"; echo '```'
+            echo '</details>'
+            echo '<details><summary>genericity against the recorded corpus</summary>'; echo
+            echo '```'; sed -n '/## Genericity/,$p' models/report.txt; echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A ceiling that bit is not a failure and must not be one: the model is a legitimate model of
+      # a truncated corpus. It is worth surfacing, because the fix is the governor's call and
+      # nobody reads a step summary that never says anything.
+      - name: flag a ceiling that bit
+        working-directory: analysis
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          b = json.load(open("models/training-record.json"))["budget"]
+          hit = {k: v["stopped_because"] for k, v in b.items() if v["stopped_because"]}
+          print("\n> **A ceiling bit.** " + "; ".join(f"{k}: {v}" for k, v in hit.items()) +
+                "\n> The model describes the prefix it read. Ask adhd-governor whether to raise it."
+                if hit else "\n> No ceiling bit: the model saw the whole library.")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: background-model
+          path: |
+            analysis/models/background.kn.gz
+            analysis/models/training-record.json
+            analysis/models/report.txt
+          retention-days: 90

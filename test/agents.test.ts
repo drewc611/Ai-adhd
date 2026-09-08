@@ -43,6 +43,21 @@ const PERMITTED: Record<string, string[]> = {
   "adhd-branch-search.md": ["WebFetch", "WebSearch"],
 };
 
+/**
+ * The maintenance agents are a different category and a separate allowlist, because giving them
+ * one entry in PERMITTED would quietly relax the rule that produced it. They never take part in a
+ * run: they are dispatched by the scheduled workflows, they read build artifacts and records, and
+ * nothing they write is read during a run. So filesystem tools are correct for them and would be
+ * a hole in any of the four above.
+ *
+ * The governor has no Bash on purpose. A ceiling that can run the job it caps eventually runs it
+ * "just to check", and the check is the cost it exists to prevent.
+ */
+const MAINTENANCE: Record<string, string[]> = {
+  "adhd-trainer.md": ["Bash", "Glob", "Grep", "Read"],
+  "adhd-governor.md": ["Glob", "Grep", "Read"],
+};
+
 test("every agent file has a name matching its filename, a description, and at least one tool", () => {
   const dir = join(cfg.root, "agents");
   const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
@@ -58,22 +73,38 @@ test("every agent file has a name matching its filename, a description, and at l
 test("every agent grants exactly the tools it is permitted, and nothing else", () => {
   const dir = join(cfg.root, "agents");
   const files = readdirSync(dir).filter((x) => x.endsWith(".md"));
-  assert.deepEqual(files.sort(), Object.keys(PERMITTED).sort(), "a new agent file needs an entry in PERMITTED");
+  const allowed = { ...PERMITTED, ...MAINTENANCE };
+  assert.deepEqual(files.sort(), Object.keys(allowed).sort(), "a new agent file needs an entry in PERMITTED or MAINTENANCE");
   for (const f of files) {
     const t = tools(frontmatter(join(dir, f))).sort();
-    assert.deepEqual(t, [...PERMITTED[f]!].sort(), `${f}: tool grant changed. Argue for it in D4 before changing PERMITTED.`);
+    assert.deepEqual(t, [...allowed[f]!].sort(), `${f}: tool grant changed. Argue for it in D4 before changing the allowlist.`);
   }
 });
 
 /** The two categories that matter most, named separately so a failure says which line was crossed. */
-test("no agent carries a filesystem tool, and only the search agent carries network", () => {
+test("no run agent carries a filesystem tool, and only the search agent carries network", () => {
   const dir = join(cfg.root, "agents");
-  for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {
+  for (const f of Object.keys(PERMITTED)) {
     const t = tools(frontmatter(join(dir, f)));
     for (const bad of FILESYSTEM) assert.ok(!t.includes(bad), `${f} grants ${bad}: a channel to sibling artifacts`);
     const net = t.filter((x) => NETWORK.includes(x));
     if (f === "adhd-branch-search.md") assert.deepEqual(net.sort(), ["WebFetch", "WebSearch"]);
     else assert.deepEqual(net, [], `${f} grants network tools`);
+  }
+});
+
+/**
+ * What the maintenance agents must never gain. Network would let a scheduled job fetch a corpus
+ * or a set of weights, which is the one way this repository acquires an inference client without
+ * anyone deciding to. Agent-spawning would let it start a run, and a run started by a job that
+ * can read the run directory is not isolated.
+ */
+test("no maintenance agent can reach the network or start a run", () => {
+  const dir = join(cfg.root, "agents");
+  for (const f of Object.keys(MAINTENANCE)) {
+    const t = tools(frontmatter(join(dir, f)));
+    for (const bad of [...NETWORK, "Task", "Agent", "SendMessage", "TaskCreate", "Write", "Edit"])
+      assert.ok(!t.includes(bad), `${f} grants ${bad}`);
   }
 });
 

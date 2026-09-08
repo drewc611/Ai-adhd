@@ -1,0 +1,46 @@
+# The document libraries the background model trains on.
+#
+# Checked in rather than passed on a command line, because a weekly job that takes a path argument
+# trains on whatever the argument said that week, and a job that reads this file trains on
+# something a diff can show changing.
+#
+# The first three entries are the repository's own prose and are always available, so a clean
+# checkout can train and the pipeline is testable without a download. They are far too small to be
+# a background corpus on their own: ~200KB of text against the 10^6-10^7 tokens modified
+# Kneser-Ney needs to be worth reading. Point the fourth entry at a real library and enable it.
+#
+# Anything on disk works. A directory of PDFs converted to text, an export of internal design
+# docs, a checkout of a documentation site, a JSONL dump with `jsonl_field` naming the text key.
+# Nothing here downloads anything: if a corpus is not on this machine it does not exist, and a
+# manifest naming a missing path fails loudly rather than training on the remainder.
+
+corpora:
+  - name: repo-docs
+    path: ../docs
+    include: ["**/*.md"]
+
+  - name: repo-prompts
+    path: ../prompts
+    include: ["**/*.md", "**/*.txt"]
+
+  - name: repo-readme
+    path: ..
+    include: ["README.md", "CLAUDE.md"]
+
+  # Replace `path` and set `enabled: true`. `required: false` on a corpus that may be absent on
+  # some machines keeps a laptop run working while CI trains on the full set.
+  - name: library
+    path: /path/to/your/documents
+    enabled: false
+    required: false
+    include: ["**/*.md", "**/*.txt", "**/*.rst"]
+    exclude: ["node_modules/**", ".git/**"]
+
+  # A JSONL dump, the shape most public text corpora ship in. `jsonl_field` names the key holding
+  # the document text; records without it are skipped rather than guessed at.
+  - name: jsonl-dump
+    path: /path/to/dump
+    enabled: false
+    required: false
+    include: ["**/*.jsonl", "**/*.jsonl.gz"]
+    jsonl_field: text

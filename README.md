@@ -239,10 +239,10 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement, config (generated)
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       367 tests over all of it
-analysis/   Python: chance-corrected reliability, bootstrap intervals, 17 tests
+test/       374 tests over all of it
+analysis/   Python: reliability, bootstrap intervals, and a language model trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one)
-agents/     the four subagent definitions and their tool grants
+agents/     four run subagents, plus the trainer and its governor
 assets/     the mark, the banner, the run explorer shell
 scripts/    demo.sh: what a clean checkout can show without a model
 ```
@@ -251,6 +251,12 @@ Nothing under `src/` calls a model. It compiles briefs, enforces the isolation c
 what comes back, and refuses to proceed when a record is missing. Nothing under `analysis/` calls
 one either, and nothing under `src/` imports it: it reads the recorded corpus after the fact and
 writes text. Delete the directory and every run behaves identically.
+
+`analysis/` does train a language model, and that is not a contradiction. It is modified
+Kneser-Ney over a document library you point it at, built from counts in the standard library.
+No weights are downloaded and none ship. D9 draws the line and D10 applies it: a model that
+changes what a run outputs is banned, a model that describes what runs already output is a
+measuring instrument.
 
 ## Install
 
@@ -349,7 +355,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D9 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D10 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing

@@ -15,6 +15,8 @@ from .corpus import Corpus, load
 from .reliability import krippendorff_alpha, summarise
 from .resample import bootstrap
 from .signal import prune_signal
+from .text.genericity import report as genericity_report
+from .text.ngram import KneserNey
 
 
 def _dimension_ratings(corpus: Corpus, dim: str, runs: list[str] | None = None):
@@ -159,11 +161,17 @@ def signal_section(corpus: Corpus, resamples: int) -> tuple[str, dict]:
     }
 
 
-def build(root: str | Path = ".", resamples: int = 2000) -> tuple[str, dict]:
+def build(root: str | Path = ".", resamples: int = 2000, model: str | Path | None = None) -> tuple[str, dict]:
     corpus = load(root)
     rel, rel_data = reliability_section(corpus, resamples)
     pooled, pooled_data = pooled_section(corpus, resamples)
     sig, sig_data = signal_section(corpus, resamples)
+
+    sections = [rel, pooled, sig]
+    if model is not None:
+        # Optional because the model is a build artifact, not repository content: a clean checkout
+        # has no `models/` and the rest of the report must still run.
+        sections.append(genericity_report(corpus, KneserNey.load(model), resamples=resamples))
 
     header = [
         "# Corpus analysis",
@@ -176,7 +184,7 @@ def build(root: str | Path = ".", resamples: int = 2000) -> tuple[str, dict]:
         "",
         "",
     ]
-    text = "\n".join(header) + "\n\n".join([rel, pooled, sig]) + "\n"
+    text = "\n".join(header) + "\n\n".join(sections) + "\n"
     return text, {"reliability": rel_data, "pooled": pooled_data, "signal": sig_data}
 
 
@@ -185,9 +193,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", default=".", help="repository root holding config/ and evals/")
     ap.add_argument("--resamples", type=int, default=2000, help="bootstrap resamples")
     ap.add_argument("--json", action="store_true", help="machine readable")
+    ap.add_argument("--model", default=None, help="a trained background model; adds the genericity section")
     args = ap.parse_args(argv)
 
-    text, data = build(args.root, args.resamples)
+    text, data = build(args.root, args.resamples, model=args.model)
     print(json.dumps(data, indent=2, default=float) if args.json else text)
     return 0
 

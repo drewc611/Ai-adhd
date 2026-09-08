@@ -691,3 +691,113 @@ thing.
 None of that changes `config/critic-rubric.yaml`. It is evidence for backlog item 60, which is the
 owner's call, and rewriting anchors mid-corpus would split the 35 scored artifacts into two halves
 that look comparable and are not. Same reason D8 gave.
+
+## D10. Training on a document library, and the two agents that keep it from running the repo
+
+**Asked.** Train against libraries of text and documents so the model is worth something. Have the
+repository run its own agents for updates and code checks. Add an agent that trains weekly and a
+subagent that stops it over-computing.
+
+**Resolved.** All four, with the model on the analysis side of the D9 line and the two new agents
+outside every run.
+
+### What "training" means here, precisely
+
+Modified Kneser-Ney over a document library, in the standard library, from scratch. Every
+parameter is a count taken from a corpus this machine can point at. Nothing is downloaded: no
+weights, no tokenizer, no corpus. That is what keeps it a description of a corpus rather than an
+inference client that shipped its weights instead of a key, and it is why `analysis/pyproject.toml`
+gained no dependency for any of it.
+
+Not a transformer, and the reason is arithmetic rather than policy. A transformer trained from
+scratch needs somewhere north of 10^8 tokens before its perplexity beats a well-smoothed 5-gram,
+and a GPU to get there. Kneser-Ney reaches useful perplexity at 10^6 to 10^7 tokens, trains in one
+pass on a CPU, and its parameters are inspectable: a suspicious score traces to the exact context
+that produced it. On a weekly CPU job over a document library it is not the compromise, it is the
+better model. (Chen & Goodman, 1999.)
+
+### What it is for
+
+T1, the consensus trap, is the one trap whose detector cannot see the thing the trap is about:
+prose that reads like every other document on the subject. A background model can. Mean surprisal
+under it is low exactly where the writing was predictable from everything else written on the
+topic, and the per-token vector says which clauses those were, which is the form a T1 finding has
+to take to be actionable.
+
+Two properties decide whether the measure is worth anything, and both are reported rather than
+assumed. It is **relative to the corpus**: against this repository's own docs, "it is important to
+note that this is a comprehensive solution" scores as surprising, because the docs never write
+that way, and against a general library it scores as generic. And **out-of-vocabulary words are
+not evidence of originality**: a closed vocabulary maps invented words to `<unk>`, which is common
+in the training data by construction, so a sentence of nonsense reads as unremarkable. Mean
+surprisal is therefore taken over in-vocabulary tokens only, with the OOV rate beside it.
+
+**First result, against the repository's own prose as a placeholder corpus.** Pruned artifacts
+mean 8.16 bits, kept artifacts 8.13, permutation p = 0.74. T1-fired artifacts 8.23 against 8.12,
+p = 0.25. Both null, and null is the better outcome: it says the detectors are catching something
+the surface statistics miss, which is what a detector sweep is for. The corpus is 88,000 tokens,
+far too small to conclude anything, which is exactly why `analysis/corpora.yaml` exists as a
+checked-in manifest rather than a command-line path.
+
+### The corpus manifest
+
+Declared in `analysis/corpora.yaml`, not passed as an argument. A weekly job that takes a path
+argument trains on whatever the argument said that week; one that reads a checked-in manifest
+trains on something a diff can show changing. A manifest naming a path that is not there raises
+`CorpusError` rather than training on the remainder, because a corpus that silently resolves to
+zero files produces a perplexity that looks like a result.
+
+### The ceiling is an object, not a timeout
+
+`Budget` is consulted by the trainer rather than wrapped around it, and the difference is the
+whole design. A refused `allows()` stops the read and seals the model that exists, with the reason
+in its metadata: a legitimate model of a truncated corpus. A timeout kills the process and leaves
+nothing, on the week the corpus grew rather than the week the code changed, which reads as flake
+and gets the job disabled.
+
+Four ceilings, each protecting a different failure: tokens against corpus growth, wall clock
+against the runner's job limit, distinct n-grams against table growth (which tracks contexts, not
+documents, so it climbs on a corpus that only got more varied), and resident set against the
+runner's 7GB. `relieve()` clears only a size refusal, checked on the stored reason rather than the
+caller's intentions, because clearing a wall-clock refusal would let one batch of work through
+before the next check re-derived it and turn a hard ceiling into a leak.
+
+**Two defects the tests caught, both of the kind that produce plausible numbers.** The counting
+pass was charging every token twice, so it stopped at half the corpus the vocabulary pass read and
+counted n-grams over words the vocabulary was never built from — the `<unk>` rate would have
+climbed through training and perplexity would have improved the less of the corpus the model saw.
+And `relieve()` originally cleared any refusal, which meant a wall-clock ceiling could be bought
+back one `check_every` batch at a time. The docstring claiming otherwise was the worse half of
+that bug.
+
+### The two agents
+
+`adhd-trainer` (Bash, Read, Glob, Grep) runs the weekly training and reports the four record
+fields that each detect a specific failure: `tokens_seen` falling means the ceiling bit earlier,
+`oov_rate` climbing means `min_count` is dropping words the artifacts are judged on,
+`stopped_because` names a truncated corpus, and a discount row fallen back to `[0.75, 0.75, 0.75]`
+means a count-of-counts was zero and modified Kneser-Ney degraded to the unmodified kind.
+
+`adhd-governor` (Read, Glob, Grep) sets and audits the ceilings. **It has no Bash**, and that is
+the point: a governor that can run the thing it governs will eventually run it to check, and the
+check is the cost it exists to prevent. It raises a ceiling only from evidence in a record, never
+above 5120MB or 1800s on a hosted runner, and prefers `min_count` and `order` over ceilings
+because both cut the table superlinearly and are modelling decisions with a stated effect.
+
+Neither is dispatched by a run phase. `adhd doctor` now knows the difference, and
+`test/agents.test.ts` keeps them in a separate allowlist rather than relaxing the run agents' one:
+the four run agents still carry no filesystem tool, and the two maintenance agents can carry no
+network tool and no agent-spawning tool. Network on a scheduled job is the one way this repository
+acquires an inference client without anyone deciding to.
+
+### Self-running checks
+
+`.github/workflows/maintenance.yml` runs every gate weekly against the default branch and opens or
+comments on one labelled issue when a gate that passed last week fails. That is not redundant with
+`test.yml`: `replay` and `frames --drift` measure the library against the recorded runs, so they
+can start failing in a week nobody pushed anything.
+
+Dependency state is reported and never applied. An unattended job that bumps a dependency and
+merges it is a supply-chain path into a repository whose whole claim is that it runs no untrusted
+code, and `test/boundary.test.ts` fails if either scheduled workflow gains a `git push` or an
+`npm audit fix`.
