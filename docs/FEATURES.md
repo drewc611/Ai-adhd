@@ -147,7 +147,11 @@ can be wrong without saying so.
     a wrong flag raised `ConfigError` and printed "config invalid:" at a reader whose config was
     fine; usage errors are now their own code.
 30. TTY colour and a progress line while `adhd os` advances.
-31. `adhd init` — scaffold a `config/` directory from the shipped one.
+31. ~~`adhd init`~~ **Built.** Copies `config/`, `prompts/` and `docs/TRAPS.md` — the last because
+    the critic brief renders its detector lines verbatim and `loadConfig` refuses a root without it,
+    which an earlier version got wrong and produced a scaffold that would not load. The point is not
+    saving typing: the shipped library is the only thing here with recorded runs behind it, so a team
+    extending it should edit that rather than start from a blank file and a schema. Never overwrites.
 32. ~~`adhd doctor`~~ **Built.** Eight checks: config files parse, rubric arithmetic and shape,
     plugin manifest against `agents/` on disk, D4 tool grants both ways, published entry points,
     trap sections `docs/TRAPS.md` must carry, routing fill, and recorded-corpus shape. Building it
@@ -155,7 +159,9 @@ can be wrong without saying so.
     for them at load — a harder failure than a report. They were deleted rather than left in to
     imply coverage that lives elsewhere, and a test pins that so a future loosening of `crossCheck`
     fails here instead of leaving the case uncovered by anything.
-33. Shell completions for bash and zsh.
+33. ~~Shell completions~~ **Built**, generated from the real command tree rather than hand-written,
+    and a test asserts the CLI's output equals the generator's. Hand-written completions go stale the
+    first time a command is added and nobody notices, because nothing tests them.
 34. `--quiet` and `--verbose` levels applied consistently.
 35. ~~`adhd open <run>`~~ **Built**, and it is not `ls -R` because it reads the absences: no
     `critic/pass-b.yaml` means the critic never finished, no `score.json` means any synthesis
@@ -244,9 +250,21 @@ can be wrong without saying so.
 
 ### Distribution
 58. Publish to npm under a scoped name.
-59. A GitHub Action that runs `adhd eval` on PRs touching `config/` or `prompts/`.
-60. A one-command demo from a clean checkout.
-61. A devcontainer so a contributor can run a fixture in minutes.
+59. ~~A GitHub Action for library changes~~ **Built** as `.github/workflows/library.yml`,
+    path-filtered on `config/`, `prompts/`, `evals/fixtures/` and `agents/`. It gates on validate,
+    doctor, lint, eval and the assertion gate, and **reports** orthogonality, retirement health, axis
+    coverage, collisions and the discrimination audit into the step summary without gating on them.
+    The split is deliberate: `frames --orthogonality` exits non-zero on a flagged pair, and the one
+    pair it flags today is one `docs/RETIREMENT.md` says explicitly to watch and not act on. Gating
+    on it would fail a PR for a rate the policy refuses to act on at this sample size.
+60. ~~A one-command demo~~ **Built** as `npm run demo`. It cannot show a run and says so: D2 means
+    this package never calls a model, so a run needs a host to spawn subagents. What it shows is
+    everything either side of that — the compile and the D5 gate a user would confirm, then a real
+    recorded run's pruned block, then the evidence commands and the harness. A demo implying it had
+    just reasoned would misrepresent the one decision the repository is built on.
+61. ~~A devcontainer~~ **Built**, Node 22, `npm ci && npm run build && npm test` on create. It
+    supplies no inference and should not: a container that could run a fixture end to end would have
+    to bring the host that spawns subagents, which the design puts outside this repository.
 62. Release notes generated from the recorded-run diff.
 
 ## Tier 3 — listed, mostly not worth building

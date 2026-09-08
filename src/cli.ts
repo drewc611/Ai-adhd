@@ -10,6 +10,7 @@ import { replayAll, replayRun } from "./replay.js";
 import { doctor } from "./doctor.js";
 import { assertionHistory, lintFixtures, regressionGate } from "./fixtures.js";
 import { comparisonMatrix, exportRun, runTree } from "./report.js";
+import { completions, initConfig } from "./scaffold.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
@@ -405,6 +406,31 @@ os.command("stats")
       const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
       const r = kernelStats(root);
       console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("init <dir>")
+  .description("scaffold config/ and prompts/ from the shipped ones, to extend rather than start blank")
+  .option("--force", "replace files that are already there")
+  .option("--json")
+  .action((dir, o) => {
+    try {
+      const r = initConfig(loadConfig(program.opts().root), dir, { force: o.force });
+      console.log(o.json ? JSON.stringify({ dest: r.dest, written: r.written, skipped: r.skipped }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("completions <shell>")
+  .description("a bash or zsh completion script, generated from the real command list")
+  .option("--json")
+  .action((shell, o) => {
+    try {
+      const verbs = program.commands.map((c) => c.name()).sort();
+      const osVerbs = (program.commands.find((c) => c.name() === "os")?.commands ?? []).map((c) => c.name()).sort();
+      const script = completions(shell, verbs, osVerbs);
+      console.log(o.json ? JSON.stringify({ shell, verbs, os_verbs: osVerbs, script }, null, 2) : script);
     } catch (e) { fail(e); }
   });
 
