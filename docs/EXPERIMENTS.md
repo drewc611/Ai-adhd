@@ -174,3 +174,79 @@ the corrections in `docs/DECISIONS.md` and `docs/RETIREMENT.md` now say.
 
 Two runs against one baseline. A finding that survives E1a is not thereby robust; it survived
 once. Nothing here licenses dropping the sample-size caveat from any figure.
+
+---
+
+## E2. Does the background model read, or has it memorised one genre?
+
+**Registered 2026-09-08, before either run. Neither has been executed at the time of writing.**
+
+The instruction that prompted this was to keep training the model "until it can read by itself."
+That is not reachable by training an n-gram model and the reason is recorded in D2 and D9 rather
+than argued here. What *is* reachable is the measurable half of the question. A model that scores
+RFC-shaped text well and everything else badly has not learned to read technical prose; it has
+learned one template. Every held-out number this repository has published is same-genre — the
+stride split holds out every 20th document across a corpus that is 95% RFCs by bytes — so nothing
+so far distinguishes those two cases.
+
+Two runs, because they answer different questions and only the second is an out-of-domain test.
+
+### E2a. Per-genre held-out perplexity, no retraining
+
+Score the shipped 68M-token model on the held-out side of the *full* split, narrowed to one source
+at a time. Narrowing happens after the stride, never before: striding a single-source library picks
+every 20th PEP by PEP index, and some of those sit in the full split's training half, so the
+measurement would score the model on its own training text and call it held out.
+
+**What it measures.** Whether competence is uniform across genres or tracks training share. It is
+**not** an out-of-domain test — every source contributes to the training half — and reporting it as
+one would be the same error as reading 17.4 against 38.6 as an improvement.
+
+**Pre-registered readings.**
+
+- Perplexity should be lowest on `rfc`, which is 95.4% of training bytes. If it is not, something
+  is wrong with the split or the fingerprint and the number to trust is neither.
+- A spread within roughly 2x across `rfc`, `pep`, `eip` and `erc` says the model has general
+  competence on the genre family. A spread beyond about 5x says it is an RFC model that tolerates
+  the others.
+- `repo-docs` is the smallest source and the least like the rest. It is reported for contrast and
+  it is the one source whose held-out documents number in the single digits, so a wide figure there
+  is a sample size and not a finding.
+- Every subset is a different test set with its own fingerprint. Numbers across rows are not ranked
+  against each other as model quality; the *spread* is the reading, not any single row.
+
+### E2b. Leave one source out
+
+Train an order-4 model on the corpus with `pep` removed entirely, then score it on all 615 PEPs.
+The model never saw a single PEP.
+
+`pep` rather than `erc`: ERCs are the same process and template as EIPs, which stay in training, so
+a small gap there would prove nothing. PEPs are 3.4% of training bytes, so removing them changes the
+model by almost nothing, and `.rst` with its own header conventions is genuinely a different surface
+from an RFC.
+
+**What it measures.** How much worse the model is on a genre it has never seen than on the same
+genre held out from training. E2a supplies the second number, so the comparison is
+`E2b perplexity on PEPs` against `E2a perplexity on held-out PEPs`, both on PEP text.
+
+**Pre-registered readings.**
+
+- The two PEP figures are on different document sets (615 against roughly 30), so the comparison is
+  a ratio between two tests and is stated as such. The fingerprints will differ and
+  `comparable_heldout` will say so. This is registered as a magnitude question, not a significance
+  test, and no p-value will be computed for it.
+- **A ratio near 1 would be the interesting result**: it would say the model's competence on PEPs
+  comes from technical English generally rather than from having read PEPs, which is the strongest
+  evidence available here that it generalises across the genre family.
+- **A ratio above about 3 says the opposite** — that most of what looks like competence on any
+  source is that source being in the training text, and that the shipped model's numbers are
+  memorisation of a corpus rather than a description of a genre. That is the outcome that would make
+  the genericity measure weaker than currently stated, and it would be recorded as such.
+- OOV rate is reported beside both. A large ratio driven mostly by OOV is a vocabulary result, not a
+  modelling one, and the two must not be conflated.
+
+**What neither answers.** Whether any of this bears on the T1 finding. The genericity comparison is
+between artifacts scored by one model; a model with a different generalisation profile could move
+every artifact's surprisal without moving the difference between two groups of them. That would need
+its own run and is not registered here.
+
