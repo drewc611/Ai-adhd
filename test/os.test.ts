@@ -743,3 +743,108 @@ test("a task that exhausted its attempts is dead, not dropped", () => {
   assert.equal(st.tasks.dropped, 4, "its four siblings, which the run simply no longer needs");
   assert.equal(st.tasks.pending + st.tasks.leased, 0);
 });
+
+// ---- housekeeping and the token ceiling ---------------------------------------------------
+
+test("a run that passes its token ceiling halts and renders what returned", () => {
+  // Checked on return, not on claim: a claim spends nothing, and the cost is only known when a
+  // worker reports it. Halting renders the branches that came back, which is the same treatment
+  // a user pressing stop gets — they are already paid for.
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true, budgetTokens: 2500 });
+  const hash = k.status("r1").problem_hash;
+  for (let i = 0; i < 3; i++) {
+    const t = k.claim("w1")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w1", 1000);
+  }
+  const st = k.status("r1");
+  assert.equal(st.state, "cancelled");
+  assert.match(st.reason!, /token budget exceeded: 3000 reported against a ceiling of 2500/);
+  assert.equal(st.tasks.done, 3, "the branches that returned are kept");
+  assert.equal(st.tasks.pending + st.tasks.leased, 0);
+  // The partial synthesis ships, unscored, and says so.
+  assert.match(k.result("r1").synthesis!, /UNSCORED/);
+  assert.equal(k.claim("w2"), null);
+});
+
+test("no ceiling means no ceiling, and the ceiling is per run rather than global", () => {
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "free", confirmed: true });
+  const hash = k.status("free").problem_hash;
+  for (let i = 0; i < 5; i++) {
+    const t = k.claim("w1")!;
+    k.return_(t.id, yaml(artifact(t.label, hash)), "w1", 1_000_000);
+  }
+  assert.equal(k.status("free").state, "critique_a", "a run with no budget was halted by one");
+  // A wide run legitimately costs more than a narrow one, which is why the number is per run.
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 2, runId: "capped", confirmed: true, budgetTokens: 10 });
+  const t = k.claim("w1")!;
+  k.return_(t.id, yaml(artifact(t.label, k.status("capped").problem_hash)), "w1", 11);
+  assert.equal(k.status("capped").state, "cancelled");
+  assert.equal(k.status("free").state, "critique_a", "one run's ceiling ended another run");
+});
+
+test("gc is dry by default and refuses to delete a run that is not finished", () => {
+  // A run directory is the only copy of its artifacts and `adhd os record` promotes rather than
+  // copies, so a run nobody recorded and this removes is gone.
+  const clock = { t: Date.parse("2026-09-06T00:00:00Z") };
+  const root = join(tmp(), "root");
+  const k = new Kernel(cfg, { root, now: () => new Date(clock.t) });
+  const hash = (id: string) => k.status(id).problem_hash;
+
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "old", confirmed: true });
+  k.cancel("old", "done with it");
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 2, runId: "stuck", confirmed: true });
+  void hash;
+
+  clock.t += 40 * 86_400_000;
+  const dry = k.gc({ days: 30 });
+  assert.deepEqual(dry.eligible.map((e) => e.run), ["old"]);
+  assert.deepEqual(dry.removed, [], "gc deleted without being asked to");
+  assert.deepEqual(dry.skipped_active, ["stuck"]);
+  assert.match(dry.text, /stuck, not rubbish/);
+  assert.ok(existsSync(join(root, "old")));
+  assert.ok(dry.eligible[0]!.bytes > 0, "gc has to say what it would free");
+
+  const applied = k.gc({ days: 30, apply: true });
+  assert.deepEqual(applied.removed, ["old"]);
+  assert.equal(existsSync(join(root, "old")), false);
+  assert.ok(existsSync(join(root, "stuck")), "gc deleted a run that had not finished");
+  assert.match(readFileSync(join(root, "journal.jsonl"), "utf8"), /"event":"gc"/);
+});
+
+test("compaction archives finished runs' journal lines and keeps everything else", () => {
+  // Archived, not deleted: the journal is the provenance `adhd os record` generates a README
+  // from, and a compaction that dropped it would make every future recording thinner.
+  const { k, root } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "finished", confirmed: true });
+  k.cancel("finished", "over");
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 2, runId: "live", confirmed: true });
+  k.drain("a kernel-level event with no run id"); // must survive compaction
+
+  const before = readFileSync(join(root, "journal.jsonl"), "utf8").trim().split("\n").length;
+  assert.equal(k.compactJournal({ keepLines: 10_000 }).archived, 0, "compaction ran below its own threshold");
+
+  const r = k.compactJournal({ keepLines: 1 });
+  assert.ok(r.archived > 0, "nothing was archived");
+  assert.equal(r.before, before);
+  assert.equal(r.kept + r.archived, before, "compaction lost a line");
+  assert.ok(existsSync(r.archive!), "the archive was not written");
+
+  const kept = readFileSync(join(root, "journal.jsonl"), "utf8");
+  assert.match(kept, /"run_id":"live"/, "a run still in flight lost its history");
+  assert.match(kept, /"event":"drain"/, "a kernel-level event was archived; those explain a corrupted run an hour later");
+  assert.ok(!/"run_id":"finished"/.test(kept.split("\n").filter((l) => !/journal_compacted/.test(l)).join("\n")));
+  assert.match(readFileSync(r.archive!, "utf8"), /"run_id":"finished"/);
+});
+
+test("compaction keeps a line it cannot parse rather than losing it", () => {
+  const { k, root } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  k.cancel("r1", "over");
+  const p = join(root, "journal.jsonl");
+  writeFileSync(p, readFileSync(p, "utf8") + "{not json\n");
+  const r = k.compactJournal({ keepLines: 1 });
+  assert.match(readFileSync(p, "utf8"), /\{not json/, "compaction is not the place to lose data");
+  assert.equal(r.kept + r.archived, r.before);
+});

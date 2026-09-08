@@ -102,7 +102,10 @@ can be wrong without saying so.
     returning. The lease holds against a second worker while it stands, expires, and the task is
     redone by someone else. Before this the lease logic had only ever met a fake clock inside the
     process that set it.
-20. **Token budget enforcement.** Halt a run past N tokens and render partial.
+20. ~~**Token budget enforcement.**~~ **Built** as `--budget` on submit, with 43. Checked on return
+    rather than on claim, because a claim spends nothing and the cost is only known when a worker
+    reports it. Halting renders the branches that came back, which is what a user pressing stop
+    gets: they are already paid for and the pruned block still ships.
 21. ~~**Trap frequency table across all runs.**~~ **Built** into `frames --stats`. T5 is the only
     detector that has never fired, and it is close to structurally unable to: the output contract
     demands a committal position. T3 fired for the first time in E1b, on the first run where any
@@ -152,7 +155,11 @@ can be wrong without saying so.
     against a 900s default lease, so that default is about 3x the worst observed task — still a
     guess, but a measured one. No lease has ever expired in a real run.
 37. Run priority, so an urgent run jumps a queued one.
-38. Journal compaction for long-lived kernels.
+38. ~~Journal compaction~~ **Built** as `adhd os compact`. Lines belonging to finished runs move
+    to a dated archive beside the journal — archived, not deleted, because `adhd os record`
+    generates a run's provenance from them. Kernel-level lines with no run id stay, because a lock
+    break is the kind of event that explains a corrupted run an hour later, and an unparseable line
+    is kept because compaction is not the place to lose data.
 39. ~~Configurable lease length per phase~~ **Built.** `leaseSeconds` takes a number or a map with
     a `default`. The measurement that justified it is `adhd os stats`: over five recorded runs mean
     `critique_b` is 244s against 108s for `deepen`. One number covering all four is either too short
@@ -164,8 +171,13 @@ can be wrong without saying so.
     cancelling every run, which drops tasks already paid for and still in flight: the subagent
     finishes, returns, and the kernel refuses the artifact. A marker file rather than a field,
     because a host draining before a deploy is a host about to exit.
-42. `adhd os gc` — delete finished run directories older than N days.
-43. Per-run token ceiling carried in the plan rather than a global.
+42. ~~`adhd os gc`~~ **Built**, dry by default. A run directory is the only copy of its artifacts
+    and `adhd os record` promotes rather than copies, so a run nobody recorded and this removes is
+    gone. An old run still in a working state is kept and named: it is stuck, not rubbish, and
+    deleting it hides that rather than fixing it.
+43. ~~Per-run token ceiling~~ **Built** as `budget_tokens` on the run record. Per run because the
+    estimate is per run: a wide `enumerate_options` run legitimately costs more than a five-branch
+    one, and a single global number is wrong for one of them.
 44. ~~Worker heartbeat~~ **Built** as `adhd os heartbeat`. Without it the lease has to cover the
     worst task anybody will ever run, because the only signal a worker is alive is the artifact
     arriving. Only the holder may beat it, and only while the lease still stands: extending an

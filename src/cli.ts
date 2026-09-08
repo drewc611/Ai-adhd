@@ -297,9 +297,10 @@ os.command("submit")
   .option("--by <who>", "who submitted")
   .option("--run-id <id>")
   .option("--confirmed", "skip the gate (scripted use)")
+  .option("--budget <tokens>", "halt the run and render partial once reported tokens pass this", (v) => Number.parseInt(v, 10))
   .action((o) => {
     try {
-      const r = kernelFor(o).submit(readFileSync(o.problem, "utf8"), o.decision, { seed: o.seed, by: o.by, confirmed: o.confirmed, runId: o.runId });
+      const r = kernelFor(o).submit(readFileSync(o.problem, "utf8"), o.decision, { seed: o.seed, by: o.by, confirmed: o.confirmed, runId: o.runId, budgetTokens: o.budget });
       out(r.preview);
       out(r.kind === "plan" ? { run_id: r.run_id, state: r.state, estimate_tokens: r.estimate_tokens } : { declined: true, reason: r.reason });
       process.exit(r.kind === "plan" ? 0 : 2);
@@ -347,6 +348,29 @@ os.command("result <run_id>").option("--os-root <dir>", "kernel root").action((i
 os.command("cancel <run_id>").option("--reason <text>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).cancel(id, o.reason)); } catch (e) { fail(e); } });
 os.command("list").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).list()); } catch (e) { fail(e); } });
 os.command("reap").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).reap()); } catch (e) { fail(e); } });
+os.command("gc")
+  .description("delete finished run directories older than --days; dry unless --yes")
+  .option("--days <n>", "age threshold in days", (v) => Number.parseInt(v, 10), 30)
+  .option("--yes", "actually delete. A run directory is the only copy of its artifacts")
+  .option("--os-root <dir>", "kernel root")
+  .option("--json")
+  .action((o) => {
+    try {
+      const r = kernelFor(o).gc({ days: o.days, apply: Boolean(o.yes) });
+      console.log(o.json ? JSON.stringify({ eligible: r.eligible, removed: r.removed, skipped_active: r.skipped_active, applied: r.applied }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+os.command("compact")
+  .description("move journal lines belonging to finished runs into a dated archive beside the journal")
+  .option("--keep-lines <n>", "leave the journal alone below this many lines", (v) => Number.parseInt(v, 10), 1000)
+  .option("--os-root <dir>", "kernel root")
+  .option("--json")
+  .action((o) => {
+    try {
+      const r = kernelFor(o).compactJournal({ keepLines: o.keepLines });
+      console.log(o.json ? JSON.stringify({ before: r.before, kept: r.kept, archived: r.archived, archive: r.archive }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
 os.command("drain")
   .description("stop handing out tasks; outstanding leases run to completion")
   .option("--reason <text>")
