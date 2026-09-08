@@ -272,3 +272,40 @@ def test_a_model_from_before_the_split_was_recorded_is_refused_rather_than_guess
 
     why = in_sample_refusal(model, SplitLibrary(lib, every=10, side="heldout"))
     assert why is not None and "before the training split was recorded" in why
+
+
+def test_a_source_the_model_never_had_needs_no_split(tmp_path):
+    """Leave-one-source-out. The split field cannot express it and `meta["sources"]` already can.
+
+    A model trained on a library that never contained a source cannot have seen that source's text,
+    whatever stride it used. Without this branch E2b would have to pass `allow_in_sample=True`, which
+    would be a lie about what the measurement is.
+    """
+    lib = _library(tmp_path, n=40)
+    assert len(lib.sources) >= 1
+    other = tmp_path / "other"
+    other.mkdir()
+    for i in range(12):
+        (other / f"o{i}.txt").write_text(f"an unrelated document about topic {i} and nothing else.\n" * 8)
+    outside = Library([Source(name="outside", path=other, include=["*.txt"])])
+
+    rec = train(lib, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    assert rec.to_dict()["split"] is None, "this run read a whole manifest"
+    # Refused on its own corpus, permitted on a source it never had.
+    assert in_sample_refusal(model, SplitLibrary(lib, every=10, side="heldout")) is not None
+    assert in_sample_refusal(model, outside) is None
+    assert evaluate(model, outside, Budget.smoke()).perplexity > 0
+
+
+def test_sharing_one_source_is_enough_to_be_refused(tmp_path):
+    """The disjointness has to be total. Overlapping on any source puts the stride rules back in charge."""
+    lib = _library(tmp_path, n=40)
+    rec = train(lib, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    names = {s["name"] for s in model.meta["sources"]}
+    assert names, "the model records no sources, so nothing can be checked"
+    why = in_sample_refusal(model, Library(lib.sources))
+    assert why is not None and "every subset of that manifest is training text" in why

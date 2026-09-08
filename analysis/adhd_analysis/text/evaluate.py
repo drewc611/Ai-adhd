@@ -104,6 +104,15 @@ def in_sample_refusal(model: KneserNey, held) -> str | None:
     So this is a function now rather than a paragraph. A rule a document states and no code enforces
     holds until someone is in a hurry.
     """
+    # A model cannot have seen text from a source it never had. This is the case where a whole source
+    # is held out rather than a stride of documents, and the split field cannot express it — but
+    # `meta["sources"]` already records exactly which sources the run read, so no new plumbing is
+    # needed to check it. Leave-one-source-out evaluation (E2b) depends on this branch.
+    trained_on = {s["name"] for s in model.meta.get("sources", [])}
+    scoring = {d["name"] for d in held.describe()}
+    if scoring and not (scoring & trained_on):
+        return None
+
     split = model.meta.get("split", "absent")
     if split == "absent":
         return (
