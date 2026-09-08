@@ -160,9 +160,14 @@ almost exactly. A model trained on public-domain novels would faithfully report 
 artifact reads unlike a Victorian novel.
 
 4,901 RFCs, 615 PEPs, 529 EIPs and the repository's own prose: **55.4M tokens, 177,507-word
-vocabulary, 36.5M 4-grams, 622 seconds, 9483MB peak, nothing pruned.** Held-out perplexity **6.06**
-on 3,097,500 tokens at 0.15% OOV. Every discount row is a real modified-Kneser-Ney estimate rather
-than the 0.75 fallback.
+vocabulary, 36.5M 4-grams, 622 seconds, 9483MB peak, nothing pruned.** Every discount row is a real
+modified-Kneser-Ney estimate rather than the 0.75 fallback.
+
+That run reported perplexity **6.06** on 3,097,500 tokens at 0.15% OOV and called it held-out.
+**D16 corrects it**: the model trained on the whole manifest and was then scored on one document in
+twenty of that same manifest, so 6.06 is a memorisation score. The honest figure at order 4 on the
+current 68M-token corpus is **26.29**, and the 0.15% OOV was the tell — an unseen set gives about
+0.79%. `evaluate` refuses that combination now rather than returning a number.
 
 Two comparisons, neither preregistered:
 

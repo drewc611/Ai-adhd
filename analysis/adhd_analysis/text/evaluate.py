@@ -77,22 +77,86 @@ class HeldOut:
     #: Carried because a perplexity without it is a number nobody can compare safely, and the
     #: comparison is the only thing perplexity is for. Growing the corpus from 1,974 RFCs to 6,067
     #: mixed documents moved the reported figure from 38.6 to 17.4, and that was *not* the model
-    #: getting better — it was a different, easier test set, because the added sources are
-    #: formulaic. `comparable_heldout` refuses that comparison now rather than inviting it.
+    #: getting better. The reason recorded at the time — a different, easier test set, because the
+    #: added sources are formulaic — was wrong. D16 has the real one: 38.6 came from a model trained
+    #: on one side of the split and 17.4 came from a model trained on the whole manifest, so only the
+    #: first was measured out of sample. The fingerprint is still the right mechanism, and
+    #: `in_sample_refusal` is the one that would have caught what actually happened.
     fingerprint: str = ""
 
     def __str__(self) -> str:
         return f"perplexity {self.perplexity:8.1f}  OOV {self.oov_rate:5.1%}  over {self.tokens:,} tokens"
 
 
-def evaluate(model: KneserNey, held: SplitLibrary, budget: Budget | None = None) -> HeldOut:
+def in_sample_refusal(model: KneserNey, held) -> str | None:
+    """Why this model must not be scored on this text, or None if it may be.
+
+    The check exists because the repository already had the rule and lost it anyway. D13 states it:
+    "building it over everything hands the model every word it is about to be tested on, and the OOV
+    rate collapses for a reason unrelated to the model." `SplitLibrary` was written to prevent it and
+    `compare_orders` uses it correctly. Two headline figures — 6.06 in D14 and 6.396 in D15 — came
+    from a path that trained on the whole manifest and then scored one document in twenty of it.
+
+    Measured on one model and one corpus snapshot, that costs a factor of four: 26.29 on 368 unseen
+    documents against 6.51 on 368 seen ones, with OOV 0.79% against 0.15%. The collapsed OOV rate was
+    printed beside every one of those figures and read as a good sign.
+
+    So this is a function now rather than a paragraph. A rule a document states and no code enforces
+    holds until someone is in a hurry.
+    """
+    # A model cannot have seen text from a source it never had. This is the case where a whole source
+    # is held out rather than a stride of documents, and the split field cannot express it — but
+    # `meta["sources"]` already records exactly which sources the run read, so no new plumbing is
+    # needed to check it. Leave-one-source-out evaluation (E2b) depends on this branch.
+    trained_on = {s["name"] for s in model.meta.get("sources", [])}
+    scoring = {d["name"] for d in held.describe()}
+    if scoring and not (scoring & trained_on):
+        return None
+
+    split = model.meta.get("split", "absent")
+    if split == "absent":
+        return (
+            "this model was trained before the training split was recorded, so nothing can say "
+            "whether it saw this text; retrain to score it"
+        )
+    if split is None:
+        return (
+            "this model trained on every document in the manifest, so every subset of that manifest "
+            "is training text and its perplexity is a memorisation score"
+        )
+    side, every = split.get("side"), split.get("every")
+    if side == getattr(held, "side", None):
+        return f"the model trained on the {side} side and this is the {side} side"
+    if every != getattr(held, "every", None):
+        return (
+            f"the model trained on a stride of {every} and this text comes from a stride of "
+            f"{getattr(held, 'every', None)}, so the two sides do not complement each other"
+        )
+    return None
+
+
+def evaluate(
+    model: KneserNey,
+    held: SplitLibrary,
+    budget: Budget | None = None,
+    *,
+    allow_in_sample: bool = False,
+) -> HeldOut:
     """Perplexity of a trained model on documents it never saw.
 
     The model is asked to predict every token including the ones that map to `<unk>`; excluding
     them would score a model on the easy half of its own test set. What is excluded from the OOV
     rate's denominator is nothing — it is the honest fraction, reported so a perplexity that
     improved because the vocabulary shrank is visible as such.
+
+    Refuses outright when the model trained on the text being scored — see `in_sample_refusal`.
+    `allow_in_sample=True` is for deliberately measuring the gap between seen and unseen text, which
+    is a real measurement and reads as one in a diff. It is not a way past a failing check.
     """
+    if not allow_in_sample:
+        why = in_sample_refusal(model, held)
+        if why is not None:
+            raise ValueError(f"refusing to report this as held-out perplexity: {why}")
     b = budget or Budget.weekly()
     docs = n_sentences = n_tokens = in_vocab = 0
     total_logprob = 0.0

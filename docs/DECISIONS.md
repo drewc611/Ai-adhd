@@ -1184,6 +1184,12 @@ corrections to figures this repository had already published.
 Held-out perplexity **6.06** on 3,097,500 tokens, OOV 0.15%, fingerprint `8487cc7ab947fef6`. No
 ceiling bit on either pass.
 
+> **Corrected in D16: 6.06 is not held-out perplexity.** That model trained on every document in the
+> manifest and was then scored on one document in twenty of the same manifest, so the figure is a
+> memorisation score. The OOV rate printed beside it is the tell — 0.15% against the 0.79% an unseen
+> set gives. Left in place rather than edited out, because the tell was visible every time and read
+> as good news.
+
 ### The T1 effect size is stable; its p-value is not
 
 Four corpora, spanning 10x in size and one change of genre:
@@ -1229,6 +1235,11 @@ carried over.
 
 `comparable_heldout` was added because 38.6 on the RFC-only held-out set and 17.4 on the mixed one
 were about to be read as a 2.2x gain when they are numbers about two different tests.
+
+> **Weakened by D16.** Both figures below are memorisation scores, so 2.9x is a ratio between two
+> numbers that do not measure generalisation. Pruning's real cost is probably larger, since a pruned
+> model has less of the tail to memorise *and* less to generalise from, but that is an argument and
+> not a measurement. Re-measuring it needs two runs on one split and is backlog item 76.
 
 The pruned and unpruned mixed runs were scored on the *same* set, so **17.4 against 6.06 is a real
 comparison**, and it puts a number on what the pruning cost: pruning singletons removes the tail
@@ -1302,6 +1313,11 @@ version did it in the loop and left 214 of 225 in place.
 `prunes: 0`, no ceiling bit on either pass, `vocab_truncated: {types: 0, tokens: 0}`.
 
 Held-out perplexity **6.396** on 3,464,186 tokens at 0.13% OOV, fingerprint `92cedd81b2261713`.
+
+> **Corrected in D16: same defect as 6.06.** Trained on all 7,344 documents, scored on 368 of them.
+> The honest figure for this corpus at order 4 is **26.29**, measured on a model that trained on the
+> other 6,976. Everything else in D15 — the table sizes, the memory law, the T1 differences, the
+> vocabulary finding — is unaffected: none of it depends on the perplexity.
 
 **That is not an improvement on 6.06 and not a regression from it.** A larger corpus means a
 different stride split, so the fingerprint changed and `comparable_heldout` refuses the comparison —
@@ -1379,3 +1395,93 @@ Doing so would mean reading a licence per document or asserting terms nobody rea
 how a corpus acquires text nobody checked. `UNLICENSED_AT_SOURCE` records it. The XMPP XEPs were
 dropped for a duller reason: the source form is XML, and a word-frequency model trained on it learns
 tag names.
+
+
+## D16. The held-out perplexity was not held out
+
+**Found.** While running the order comparison at 68M tokens, from its OOV column.
+
+**Resolved.** Two headline figures this repository published — 6.06 in D14 and 6.396 in D15 — were
+computed on text the model trained on. The honest figure for the same corpus at order 4 is **26.29**.
+
+### What happened
+
+D13 states the rule and states it correctly:
+
+> The vocabulary comes from the training half only. `SplitLibrary` yields one side, so `train()`
+> never sees the other. Building it over everything hands the model every word it is about to be
+> tested on, **and the OOV rate collapses for a reason unrelated to the model**.
+
+`compare_orders` obeys that. The standalone evaluation did not. It trained on
+`Library.load("corpora.yaml")` — the whole manifest, all 7,344 documents — and then scored
+`SplitLibrary(..., every=20, side="heldout")`, which is 368 of those same 7,344. `train.yml` had the
+identical shape: a full-manifest training step followed by a step scoring a stride of it.
+
+The training record said so plainly the whole time. `documents: 7344`, and the source file counts sum
+to 7,344.
+
+### The measurement
+
+One model, one corpus snapshot, two document sets of the same size. The model is the order-4 model
+`compare_orders` built, which trained on the 6,976-document training half:
+
+| set | documents | tokens | OOV | perplexity |
+|---|---|---|---|---|
+| never seen | 368 | 3,464,189 | **0.794%** | **26.29** |
+| seen in training | 368 | 3,276,561 | **0.149%** | **6.51** |
+
+**A factor of 4.04.** And the confirming detail: the published OOV rates were 0.15% (D14) and 0.13%
+(D15). The in-sample rate measured here is 0.149%. Those figures were not near the honest number and
+drifting; they were the in-sample number, exactly.
+
+### What the collapse of a defence looks like
+
+Worth writing down because the shape recurs. The rule was known, written in a decision record, and
+enforced by a class built for it. What was missing is that nothing *refused*. `evaluate` accepted any
+model and any library and returned a number, so the correct path and the incorrect path both produced
+something that looked like held-out perplexity, and the incorrect one produced a prettier figure.
+
+I then built `comparable_heldout` to explain the gap between 38.6 (a genuine held-out number from
+`compare_orders`) and 17.4 (an in-sample one), and the explanation I recorded — a different, easier
+test set, because the added sources are formulaic — was wrong. The function is right for other
+reasons and stays. Its motivating story was a misdiagnosis of this bug.
+
+### The fix is mechanical, because a stated rule is not one
+
+- `train()` records `split` on the model's meta and on the training record: `{"every": N, "side":
+  "train"}` for a split library, `None` for the whole manifest.
+- `in_sample_refusal(model, held)` returns why a model must not be scored on some text. Four
+  refusals: the model trained on everything; the model trained on this same side; the strides do not
+  complement; or the model predates the field, which is refused rather than guessed at, because
+  *absent* and *None* are different facts and treating them alike would silently accept exactly the
+  models whose provenance is unknown.
+- `evaluate()` raises on a refusal. `allow_in_sample=True` exists for deliberately measuring the gap
+  — it is how the table above was produced — and reads as a deliberate act in a diff.
+- `--held-out-every N` on the trainer, and `train.yml` passes 20. A boundary test asserts the trained
+  stride and the scored stride match, so the two cannot drift apart again.
+- **The shipped weekly model now trains on 95% of the corpus.** That is the price of the reported
+  number meaning what it says. At 68M tokens the last 5% is worth much less than the honesty.
+
+Both model files currently on disk predate the field, so both are refused. That is the conservative
+answer and it is the right one.
+
+### The order comparison, which is what found this
+
+Same held-out text, same fingerprint `eb2fc01784de564a`, `comparable()` raises no refusal:
+
+| order | n-grams | perplexity | OOV | peak RSS | seconds |
+|---|---|---|---|---|---|
+| 3 | 17.3M | 36.46 | 0.79% | 3.8GB | 321 |
+| 4 | 40.8M | **26.29** | 0.79% | 10.7GB | 691 |
+
+Order 4 buys **27.9%** for 2.37x the table. At 22.9M tokens (D13) the same step bought 16.4% for
+2.2x.
+
+**The higher order gets more valuable as the corpus grows, not less.** That is the opposite of the
+intuition the question was asked to test — whether more text lets the cheaper order catch up — and
+the reason is that a 4-gram table was data-starved at 22.9M tokens. So at a fixed memory ceiling,
+spending it on order beats spending it on text, at least across this range.
+
+Order 5 cannot be measured here. The 257MB-per-million-n-grams law puts an order-5 table at this
+corpus around 17.5GB and the machine has 15GB. D13's order-5 figure stands at 22.9M tokens and does
+not transfer.
