@@ -645,3 +645,101 @@ test("a critic that refuses aborts the run with the reason it gave, not a schema
   assert.ok(!/Required|invalid|expected/.test(st.reason!), "the refusal was reported as a schema failure");
   assert.equal(k.claim("w2"), null, "an aborted run keeps handing out work");
 });
+
+// ---- lease lifecycle: per-phase length, heartbeat, drain, dead letters ----------------------
+
+test("a lease runs for its own phase's length, not one number covering all four", () => {
+  // adhd os stats measures mean critique_b at 244s against 108s for deepen. One number is
+  // either too short for the critic or wasteful for the rest, and too short hands live work to
+  // a second subagent.
+  const clock = { t: Date.parse("2026-09-06T00:00:00Z") };
+  const root = join(tmp(), "root");
+  const k = new Kernel(cfg, { root, leaseSeconds: { default: 60, critique_b: 600 }, now: () => new Date(clock.t) });
+  assert.equal(k.leaseFor("diverge"), 60, "an unnamed phase falls back to default");
+  assert.equal(k.leaseFor("critique_b"), 600);
+
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const t = k.claim("w1")!;
+  assert.equal(t.phase, "diverge");
+  assert.equal(Date.parse(t.lease_until!) - clock.t, 60_000);
+
+  // A bare number still applies everywhere, which is what every existing caller passes.
+  const flat = new Kernel(cfg, { root: join(tmp(), "flat"), leaseSeconds: 42 });
+  for (const p of ["diverge", "critique_a", "critique_b", "deepen"] as const) assert.equal(flat.leaseFor(p), 42);
+});
+
+test("a heartbeat pushes a live lease out; it cannot revive an expired one", () => {
+  // Without this the lease has to cover the worst task anybody will ever run, because the only
+  // signal a worker is alive is the artifact arriving.
+  const { k, clock } = kernel({ leaseSeconds: 60 });
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const t = k.claim("w1")!;
+
+  clock.t += 50_000;
+  const beat = k.heartbeat(t.id, "w1");
+  assert.equal(Date.parse(beat.lease_until) - clock.t, 60_000);
+  assert.equal(beat.attempts, 1, "a heartbeat is not a re-claim");
+
+  clock.t += 50_000; // past the original expiry, inside the extended one
+  assert.equal(k.status("r1").tasks.leased, 1, "the reaper took a task whose worker was beating");
+  assert.equal(k.claim("w2", { runId: "r1" })?.id !== t.id, true, "the beaten task was handed to another worker");
+
+  // Only the holder, and only while it holds it.
+  assert.throws(() => k.heartbeat(t.id, "w2"), /leased to w1, not w2/);
+  clock.t += 61_000;
+  assert.throws(() => k.heartbeat(t.id, "w1"), /extending it now would take it back from whoever re-claimed it/);
+});
+
+test("draining stops new claims and lets outstanding leases finish", () => {
+  // Cancelling would drop tasks already paid for and still in flight: the subagent finishes,
+  // returns, and the kernel refuses the artifact. Draining costs nothing already spent.
+  const { k } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  const hash = k.status("r1").problem_hash;
+  const held = k.claim("w1")!;
+
+  const d = k.drain("deploying");
+  assert.equal(d.draining, true);
+  assert.equal(d.outstanding, 1, "the drain report has to say how much work is still live");
+  assert.equal(k.draining(), true);
+  assert.equal(k.claim("w2"), null, "a draining kernel handed out new work");
+  assert.equal(k.claim("w2", { runId: "r1" }), null, "naming the run got past the drain");
+
+  // The lease it already had still completes, and a heartbeat on it still works.
+  k.heartbeat(held.id, "w1");
+  k.return_(held.id, yaml(artifact(held.label, hash)), "w1");
+  assert.equal(k.status("r1").tasks.done, 1);
+
+  k.resume();
+  assert.equal(k.draining(), false);
+  assert.ok(k.claim("w2"), "resume did not restore claims");
+  const events = readFileSync(join(k.root, "journal.jsonl"), "utf8");
+  assert.match(events, /"event":"drain"/);
+  assert.match(events, /"event":"resume"/);
+});
+
+test("draining survives the process that called it", () => {
+  // A host draining before a deploy is a host about to exit, so the flag is a marker file
+  // rather than a field. A fresh Kernel on the same root has to see it.
+  const { k, root } = kernel();
+  k.drain("before deploy");
+  assert.equal(new Kernel(cfg, { root }).draining(), true);
+  new Kernel(cfg, { root }).resume();
+  assert.equal(k.draining(), false);
+});
+
+test("a task that exhausted its attempts is dead, not dropped", () => {
+  // They were one value, so a run that died because one task could never be completed looked
+  // exactly like a run somebody cancelled, and only the journal kept the difference.
+  const { k, clock } = kernel({ leaseSeconds: 60, maxAttempts: 2 });
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
+  k.claim("w1");
+  clock.t += 61_000;
+  k.claim("w2");
+  clock.t += 61_000;
+  const st = k.status("r1");
+  assert.equal(st.state, "aborted");
+  assert.equal(st.tasks.dead, 1, "the task that was tried twice and never came back");
+  assert.equal(st.tasks.dropped, 4, "its four siblings, which the run simply no longer needs");
+  assert.equal(st.tasks.pending + st.tasks.leased, 0);
+});

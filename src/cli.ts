@@ -347,6 +347,17 @@ os.command("result <run_id>").option("--os-root <dir>", "kernel root").action((i
 os.command("cancel <run_id>").option("--reason <text>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).cancel(id, o.reason)); } catch (e) { fail(e); } });
 os.command("list").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).list()); } catch (e) { fail(e); } });
 os.command("reap").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).reap()); } catch (e) { fail(e); } });
+os.command("drain")
+  .description("stop handing out tasks; outstanding leases run to completion")
+  .option("--reason <text>")
+  .option("--os-root <dir>", "kernel root")
+  .action((o) => { try { out(kernelFor(o).drain(o.reason)); } catch (e) { fail(e); } });
+os.command("resume").description("accept claims again").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).resume()); } catch (e) { fail(e); } });
+os.command("heartbeat <task_id>")
+  .description("a worker says it is still alive; pushes its lease out by the phase's lease length")
+  .requiredOption("--worker <id>")
+  .option("--os-root <dir>", "kernel root")
+  .action((id, o) => { try { out(kernelFor(o).heartbeat(id, o.worker)); } catch (e) { fail(e); } });
 os.command("stats")
   .description("throughput, phase timing and lease expiry rate across the journal")
   .option("--os-root <dir>", "kernel root")

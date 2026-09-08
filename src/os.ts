@@ -61,7 +61,13 @@ export const TaskSchema = z
     others_after: z.string().nullable(),
     /** Token usage the worker reported on return, if any. */
     tokens: z.number().int().nullable(),
-    status: z.enum(["pending", "leased", "done", "dropped"]),
+    /**
+     * `dropped` is a task the run no longer needs: cancelled, or outstanding when the run ended.
+     * `dead` is a task that was tried `maxAttempts` times and never came back. The two used to
+     * be one value, so a run that died because one task could not be completed looked exactly
+     * like a run somebody cancelled, and the journal was the only place the difference survived.
+     */
+    status: z.enum(["pending", "leased", "done", "dropped", "dead"]),
     worker: z.string().nullable(),
     leased_at: z.string().nullable(),
     lease_until: z.string().nullable(),
@@ -93,9 +99,20 @@ export const RunRecordSchema = z
   .strict();
 export type RunRecord = z.infer<typeof RunRecordSchema>;
 
+/**
+ * Lease length. A number applies to every phase; a map sets it per phase and falls back to
+ * `default` for anything unnamed.
+ *
+ * Per-phase exists because the phases are not alike and `adhd os stats` says so: over five
+ * recorded runs the mean `critique_b` task took 244s against 108s for `deepen`, and the longest
+ * anything has taken is 280s. One number covering all four is either too short for the critic
+ * or wasteful for the rest, and a lease that is too short hands live work to a second subagent.
+ */
+export type LeaseSpec = number | ({ default: number } & Partial<Record<Task["phase"], number>>);
+
 export interface KernelOptions {
   root: string;
-  leaseSeconds?: number;
+  leaseSeconds?: LeaseSpec;
   maxAttempts?: number;
   now?: () => Date;
 }
@@ -109,7 +126,7 @@ const RUN_DIR_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$/;
 
 export class Kernel {
   readonly root: string;
-  readonly leaseSeconds: number;
+  readonly leaseSeconds: LeaseSpec;
   readonly maxAttempts: number;
   private readonly now: () => Date;
 
@@ -119,6 +136,11 @@ export class Kernel {
     this.maxAttempts = opts.maxAttempts ?? 3;
     this.now = opts.now ?? (() => new Date());
     mkdirSync(this.root, { recursive: true });
+  }
+
+  /** Seconds this phase's lease runs for. A bare number applies everywhere. */
+  leaseFor(phase: Task["phase"]): number {
+    return typeof this.leaseSeconds === "number" ? this.leaseSeconds : (this.leaseSeconds[phase] ?? this.leaseSeconds.default);
   }
 
   // ---- locking and persistence ------------------------------------------------------------
@@ -364,6 +386,10 @@ export class Kernel {
   claim(worker: string, opts: { runId?: string } = {}): ClaimedTask | null {
     return this.withLock(() => {
       this.reapLocked();
+      // Draining: outstanding leases run to completion, nothing new is handed out. A host that
+      // wants to stop the kernel without killing live subagents has no other way to do it —
+      // cancelling would drop work that is already paid for and still in flight.
+      if (this.draining()) return null;
       // The state filter belongs on both paths. Naming a run explicitly used to skip it, so a
       // host that tracked its own run id could be handed a task from a run that was already
       // cancelled, aborted or still sitting at the D5 gate — spending a subagent on a decision
@@ -379,7 +405,7 @@ export class Kernel {
         task.status = "leased";
         task.worker = worker;
         task.leased_at = now.toISOString();
-        task.lease_until = new Date(now.getTime() + this.leaseSeconds * 1000).toISOString();
+        task.lease_until = new Date(now.getTime() + this.leaseFor(task.phase) * 1000).toISOString();
         task.attempts += 1;
         this.save(rec);
         this.journal("claimed", { run_id: rec.run_id, task: task.id, worker, attempt: task.attempts });
@@ -482,6 +508,78 @@ export class Kernel {
     });
   }
 
+  // ---- drain and heartbeat ------------------------------------------------------------------
+
+  private drainFile() {
+    return join(this.root, ".draining");
+  }
+
+  /** Is this root refusing new claims? A marker file, so it survives a restart and is visible. */
+  draining(): boolean {
+    return existsSync(this.drainFile());
+  }
+
+  /**
+   * Stop handing out work; let what is leased finish.
+   *
+   * The alternative a host had was cancelling every run, which drops tasks that are already
+   * paid for and still in flight: the subagent finishes, returns, and the kernel refuses the
+   * artifact. Draining costs nothing already spent.
+   *
+   * A marker file rather than memory, because the point is to survive the process that called
+   * it — a host draining before a deploy is a host about to exit.
+   */
+  drain(reason = "draining"): { draining: true; outstanding: number; reason: string } {
+    return this.withLock(() => {
+      writeFileSync(this.drainFile(), JSON.stringify({ at: this.now().toISOString(), reason }) + "\n");
+      const outstanding = this.listLocked().reduce((n, r) => n + r.tasks.filter((t) => t.status === "leased").length, 0);
+      this.journal("drain", { reason, outstanding });
+      return { draining: true as const, outstanding, reason };
+    });
+  }
+
+  /** Accept claims again. */
+  resume(): { draining: false } {
+    return this.withLock(() => {
+      if (existsSync(this.drainFile())) {
+        rmSync(this.drainFile(), { force: true });
+        this.journal("resume", {});
+      }
+      return { draining: false as const };
+    });
+  }
+
+  /**
+   * A worker says it is still alive and pushes its lease out.
+   *
+   * Without this the lease length has to cover the worst task anybody will ever run, because
+   * the only signal a worker is alive is the artifact arriving. `adhd os stats` measures the
+   * longest task the journal has seen at 280s against a 900s default — a margin picked by
+   * guessing, and one that a genuinely slow subagent still crosses. A heartbeat lets the lease
+   * be short enough to notice a dead worker quickly without punishing a live slow one.
+   *
+   * Only the worker holding the lease may beat it, and only while it still holds it: extending
+   * a lease that already expired would take a task back from whoever legitimately re-claimed it.
+   */
+  heartbeat(taskId: string, worker: string): { task: string; lease_until: string; attempts: number } {
+    return this.withLock(() => {
+      const runId = taskId.split(":")[0]!;
+      const rec = this.load(runId);
+      if (isTerminal(rec.state)) throw new ContractError("heartbeat", [`run ${runId} is ${rec.state}; its leases are over`]);
+      const task = rec.tasks.find((t) => t.id === taskId);
+      if (!task) throw new ContractError("heartbeat", [`no task ${taskId}`]);
+      if (task.status !== "leased") throw new ContractError("heartbeat", [`task ${taskId} is ${task.status}, not leased`]);
+      if (task.worker !== worker) throw new ContractError("heartbeat", [`task ${taskId} is leased to ${task.worker}, not ${worker}`]);
+      const now = this.now();
+      if (task.lease_until && Date.parse(task.lease_until) <= now.getTime())
+        throw new ContractError("heartbeat", [`task ${taskId} expired at ${task.lease_until}; extending it now would take it back from whoever re-claimed it`]);
+      task.lease_until = new Date(now.getTime() + this.leaseFor(task.phase) * 1000).toISOString();
+      this.save(rec);
+      this.journal("heartbeat", { run_id: runId, task: taskId, worker, lease_until: task.lease_until });
+      return { task: taskId, lease_until: task.lease_until, attempts: task.attempts };
+    });
+  }
+
   /** Expire leases. Public so a cron can call it; also runs on every claim/status/list. */
   reap() {
     return this.withLock(() => this.reapLocked());
@@ -507,7 +605,9 @@ export class Kernel {
         if (Date.parse(t.lease_until) > now) continue;
         changed = true;
         if (t.attempts >= this.maxAttempts) {
-          t.status = "dropped";
+          // Dead, not dropped: this task was tried and never came back, which is a different
+          // fact from the siblings below, which the run simply no longer needs.
+          t.status = "dead";
           rec.state = "aborted";
           rec.reason = `task ${t.id} expired ${t.attempts} times`;
           rec.finished_at = this.now().toISOString();
@@ -554,7 +654,7 @@ export class Kernel {
           const a = rec.tasks.find((t) => t.phase === "critique_a")!;
           const b = this.newTask(rec.run_id, "critique_b", n.agent, "pass-b", rel(dir, n.brief), rel(dir, n.artifact), a.id);
           b.prefer_worker = a.worker;
-          b.others_after = new Date(this.now().getTime() + this.leaseSeconds * 1000).toISOString();
+          b.others_after = new Date(this.now().getTime() + this.leaseFor("critique_b") * 1000).toISOString();
           rec.tasks.push(b);
           rec.state = "critique_b";
           break;
@@ -655,7 +755,7 @@ export class Kernel {
       created_at: rec.created_at,
       updated_at: rec.updated_at,
       finished_at: rec.finished_at,
-      tasks: { pending: count("pending"), leased: count("leased"), done: count("done"), dropped: count("dropped") },
+      tasks: { pending: count("pending"), leased: count("leased"), done: count("done"), dropped: count("dropped"), dead: count("dead") },
       reason: rec.reason,
       last_phase_text: rec.last_phase_text,
     };

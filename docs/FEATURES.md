@@ -153,12 +153,23 @@ can be wrong without saying so.
     guess, but a measured one. No lease has ever expired in a real run.
 37. Run priority, so an urgent run jumps a queued one.
 38. Journal compaction for long-lived kernels.
-39. Configurable lease length per phase; deepen legitimately takes longer than diverge.
-40. A dead-letter state for tasks that exhausted their attempts, separate from `aborted`.
-41. Graceful drain: stop accepting claims, let leases finish.
+39. ~~Configurable lease length per phase~~ **Built.** `leaseSeconds` takes a number or a map with
+    a `default`. The measurement that justified it is `adhd os stats`: over five recorded runs mean
+    `critique_b` is 244s against 108s for `deepen`. One number covering all four is either too short
+    for the critic or wasteful for the rest, and too short hands live work to a second subagent.
+40. ~~A dead-letter state~~ **Built** as task status `dead`, distinct from `dropped`. They were one
+    value, so a run that died because one task could never be completed looked exactly like a run
+    somebody cancelled, and only the journal kept the difference.
+41. ~~Graceful drain~~ **Built** as `adhd os drain` / `resume`. The alternative a host had was
+    cancelling every run, which drops tasks already paid for and still in flight: the subagent
+    finishes, returns, and the kernel refuses the artifact. A marker file rather than a field,
+    because a host draining before a deploy is a host about to exit.
 42. `adhd os gc` — delete finished run directories older than N days.
 43. Per-run token ceiling carried in the plan rather than a global.
-44. Worker heartbeat, so a lease can be extended by a worker that is still alive.
+44. ~~Worker heartbeat~~ **Built** as `adhd os heartbeat`. Without it the lease has to cover the
+    worst task anybody will ever run, because the only signal a worker is alive is the artifact
+    arriving. Only the holder may beat it, and only while the lease still stands: extending an
+    expired lease would take the task back from whoever legitimately re-claimed it.
 
 ### Eval and reporting
 45. HTML report for a run: synthesis, branches, scores, detector table, one page.
