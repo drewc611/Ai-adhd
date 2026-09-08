@@ -136,3 +136,34 @@ test("every workflow declares its permissions", () => {
     assert.match(text, /^\s*permissions:/m, `.github/workflows/${f} declares no permissions at any level`);
   }
 });
+
+test("the published package is enough to run the CLI, the doctor and the demo", () => {
+  // Three defects found by building this: `scripts/demo.sh` was published while the corpus it
+  // reads was not, the demo ran `npm run build` against a tsconfig.json that is not published,
+  // and `files` omitted agents/, skills/ and .claude-plugin/ — so `adhd doctor` errored on an
+  // installed copy and the Claude Code plugin, one of the four v0 deliverables, shipped as
+  // nothing at all. This is the same family as the hygiene sweep's defect 55 (every entry point
+  // pointed at a path the build did not emit) and 16 (the README referenced assets/ and no
+  // files entry published it), and the reason it keeps happening is that development never
+  // exercises the published layout.
+  const packed = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--json"], { encoding: "utf8", cwd: cfg.root, stdio: ["ignore", "pipe", "ignore"] })) as [{ files: { path: string }[] }];
+  const published = new Set(packed[0].files.map((f) => f.path));
+
+  // Everything the plugin manifest and the run dispatch need has to be in the tarball.
+  for (const required of [".claude-plugin/plugin.json", "config/frames.yaml", "config/routing.yaml", "config/critic-rubric.yaml", "docs/TRAPS.md", "dist/src/cli.js"])
+    assert.ok(published.has(required), `${required} is not published, and something at runtime reads it`);
+  for (const agent of ["adhd-branch", "adhd-branch-search", "adhd-critic", "adhd-deepen"])
+    assert.ok(published.has(`agents/${agent}.md`), `agents/${agent}.md is not published; a run dispatches to it`);
+
+  // And nothing that would be a mistake to ship.
+  for (const p of published) {
+    assert.ok(!p.startsWith("test/"), `${p} is published`);
+    assert.ok(!p.startsWith("runs/"), `${p} is published`);
+    assert.ok(!/(^|\/)\.env|\.key$|id_rsa/.test(p), `${p} looks like a secret`);
+  }
+  // The corpus is evidence rather than runtime, and 40 MB of artifacts in every install to
+  // support a demo is the wrong trade. The demo says so rather than failing four steps.
+  assert.ok(![...published].some((p) => p.startsWith("evals/recorded/")), "the recorded corpus is being published");
+  assert.match(readFileSync(join(cfg.root, "scripts", "demo.sh"), "utf8"), /if \[ ! -d evals\/recorded \]/);
+  assert.match(readFileSync(join(cfg.root, "scripts", "demo.sh"), "utf8"), /if \[ -f tsconfig\.json \]/, "the demo rebuilds unconditionally and a published copy has no tsconfig");
+});

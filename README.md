@@ -239,7 +239,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement, config (generated)
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       352 tests over all of it
+test/       362 tests over all of it
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
@@ -297,6 +297,7 @@ node dist/src/cli.js open <run>              # what a run directory holds, and w
 node dist/src/cli.js init <dir>              # scaffold config/ and prompts/ to extend, not start blank
 node dist/src/cli.js completions bash        # generated from the real command list
 node dist/src/cli.js schema-doc              # regenerate docs/CONFIG.md from the zod schemas
+node dist/src/cli.js os watch <run>          # redraw a run's status; one line per change when piped
 npm run demo                                 # what a clean checkout can show without a model
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?

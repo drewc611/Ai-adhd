@@ -297,6 +297,11 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     it? Each answer changes what `frame_hash` means for a run under a merged library, and one of
     them quietly makes the drift report unable to say which definition ran.
 
+72. **Publishing to npm** (owner's action). The package is verified — a test reconstructs the
+    tarball's file list and asserts the CLI, `adhd doctor` and `scripts/demo.sh` all work from it —
+    but publishing needs credentials and a decision about the name, which `package.json` currently
+    leaves as the unscoped `adhd`.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

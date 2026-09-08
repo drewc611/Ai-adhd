@@ -10,7 +10,14 @@ cd "$(dirname "$0")/.."
 step() { printf '\n\033[1m== %s\033[0m\n\n' "$1"; }
 
 step "1. Build and check the library"
-npm run build --silent
+# Build only from a source checkout. A published package ships dist/ prebuilt and no
+# tsconfig.json, so an unconditional build fails on the first step of the demo.
+if [ -f tsconfig.json ]; then
+  npm run build --silent
+elif [ ! -f dist/src/cli.js ]; then
+  echo "no dist/src/cli.js and no tsconfig.json: nothing to run." >&2
+  exit 1
+fi
 node dist/src/cli.js validate
 node dist/src/cli.js doctor | tail -3
 
@@ -27,6 +34,18 @@ node dist/src/cli.js run --phase compile \
 echo
 echo "Nothing has been spent. A host would now spawn one subagent per brief; this package"
 echo "never does that itself, which is the whole of D2."
+
+# Everything below reads evals/recorded, which package.json does not publish: it is 40 MB of
+# evidence and an installed dependency does not need it. A clone has it; an install does not,
+# and saying so beats failing four steps in a row.
+if [ ! -d evals/recorded ]; then
+  step "4-6. The recorded corpus"
+  echo "evals/recorded is not here, so the corpus steps are skipped."
+  echo "They need a clone: the corpus is evidence rather than runtime, and publishing it would"
+  echo "put 40 MB of artifacts in every install to support a demo."
+  printf '\nEverything above ran from the compiler alone. No model was called.\n'
+  exit 0
+fi
 
 step "4. A run that did happen, with its pruned block"
 node dist/src/cli.js why evals/recorded/001-first-run FRAME_BREAKER | head -25

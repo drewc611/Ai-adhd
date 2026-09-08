@@ -146,7 +146,12 @@ can be wrong without saying so.
     documented** in the README, and tested against the real binary. Adding the table found that
     a wrong flag raised `ConfigError` and printed "config invalid:" at a reader whose config was
     fine; usage errors are now their own code.
-30. TTY colour and a progress line while `adhd os` advances.
+30. ~~TTY colour and a progress line~~ **Built** as `src/tty.ts`, `adhd os list` and `adhd os watch`.
+    Two rules, both about not lying to a pipe: colour only on a TTY with `NO_COLOR` unset (`FORCE_COLOR`
+    overrides for CI, and `NO_COLOR` wins over it, because off is the safer direction to be wrong in),
+    and in-place redraw only on a TTY — carriage-returning into a log file makes one unreadable line,
+    which is worse than no progress. The watcher prints only when the text it would print has changed,
+    so a piped watch is one line per change rather than one per poll.
 31. ~~`adhd init`~~ **Built.** Copies `config/`, `prompts/` and `docs/TRAPS.md` — the last because
     the critic brief renders its detector lines verbatim and `loadConfig` refuses a root without it,
     which an earlier version got wrong and produced a scaffold that would not load. The point is not
@@ -173,7 +178,11 @@ can be wrong without saying so.
 36. ~~`adhd os stats`~~ **Built.** The longest task the journal has seen is 280s (`critique_b`)
     against a 900s default lease, so that default is about 3x the worst observed task — still a
     guess, but a measured one. No lease has ever expired in a real run.
-37. Run priority, so an urgent run jumps a queued one.
+37. ~~Run priority~~ **Built** as `--priority` on submit. Higher goes first; ties fall back to
+    submission order, so a default of 0 everywhere reproduces exactly the oldest-first scheduling it
+    replaced, and there is a test for that. Not preemption: a lease already handed out is never
+    reclaimed, because that would throw away a subagent already paid for — the same reason `drain`
+    exists rather than `cancel`.
 38. ~~Journal compaction~~ **Built** as `adhd os compact`. Lines belonging to finished runs move
     to a dated archive beside the journal — archived, not deleted, because `adhd os record`
     generates a run's provenance from them. Kernel-level lines with no run id stay, because a lock
@@ -268,7 +277,14 @@ can be wrong without saying so.
     exists. `crossCheck`'s rules are named in the preamble because none of them is per-field.
 
 ### Distribution
-58. Publish to npm under a scoped name.
+58. **Publish to npm** — not published (that needs the owner's credentials and consent), but the
+    package is now verifiable, and checking it found three defects. `scripts/demo.sh` was published
+    while the corpus it reads was not; the demo ran `npm run build` against a `tsconfig.json` that is
+    not published; and `files` omitted `agents/`, `skills/` and `.claude-plugin/`, so `adhd doctor`
+    errored on an installed copy and the Claude Code plugin — one of the four v0 deliverables —
+    shipped as nothing at all. The same family as hygiene defects 55 and 16, and it keeps happening
+    for the same reason: development never exercises the published layout. A test now reconstructs
+    the tarball's file list and asserts the CLI, the doctor and the demo all work from it.
 59. ~~A GitHub Action for library changes~~ **Built** as `.github/workflows/library.yml`,
     path-filtered on `config/`, `prompts/`, `evals/fixtures/` and `agents/`. It gates on validate,
     doctor, lint, eval and the assertion gate, and **reports** orthogonality, retirement health, axis
@@ -284,7 +300,10 @@ can be wrong without saying so.
 61. ~~A devcontainer~~ **Built**, Node 22, `npm ci && npm run build && npm test` on create. It
     supplies no inference and should not: a container that could run a fixture end to end would have
     to bring the host that spawns subagents, which the design puts outside this repository.
-62. Release notes generated from the recorded-run diff.
+62. **Release notes from the recorded-run diff.** Not built. There are no releases, one version, and
+    `adhd diff` already reports what changed between two runs — which is the part with evidence behind
+    it. Generating prose about a version boundary that does not exist yet is surface area the
+    catalogue's own ordering rule says loses. Worth revisiting the first time something is published.
 
 ## Tier 3 — listed, mostly not worth building
 

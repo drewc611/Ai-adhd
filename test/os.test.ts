@@ -848,3 +848,60 @@ test("compaction keeps a line it cannot parse rather than losing it", () => {
   assert.match(readFileSync(p, "utf8"), /\{not json/, "compaction is not the place to lose data");
   assert.equal(r.kept + r.archived, r.before);
 });
+
+test("priority jumps the queue without taking work off a busy worker", () => {
+  // Not preemption. A lease already handed out is not reclaimed: that would throw away a
+  // subagent already paid for, which is the same reason `drain` exists rather than `cancel`.
+  const { k, clock } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "ordinary", confirmed: true });
+  const held = k.claim("w1")!;
+  assert.equal(held.run_id, "ordinary");
+
+  clock.t += 1000;
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 2, runId: "urgent", confirmed: true, priority: 10 });
+  assert.equal(k.status("urgent").priority, 10);
+
+  // The next free worker goes to the urgent run even though it was submitted second.
+  assert.equal(k.claim("w2")!.run_id, "urgent");
+  // The lease w1 already holds is untouched.
+  assert.equal(k.status("ordinary").tasks.leased, 1);
+  k.return_(held.id, yaml(artifact(held.label, k.status("ordinary").problem_hash)), "w1");
+  assert.equal(k.status("ordinary").tasks.done, 1);
+});
+
+/** Which run each claim came from, draining a whole run before the scheduler moves on. */
+function claimOrder(k: Kernel, claims: number): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < claims; i++) {
+    const t = k.claim(`w${i}`);
+    if (!t) break;
+    out.push(t.run_id);
+  }
+  return out;
+}
+
+test("with no priorities set, scheduling is exactly the oldest-first order it replaced", () => {
+  // The tie-break is what makes a default of 0 everywhere a no-op rather than a behaviour change.
+  // A run is drained before the scheduler moves on, so the order is per run, not per claim.
+  const { k, clock } = kernel();
+  for (const id of ["first", "second", "third"]) {
+    k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: id, confirmed: true });
+    clock.t += 1000;
+  }
+  const order = claimOrder(k, 15);
+  assert.equal(order.length, 15, "three runs of five branches");
+  assert.deepEqual([...new Set(order)], ["first", "second", "third"]);
+  assert.deepEqual(order.slice(0, 5), Array(5).fill("first"), "a run is not drained before the next is started");
+});
+
+test("equal priorities fall back to submission order, and a negative priority sinks", () => {
+  const { k, clock } = kernel();
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "later_high", confirmed: true, priority: 5 });
+  clock.t += 1000;
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 2, runId: "background", confirmed: true, priority: -1 });
+  clock.t += 1000;
+  k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 3, runId: "also_high", confirmed: true, priority: 5 });
+
+  const order = claimOrder(k, 15);
+  assert.deepEqual([...new Set(order)], ["later_high", "also_high", "background"], "priority did not order the runs, or the tie did not fall back to submission order");
+});
