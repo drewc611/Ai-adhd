@@ -209,6 +209,20 @@ test("the training workflow fetches before it trains, and caches what it fetched
   assert.ok(wf.indexOf("fetch_corpus.py") < wf.indexOf("adhd_analysis.text.train"), "it trains before it fetches");
 });
 
+test("the weekly job trains on one side of the split and scores the other", () => {
+  // Without `--held-out-every` the trainer reads the whole manifest and the next step scores one
+  // document in twenty of that same manifest. That is a memorisation score wearing the name
+  // "held-out perplexity", and on the real corpus it was off by a factor of four: 26.29 on unseen
+  // text against 6.51 on seen, with OOV 0.79% against 0.15%. D13 wrote the rule down, SplitLibrary
+  // enforced it inside compare_orders, and two headline figures came from the path that skipped it.
+  const wf = readFileSync(join(ROOT, ".github", "workflows", "train.yml"), "utf8");
+  const every = wf.match(/--held-out-every (\d+)/);
+  assert.ok(every, "the train step does not hold anything out, so its perplexity is a memorisation score");
+  const scored = wf.match(/SplitLibrary\(Library\.load\("corpora\.yaml"\), every=(\d+), side="heldout"\)/);
+  assert.ok(scored, "the held-out step does not score a stride of the manifest");
+  assert.equal(scored![1], every![1], "the scored stride differs from the trained stride, so the sides overlap");
+});
+
 test("the weekly job writes the corpus where corpora.yaml reads it", () => {
   // `--out` is the parent directory and the fetcher gives each source its own subdirectory, so
   // `--out corpora/rfc` writes `corpora/rfc/rfc/*.txt` while the manifest reads `corpora/rfc/*.txt`.

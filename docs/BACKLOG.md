@@ -339,6 +339,18 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     call rather than a table entry. What it would buy: roughly 600 more documents under freer
     licences than the largest source currently in the corpus.
 
+76. **Re-measure what pruning costs, on one split** (small, and it invalidates a published figure
+    until it is done). D14 priced count-pruning at 2.9x perplexity — 17.4 against 6.06 — and D16
+    establishes that both of those are memorisation scores, because each model trained on the whole
+    manifest and was scored on a stride of it. The ratio between two numbers that measure nothing
+    about unseen text is not a measurement of anything.
+
+    The fix is two runs on one split: order 4 with `--held-out-every 20`, once with the n-gram
+    ceiling low enough to force pruning and once without, scored on the same held-out half. About 25
+    minutes. The prediction, recorded here so it can be wrong: the real cost is **larger** than 2.9x,
+    because a pruned model has less of the tail to memorise and also less to generalise from. Until
+    this runs, `agents/adhd-governor.md` says not to quote 2.9x as measured.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

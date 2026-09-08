@@ -48,8 +48,13 @@ training tokens, one held-out document in twenty:
 | 4 | 16.7M | 38.6 | ~5.2GB | 4905MB | 207 |
 | 5 | 27.8M | **36.0** | ~9.5GB | 9153MB | 340 |
 
-**Order 5 has the best perplexity and you should still choose 4.** Going 3→4 buys 16.4% for 2.2x
-the table; 4→5 buys 6.8% for another 1.7x and pushes the resident set to 9.2GB. `Budget.weekly()`
+At 68M tokens the same comparison gives order 3 at 36.46 and order 4 at **26.29** on one held-out
+set — 3→4 buys **27.9%** for 2.37x. **The higher order gets more valuable as the corpus grows**,
+because a 4-gram table was data-starved at 22.9M tokens. Order 5 at 68M tokens is about 17.5GB by the
+memory law and cannot be measured on a 15GB machine, so the row below does not transfer upward.
+
+**Order 5 has the best perplexity at 22.9M tokens and you should still choose 4.** Going 3→4 buys
+16.4% for 2.2x the table; 4→5 buys 6.8% for another 1.7x and pushes the resident set to 9.2GB. `Budget.weekly()`
 allows 5120MB, so order 5 does not fit on a hosted runner at this corpus size and order 4 does,
 with about 200MB to spare. That is the trade, and it is the corpus size that decides it: a smaller
 corpus makes 5 affordable and a larger one makes 4 marginal.
@@ -88,10 +93,19 @@ totals.** A record with `prunes > 0` reports what survived, not what was counted
 The prediction this brief made before either clean run — "the resident set binds at about 20M
 tokens, well before the token ceiling" — was falsified immediately: at 40M tokens the resident set
 was 4.2GB against an 11GB ceiling and the **n-gram ceiling** bound first, pruning 8.9M singletons.
-The cost of that was measured: on the identical held-out set, the pruned model scored perplexity
-**17.4** and the unpruned one **6.06**. Pruning singletons is not a small economy — it removes the
-tail modified Kneser-Ney does most of its work on, and it corrupts the discount estimates that tail
-provides.
+The cost of that was measured: on the identical set, the pruned model scored perplexity **17.4** and
+the unpruned one **6.06**. Pruning singletons is not a small economy — it removes the tail modified
+Kneser-Ney does most of its work on, and it corrupts the discount estimates that tail provides.
+
+**Both of those are memorisation scores and D16 says why.** Each model trained on the whole manifest
+and was then scored on one document in twenty of it, so 2.9x is a ratio between two numbers that
+measure nothing about unseen text. Pruning's real cost is probably larger, since a pruned model has
+less of the tail to memorise *and* less to generalise from, but that is an argument. **Do not quote
+2.9x as measured.** Backlog 76 re-measures it on one split.
+
+**Read the OOV rate before the perplexity.** A held-out OOV near 0.15% on this corpus means the model
+saw the text; the honest figure is about 0.79%. That tell was printed beside every one of these
+numbers and read as good news.
 
 **Read all four ceilings together before raising one.** Raising `max_rss_mb` alone is what caused
 that: a table pruned under a 12M n-gram ceiling while 7GB of memory sat unused. When a record shows

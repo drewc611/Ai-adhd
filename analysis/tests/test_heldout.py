@@ -18,7 +18,13 @@ import pytest
 
 from adhd_analysis.text.budget import Budget
 from adhd_analysis.text.corpora import Library, Source
-from adhd_analysis.text.evaluate import SplitLibrary, compare_orders, evaluate, report
+from adhd_analysis.text.evaluate import (
+    SplitLibrary,
+    compare_orders,
+    evaluate,
+    in_sample_refusal,
+    report,
+)
 from adhd_analysis.text.ngram import KneserNey
 from adhd_analysis.text.train import train
 
@@ -88,7 +94,10 @@ def test_held_out_is_harder_than_what_the_model_memorised(tmp_path):
     rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
     model = KneserNey.load(rec.model_path)
 
-    seen = evaluate(model, SplitLibrary(lib, every=10, side="train"), Budget.smoke())
+    # `allow_in_sample` because scoring the training side is the whole point here. Everywhere else
+    # it is refused, which is what this test was asserting at the unit level while two published
+    # figures did it anyway.
+    seen = evaluate(model, SplitLibrary(lib, every=10, side="train"), Budget.smoke(), allow_in_sample=True)
     unseen = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke())
     assert unseen.perplexity > seen.perplexity
 
@@ -177,9 +186,10 @@ def test_a_heldout_number_carries_the_identity_of_the_text_it_was_scored_on(tmp_
     """Two perplexities from different held-out sets are two numbers about two different tests.
 
     The repository nearly published exactly that mistake: 38.6 on 1,974 RFCs against 17.4 on 6,067
-    mixed documents, read as the model improving when the added sources were simply more formulaic.
-    Invisible in the two numbers alone, which is why the fingerprint is carried rather than derived
-    at comparison time.
+    mixed documents, read as the model improving. The explanation recorded at the time — that the
+    added sources were more formulaic — was wrong, and D16 has the real one: 38.6 was measured out of
+    sample and 17.4 was not. The fingerprint is still the right mechanism and is still carried rather
+    than derived at comparison time; only the incident that motivated it was misdiagnosed.
     """
     from adhd_analysis.text.evaluate import comparable_heldout
 
@@ -195,8 +205,11 @@ def test_a_heldout_number_carries_the_identity_of_the_text_it_was_scored_on(tmp_
     assert comparable_heldout(first, again) is None
 
     # A different stride is a different set of documents, so the numbers stop being comparable even
-    # though the corpus and the model did not change.
-    other = evaluate(model, SplitLibrary(lib, every=7, side="heldout"), Budget.smoke())
+    # though the corpus and the model did not change. `allow_in_sample` because a stride-7 held-out
+    # set overlaps a stride-10 training half — documents where i%7==0 and i%10!=0 are in both — so
+    # this number is partly a memorisation score. It is here for its fingerprint and not its value,
+    # and the refusal was right to point that out.
+    other = evaluate(model, SplitLibrary(lib, every=7, side="heldout"), Budget.smoke(), allow_in_sample=True)
     assert other.fingerprint != first.fingerprint
     why = comparable_heldout(first, other)
     assert why and "different held-out text" in why
@@ -209,3 +222,53 @@ def test_a_heldout_number_carries_the_identity_of_the_text_it_was_scored_on(tmp_
     from dataclasses import replace
 
     assert "before held-out sets carried a fingerprint" in (comparable_heldout(first, replace(first, fingerprint="")) or "")
+
+
+def test_a_full_corpus_model_is_refused_as_a_held_out_score(tmp_path):
+    """The check that would have caught 6.06 and 6.396.
+
+    Training on `Library` rather than on one side of a split and then scoring one document in twenty
+    of the same manifest produces a plausible-looking number that is a memorisation score. Measured
+    on the real corpus it was off by a factor of four, and the tell — OOV collapsing from 0.79% to
+    0.15% — was printed next to it every time and read as good news.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(lib, tmp_path / "full.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    assert rec.to_dict()["split"] is None, "a full-manifest run must record no split"
+    with pytest.raises(ValueError, match="every subset of that manifest is training text"):
+        evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke())
+
+    # Still measurable on purpose, which is how the factor of four was measured.
+    got = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke(), allow_in_sample=True)
+    assert got.perplexity > 0
+
+
+def test_the_complementary_split_is_the_one_case_that_passes(tmp_path):
+    """Same stride, other side. Anything else is refused, including the same side twice."""
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    assert rec.to_dict()["split"] == {"every": 10, "side": "train"}
+
+    assert in_sample_refusal(model, SplitLibrary(lib, every=10, side="heldout")) is None
+    assert "the train side and this is the train side" in (
+        in_sample_refusal(model, SplitLibrary(lib, every=10, side="train")) or ""
+    )
+    assert "do not complement" in (in_sample_refusal(model, SplitLibrary(lib, every=5, side="heldout")) or "")
+
+
+def test_a_model_from_before_the_split_was_recorded_is_refused_rather_than_guessed_at(tmp_path):
+    """An older model file carries no `split` key, and absent is not the same as None.
+
+    None means "trained on everything", which is a fact. Absent means nothing knows, and a scorer
+    that treats the two alike would silently accept exactly the models whose provenance is unclear.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    del model.meta["split"]
+
+    why = in_sample_refusal(model, SplitLibrary(lib, every=10, side="heldout"))
+    assert why is not None and "before the training split was recorded" in why

@@ -43,6 +43,9 @@ class TrainingRecord:
     #: previously invisible because both causes landed in one number.
     vocab_truncated_types: int
     vocab_truncated_tokens: int
+    #: Which side of which split this trained on, or None for the whole manifest. On the record as
+    #: well as in the model's meta, because the record is what a person reads.
+    split: dict | None
     discounts: list[tuple[float, float, float]]
     budget_pass1: dict
     budget_pass2: dict
@@ -63,6 +66,7 @@ class TrainingRecord:
                 "types": self.vocab_truncated_types,
                 "tokens": self.vocab_truncated_tokens,
             },
+            "split": self.split,
             "discounts": [[round(x, 4) for x in d] for d in self.discounts],
             "budget": {"vocabulary": self.budget_pass1, "counts": self.budget_pass2},
             "sources": self.sources,
@@ -123,6 +127,18 @@ def train(
             "min_count": min_count,
             "oov_rate": round(oov, 5),
             "vocab_truncated": {"types": vocab.truncated_types, "tokens": vocab.truncated_tokens},
+            # Which side of which split this trained on, or None for the whole manifest. Recorded
+            # so `evaluate` can refuse to score a model on text it trained on. D13 wrote that
+            # failure mode down — "building it over everything hands the model every word it is
+            # about to be tested on, and the OOV rate collapses for a reason unrelated to the
+            # model" — built `SplitLibrary` to prevent it, and then two headline figures came from a
+            # path that trained on the whole manifest and scored a slice of it anyway. A rule a
+            # document states and no code enforces is a rule that holds until someone is in a hurry.
+            "split": (
+                {"every": library.every, "side": library.side}
+                if hasattr(library, "every") and hasattr(library, "side")
+                else None
+            ),
             "sources": library.describe(),
             "budget": {"vocabulary": b1.report(), "counts": b2.report()},
         }
@@ -140,6 +156,7 @@ def train(
         oov_rate=oov,
         vocab_truncated_types=vocab.truncated_types,
         vocab_truncated_tokens=vocab.truncated_tokens,
+        split=model.meta["split"],
         discounts=model.discounts,
         budget_pass1=b1.report(),
         budget_pass2=b2.report(),
@@ -164,6 +181,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-seconds", type=float, default=None)
     ap.add_argument("--max-ngrams", type=int, default=None)
     ap.add_argument("--max-rss-mb", type=int, default=None)
+    ap.add_argument(
+        "--held-out-every",
+        type=int,
+        default=None,
+        metavar="N",
+        help="train on all but every Nth document, leaving that Nth for evaluation. Without this the "
+        "model trains on the whole manifest and no honest held-out perplexity can be computed from "
+        "it: `evaluate` refuses such a model rather than reporting a memorisation score.",
+    )
     ap.add_argument("--record", default=None, help="write the training record here as JSON")
     args = ap.parse_args(argv)
 
@@ -178,6 +204,12 @@ def main(argv: list[str] | None = None) -> int:
             setattr(b, attr, val)
 
     library = Library.load(args.manifest)
+    if args.held_out_every is not None:
+        # Imported here rather than at module scope: evaluate imports train, and the other direction
+        # at import time is a cycle.
+        from .evaluate import SplitLibrary
+
+        library = SplitLibrary(library, every=args.held_out_every, side="train")
     rec = train(library, args.out, order=args.order, min_count=args.min_count, max_vocab=args.max_vocab, budget=b)
     payload = rec.to_dict()
     if args.record:
