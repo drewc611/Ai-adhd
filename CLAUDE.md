@@ -2,7 +2,7 @@
 
 Read in this order: `README.md`, `docs/ARCHITECTURE.md`, `docs/TRAPS.md`, `docs/DECISIONS.md`.
 
-D1 through D8 are resolved; the decisions and their evidence are in `docs/DECISIONS.md`. What is
+D1 through D9 are resolved; the decisions and their evidence are in `docs/DECISIONS.md`. What is
 still open is listed in `docs/BACKLOG.md`, and `docs/RETIREMENT.md` holds the bar for taking a
 frame out. Resolve any new decision with the user before writing code, and record it there.
 

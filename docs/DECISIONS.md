@@ -639,3 +639,55 @@ comparable if the same weights and anchors produced them. Rewriting anchors mid-
 1 through 4 is drawn from that pool. The prerequisite shipped instead: `score.json` now records
 `rubric_version`, so a future rubric change is legible in the corpus rather than invisible. The
 rubric change itself is the owner's call and belongs in `docs/BACKLOG.md` until it is made.
+
+## D9. Where the D2 boundary actually falls, given the ask was "build a transformer into this"
+
+**Asked.** Build a transformer into the architecture and add Python ML trained for it.
+
+**Resolved.** No transformer in the run path. A Python package under `analysis/` that measures the
+recorded corpus, including one small supervised model used as an instrument.
+
+The ask has three readings and they do not have the same answer.
+
+**A transformer in the run path is D2 with extra steps.** A transformer that produced or scored
+reasoning would have to be pretrained, because 35 artifacts is not a training set, and a
+pretrained model shipped with the repository is an inference client whether it arrives as an API
+key or as a weights file. CLAUDE.md's line is "no API, no provider SDK, no keys anywhere" and D2's
+argument for it is not about cost or vendor lock-in. It is that branch isolation is the entire
+mechanism, and isolation is a property of separate context windows, not of an instruction to
+ignore what you read above. A local model scoring branches would sit outside that guarantee and
+the repository would no longer be a demonstration of the thing it claims.
+
+**Training a transformer on this corpus is arithmetic, not policy.** The corpus is roughly 35,000
+tokens across seven runs. A model small enough to train on it cannot do anything, and a model
+large enough to do something cannot be trained on it. That is true regardless of what D2 says.
+
+**Measuring the corpus with statistics and one small model is neither.** `analysis/` reads
+`evals/recorded/` and writes text. It runs after runs, never during one. Nothing under `src/`
+imports it, and a test in the TypeScript suite would be the place to enforce that if it ever
+looks like changing. It makes no decision a run depends on: delete the directory and every run
+behaves identically.
+
+The line, stated so a future change can be checked against it: **a model that changes what a run
+outputs is banned; a model that describes what runs already output is a measuring instrument.**
+`signal.py` is on the second side of it because the outcome it predicts is `pruned`, which is
+decided by trap detectors, and its output goes into a report a human reads. Move it into the
+prune decision and it crosses the line, and at 71% leave-one-run-out accuracy it would also be
+worse than the detectors it replaced.
+
+**What it found, which is why the boundary was worth drawing rather than just declining.** The
+repository's headline reliability figure — 79% exact critic agreement over 225 cells — is highest
+on the dimensions that vary least. Corrected for chance, `foreclosure` has alpha -0.017 with a
+95% interval of [-0.04, +0.00] and 96% exact agreement; `reversibility` has alpha +0.850 and 76%
+exact agreement. The two rankings invert. D8 finding 5 named `foreclosure` and `reasoning_carries`
+as scoring the output contract and the D4 tool allowlist rather than the reasoning, and got there
+from ceiling rates; alpha gets there without being told which dimensions to suspect. `committal`
+and `foreclosure` have intervals containing zero, which at seven runs means unmeasured rather than
+weak. And all nine dimensions load the same direction on whether an artifact is pruned, which the
+pairwise correlation matrix in `learn --correlation` cannot see: it reports max |r| = 0.51, so no
+two dimensions are redundant with each other, while every one of them tracks the same latent
+thing.
+
+None of that changes `config/critic-rubric.yaml`. It is evidence for backlog item 60, which is the
+owner's call, and rewriting anchors mid-corpus would split the 35 scored artifacts into two halves
+that look comparable and are not. Same reason D8 gave.

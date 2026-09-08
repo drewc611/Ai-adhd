@@ -134,7 +134,12 @@ yet enough to know whether they work.
     frame having had them. Bump `version` in `config/critic-rubric.yaml` when either lands —
     `score.json` records `rubric_version`, so the split in the corpus will be legible. Owner's
     call: it makes the 35 artifacts scored under version 0 non-comparable with everything
-    after. Evidence in D8 finding 5.
+    after. Evidence in D8 finding 5, and now with a sign on it: chance-corrected, `foreclosure`
+    scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96% exact
+    agreement, and the interval for `committal` also contains zero. `python -m adhd_analysis`
+    reports both. A dimension whose interval spans chance is unmeasured, not weak, which raises a
+    third option for this item: drop `foreclosure` rather than rewrite it, since the contract
+    validator already enforces what it is scoring.
 
 ## 5. Kernel (D7)
 

@@ -239,7 +239,8 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement, config (generated)
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       362 tests over all of it
+test/       367 tests over all of it
+analysis/   Python: chance-corrected reliability, bootstrap intervals, 17 tests
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
@@ -247,7 +248,9 @@ scripts/    demo.sh: what a clean checkout can show without a model
 ```
 
 Nothing under `src/` calls a model. It compiles briefs, enforces the isolation contract, scores
-what comes back, and refuses to proceed when a record is missing.
+what comes back, and refuses to proceed when a record is missing. Nothing under `analysis/` calls
+one either, and nothing under `src/` imports it: it reads the recorded corpus after the fact and
+writes text. Delete the directory and every run behaves identically.
 
 ## Install
 
@@ -346,7 +349,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D8 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D9 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -354,6 +357,13 @@ refuses a class rather than spending on it. Every real run has been scored a sec
 fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
+
+That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
+`foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%
+exact agreement, while `reversibility` scores +0.850 on 76%. The two rankings invert, because
+percent agreement ranks dimensions by how constant they are. `committal` and `foreclosure` have
+intervals containing zero, which at seven runs means unmeasured rather than weak. See
+`analysis/README.md` and D9.
 
 <details>
 <summary><b>What each recorded run found</b>, including the two recorded as failing</summary>
