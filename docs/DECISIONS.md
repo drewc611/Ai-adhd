@@ -937,3 +937,108 @@ The nearest thing that is possible: any MCP host that reads the official registr
 server once the npm publish lands, and that includes hosts other than Claude Code. That is
 distribution to the MCP ecosystem, which is the part of "everywhere possible" that does not require
 becoming a different project.
+
+## D12. The SuperAgent: a harness for hours of work that still never reasons
+
+**Asked.** A SuperAgent that researches, codes and creates, using sandboxes, memory, tools, skills,
+subagents and a message gateway, handling tasks that take minutes to hours.
+
+**Resolved.** Built as a layer above the kernel, with all six pieces, and with the three
+CLAUDE.md non-negotiables holding unchanged. Two of the six pieces turned out to be the interesting
+part, and not for the reason the ask suggests.
+
+### Above the kernel, not inside it
+
+`src/os.ts` already schedules long multi-agent work: leases, heartbeat, drain, priority, budgets,
+a journal. Its `phase` enum is the four ADHD phases, and widening that enum to hold `research` and
+`build` would weaken the invariants the enum encodes.
+
+So a mission owns a stage graph and, when a stage needs a hard decision made well, submits an
+ordinary run to the kernel and adopts the synthesis. `decide` is a stage kind that spawns no
+agent. That is the whole reason a mission beats a long prompt: the decision is made by N isolated
+frames and a blind critic instead of by one agent being thorough, which is the thing this
+repository is.
+
+### Memory and the gateway are the same problem twice
+
+The ask lists them as features. They are the two mechanisms by which a sibling's output would reach
+a branch, which makes them the two ways to lose the property the architecture exists to
+demonstrate — and to lose it through components nobody was watching, because a memory store has a
+database's air of neutrality and a message bus reads as plumbing.
+
+So both refuse, mechanically and at the point of delivery rather than on read:
+
+- `Memory.forBrief` withholds every entry written by a `diverge` participant from every `diverge`
+  brief. Global scope does not exempt it, and neither does coming from a different run: a branch
+  of last week's run is still a branch, and its conclusion on a related question is exactly the
+  anchor being defeated. The brief is told the count and never the content, because a list of
+  titles is a list of what siblings thought worth writing down.
+- `Gateway.send` refuses any delivery whose two ends are both `diverge` participants, in either
+  direction, and journals the refusal. Direction does not matter: a branch asking a sibling a
+  question leaks the question, and a question is a claim about what the asker thinks matters.
+  Refused at send rather than dropped on read, because a message accepted and then hidden is a
+  message the sender believes arrived.
+
+`adhd super memory --audit` and `adhd super gateway <mission>` report what each rule actually did.
+A gateway that has never refused anything is one whose rule is not being exercised.
+
+### The sandbox is not a security boundary and says so
+
+A stage with Bash walks out of any directory this creates. Claiming otherwise would be the more
+dangerous error, because someone would then rely on it.
+
+What it is: an honest stage's work made reviewable and revertible. Changes in one place, a diff by
+content hash rather than mtime (`cpSync` does not preserve mtimes across filesystems, so an mtime
+diff reports the whole tree on some machines and nothing on others), and one deliberate promote
+back. `promote` checks every path against the writable list before moving anything, so a refusal
+moves nothing — a partial promote leaves a tree matching neither the sandbox nor the source.
+
+The command allowlist matches the whole command string. Prefix matching on `npm test` lets
+`npm test && curl somewhere` through, and a verify stage runs what it is told.
+
+### Two tool-grant holes the doctor check found on its first run
+
+`adhd doctor` gained a check comparing `STAGE_TOOLS` against the agents' own front matter in both
+directions, and it failed immediately on the code that had just been written.
+
+`review` was mapped to `adhd-critic` and `diverge` to `adhd-branch`. Both are run agents whose
+grant is fixed by D4 at `TaskList` and nothing else, so the stage grants either had to be empty or
+had to widen an agent whose emptiness is the point. Fixed by giving `review` its own agent and
+`diverge` none.
+
+`build` and `verify` were one agent. A tool grant is per agent, so one agent serving both kinds
+carries the union — and the union means a verify stage can write. **A stage that checks its own
+work and can edit it is not a check.** Split into `adhd-builder` and `adhd-verifier`, and
+`test/agents.test.ts` derives the expected grants from `STAGE_TOOLS` rather than restating them,
+so a stage kind that gains a tool fails until its agent declares the same one.
+
+### The gate, and the reason it is dumb on purpose
+
+Every stage names its artifact, required headings, a word floor and optionally a command that must
+exit zero, all fixed before the stage runs. `verifyStage` runs exactly that. Nobody judges whether
+the artifact is good: "good" is what the review stage is for, and a gate that asks for it passes
+whatever it is given.
+
+`assertNoReasoning` runs on every brief the planner emits and on every orchestrator message. An
+orchestrator that formed a view would put it in every brief it compiled, and every stage
+downstream would reason from a premise nobody scored — the anchor arriving through the one
+component that talks to everything.
+
+`goal_hash` is checked on every return, aborting with `GOAL_HASH_MISMATCH` at exit code 3. A
+worker returning against a paraphrased goal is the mission-level `problem_hash` drift.
+
+### Classes, and what minutes-to-hours means concretely
+
+`quick` is research and a write-up. `standard` adds the divergent decision and a build behind it.
+`deep` adds a second research stage **after** the divergence, because the most common way an
+hour-long piece of work goes wrong is committing to a direction chosen before the hard part was
+understood, and the second pass is where the branches' disagreement gets checked against the world
+rather than against each other.
+
+Leases and budgets come from the class rather than a flag, and everything is on disk: a mission
+that takes an hour outlives the process that started it, so the record is the truth and the object
+is a view of it. A test starts a second `SuperAgent` on the same root and resumes mid-mission.
+
+`plan` prints the graph and stops. D5 said a system that spawns seven subagents and gives the user
+no way out fails its own fixture 001; a deep mission is seven stages, one of which is itself a
+seven-branch run, so the objection applies with an order of magnitude on it.

@@ -1,7 +1,7 @@
 {
   "name": "adhd",
   "version": "0.0.1",
-  "description": "Anchoring Defeat by Heterogeneous Divergence. A reasoning architecture for Claude Code: N isolated subagents under distorted frames, blind critic, trap pruning, adversarial deepening.",
+  "description": "Anchoring Defeat by Heterogeneous Divergence. A reasoning architecture for Claude Code: N isolated subagents under distorted frames, blind critic, trap pruning, adversarial deepening. Plus a SuperAgent for missions that take minutes to hours, with sandboxes, memory and a message gateway.",
   "author": {
     "name": "drewc611"
   },
@@ -17,13 +17,19 @@
   ],
   "skills": [
     "./skills/adhd",
-    "./skills/adhd-worker"
+    "./skills/adhd-worker",
+    "./skills/superagent"
   ],
   "agents": [
     "./agents/adhd-branch.md",
     "./agents/adhd-branch-search.md",
     "./agents/adhd-critic.md",
-    "./agents/adhd-deepen.md"
+    "./agents/adhd-deepen.md",
+    "./agents/adhd-researcher.md",
+    "./agents/adhd-builder.md",
+    "./agents/adhd-verifier.md",
+    "./agents/adhd-maker.md",
+    "./agents/adhd-reviewer.md"
   ],
   "mcpServers": {
     "adhd": {

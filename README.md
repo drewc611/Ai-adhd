@@ -236,14 +236,14 @@ carrying it.
 ```
 config/     frames, routing, critic rubric      <- the actual IP
 prompts/    orchestrator, branch, critic, deepen, synthesis
-docs/       architecture, traps, decisions, manifest, distribution, backlog, config (generated)
+docs/       architecture, traps, decisions, superagent, manifest, distribution, backlog, config
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       384 tests over all of it
+test/       405 tests over all of it
 analysis/   Python: reliability, bootstrap intervals, a language model trained from scratch
-skills/     adhd (drives a run), adhd-worker (executes one)
-agents/     four run subagents, plus the trainer and its governor
+skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
+agents/     four run subagents, five mission subagents, the trainer and its governor
 assets/     the mark, the banner, the run explorer shell
 scripts/    demo.sh: what a clean checkout can show without a model
 ```
@@ -322,6 +322,15 @@ node dist/src/cli.js init <dir>              # scaffold config/ and prompts/ to 
 node dist/src/cli.js completions bash        # generated from the real command list
 node dist/src/cli.js schema-doc              # regenerate docs/CONFIG.md from the zod schemas
 node dist/src/cli.js os watch <run>          # redraw a run's status; one line per change when piped
+
+node dist/src/cli.js super plan --id m --goal g.txt --class deep   # the stage graph, then stop
+node dist/src/cli.js super confirm m         # nothing is claimable until this
+node dist/src/cli.js super claim m --worker w1               # the next stage, its agent, its brief
+node dist/src/cli.js super return m research --worker w1 --goal-hash <h>  # checked against the contract
+node dist/src/cli.js super status m          # what is ready, what is waiting, what was withheld
+node dist/src/cli.js super memory --audit    # what the isolation rule keeps out of a diverge brief
+node dist/src/cli.js super gateway m         # the thread, and every delivery the rule refused
+node dist/src/cli.js super sandbox m --diff  # what a build stage changed, before it reaches the tree
 npm run demo                                 # what a clean checkout can show without a model
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
@@ -370,7 +379,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D11 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D12 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing

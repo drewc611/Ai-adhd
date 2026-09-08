@@ -312,6 +312,13 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     `NPM_TOKEN` repository secret, which only the owner can add.** Until it is there, a tag fails
     at the npm step with that sentence. See `docs/DISTRIBUTION.md`.
 
+73. **A mission that runs the whole loop end to end** (evidence). Every part of the SuperAgent is
+    tested and `adhd super` drives a real mission through plan, confirm, claim, a contract
+    rejection, a retry and done. Nothing has yet run a `deep` mission with live subagents, so the
+    stage graph's central claim — that a second research pass after the divergence catches the
+    direction chosen too early — is a design argument and not a finding. It needs one real
+    mission, which costs real tokens, and is the owner's call for the same reason D5 exists.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

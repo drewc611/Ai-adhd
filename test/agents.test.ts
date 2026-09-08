@@ -7,6 +7,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { cfg } from "./helpers.js";
+import { STAGE_AGENT, STAGE_TOOLS, type StageKind } from "../src/super/index.js";
 
 function frontmatter(path: string): Record<string, unknown> {
   const text = readFileSync(path, "utf8");
@@ -58,6 +59,20 @@ const MAINTENANCE: Record<string, string[]> = {
   "adhd-governor.md": ["Glob", "Grep", "Read"],
 };
 
+/**
+ * The SuperAgent's stage agents, derived rather than listed.
+ *
+ * `STAGE_TOOLS` is what the scheduler actually hands a host when it dispatches a stage, so writing
+ * the expected grants out again here would test a copy. Deriving them means a stage kind that
+ * gains a tool fails this test until the agent that runs it declares the same one, which is the
+ * D4 property applied to stages.
+ */
+const MISSION: Record<string, string[]> = Object.fromEntries(
+  Object.entries(STAGE_AGENT)
+    .filter(([, agent]) => agent !== null)
+    .map(([kind, agent]) => [`${agent}.md`, [...STAGE_TOOLS[kind as StageKind]].sort()]),
+);
+
 test("every agent file has a name matching its filename, a description, and at least one tool", () => {
   const dir = join(cfg.root, "agents");
   const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
@@ -73,8 +88,8 @@ test("every agent file has a name matching its filename, a description, and at l
 test("every agent grants exactly the tools it is permitted, and nothing else", () => {
   const dir = join(cfg.root, "agents");
   const files = readdirSync(dir).filter((x) => x.endsWith(".md"));
-  const allowed = { ...PERMITTED, ...MAINTENANCE };
-  assert.deepEqual(files.sort(), Object.keys(allowed).sort(), "a new agent file needs an entry in PERMITTED or MAINTENANCE");
+  const allowed = { ...PERMITTED, ...MAINTENANCE, ...MISSION };
+  assert.deepEqual(files.sort(), Object.keys(allowed).sort(), "a new agent file needs an entry in PERMITTED, MAINTENANCE, or a stage kind in STAGE_AGENT");
   for (const f of files) {
     const t = tools(frontmatter(join(dir, f))).sort();
     assert.deepEqual(t, [...allowed[f]!].sort(), `${f}: tool grant changed. Argue for it in D4 before changing the allowlist.`);
@@ -136,15 +151,16 @@ test("the skill has a name and a description that says when not to use it", () =
   assert.match(String(fm["description"]), /Do not use/i);
 });
 
-test("plugin.json ships the four run agents and nothing that maintains this repository", () => {
+test("plugin.json ships the run and mission agents, and nothing that maintains this repository", () => {
   const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
-  assert.deepEqual(p["skills"], ["./skills/adhd", "./skills/adhd-worker"]);
+  assert.deepEqual(p["skills"], ["./skills/adhd", "./skills/adhd-worker", "./skills/superagent"]);
 
   // Not `./agents`. That directory also holds adhd-trainer and adhd-governor, which maintain this
   // repository's background model and would arrive at a plugin user as two agents referencing
   // paths they do not have.
   const shipped = p["agents"] as string[];
-  assert.deepEqual([...shipped].sort(), Object.keys(PERMITTED).map((f) => `./agents/${f}`).sort());
+  const expected = [...Object.keys(PERMITTED), ...Object.keys(MISSION)].map((f) => `./agents/${f}`).sort();
+  assert.deepEqual([...shipped].sort(), expected);
   for (const rel of shipped) assert.ok(existsSync(join(cfg.root, rel)), `plugin.json ships ${rel}, which is not there`);
   for (const m of Object.keys(MAINTENANCE))
     assert.ok(!shipped.includes(`./agents/${m}`), `plugin.json ships ${m}, a maintenance agent`);
@@ -199,4 +215,24 @@ test("every path package.json publishes exists after a build", () => {
       pkg.files.some((f) => rel === f || rel.startsWith(f.replace(/\/$/, "") + "/")),
       `${rel} is an entry point but no "files" entry ships it`,
     );
+});
+
+/**
+ * Mission agents legitimately carry filesystem tools; the run agents' ban does not apply to them.
+ * What does apply is the ban that made them separate agents in the first place.
+ */
+test("no mission agent can reach the network or start a run, and only the builder can write", () => {
+  const dir = join(cfg.root, "agents");
+  for (const f of Object.keys(MISSION)) {
+    const t = tools(frontmatter(join(dir, f)));
+    for (const bad of ["Task", "Agent", "SendMessage", "TaskCreate"]) assert.ok(!t.includes(bad), `${f} grants ${bad}`);
+    if (f !== "adhd-researcher.md") for (const bad of NETWORK) assert.ok(!t.includes(bad), `${f} grants ${bad}`);
+  }
+  // A verify stage that can edit what it just checked is not a check, which is why the build and
+  // verify kinds are two agents rather than one. `adhd doctor` found that; this keeps it found.
+  const verifier = tools(frontmatter(join(dir, "adhd-verifier.md")));
+  assert.ok(!verifier.includes("Write") && !verifier.includes("Edit"), "the verifier can edit what it verifies");
+  assert.ok(verifier.includes("Bash"), "the verifier cannot run the checks");
+  const reviewer = tools(frontmatter(join(dir, "adhd-reviewer.md")));
+  assert.ok(!reviewer.includes("Write") && !reviewer.includes("Bash"), "a reviewer that can fix what it finds never writes the objection down");
 });

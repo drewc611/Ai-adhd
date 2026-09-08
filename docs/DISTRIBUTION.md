@@ -40,10 +40,13 @@ exists to say that in a sentence instead of failing with a module path inside th
 cache. It does not build on the user's behalf: hosts start MCP servers without asking, and a
 server that runs `npm install` on first start is a surprise with a network fetch in it.
 
-`.claude-plugin/plugin.json` ships the four run agents by name rather than the whole `agents/`
-directory, which also holds `adhd-trainer` and `adhd-governor` — those maintain this repository's
-own background model and would arrive at a plugin user as two agents referencing paths they do not
-have.
+`.claude-plugin/plugin.json` names the agents it ships rather than pointing at the whole `agents/`
+directory: the four run agents and the five mission agents the SuperAgent dispatches, and not
+`adhd-trainer` or `adhd-governor`, which maintain this repository's own background model and would
+arrive at a plugin user as two agents referencing paths they do not have.
+
+Three skills install: `adhd` drives a run, `adhd-worker` executes one, `superagent` drives a
+mission across research, a divergent decision, build, verify, create and review.
 
 ## npm and the MCP Registry
 
