@@ -91,6 +91,12 @@ export const RunRecordSchema = z
     confirmed_at: z.string().nullable(),
     finished_at: z.string().nullable(),
     estimate_tokens: z.number().int(),
+    /**
+     * A ceiling on reported tokens for this run, or null for none. Carried per run rather than
+     * globally because the estimate is per run: a wide `enumerate_options` run legitimately
+     * costs more than a five-branch one, and a single global number is wrong for one of them.
+     */
+    budget_tokens: z.number().int().positive().nullable().default(null),
     tasks: z.array(TaskSchema),
     reason: z.string().nullable(),
     /** Last phase output text, for status. */
@@ -293,7 +299,7 @@ export class Kernel {
   // ---- syscalls -----------------------------------------------------------------------
 
   /** D5: compile and show the bill. Nothing is spent until confirm. */
-  submit(problem: string, decisionRaw: unknown, opts: { by?: string; seed?: number; confirmed?: boolean; runId?: string } = {}) {
+  submit(problem: string, decisionRaw: unknown, opts: { by?: string; seed?: number; confirmed?: boolean; runId?: string; budgetTokens?: number } = {}) {
     return this.withLock(() => {
       const decision = parseDecision(this.cfg, decisionRaw);
       const result = compile(this.cfg, problem, decision, { seed: opts.seed, runId: opts.runId });
@@ -330,6 +336,7 @@ export class Kernel {
         confirmed_at: null,
         finished_at: null,
         estimate_tokens: plan.estimate.tokens_total,
+        budget_tokens: opts.budgetTokens ?? null,
         tasks: [],
         reason: null,
         last_phase_text: null,
@@ -452,6 +459,15 @@ export class Kernel {
       if (tokens !== undefined && Number.isFinite(tokens)) task.tokens = Math.round(tokens);
       this.save(rec);
       this.journal("returned", { run_id: runId, task: taskId, bytes: Buffer.byteLength(output), tokens: task.tokens });
+      // The ceiling is checked here rather than at claim, because a claim spends nothing: the
+      // cost is only known when a worker reports it. Halting mid-phase renders what returned,
+      // which is the same treatment a user pressing stop gets — the branches that came back are
+      // already paid for and the pruned block still ships.
+      if (this.overBudget(rec)) {
+        const spent = rec.tasks.reduce((a, t) => a + (t.tokens ?? 0), 0);
+        this.cancelLocked(rec, `token budget exceeded: ${spent} reported against a ceiling of ${rec.budget_tokens}`);
+        return this.summary(rec);
+      }
       this.advanceLocked(rec);
       return this.summary(rec);
     });
@@ -462,24 +478,34 @@ export class Kernel {
     return this.withLock(() => {
       const rec = this.load(runId);
       if (isTerminal(rec.state)) return this.summary(rec);
-      for (const t of rec.tasks) if (t.status === "pending" || t.status === "leased") t.status = "dropped";
-      const wasConfirmed = rec.confirmed_at !== null;
-      rec.state = "cancelled";
-      rec.reason = reason;
-      rec.finished_at = this.now().toISOString();
-      if (wasConfirmed) {
-        try {
-          this.writeCost(rec);
-          const r = phaseSynth(this.cfg, this.runDir(runId), { partial: true });
-          rec.last_phase_text = r.text;
-        } catch (e) {
-          rec.last_phase_text = `partial synthesis failed: ${(e as Error).message}`;
-        }
-      } else rec.last_phase_text = "cancelled before confirm; nothing was spent";
-      this.save(rec);
-      this.journal("cancelled", { run_id: runId, reason });
+      this.cancelLocked(rec, reason);
       return this.summary(rec);
     });
+  }
+
+  /** Has this run reported more tokens than its ceiling allows? No ceiling means never. */
+  private overBudget(rec: RunRecord): boolean {
+    if (rec.budget_tokens === null) return false;
+    return rec.tasks.reduce((a, t) => a + (t.tokens ?? 0), 0) > rec.budget_tokens;
+  }
+
+  private cancelLocked(rec: RunRecord, reason: string): void {
+    for (const t of rec.tasks) if (t.status === "pending" || t.status === "leased") t.status = "dropped";
+    const wasConfirmed = rec.confirmed_at !== null;
+    rec.state = "cancelled";
+    rec.reason = reason;
+    rec.finished_at = this.now().toISOString();
+    if (wasConfirmed) {
+      try {
+        this.writeCost(rec);
+        const r = phaseSynth(this.cfg, this.runDir(rec.run_id), { partial: true });
+        rec.last_phase_text = r.text;
+      } catch (e) {
+        rec.last_phase_text = `partial synthesis failed: ${(e as Error).message}`;
+      }
+    } else rec.last_phase_text = "cancelled before confirm; nothing was spent";
+    this.save(rec);
+    this.journal("cancelled", { run_id: rec.run_id, reason });
   }
 
   status(runId: string) {
@@ -577,6 +603,103 @@ export class Kernel {
       this.save(rec);
       this.journal("heartbeat", { run_id: runId, task: taskId, worker, lease_until: task.lease_until });
       return { task: taskId, lease_until: task.lease_until, attempts: task.attempts };
+    });
+  }
+
+  // ---- housekeeping ---------------------------------------------------------------------------
+
+  /**
+   * Delete finished run directories older than `days` (catalogue 42).
+   *
+   * Dry by default. Deleting a run directory destroys the only copy of its artifacts, and a
+   * recorded run is promoted out of here by `adhd os record` rather than copied — so a run
+   * nobody recorded and this removes is gone. `--yes` is the whole safety mechanism and it is
+   * deliberately not the default.
+   *
+   * Only terminal runs are eligible. An old run still in `diverge` is a stuck run, not rubbish:
+   * something is wrong with it and deleting it hides that rather than fixing it.
+   */
+  gc(opts: { days: number; apply?: boolean } = { days: 30 }): { eligible: { run: string; state: RunState; finished_at: string | null; bytes: number }[]; removed: string[]; skipped_active: string[]; applied: boolean; text: string } {
+    return this.withLock(() => {
+      const cutoff = this.now().getTime() - opts.days * 86_400_000;
+      const eligible: { run: string; state: RunState; finished_at: string | null; bytes: number }[] = [];
+      const skippedActive: string[] = [];
+      for (const rec of this.listLocked()) {
+        if (!isTerminal(rec.state)) {
+          const age = this.now().getTime() - Date.parse(rec.updated_at);
+          if (age > opts.days * 86_400_000) skippedActive.push(rec.run_id);
+          continue;
+        }
+        const at = rec.finished_at ?? rec.updated_at;
+        if (Date.parse(at) > cutoff) continue;
+        eligible.push({ run: rec.run_id, state: rec.state, finished_at: rec.finished_at, bytes: dirBytes(this.runDir(rec.run_id)) });
+      }
+      const removed: string[] = [];
+      if (opts.apply)
+        for (const e of eligible) {
+          rmSync(this.runDir(e.run), { recursive: true, force: true });
+          removed.push(e.run);
+          this.journal("gc", { run_id: e.run, state: e.state, bytes: e.bytes });
+        }
+
+      const total = eligible.reduce((a, e) => a + e.bytes, 0);
+      const lines = [`gc over ${this.root}: ${eligible.length} finished run(s) older than ${opts.days} day(s), ${(total / 1024).toFixed(0)} KiB`];
+      for (const e of eligible) lines.push(`  ${e.run.padEnd(24)} ${e.state.padEnd(15)} ${(e.bytes / 1024).toFixed(0).padStart(6)} KiB  finished ${e.finished_at ?? "unknown"}`);
+      if (skippedActive.length)
+        lines.push(`  kept ${skippedActive.join(", ")}: old and not finished. A run that has sat in a working state past the cutoff is stuck, not rubbish, and deleting it hides that.`);
+      lines.push(opts.apply ? `Removed ${removed.length} run(s).` : "Nothing was deleted. A run directory is the only copy of its artifacts, and `adhd os record` promotes rather than copies, so pass --yes only when you mean it.");
+      return { eligible, removed, skipped_active: skippedActive, applied: Boolean(opts.apply), text: lines.join("\n") };
+    });
+  }
+
+  /**
+   * Roll the journal, keeping every line that belongs to a run still in flight (catalogue 38).
+   *
+   * The journal is append-only and nothing has ever truncated it, so a long-lived kernel grows
+   * one file forever and `adhd os stats` reads all of it on every call. Rotation moves the
+   * finished runs' lines to `journal.<timestamp>.jsonl` beside it — archived, not deleted,
+   * because the journal is the provenance `adhd os record` generates a README from, and a
+   * compaction that drops it would make every future recording thinner than the ones before.
+   */
+  compactJournal(opts: { keepLines?: number } = {}): { before: number; kept: number; archived: number; archive: string | null; text: string } {
+    return this.withLock(() => {
+      const p = join(this.root, "journal.jsonl");
+      if (!existsSync(p)) return { before: 0, kept: 0, archived: 0, archive: null, text: "no journal to compact." };
+      const lines = readFileSync(p, "utf8").split("\n").filter(Boolean);
+      const keepLines = opts.keepLines ?? 1000;
+      if (lines.length <= keepLines) return { before: lines.length, kept: lines.length, archived: 0, archive: null, text: `journal is ${lines.length} line(s), under the ${keepLines} threshold. Nothing to do.` };
+
+      const live = new Set(this.listLocked().filter((r) => !isTerminal(r.state)).map((r) => r.run_id));
+      const keep: string[] = [];
+      const archive: string[] = [];
+      for (const l of lines) {
+        let runId: string | null = null;
+        try {
+          const v = (JSON.parse(l) as { run_id?: unknown }).run_id;
+          runId = typeof v === "string" ? v : null;
+        } catch {
+          keep.push(l); // an unparseable line is kept: compaction is not the place to lose data
+          continue;
+        }
+        // Lines with no run id are kernel-level events (lock breaks, drains). They are the ones
+        // that explain a corrupted run an hour later, so they stay.
+        (runId === null || live.has(runId) ? keep : archive).push(l);
+      }
+      if (!archive.length) return { before: lines.length, kept: lines.length, archived: 0, archive: null, text: `journal is ${lines.length} line(s) and every one belongs to a run still in flight.` };
+
+      const archivePath = join(this.root, `journal.${this.now().toISOString().replace(/[:.]/g, "-")}.jsonl`);
+      writeFileSync(archivePath, archive.join("\n") + "\n");
+      const tmp = `${p}.tmp`;
+      writeFileSync(tmp, keep.length ? keep.join("\n") + "\n" : "");
+      renameSync(tmp, p);
+      this.journal("journal_compacted", { before: lines.length, kept: keep.length, archived: archive.length, archive: archivePath });
+      return {
+        before: lines.length,
+        kept: keep.length,
+        archived: archive.length,
+        archive: archivePath,
+        text: `journal was ${lines.length} lines; ${archive.length} belonging to finished runs moved to ${archivePath}, ${keep.length} kept. Archived, not deleted: adhd os record generates provenance from these.`,
+      };
     });
   }
 
@@ -760,6 +883,17 @@ export class Kernel {
       last_phase_text: rec.last_phase_text,
     };
   }
+}
+
+/** Recursive size of a directory, for gc to report what it would free. */
+function dirBytes(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  let total = 0;
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    total += e.isDirectory() ? dirBytes(p) : statSync(p).size;
+  }
+  return total;
 }
 
 function rel(dir: string, abs: string): string {

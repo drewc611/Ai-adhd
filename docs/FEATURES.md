@@ -102,7 +102,10 @@ can be wrong without saying so.
     returning. The lease holds against a second worker while it stands, expires, and the task is
     redone by someone else. Before this the lease logic had only ever met a fake clock inside the
     process that set it.
-20. **Token budget enforcement.** Halt a run past N tokens and render partial.
+20. ~~**Token budget enforcement.**~~ **Built** as `--budget` on submit, with 43. Checked on return
+    rather than on claim, because a claim spends nothing and the cost is only known when a worker
+    reports it. Halting renders the branches that came back, which is what a user pressing stop
+    gets: they are already paid for and the pruned block still ships.
 21. ~~**Trap frequency table across all runs.**~~ **Built** into `frames --stats`. T5 is the only
     detector that has never fired, and it is close to structurally unable to: the output contract
     demands a committal position. T3 fired for the first time in E1b, on the first run where any
@@ -128,7 +131,16 @@ can be wrong without saying so.
     so nobody spends five subagents without agreeing to it, and a quote that far under looks like
     informed consent without being it. `tokens_per_branch_estimate` is unchanged: what it should
     become is backlog 68 and the owner's call.
-27. `adhd lint <fixture>` — the audit and pattern checks for one fixture, before recording.
+27. ~~`adhd lint <fixture>`~~ **Built.** Errors on a pattern that cannot compile, one that matches
+    everything, one that uses a bare dot between two letters (the `on.call` defect, which matched
+    "functi(on call)s"), and two items sharing an id. Warns on a `must_surface` pattern matching the
+    fixture's own prompt — every branch quotes the prompt, so such an assertion is satisfied by
+    echoing the question, the control included — and on an alternative that is a substring of
+    another in the same list. It found two real things in the shipped fixtures: `002/or_so_noticed`
+    matches "or so", which is in 002's prompt verbatim, and `003/one_way_door` lists "reversib"
+    alongside "irreversib" so the second can never be the alternative that matches. Neither fixture
+    is changed here: tightening an assertion after seeing what it does is the mirror of the
+    loosening D6 refuses, and both would move a recorded outcome. Backlog 70.
 28. `--json` on every command that lacks it.
 29. ~~Exit codes that distinguish contract failure, hash mismatch and eval failure.~~ **Built and
     documented** in the README, and tested against the real binary. Adding the table found that
@@ -152,7 +164,11 @@ can be wrong without saying so.
     against a 900s default lease, so that default is about 3x the worst observed task — still a
     guess, but a measured one. No lease has ever expired in a real run.
 37. Run priority, so an urgent run jumps a queued one.
-38. Journal compaction for long-lived kernels.
+38. ~~Journal compaction~~ **Built** as `adhd os compact`. Lines belonging to finished runs move
+    to a dated archive beside the journal — archived, not deleted, because `adhd os record`
+    generates a run's provenance from them. Kernel-level lines with no run id stay, because a lock
+    break is the kind of event that explains a corrupted run an hour later, and an unparseable line
+    is kept because compaction is not the place to lose data.
 39. ~~Configurable lease length per phase~~ **Built.** `leaseSeconds` takes a number or a map with
     a `default`. The measurement that justified it is `adhd os stats`: over five recorded runs mean
     `critique_b` is 244s against 108s for `deepen`. One number covering all four is either too short
@@ -164,8 +180,13 @@ can be wrong without saying so.
     cancelling every run, which drops tasks already paid for and still in flight: the subagent
     finishes, returns, and the kernel refuses the artifact. A marker file rather than a field,
     because a host draining before a deploy is a host about to exit.
-42. `adhd os gc` — delete finished run directories older than N days.
-43. Per-run token ceiling carried in the plan rather than a global.
+42. ~~`adhd os gc`~~ **Built**, dry by default. A run directory is the only copy of its artifacts
+    and `adhd os record` promotes rather than copies, so a run nobody recorded and this removes is
+    gone. An old run still in a working state is kept and named: it is stuck, not rubbish, and
+    deleting it hides that rather than fixing it.
+43. ~~Per-run token ceiling~~ **Built** as `budget_tokens` on the run record. Per run because the
+    estimate is per run: a wide `enumerate_options` run legitimately costs more than a five-branch
+    one, and a single global number is wrong for one of them.
 44. ~~Worker heartbeat~~ **Built** as `adhd os heartbeat`. Without it the lease has to cover the
     worst task anybody will ever run, because the only signal a worker is alive is the artifact
     arriving. Only the holder may beat it, and only while the lease still stands: extending an
@@ -176,9 +197,23 @@ can be wrong without saying so.
 46. A run-comparison matrix across every recorded run and fixture.
 47. Export a run as a single self-contained Markdown file.
 48. `expected.json` schema versioning, so old recordings stay readable.
-49. Fixture inheritance, so classes can share `must_surface` items.
-50. Per-assertion history: when did this item start passing, and on which run?
-51. A regression gate: fail CI if a previously passing assertion starts failing.
+49. **Fixture inheritance.** Not built, and I would argue against it at this size. Eight fixtures
+    share almost nothing: the duplication it would remove is a handful of `trap_named` and
+    `no_verdict` items, and the cost is a second place a fixture's assertions can come from, which
+    `adhd lint` and the assertion baseline would both have to learn. The catalogue's own ordering
+    rule — surface area loses to evidence — says no until the fixture set is several times larger.
+50. ~~Per-assertion history~~ **Built** as `adhd eval --history`. The eval report says whether a run
+    passed a fixture; it never said whether one assertion held across every run or only the one it
+    was written against, which is the difference between a regression test and a description of a
+    single afternoon. It reproduces the E1a and E1b findings mechanically: `human_cancel` holds on
+    2 of 3, `retry_target_questioned` on 2 of 3 but a different two, `retry_cost` on 1 of 3, and
+    `004/false_means` on none.
+51. ~~A regression gate~~ **Built** as `adhd eval --gate`, against `evals/assertion-baseline.json`.
+    The unit `adhd eval` cannot see: a run recorded as failing stays green there however much worse
+    it gets, because it is compared against its own recorded expectation. The gate is per assertion
+    per run. **A gain is reported and never fails** — a gate that auto-adopted gains would ratify
+    exactly the fixture-loosening D6 refuses, so `--update` makes taking one a deliberate act with
+    a diff.
 
 ### Config and library
 52. Config overlays, so a team can extend the shipped frames without forking.

@@ -1,0 +1,100 @@
+{
+  "why": "Which fixture assertions held on which recorded runs, at the moment this file was written. `adhd eval --gate` fails when an assertion that used to hold on a run stops holding on it. The pair-level eval cannot see that: a run recorded as failing stays green however much worse it gets, because it is compared against its own recorded expectation. A gain is never a failure — it prints and waits to be taken with --update, so that adopting an improvement is a deliberate act with a diff.",
+  "passing": {
+    "001/human_cancel": [
+      "001-altframes",
+      "001-first-run"
+    ],
+    "001/no_verdict": [
+      "001-altframes",
+      "001-first-run",
+      "001-seed2"
+    ],
+    "001/retry_cost": [
+      "001-first-run"
+    ],
+    "001/retry_target_questioned": [
+      "001-first-run",
+      "001-seed2"
+    ],
+    "001/trap_named": [
+      "001-altframes",
+      "001-first-run",
+      "001-seed2"
+    ],
+    "001/triple_only": [
+      "001-altframes",
+      "001-first-run",
+      "001-seed2"
+    ],
+    "002/cheap_first": [
+      "002-first-run",
+      "002-kernel-enduser"
+    ],
+    "002/list_without_order": [
+      "002-first-run",
+      "002-kernel-enduser"
+    ],
+    "002/no_verdict": [
+      "002-first-run",
+      "002-kernel-enduser"
+    ],
+    "002/or_so_noticed": [
+      "002-first-run",
+      "002-kernel-enduser"
+    ],
+    "002/trap_named": [
+      "002-first-run",
+      "002-kernel-enduser"
+    ],
+    "002/who_is_hurt": [
+      "002-kernel-enduser"
+    ],
+    "003/detection_latency": [
+      "003-kernel-strategy"
+    ],
+    "003/no_authority_crutch": [
+      "003-kernel-strategy"
+    ],
+    "003/no_both_sides": [
+      "003-kernel-strategy"
+    ],
+    "003/no_it_depends_verdict": [
+      "003-kernel-strategy"
+    ],
+    "003/one_way_door": [
+      "003-kernel-strategy"
+    ],
+    "003/reframe": [
+      "003-kernel-strategy"
+    ],
+    "003/trap_named": [
+      "003-kernel-strategy"
+    ],
+    "003/who_pays": [
+      "003-kernel-strategy"
+    ],
+    "004/convention_list": [
+      "004-kernel-naming"
+    ],
+    "004/deletion": [
+      "004-kernel-naming"
+    ],
+    "004/false_means": [],
+    "004/never_names_it": [
+      "004-kernel-naming"
+    ],
+    "004/no_verdict": [
+      "004-kernel-naming"
+    ],
+    "004/not_the_name": [
+      "004-kernel-naming"
+    ],
+    "004/trap_named": [
+      "004-kernel-naming"
+    ],
+    "004/who_reads": [
+      "004-kernel-naming"
+    ]
+  }
+}

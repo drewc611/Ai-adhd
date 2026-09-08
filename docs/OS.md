@@ -38,6 +38,7 @@ returning artifacts.
 | init | `submit`; nothing is spent until `confirm` |
 | kill | `cancel`; returned branches render unscored |
 | SIGTERM to the scheduler | `drain`; nothing new is handed out and live leases finish |
+| ulimit | `--budget <tokens>` on submit; the run halts and renders partial once reported tokens pass it |
 
 The kernel never reads a brief's content into a decision and never composes a prompt beyond
 what the compiler already wrote. It moves files and flips states. Every invariant the phases
@@ -64,6 +65,8 @@ phase functions.
 | `adhd os heartbeat` | a worker says it is still alive; pushes its lease out by the phase's lease length. Only the holder, and only while the lease still stands: extending an expired one would take the task back from whoever legitimately re-claimed it |
 | `adhd os drain` | stop handing out tasks; outstanding leases run to completion. Cancelling would drop work already paid for and still in flight, so this is what a host uses to stop without killing live subagents. A marker file, so it survives the process that called it |
 | `adhd os resume` | accept claims again |
+| `adhd os gc` | delete finished run directories older than `--days`. Dry unless `--yes`: a run directory is the only copy of its artifacts, `adhd os record` promotes rather than copies, and an old run still in a working state is stuck rather than rubbish, so it is kept and named |
+| `adhd os compact` | move journal lines belonging to finished runs into a dated archive beside the journal. Archived, not deleted — `adhd os record` generates provenance from these, and kernel-level lines with no run id stay because they are what explain a corrupted run an hour later |
 
 ### Two roots, and why they are named apart
 
