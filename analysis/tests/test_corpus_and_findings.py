@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -172,3 +173,16 @@ def test_permutation_p_is_never_zero():
     same = [1.0, 2.0, 3.0, 4.0] * 4
     _obs, p_same = permutation_test(same[:8], same[8:], resamples=500, seed=1)
     assert p_same > 0.2, "identical distributions should not look significant"
+
+
+def test_the_readme_badge_states_the_number_pytest_collects(request):
+    """The badge says how many Python tests there are, and pytest is the only thing that knows.
+
+    Counting `def test_` from the TypeScript side gives 38, because one test is parametrised into
+    six cases. Both numbers are true about different things, and the one a reader can check by
+    running `pytest` is this one, so this is the side that owns the badge.
+    """
+    readme = (ROOT / "README.md").read_text()
+    m = re.search(r"/badge/python%20tests-(\d+)-", readme)
+    assert m, "the README has no python tests badge"
+    assert int(m.group(1)) == request.session.testscollected, "the badge has drifted from the suite"

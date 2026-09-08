@@ -187,3 +187,68 @@ test("every backlog item marked built names something that exists", () => {
       assert.ok(existsSync(join(cfg.root, m[1]!)), `a built note names ${m[1]}, which is not there`);
   }
 });
+
+// ---- badges --------------------------------------------------------------------------------
+// A badge is a claim with a number in it, rendered where it is read first and rechecked never.
+// The workflow ones keep themselves honest because GitHub renders live status; the static ones
+// do not, so they are checked here against the thing they describe.
+
+const BADGES = [...README.matchAll(/<img src="([^"]+)"[^>]*alt="([^"]*)"/g)].map((m) => ({ src: m[1]!, alt: m[2]! }));
+
+test("every workflow badge names a workflow that exists, and every branch-triggered workflow has one", () => {
+  const dir = join(cfg.root, ".github", "workflows");
+  const files = readdirSync(dir).filter((f) => f.endsWith(".yml"));
+  const badged = new Set(BADGES.map((b) => b.src.match(/actions\/workflows\/([^/]+)\/badge\.svg/)?.[1]).filter(Boolean) as string[]);
+
+  for (const f of badged) assert.ok(files.includes(f), `a badge points at ${f}, which is not in .github/workflows`);
+
+  // A workflow that only fires on a tag renders "no status" forever, which reads as broken rather
+  // than as idle. So the rule is every workflow a branch or a schedule can trigger, and no other.
+  const branchTriggered = files.filter((f) => {
+    const body = readFileSync(join(dir, f), "utf8");
+    const end = body.indexOf("\npermissions:");
+    const on = body.slice(body.indexOf("\non:"), end === -1 ? undefined : end + 1);
+    return /^\s*(push|pull_request|schedule):/m.test(on) && !/^\s*push:\s*\n\s*tags:/m.test(on);
+  });
+  assert.deepEqual([...badged].sort(), branchTriggered.sort(), "the badge row and the branch-triggered workflows disagree");
+});
+
+test("the static badges state numbers the repository actually has", () => {
+  // shields encodes a badge as `/badge/<label>-<message>-<colour>` and escapes a literal hyphen
+  // inside either as `--`. Splitting on the first hyphen returns "D1" from "D1--D12 resolved",
+  // which is how a drifting badge passes a check that thinks it is reading the whole message.
+  const value = (label: string): string => {
+    const b = BADGES.find((x) => x.src.includes(`/badge/${label}-`));
+    assert.ok(b, `no badge labelled ${label}`);
+    const rest = b.src.split(`/badge/${label}-`)[1]!;
+    const message = rest.slice(0, rest.lastIndexOf("-"));
+    return decodeURIComponent(message).replace(/--/g, "-");
+  };
+
+  const tests = readdirSync(join(cfg.root, "test"))
+    .filter((f) => f.endsWith(".test.ts"))
+    .reduce((n, f) => n + (readFileSync(join(cfg.root, "test", f), "utf8").match(/^test\(/gm) ?? []).length, 0);
+  assert.equal(Number(value("tests")), tests, "the tests badge has drifted from test/");
+
+  const pkg = JSON.parse(readFileSync(join(cfg.root, "package.json"), "utf8")) as { license: string; engines: { node: string } };
+  assert.equal(value("license"), pkg.license);
+  assert.equal(value("node"), pkg.engines.node, "the node badge disagrees with engines.node");
+
+  const decisions = readFileSync(join(cfg.root, "docs", "DECISIONS.md"), "utf8");
+  const highest = Math.max(...(decisions.match(/^## D(\d+)\./gm) ?? []).map((h) => Number(h.match(/\d+/)![0])));
+  assert.equal(value("decisions"), `D1-D${highest} resolved`, "the decisions badge has drifted");
+});
+
+/**
+ * The one badge rule that is about honesty rather than drift. `ai-adhd` is not on npm and the MCP
+ * server is not in the registry, both waiting on a token only the owner can add (D11). A version
+ * badge for either renders "invalid" or "not found", which reads as a broken project rather than
+ * an unpublished one, and a green one would be a claim that is not true yet.
+ */
+test("no badge advertises a registry the package has not been published to", () => {
+  for (const b of BADGES) {
+    assert.ok(!/img\.shields\.io\/npm\//.test(b.src), "an npm badge, and ai-adhd is not published (see docs/DISTRIBUTION.md)");
+    assert.ok(!/img\.shields\.io\/pypi\//.test(b.src), "a PyPI badge, and adhd-analysis is not published");
+    assert.ok(!/coverage/i.test(b.alt), "a coverage badge, and nothing in this repository measures coverage");
+  }
+});
