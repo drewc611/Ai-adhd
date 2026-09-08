@@ -23,6 +23,7 @@ model can lower its perplexity by knowing fewer words.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import sys
 from dataclasses import dataclass
@@ -71,6 +72,14 @@ class HeldOut:
     in_vocabulary: int
     oov_rate: float
     perplexity: float
+    #: Identity of the text this was scored on: a digest over each held-out document's own content.
+    #:
+    #: Carried because a perplexity without it is a number nobody can compare safely, and the
+    #: comparison is the only thing perplexity is for. Growing the corpus from 1,974 RFCs to 6,067
+    #: mixed documents moved the reported figure from 38.6 to 17.4, and that was *not* the model
+    #: getting better — it was a different, easier test set, because the added sources are
+    #: formulaic. `comparable_heldout` refuses that comparison now rather than inviting it.
+    fingerprint: str = ""
 
     def __str__(self) -> str:
         return f"perplexity {self.perplexity:8.1f}  OOV {self.oov_rate:5.1%}  over {self.tokens:,} tokens"
@@ -88,9 +97,13 @@ def evaluate(model: KneserNey, held: SplitLibrary, budget: Budget | None = None)
     docs = n_sentences = n_tokens = in_vocab = 0
     total_logprob = 0.0
     predictions = 0
+    identity = hashlib.sha256()
 
-    for _name, doc in held.documents():
+    for name, doc in held.documents():
         docs += 1
+        # The set's identity, accumulated as it is read rather than by walking the corpus twice.
+        identity.update(name.encode())
+        identity.update(hashlib.sha256(doc.encode("utf-8", "replace")).digest())
         for s in sentences(doc):
             ts = tokens(s)
             if not ts:
@@ -114,6 +127,7 @@ def evaluate(model: KneserNey, held: SplitLibrary, budget: Budget | None = None)
         in_vocabulary=in_vocab,
         oov_rate=1.0 - (in_vocab / n_tokens if n_tokens else 0.0),
         perplexity=math.exp(-total_logprob / predictions) if predictions else float("inf"),
+        fingerprint=identity.hexdigest()[:16],
     )
 
 
@@ -165,6 +179,28 @@ def compare_orders(
         out.append(OrderResult(order=order, record=rec, held=held, truncated=scoring.stopped_because))
         del model
     return out
+
+
+def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
+    """Why two held-out perplexities cannot be compared, or None if they can.
+
+    Two numbers from different held-out sets are two numbers about two different tests. The smaller
+    one is not a better model; it may be an easier set. This repository nearly published exactly
+    that mistake — 38.6 on 1,974 RFCs against 17.4 on 6,067 mixed documents, read as a 2.2x
+    improvement when the added sources were simply more formulaic — and the refusal exists because
+    the mistake is invisible in the two numbers alone.
+
+    `comparable()` does the same job across orders. This is the same rule across corpora, which is
+    the axis it was missing.
+    """
+    if not a.fingerprint or not b.fingerprint:
+        return "one of these was measured before held-out sets carried a fingerprint"
+    if a.fingerprint != b.fingerprint:
+        return (
+            f"different held-out text ({a.documents} documents / {a.tokens:,} tokens, fingerprint "
+            f"{a.fingerprint} against {b.documents} / {b.tokens:,}, fingerprint {b.fingerprint})"
+        )
+    return None
 
 
 def comparable(results: list[OrderResult]) -> str | None:

@@ -14,7 +14,7 @@
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-416-2ea44f" alt="416 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-57-2ea44f" alt="57 Python tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-58-2ea44f" alt="58 Python tests"></a>
   <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D13%20resolved-0969da" alt="D1 through D13 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
