@@ -100,7 +100,10 @@ test("the library workflow gates on the checks and reports the evidence without 
   const p = join(cfg.root, ".github", "workflows", "library.yml");
   assert.ok(existsSync(p));
   const yml = readFileSync(p, "utf8");
-  for (const gate of ["validate", "doctor", "lint", "eval", "eval --gate"]) assert.match(yml, new RegExp(`cli\\.js ${gate.replace(/ /g, " ")}`));
+  // Each gate is matched as a literal, so a verb gaining a regex metacharacter cannot silently
+  // turn this assertion into a looser one.
+  const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const gate of ["validate", "doctor", "lint", "eval", "eval --gate"]) assert.match(yml, new RegExp(`cli\\.js ${literal(gate)}`));
   // The reports tolerate a non-zero exit; the gates do not.
   assert.match(yml, /frames --orthogonality \|\| true/);
   assert.match(yml, /eval --audit \|\| true/);
