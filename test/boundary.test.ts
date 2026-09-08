@@ -208,3 +208,23 @@ test("the training workflow fetches before it trains, and caches what it fetched
   assert.match(wf, /actions\/cache/, "the weekly job re-downloads the whole corpus every week");
   assert.ok(wf.indexOf("fetch_corpus.py") < wf.indexOf("adhd_analysis.text.train"), "it trains before it fetches");
 });
+
+test("the weekly job writes the corpus where corpora.yaml reads it", () => {
+  // `--out` is the parent directory and the fetcher gives each source its own subdirectory, so
+  // `--out corpora/rfc` writes `corpora/rfc/rfc/*.txt` while the manifest reads `corpora/rfc/*.txt`.
+  // Every third-party entry in that manifest is `required: false`, so nothing fails: the loader
+  // shrugs and the job trains on ~250KB of repository prose. The class of bug is a path error
+  // upstream of an optional input, and the only thing that catches it is a check that the input
+  // arrived. This one was caught before the weekly cron had fired once, so no model was built from
+  // it; that was luck about timing rather than anything the repository did.
+  const wf = readFileSync(join(ROOT, ".github", "workflows", "train.yml"), "utf8");
+  const out = wf.match(/fetch_corpus\.py[\s\S]{0,200}?--out (\S+)/);
+  assert.ok(out, "the fetch step passes no --out");
+  assert.equal(out![1], "corpora", "--out must be the parent directory, not one source's directory");
+
+  const manifest = readFileSync(join(ANALYSIS, "corpora.yaml"), "utf8");
+  for (const name of ["rfc", "pep", "eip", "erc"]) {
+    assert.match(manifest, new RegExp(`path: corpora/${name}\\b`), `the manifest does not read corpora/${name}`);
+  }
+  assert.match(wf, /the fetched corpus reaches the trainer/, "nothing fails the job when the fetch lands nowhere");
+});

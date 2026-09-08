@@ -59,19 +59,49 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: analysis/corpora
-          key: corpus-rfc-v1-${{ github.event.inputs.corpus_size || 1500 }}
-          restore-keys: corpus-rfc-v1-
+          # v2: v1 caches hold the old `corpora/rfc/rfc/*.txt` layout, which corpora.yaml does not
+          # read. Restoring one would put the job straight back into training on repository prose.
+          key: corpus-v2-${{ github.event.inputs.corpus_size || 1500 }}
+          restore-keys: corpus-v2-
 
-      # The only network access in this repository, and every part of it is constrained: one
-      # allowlisted host, https only, text/plain only, and a refusal list of the extensions a set
-      # of weights arrives in. test/boundary.test.ts pins all four.
+      # The only network access in this repository, and every part of it is constrained: https
+      # only, an allowlist of URL prefixes rather than hosts, text/plain only, and a refusal list of
+      # the extensions a set of weights arrives in. test/boundary.test.ts pins all four.
+      #
+      # `--out corpora`, not `corpora/rfc`. The fetcher treats --out as the parent and gives each
+      # source its own subdirectory, so `--out corpora/rfc` writes `corpora/rfc/rfc/*.txt` while
+      # corpora.yaml reads `corpora/rfc/*.txt`. Every third-party entry in that manifest is
+      # `required: false`, so nothing would have failed: the loader shrugs and the job trains on
+      # ~250KB of repository prose. This workflow had not yet fired once, so no model was actually
+      # built that way — the bug was found by reading, not by a bad artifact. The step below is what
+      # keeps it found.
       - name: fetch corpus
         working-directory: analysis
         run: |
           python scripts/fetch_corpus.py \
-            --out corpora/rfc \
+            --out corpora \
             --limit "${{ github.event.inputs.corpus_size || 1500 }}" \
             --delay 0.25
+
+      # A path bug upstream of a `required: false` corpus is invisible: training succeeds, the
+      # record looks plausible, and the model describes the repository's own docs. Fail here
+      # instead, before half an hour of compute goes into a model of nothing.
+      - name: the fetched corpus reaches the trainer
+        working-directory: analysis
+        run: |
+          python - <<'PY'
+          from adhd_analysis.text.corpora import Library
+          described = {s["name"]: s for s in Library.load("corpora.yaml").describe()}
+          fetched = {n: d for n, d in described.items() if n in {"rfc", "pep", "eip", "erc"}}
+          for name, d in fetched.items():
+              print(f"{name:6} {d['files']:6} files {d['bytes']:12,} bytes")
+          total = sum(d["bytes"] for d in fetched.values())
+          if total < 10_000_000:
+              raise SystemExit(
+                  f"the fetched corpus is {total:,} bytes, which is repository prose and not a "
+                  "background corpus. The fetch step wrote somewhere corpora.yaml does not read."
+              )
+          PY
 
       - name: train
         working-directory: analysis
@@ -83,6 +113,24 @@ jobs:
             --order "${{ github.event.inputs.order || 4 }}" \
             --max-seconds "${{ github.event.inputs.max_seconds || 1500 }}" \
             --min-count 2
+
+      # `vocab_truncated` is nonzero when --max-vocab cut types that met --min-count. That raises the
+      # OOV rate for a reason the rate itself cannot show, and it makes this week's perplexity
+      # incomparable with last week's. A warning rather than a failure: a capped vocabulary is a
+      # usable model, it just is not a comparable one.
+      - name: say whether the vocabulary ceiling bound
+        working-directory: analysis
+        run: |
+          python - <<'PY'
+          import json
+          cut = json.load(open("models/training-record.json"))["vocab_truncated"]
+          if cut["types"]:
+              print(f"::warning::the vocabulary ceiling cut {cut['types']:,} types "
+                    f"({cut['tokens']:,} tokens) that met min_count. This week's perplexity is not "
+                    "comparable with a run whose vocabulary was not capped.")
+          else:
+              print("the vocabulary ceiling did not bind")
+          PY
 
       # Held-out perplexity, which is the only number in the record that can get worse. Vocabulary
       # size, n-gram count and wall clock all rise when the model degrades, so a weekly job that
