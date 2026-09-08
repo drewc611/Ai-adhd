@@ -159,30 +159,37 @@ artifacts being scored are engineering arguments with a fixed shape, and that is
 almost exactly. A model trained on public-domain novels would faithfully report that a branch
 artifact reads unlike a Victorian novel.
 
-1,974 RFCs plus the repository's own prose: **22.9M tokens, 101,051-word vocabulary, 17.4M
-4-grams, 206 seconds, 4710MB peak.** No ceiling bit and every discount row is a real
-modified-Kneser-Ney estimate rather than the 0.75 fallback.
+4,901 RFCs, 615 PEPs, 529 EIPs and the repository's own prose: **55.4M tokens, 177,507-word
+vocabulary, 36.5M 4-grams, 622 seconds, 9483MB peak, nothing pruned.** Held-out perplexity **6.06**
+on 3,097,500 tokens at 0.15% OOV. Every discount row is a real modified-Kneser-Ney estimate rather
+than the 0.75 fallback.
 
 Two comparisons, neither preregistered:
 
-- **Pruned against kept**: 9.72 bits against 9.74, permutation p = 0.87. Null, and null is the
+- **Pruned against kept**: 9.60 bits against 9.65, permutation p = 0.68. Null, and null is the
   better outcome — it says the detectors are catching something the surface statistics miss.
-- **T1 fired against the rest**: 9.94 bits against 9.68, p = 0.0455, and **the sign is backwards**.
-  T1 is the consensus trap, so the artifacts it fires on should read as *more* predictable. They
-  read as less. The detector is a written rule over what an artifact claims, not over how it
-  reads, and on this evidence those measure different things.
+- **T1 fired against the rest**: 9.82 bits against 9.58, +0.243 at p = 0.078, and **the sign is
+  backwards**. T1 is the consensus trap, so the artifacts it fires on should read as *more*
+  predictable. They read as less. The detector is a written rule over what an artifact claims, not
+  over how it reads, and on this evidence those measure different things.
 
-**The T1 result survived a fourfold corpus increase.** On 492 RFCs it was +0.226 bits at p = 0.048;
-on 1,974 it is +0.261 at p = 0.0455, with the per-artifact OOV rate falling from 13–24% to 1–5%
-and the training OOV from 2.7% to 0.4%. Quadrupling the background corpus is an independent
-perturbation, and an effect that was an artifact of a thin corpus would have washed out rather
-than strengthened. The pruned-against-kept null held too, and its tiny difference flipped sign,
-which is what noise looks like.
+**The effect size is stable across four corpora. Its p-value is not.**
 
-What that does *not* fix is the sample. It is the same 35 artifacts with 7 in the fired group, so
-the p-value carries the same caveat it always did — a bigger corpus tests the measure, not the
-sample. Backlog item 1, multi-seed replay, is what tests the sample. The report prints the caveat
-beside the number every time.
+| corpus | tokens | difference | p |
+|---|---|---|---|
+| 492 RFCs | 5.6M | +0.226 bits | 0.048 |
+| 1,974 RFCs | 22.9M | +0.261 | 0.0455 |
+| mixed, pruned | 40.0M | +0.224 | 0.0950 |
+| mixed, unpruned | 55.4M | +0.243 | 0.0780 |
+
+Ten times the text and a change of genre moved the difference by 0.04 bits. The p-value wanders
+across 0.05 and never clears it decisively.
+
+Earlier versions of this file read the p-value as the finding twice, in opposite directions: after
+the RFC-only increase it said the effect had *survived*, and when the genre-diverse corpus moved p
+to 0.095 it said the effect had *weakened*. Neither was right. **What is underpowered is n=7 in the
+fired group against 28, and no amount of background text fixes that.** Backlog item 1, multi-seed
+replay, is the only thing that would. The report prints that caveat beside the number every time.
 
 **Two things the measure will lie about if you let it.** It is relative to what it trained on:
 against these docs, "it is important to note that this is a comprehensive solution" scores as
