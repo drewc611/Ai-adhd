@@ -28,6 +28,7 @@ returning artifacts.
 |---|---|
 | process | a run directory with `os.json` |
 | process state | `awaiting_confirm`, `diverge`, `critique_a`, `critique_b`, `deepen`, `done`, `done_run_level`, `cancelled`, `aborted` |
+| task status | `pending`, `leased`, `done`, `dropped` (the run no longer needs it), `dead` (tried `maxAttempts` times and never came back) |
 | thread | a task: one brief, one agent type, one artifact path |
 | mutex | `.lock`, a directory in the kernel root, stamped with the owning pid and host |
 | scheduler | `claim` hands out the oldest pending task under a lease |
@@ -36,6 +37,7 @@ returning artifacts.
 | journal | `<root>/journal.jsonl`, append only |
 | init | `submit`; nothing is spent until `confirm` |
 | kill | `cancel`; returned branches render unscored |
+| SIGTERM to the scheduler | `drain`; nothing new is handed out and live leases finish |
 
 The kernel never reads a brief's content into a decision and never composes a prompt beyond
 what the compiler already wrote. It moves files and flips states. Every invariant the phases
@@ -58,6 +60,10 @@ phase functions.
 | `adhd_log` / `adhd os log` | the journal lines for one run |
 | `adhd_record` / `adhd os record` | promote a finished run into `evals/recorded/` with provenance generated from the journal and an `expected.json` recording the eval outcome as observed |
 | `adhd os reap` | expire leases (also runs on every claim, status, and list) |
+| `adhd os stats` | throughput, per-phase timing and lease expiry rate from the journal |
+| `adhd os heartbeat` | a worker says it is still alive; pushes its lease out by the phase's lease length. Only the holder, and only while the lease still stands: extending an expired one would take the task back from whoever legitimately re-claimed it |
+| `adhd os drain` | stop handing out tasks; outstanding leases run to completion. Cancelling would drop work already paid for and still in flight, so this is what a host uses to stop without killing live subagents. A marker file, so it survives the process that called it |
+| `adhd os resume` | accept claims again |
 
 ### Two roots, and why they are named apart
 
