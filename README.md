@@ -14,8 +14,8 @@
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-408-2ea44f" alt="408 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-44-2ea44f" alt="44 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D12%20resolved-0969da" alt="D1 through D12 resolved"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-52-2ea44f" alt="52 Python tests"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D13%20resolved-0969da" alt="D1 through D13 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -397,7 +397,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D12 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D13 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -405,6 +405,12 @@ refuses a class rather than spending on it. Every real run has been scored a sec
 fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
+
+`analysis/` also trains a background language model from scratch on a document library — 1,974
+RFCs, 22.9M tokens, modified Kneser-Ney, standard library only, no weights downloaded and none
+shipped. Held-out perplexity is what says whether a training run improved anything, because
+vocabulary size, table size and wall clock all rise when a model gets worse. See D13 and
+`analysis/README.md`.
 
 That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
 `foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%

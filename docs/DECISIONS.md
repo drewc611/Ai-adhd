@@ -1042,3 +1042,91 @@ is a view of it. A test starts a second `SuperAgent` on the same root and resume
 `plan` prints the graph and stops. D5 said a system that spawns seven subagents and gives the user
 no way out fails its own fixture 001; a deep mission is seven stages, one of which is itself a
 seven-branch run, so the objection applies with an order of magnitude on it.
+
+## D13. Held-out evaluation, and what it found in its own first run
+
+**Asked.** Keep training.
+
+**Resolved.** Corpus to 1,974 RFCs (117MB, 22.9M tokens), and a held-out evaluation so that
+"trained more" has a way to be wrong. The evaluation found two defects and reversed one modelling
+conclusion, including the one it produced itself.
+
+### "More tokens" was a claim with no failure mode
+
+The trainer reported vocabulary size, n-gram count and wall clock. **All three rise when a model
+gets worse**: a model that memorises its corpus has the largest table available and the best
+training-set perplexity. Nothing measured generalisation, so every training run was an improvement
+by construction.
+
+`evaluate.py` holds out one document in twenty by a deterministic stride and scores the model on
+text it never saw. Two properties are load-bearing and both are easy to lose:
+
+- **The vocabulary comes from the training half only.** `SplitLibrary` yields one side, so
+  `train()` never sees the other. Building it over everything hands the model every word it is
+  about to be tested on, and the OOV rate collapses for a reason unrelated to the model.
+- **The stride is over documents, never sentences.** Two sentences from one RFC share a topic, an
+  author and a vocabulary, and splitting inside a document leaks all three.
+
+### Order 4 is right, and the first run said so for the wrong reason
+
+Over 21.8M training tokens, scored on the same 1,088,715 held-out tokens:
+
+| order | n-grams | held-out perplexity | peak RSS | seconds |
+|---|---|---|---|---|
+| 3 | 7.5M | 46.2 | 1.9GB | 102 |
+| 4 | 16.7M | 38.6 | 4.9GB | 207 |
+| 5 | 27.8M | **36.0** | 9.2GB | 340 |
+
+Order 5 has the best perplexity. Order 4 is still the default, because 3→4 buys 16.4% for 2.2x the
+table and 4→5 buys 6.8% for another 1.7x and 9.2GB — past `Budget.weekly()`'s 5120MB. Order 5 does
+not fit a hosted runner at this corpus size and order 4 fits with about 200MB to spare. That trade
+is now a measured table in the governor's brief rather than the assertion it had been.
+
+**The first run of that comparison reported order 5 at perplexity 101.1 and called it the worst.**
+Its own output gave it away: the vocabulary was identical across all three orders and the OOV rates
+were not, which is impossible on one held-out set. Scoring is deeper per token at a higher order,
+so the wall-clock ceiling shared with training truncated order 5's evaluation and not order 3's,
+and three orders were ranked on three different slices of text. Had nobody read the OOV column, the
+repository would have adopted a conclusion that is the reverse of the truth.
+
+`comparable()` now refuses to print a ranking when the held-out token counts differ or any
+evaluation was cut short, and scoring gets its own wall-clock allowance.
+
+### Loading a model was outside the budget entirely
+
+`Budget` governed reading a corpus and counting n-grams, and nothing about reading the result back.
+A model trained under a 9.5GB ceiling was then loaded into a process that reached 11.9GB, because
+the table is rebuilt in memory and nothing was watching that path.
+
+`KneserNey.load` now takes an optional budget. `Budget.touch()` exists because `spend(0)` never
+advances the counter that gates the periodic memory check, so a `spend(0)`-based loop would have
+looked correct and checked nothing — a load spends memory and no tokens.
+
+The governor's brief now says scoring costs about as much memory as training, because a ceiling
+sized for training alone is a ceiling that bites during evaluation, which is exactly how the order
+comparison went wrong.
+
+### The T1 result survived the corpus increase
+
+Retrained at order 4 on the full corpus: 22.9M tokens, 101,051-word vocabulary, 17.4M 4-grams,
+206 seconds, 4710MB peak, no ceiling bit, training OOV down from 2.7% to 0.4%.
+
+- **Pruned against kept**: 9.72 bits against 9.74, p = 0.87. Null, as before, and the tiny
+  difference flipped sign — which is what noise looks like.
+- **T1 fired against the rest**: 9.94 against 9.68, +0.261 bits, p = 0.0455. On 492 RFCs it was
+  +0.226 at p = 0.048.
+
+Quadrupling the background corpus is an independent perturbation, and an effect that was an
+artifact of a thin corpus would have washed out rather than strengthened. Per-artifact OOV fell
+from 13–24% to 1–5%, so far less of each artifact is now being scored as `<unk>`.
+
+**This does not fix the sample.** It is the same 35 artifacts with 7 in the fired group, so the
+p-value carries the caveat it always did: a bigger corpus tests the measure, not the sample.
+Backlog item 1, multi-seed replay, is what would test the sample. The report prints that caveat
+beside the number every time it prints the number.
+
+### The weekly job now reports it
+
+`train.yml` computes held-out perplexity after training and uploads it with the record, so a week
+where the model degrades is visible as a number that went up rather than as three numbers that all
+went up as usual.

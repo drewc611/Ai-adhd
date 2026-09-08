@@ -49,6 +49,14 @@ class Budget:
         self.tokens += tokens
         self._since_check += tokens
 
+    def touch(self) -> None:
+        """Force the next `allows()` to do the expensive checks without charging any tokens.
+
+        Loading a model spends memory and no tokens, so `spend(0)` would leave `_since_check` at
+        zero forever and the wall-clock and resident-set checks would never fire on that path.
+        """
+        self._since_check = self.check_every
+
     @property
     def elapsed(self) -> float:
         return time.monotonic() - self.started
