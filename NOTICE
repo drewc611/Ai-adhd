@@ -1,0 +1,37 @@
+# NOTICE
+
+## This work
+
+Copyright (c) 2026 drewc611. Licensed under the MIT License; see `LICENSE`.
+
+That covers everything original in this repository: the frame library and routing in `config/`, the
+prompts, the TypeScript in `src/`, the Python in `analysis/`, the recorded runs in `evals/`, the
+agents, the skills and the docs. Those are the product and they are the author's.
+
+## Third-party dependencies
+
+Read from the installed package metadata rather than transcribed, on 2026-09-08.
+
+| package | version | licence |
+|---|---|---|
+| `@modelcontextprotocol/sdk` | 1.30.0 | MIT |
+| `commander` | 13.1.0 | MIT |
+| `yaml` | 2.9.0 | ISC |
+| `zod` | 4.5.4 | MIT |
+| `pyyaml` | 6.0.1 | MIT |
+| `numpy` | 2.4.6 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
+| `scikit-learn` | 1.9.0 | BSD-3-Clause |
+
+None is vendored. Each is resolved at install time from its own registry, and each carries its own
+licence text in its own distribution. `test/notice.test.ts` fails if a dependency is added or a
+version moves without this table moving with it, because an attribution file that has drifted is
+worse than none: it is a specific false claim rather than a missing one.
+
+## Corpora
+
+The background language model trains on third-party documents. **This repository redistributes
+none of them.** They are fetched to a gitignored directory by `analysis/scripts/fetch_corpus.py`,
+and the trained model is gitignored too, so nothing derived from them is committed or published
+here either.
+
+Every source, its licence, and the reasoning about what that permits is in `docs/PROVENANCE.md`.

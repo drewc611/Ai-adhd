@@ -172,11 +172,29 @@ test("exactly one file in analysis/ reaches the network, and it is not in the pa
   );
 
   const body = readFileSync(join(ANALYSIS, "scripts", "fetch_corpus.py"), "utf8");
-  assert.match(body, /ALLOWED_HOSTS\s*=\s*\{/, "the fetcher has no host allowlist");
-  assert.match(body, /u\.scheme != "https"/, "the fetcher does not require https");
+
+  // Prefixes rather than hosts, which is tighter: `raw.githubusercontent.com` serves every public
+  // repository on GitHub, so a host allowlist containing it allows all of them.
+  assert.match(body, /def allowed_prefixes\(\)/, "the fetcher has no prefix allowlist");
+  assert.ok(!/ALLOWED_HOSTS/.test(body), "the fetcher is back to a host allowlist, which is looser");
+  assert.match(body, /no allowlisted prefix matches/, "nothing refuses a URL outside the allowlist");
+  assert.match(body, /prefixes=\("https:\/\//, "a source declares no https prefix");
+
+  assert.match(body, /url\.startswith\("https:\/\/"\)/, "the fetcher does not require https");
   assert.match(body, /ctype != "text\/plain"/, "the fetcher does not require text/plain");
+
+  // Both bypasses of the prefix check, each of which passed a version of it. A `startswith` alone
+  // admits `.../peps/main/peps/../../../evil/...`, and a check that forgets to decode admits `%2e%2e`.
+  assert.match(body, /path traversal/, "nothing refuses a `..` segment");
+  assert.match(body, /unquote/, "the path is compared without being decoded, so %2e%2e bypasses it");
+  assert.match(body, /posixpath\.normpath/, "the prefix comparison runs on an unnormalised path");
+
   for (const ext of [".safetensors", ".gguf", ".ckpt", ".pt", ".onnx", ".bin"])
     assert.ok(body.includes(`"${ext}"`), `the fetcher does not refuse ${ext}`);
+
+  // Every corpus records where its terms were checked. A fetcher that pulls text under terms nobody
+  // wrote down is the licensing equivalent of an unbudgeted download.
+  assert.match(body, /licence_url/, "a source records no licence url");
 
   // Importable from the package would make the exception meaningless: the package's own ban is
   // enforced by import, so a re-export would carry the network straight back in.
