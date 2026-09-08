@@ -29,6 +29,7 @@ returning artifacts.
 | process | a run directory with `os.json` |
 | process state | `awaiting_confirm`, `diverge`, `critique_a`, `critique_b`, `deepen`, `done`, `done_run_level`, `cancelled`, `aborted` |
 | task status | `pending`, `leased`, `done`, `dropped` (the run no longer needs it), `dead` (tried `maxAttempts` times and never came back) |
+| priority | higher goes first; ties fall back to submission order, so the default of 0 everywhere is exactly the oldest-first scheduling it replaced. Not preemption: a lease already handed out is never reclaimed |
 | thread | a task: one brief, one agent type, one artifact path |
 | mutex | `.lock`, a directory in the kernel root, stamped with the owning pid and host |
 | scheduler | `claim` hands out the oldest pending task under a lease |
@@ -65,6 +66,7 @@ phase functions.
 | `adhd os heartbeat` | a worker says it is still alive; pushes its lease out by the phase's lease length. Only the holder, and only while the lease still stands: extending an expired one would take the task back from whoever legitimately re-claimed it |
 | `adhd os drain` | stop handing out tasks; outstanding leases run to completion. Cancelling would drop work already paid for and still in flight, so this is what a host uses to stop without killing live subagents. A marker file, so it survives the process that called it |
 | `adhd os resume` | accept claims again |
+| `adhd os watch` | redraw one run's status as it advances; one line per change when piped, since carriage-returning into a log file produces a single unreadable line |
 | `adhd os gc` | delete finished run directories older than `--days`. Dry unless `--yes`: a run directory is the only copy of its artifacts, `adhd os record` promotes rather than copies, and an old run still in a working state is stuck rather than rubbish, so it is kept and named |
 | `adhd os compact` | move journal lines belonging to finished runs into a dated archive beside the journal. Archived, not deleted — `adhd os record` generates provenance from these, and kernel-level lines with no run id stay because they are what explain a corrupted run an hour later |
 

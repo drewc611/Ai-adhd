@@ -5,6 +5,7 @@ import { parse as parseYaml } from "yaml";
 import { currentFrameId, type Config } from "./config.js";
 import { DeepenArtifactSchema, PassBSchema, TRAP_IDS, type TrapId } from "./schema.js";
 import { forwardFrameIds, type ScoreResult } from "./score.js";
+import { frameHash } from "./hash.js";
 
 export function listFrames(cfg: Config, json = false): string {
   if (json) return JSON.stringify(cfg.frames.frames.map(({ id, name, axis, attacks, tools }) => ({ id, name, axis, attacks, tools })), null, 2);
@@ -639,4 +640,77 @@ export function axisCoverage(cfg: Config, recordedDir = join(cfg.root, "evals", 
   lines.push("Counts, not verdicts. Adding a frame to a thin axis is a D6 decision and needs the orthogonality check first.");
 
   return { axes, runs: stats.runs, text: lines.join("\n") };
+}
+
+// ---- frame definition drift (catalogue 53) --------------------------------------------------
+
+export interface FrameDrift {
+  run: string;
+  frame: string;
+  recorded_hash: string | null;
+  current_hash: string;
+  /** null when the run predates the stamp: unknown is not the same as unchanged. */
+  changed: boolean | null;
+}
+
+export interface DriftReport {
+  rows: FrameDrift[];
+  changed: FrameDrift[];
+  unknown: FrameDrift[];
+  text: string;
+}
+
+/**
+ * Which recorded runs used a frame whose definition has changed since (catalogue 53).
+ *
+ * `former_ids` handles a rename. Nothing handled a *stance* edit: change what PARTICULARIST is
+ * instructed to do and every recorded run still says PARTICULARIST, so `frames --stats` pools
+ * two different frames as one, `--orthogonality` pools their pair histories, and
+ * `docs/RETIREMENT.md`'s bar is counted across both. The corpus silently claims a frame produced
+ * a position that a differently-worded frame produced.
+ *
+ * Runs recorded before the stamp existed report `unknown`, not `unchanged`. Assuming they match
+ * would be inventing the fact this report exists to establish.
+ */
+export function frameDrift(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): DriftReport {
+  const current = new Map(cfg.frames.frames.map((f) => [f.id, frameHash(f)]));
+  const rows: FrameDrift[] = [];
+  if (existsSync(recordedDir))
+    for (const d of readdirSync(recordedDir).sort()) {
+      const planPath = join(recordedDir, d, "plan.json");
+      if (!existsSync(planPath)) continue;
+      let plan: { branches?: { frame: string; frame_hash?: string }[] };
+      try {
+        plan = JSON.parse(readFileSync(planPath, "utf8")) as typeof plan;
+      } catch {
+        continue;
+      }
+      for (const b of plan.branches ?? []) {
+        const frame = currentFrameId(cfg, b.frame);
+        const now = current.get(frame);
+        if (!now) continue; // a frame that has left the library is a retirement question, not drift
+        const recorded = b.frame_hash ?? null;
+        rows.push({ run: d, frame, recorded_hash: recorded, current_hash: now, changed: recorded === null ? null : recorded !== now });
+      }
+    }
+
+  const changed = rows.filter((r) => r.changed === true);
+  const unknown = rows.filter((r) => r.changed === null);
+  const lines = [`frame definition drift over ${new Set(rows.map((r) => r.run)).size} recorded run(s)`];
+  lines.push("");
+  if (!rows.length) lines.push("no recorded run carries a plan to read.");
+  for (const r of changed) lines.push(`CHANGED  ${r.run}/${r.frame}: recorded ${r.recorded_hash}, library now ${r.current_hash}`);
+  if (unknown.length) {
+    const runs = [...new Set(unknown.map((r) => r.run))].sort();
+    lines.push(
+      `unknown for ${unknown.length} branch(es) across ${runs.length} run(s): ${runs.join(", ")}. These predate the stamp, and unknown is not unchanged — assuming they match would invent the fact this report exists to establish.`,
+    );
+  }
+  lines.push("");
+  if (changed.length)
+    lines.push(
+      `${changed.length} branch(es) ran under a definition the library no longer has. Their artifacts are still evidence of what that frame produced; they are not evidence about the frame that carries the id today, and \`frames --stats\` pools them as one.`,
+    );
+  else if (rows.some((r) => r.changed === false)) lines.push("Every stamped branch ran under the definition the library still carries.");
+  return { rows, changed, unknown, text: lines.join("\n") };
 }

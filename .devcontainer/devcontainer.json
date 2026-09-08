@@ -1,0 +1,18 @@
+{
+  "name": "adhd",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "features": {},
+  "postCreateCommand": "npm ci && npm run build && npm test",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "redhat.vscode-yaml"],
+      "settings": {
+        "yaml.schemas": {},
+        "editor.formatOnSave": false
+      }
+    }
+  },
+  "remoteEnv": {
+    "ADHD_OS_ROOT": "${containerWorkspaceFolder}/runs"
+  }
+}

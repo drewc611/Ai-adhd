@@ -290,6 +290,18 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     seeing what it does is the mirror image of the loosening D6 refuses, and both would move a
     recorded outcome: 002 currently holds `or_so_noticed` on both its runs.
 
+71. **Config overlays** (owner's call). `adhd init` copies the shipped library, which forks it: a
+    team that scaffolds has no way to pull later improvements. An overlay would fix that and its
+    merge semantics are a genuine decision, not a detail. Does an overlay frame reusing an id
+    replace the base frame or fail loudly? Does a routing class merge its `frames` list or replace
+    it? Each answer changes what `frame_hash` means for a run under a merged library, and one of
+    them quietly makes the drift report unable to say which definition ran.
+
+72. **Publishing to npm** (owner's action). The package is verified — a test reconstructs the
+    tarball's file list and asserts the CLI, `adhd doctor` and `scripts/demo.sh` all work from it —
+    but publishing needs credentials and a decision about the name, which `package.json` currently
+    leaves as the unscoped `adhd`.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

@@ -13,9 +13,11 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "claude/adhd-architecture-build-jlyjk2" ]
+    # main above all: it was missing, so every merge landed unscanned code on the branch
+    # that ships, and the scan running on each PR made it look covered.
+    branches: [ "main", "claude/adhd-architecture-build-jlyjk2" ]
   pull_request:
-    branches: [ "claude/adhd-architecture-build-jlyjk2" ]
+    branches: [ "main", "claude/adhd-architecture-build-jlyjk2" ]
   schedule:
     - cron: '25 10 * * 2'
 

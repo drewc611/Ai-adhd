@@ -92,6 +92,16 @@ export const RunRecordSchema = z
     finished_at: z.string().nullable(),
     estimate_tokens: z.number().int(),
     /**
+     * Higher goes first (catalogue 37). Ties fall back to submission order, so the default of 0
+     * everywhere reproduces exactly the oldest-first behaviour that existed before this.
+     *
+     * Priority is not preemption: a lease already handed out is not taken back. A run that
+     * jumps the queue takes the next free worker, not one that is busy — reclaiming live work
+     * would throw away a subagent that is already paid for, which is the same reason `drain`
+     * exists rather than `cancel`.
+     */
+    priority: z.number().int().default(0),
+    /**
      * A ceiling on reported tokens for this run, or null for none. Carried per run rather than
      * globally because the estimate is per run: a wide `enumerate_options` run legitimately
      * costs more than a five-branch one, and a single global number is wrong for one of them.
@@ -299,7 +309,7 @@ export class Kernel {
   // ---- syscalls -----------------------------------------------------------------------
 
   /** D5: compile and show the bill. Nothing is spent until confirm. */
-  submit(problem: string, decisionRaw: unknown, opts: { by?: string; seed?: number; confirmed?: boolean; runId?: string; budgetTokens?: number } = {}) {
+  submit(problem: string, decisionRaw: unknown, opts: { by?: string; seed?: number; confirmed?: boolean; runId?: string; budgetTokens?: number; priority?: number } = {}) {
     return this.withLock(() => {
       const decision = parseDecision(this.cfg, decisionRaw);
       const result = compile(this.cfg, problem, decision, { seed: opts.seed, runId: opts.runId });
@@ -337,6 +347,7 @@ export class Kernel {
         finished_at: null,
         estimate_tokens: plan.estimate.tokens_total,
         budget_tokens: opts.budgetTokens ?? null,
+        priority: opts.priority ?? 0,
         tasks: [],
         reason: null,
         last_phase_text: null,
@@ -403,7 +414,9 @@ export class Kernel {
       // the user had declined or the kernel had already given up on.
       const runs = (opts.runId ? [this.load(opts.runId)] : this.listLocked()).filter((r) => isActive(r.state));
       const nowMs = this.now().getTime();
-      for (const rec of runs.sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+      // Priority first, then submission order. The tie-break is what makes a default of 0
+      // everywhere identical to the oldest-first scheduling this replaced.
+      for (const rec of runs.sort((a, b) => b.priority - a.priority || a.created_at.localeCompare(b.created_at))) {
         const task = rec.tasks.find(
           (t) => t.status === "pending" && (t.prefer_worker === null || t.prefer_worker === worker || (t.others_after !== null && Date.parse(t.others_after) <= nowMs)),
         );
@@ -874,6 +887,7 @@ export class Kernel {
       problem_hash: rec.problem_hash,
       n: rec.n,
       seed: rec.seed,
+      priority: rec.priority,
       estimate_tokens: rec.estimate_tokens,
       created_at: rec.created_at,
       updated_at: rec.updated_at,

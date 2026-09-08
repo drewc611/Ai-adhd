@@ -4,11 +4,15 @@ import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
-import { axisCoverage, diffRuns, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
+import { axisCoverage, diffRuns, frameDrift, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { costReport } from "./cost.js";
 import { replayAll, replayRun } from "./replay.js";
 import { doctor } from "./doctor.js";
 import { assertionHistory, lintFixtures, regressionGate } from "./fixtures.js";
+import { comparisonMatrix, exportRun, runTree } from "./report.js";
+import { completions, initConfig } from "./scaffold.js";
+import { configDoc } from "./schemadoc.js";
+import { Progress, colourEnabled, statusLine } from "./tty.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
@@ -141,6 +145,7 @@ program
   .option("--collisions", "which frame labels are also ordinary prose, so the redactor removes real text")
   .option("--health", "docs/RETIREMENT.md's bar, counted: which frames meet criteria for examination")
   .option("--axes", "frames per axis, and which axes no recorded run has exercised")
+  .option("--drift", "which recorded runs used a frame whose definition has changed since")
   .option("--recorded <dir>")
   .option("--json")
   .action((o) => {
@@ -155,6 +160,11 @@ program
         const r = frameHealth(cfg, o.recorded);
         console.log(o.json ? JSON.stringify({ runs: r.runs, classes: r.classes, frames: r.frames, candidates: r.candidates.map((c) => c.frame) }, null, 2) : r.text);
         return;
+      }
+      if (o.drift) {
+        const r = frameDrift(cfg, o.recorded);
+        console.log(o.json ? JSON.stringify({ rows: r.rows, changed: r.changed, unknown: r.unknown.length }, null, 2) : r.text);
+        process.exit(r.changed.length ? 1 : 0);
       }
       if (o.axes) {
         const r = axisCoverage(cfg, o.recorded);
@@ -311,9 +321,10 @@ os.command("submit")
   .option("--run-id <id>")
   .option("--confirmed", "skip the gate (scripted use)")
   .option("--budget <tokens>", "halt the run and render partial once reported tokens pass this", (v) => Number.parseInt(v, 10))
+  .option("--priority <n>", "higher goes first; ties fall back to submission order", (v) => Number.parseInt(v, 10))
   .action((o) => {
     try {
-      const r = kernelFor(o).submit(readFileSync(o.problem, "utf8"), o.decision, { seed: o.seed, by: o.by, confirmed: o.confirmed, runId: o.runId, budgetTokens: o.budget });
+      const r = kernelFor(o).submit(readFileSync(o.problem, "utf8"), o.decision, { seed: o.seed, by: o.by, confirmed: o.confirmed, runId: o.runId, budgetTokens: o.budget, priority: o.priority });
       out(r.preview);
       out(r.kind === "plan" ? { run_id: r.run_id, state: r.state, estimate_tokens: r.estimate_tokens } : { declined: true, reason: r.reason });
       process.exit(r.kind === "plan" ? 0 : 2);
@@ -359,7 +370,36 @@ os.command("result <run_id>").option("--os-root <dir>", "kernel root").action((i
   try { const r = kernelFor(o).result(id); out(r.synthesis ?? `no synthesis yet (state ${r.state}${r.reason ? `: ${r.reason}` : ""})`); process.exit(r.synthesis ? 0 : 3); } catch (e) { fail(e); }
 });
 os.command("cancel <run_id>").option("--reason <text>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).cancel(id, o.reason)); } catch (e) { fail(e); } });
-os.command("list").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).list()); } catch (e) { fail(e); } });
+os.command("list")
+  .option("--os-root <dir>", "kernel root")
+  .option("--json", "the full summaries rather than one line per run")
+  .action((o) => {
+    try {
+      const runs = kernelFor(o).list();
+      if (o.json || !runs.length) { out(runs); return; }
+      for (const r of runs) console.log(statusLine(r, colourEnabled()));
+    } catch (e) { fail(e); }
+  });
+os.command("watch <run_id>")
+  .description("redraw a run's status as it advances; one line per change when piped")
+  .option("--os-root <dir>", "kernel root")
+  .option("--interval <ms>", "poll interval", (v) => Number.parseInt(v, 10), 1000)
+  .option("--max <seconds>", "give up after this long", (v) => Number.parseInt(v, 10), 3600)
+  .action(async (id, o) => {
+    try {
+      const k = kernelFor(o);
+      const p = new Progress();
+      const deadline = Date.now() + o.max * 1000;
+      const terminal = ["done", "done_run_level", "cancelled", "aborted"];
+      for (;;) {
+        const s = k.status(id);
+        p.render(statusLine(s, colourEnabled()));
+        if (terminal.includes(s.state)) { p.done(); process.exit(s.state === "aborted" ? 3 : 0); }
+        if (Date.now() > deadline) { p.done(); console.error(`still ${s.state} after ${o.max}s`); process.exit(1); }
+        await new Promise((r) => setTimeout(r, Math.max(50, o.interval)));
+      }
+    } catch (e) { fail(e); }
+  });
 os.command("reap").option("--os-root <dir>", "kernel root").action((o) => { try { out(kernelFor(o).reap()); } catch (e) { fail(e); } });
 os.command("gc")
   .description("delete finished run directories older than --days; dry unless --yes")
@@ -404,6 +444,78 @@ os.command("stats")
       const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
       const r = kernelStats(root);
       console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("schema-doc")
+  .description("docs/CONFIG.md, generated from the zod schemas; a test fails when the checked-in copy drifts")
+  .option("--json", "the same document wrapped, for a caller that wants it alongside its destination")
+  .action((o) => {
+    try {
+      const markdown = configDoc();
+      if (o.json) console.log(JSON.stringify({ path: "docs/CONFIG.md", markdown }, null, 2));
+      else process.stdout.write(markdown);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("init <dir>")
+  .description("scaffold config/ and prompts/ from the shipped ones, to extend rather than start blank")
+  .option("--force", "replace files that are already there")
+  .option("--json")
+  .action((dir, o) => {
+    try {
+      const r = initConfig(loadConfig(program.opts().root), dir, { force: o.force });
+      console.log(o.json ? JSON.stringify({ dest: r.dest, written: r.written, skipped: r.skipped }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("completions <shell>")
+  .description("a bash or zsh completion script, generated from the real command list")
+  .option("--json")
+  .action((shell, o) => {
+    try {
+      const verbs = program.commands.map((c) => c.name()).sort();
+      const osVerbs = (program.commands.find((c) => c.name() === "os")?.commands ?? []).map((c) => c.name()).sort();
+      const script = completions(shell, verbs, osVerbs);
+      console.log(o.json ? JSON.stringify({ shell, verbs, os_verbs: osVerbs, script }, null, 2) : script);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("matrix")
+  .description("every assertion against every run of its fixture, as a grid")
+  .option("--fixtures <dir>")
+  .option("--recorded <dir>")
+  .option("--json")
+  .action((o) => {
+    try {
+      const r = comparisonMatrix(loadConfig(program.opts().root), { fixturesDir: o.fixtures, recordedDir: o.recorded });
+      console.log(o.json ? JSON.stringify({ runs: r.runs, items: r.items, cells: r.cells }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("export <run_dir>")
+  .description("one run as a single self-contained Markdown file, on stdout")
+  .option("--json", "the same document wrapped, for a caller that wants the path alongside it")
+  .action((runDir, o) => {
+    try {
+      const markdown = exportRun(loadConfig(program.opts().root), runDir);
+      console.log(o.json ? JSON.stringify({ run: runDir, markdown }, null, 2) : markdown);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("open <run_dir>")
+  .description("what a run directory holds, with sizes, and what its absences mean")
+  .option("--json")
+  .action((runDir, o) => {
+    try {
+      const r = runTree(runDir);
+      console.log(o.json ? JSON.stringify({ entries: r.entries, bytes: r.bytes }, null, 2) : r.text);
     } catch (e) { fail(e); }
   });
 

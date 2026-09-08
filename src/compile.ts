@@ -1,6 +1,6 @@
 import type { Config } from "./config.js";
 import type { Frame, Plan } from "./schema.js";
-import { problemHash } from "./hash.js";
+import { frameHash, problemHash } from "./hash.js";
 import { deriveSeed, mulberry32, randomSeed, shuffle } from "./rng.js";
 import { render } from "./template.js";
 import { lintProblemInjection } from "./lint.js";
@@ -137,6 +137,7 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
       axis: f.axis,
       agent: f.tools.length ? "adhd-branch-search" : "adhd-branch",
       tools: f.tools,
+      frame_hash: frameHash(f),
       brief_path: `${briefDir}/${f.id}.md`,
       artifact_path: `${artifactDir}/${f.id}.yaml`,
     })),

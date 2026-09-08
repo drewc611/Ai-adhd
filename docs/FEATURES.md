@@ -146,8 +146,17 @@ can be wrong without saying so.
     documented** in the README, and tested against the real binary. Adding the table found that
     a wrong flag raised `ConfigError` and printed "config invalid:" at a reader whose config was
     fine; usage errors are now their own code.
-30. TTY colour and a progress line while `adhd os` advances.
-31. `adhd init` — scaffold a `config/` directory from the shipped one.
+30. ~~TTY colour and a progress line~~ **Built** as `src/tty.ts`, `adhd os list` and `adhd os watch`.
+    Two rules, both about not lying to a pipe: colour only on a TTY with `NO_COLOR` unset (`FORCE_COLOR`
+    overrides for CI, and `NO_COLOR` wins over it, because off is the safer direction to be wrong in),
+    and in-place redraw only on a TTY — carriage-returning into a log file makes one unreadable line,
+    which is worse than no progress. The watcher prints only when the text it would print has changed,
+    so a piped watch is one line per change rather than one per poll.
+31. ~~`adhd init`~~ **Built.** Copies `config/`, `prompts/` and `docs/TRAPS.md` — the last because
+    the critic brief renders its detector lines verbatim and `loadConfig` refuses a root without it,
+    which an earlier version got wrong and produced a scaffold that would not load. The point is not
+    saving typing: the shipped library is the only thing here with recorded runs behind it, so a team
+    extending it should edit that rather than start from a blank file and a schema. Never overwrites.
 32. ~~`adhd doctor`~~ **Built.** Eight checks: config files parse, rubric arithmetic and shape,
     plugin manifest against `agents/` on disk, D4 tool grants both ways, published entry points,
     trap sections `docs/TRAPS.md` must carry, routing fill, and recorded-corpus shape. Building it
@@ -155,15 +164,25 @@ can be wrong without saying so.
     for them at load — a harder failure than a report. They were deleted rather than left in to
     imply coverage that lives elsewhere, and a test pins that so a future loosening of `crossCheck`
     fails here instead of leaving the case uncovered by anything.
-33. Shell completions for bash and zsh.
+33. ~~Shell completions~~ **Built**, generated from the real command tree rather than hand-written,
+    and a test asserts the CLI's output equals the generator's. Hand-written completions go stale the
+    first time a command is added and nobody notices, because nothing tests them.
 34. `--quiet` and `--verbose` levels applied consistently.
-35. `adhd open <run>` — print the run directory's file tree with sizes.
+35. ~~`adhd open <run>`~~ **Built**, and it is not `ls -R` because it reads the absences: no
+    `critic/pass-b.yaml` means the critic never finished, no `score.json` means any synthesis
+    present is the unscored partial, a planned branch with no artifact returned nothing (which is
+    not the same as scoring badly), and no `plan.json` at all means a hand-written negative control
+    rather than a run missing everything.
 
 ### Kernel
 36. ~~`adhd os stats`~~ **Built.** The longest task the journal has seen is 280s (`critique_b`)
     against a 900s default lease, so that default is about 3x the worst observed task — still a
     guess, but a measured one. No lease has ever expired in a real run.
-37. Run priority, so an urgent run jumps a queued one.
+37. ~~Run priority~~ **Built** as `--priority` on submit. Higher goes first; ties fall back to
+    submission order, so a default of 0 everywhere reproduces exactly the oldest-first scheduling it
+    replaced, and there is a test for that. Not preemption: a lease already handed out is never
+    reclaimed, because that would throw away a subagent already paid for — the same reason `drain`
+    exists rather than `cancel`.
 38. ~~Journal compaction~~ **Built** as `adhd os compact`. Lines belonging to finished runs move
     to a dated archive beside the journal — archived, not deleted, because `adhd os record`
     generates a run's provenance from them. Kernel-level lines with no run id stay, because a lock
@@ -194,8 +213,16 @@ can be wrong without saying so.
 
 ### Eval and reporting
 45. HTML report for a run: synthesis, branches, scores, detector table, one page.
-46. A run-comparison matrix across every recorded run and fixture.
-47. Export a run as a single self-contained Markdown file.
+46. ~~A run-comparison matrix~~ **Built** as `adhd matrix`. `--history` reads one assertion at a
+    time, which is the right shape for one assertion and the wrong shape for a pattern across runs.
+    The grid states the E1a/E1b finding by itself: `001-altframes` and `001-seed2` each hold an
+    assertion the other misses, so no single "this run is better" reading of the pair is available.
+    An absent cell is distinguished from a failing one, because a run belonging to another fixture
+    has not failed anything.
+47. ~~Export a run as a single Markdown file~~ **Built** as `adhd export`. The pruned block sits
+    above the branch artifacts on purpose: it is what the architecture exists to deliver and it is
+    what a reader skips when it is at the end. The embedded synthesis is demoted a heading level so
+    the document has one H1 and an outline that nests, and a renamed frame is titled by both ids.
 48. `expected.json` schema versioning, so old recordings stay readable.
 49. **Fixture inheritance.** Not built, and I would argue against it at this size. Eight fixtures
     share almost nothing: the duplication it would remove is a handful of `trap_named` and
@@ -216,8 +243,21 @@ can be wrong without saying so.
     a diff.
 
 ### Config and library
-52. Config overlays, so a team can extend the shipped frames without forking.
-53. Frame versioning, so a stance edit does not silently invalidate old recordings.
+52. **Config overlays.** Not built, and it needs a decision first. `adhd init` copies, which forks:
+    a team that scaffolds gets no way to pull later library improvements, and I named that as a weak
+    point when shipping it. An overlay fixes that, but its merge semantics are a real choice — does
+    an overlay frame with an existing id replace it, or error? does a routing class merge its
+    `frames` list or replace it? — and every answer changes what a recorded run's `frame_hash` means
+    for someone running a merged library. Owner's call, backlog 71.
+53. ~~Frame versioning~~ **Built** as `frame_hash` on each planned branch, reported by
+    `adhd frames --drift`. `former_ids` handles a rename; nothing handled a stance edit, so
+    changing what PARTICULARIST is instructed to do left every recorded run still saying
+    PARTICULARIST — `frames --stats` pooling two different frames as one, `--orthogonality`
+    pooling their pair histories, and `docs/RETIREMENT.md`'s bar counted across both. The hash
+    covers axis, attacks, tools, stance, probes and forbidden, and deliberately not `name` or
+    `former_ids`: a rename must not read as a redefinition, which is the point of having two
+    mechanisms. All 35 recorded branches predate the stamp and report **unknown, not unchanged** —
+    assuming they match would invent the fact the report exists to establish.
 54. ~~A rubric linter~~ **Built** into `adhd doctor`, and deliberately not a quality judgement:
     CLAUDE.md forbids replacing the critic rubric with one. It checks arithmetic and shape —
     anchors contiguous from zero, weights positive, every dimension on the same anchor range
@@ -228,14 +268,42 @@ can be wrong without saying so.
     `HORIZON` became `SUCCESSOR`. Every reader forwards at the point it reads; the recorded runs are
     not rewritten. Without it the corpus split and `frames --stats` listed the old and new ids as
     separate frames with one marked "not in library".
-57. A `config/` schema doc generated from the zod schemas.
+57. ~~A `config/` schema doc generated from the zod schemas~~ **Built** as `adhd schema-doc`, with the
+    output checked in at `docs/CONFIG.md` and a test that fails when the two disagree. Generated
+    because the hand-written version of this has already failed twice here: the README's layout block
+    omitted three directories, and `docs/RETIREMENT.md`'s standing table missed a frame the tooling had
+    put on its own list. It says explicitly what it cannot tell you — a generated table is honest about
+    shape and silent about intent — and points at the JSDoc and `docs/DECISIONS.md` for why a field
+    exists. `crossCheck`'s rules are named in the preamble because none of them is per-field.
 
 ### Distribution
-58. Publish to npm under a scoped name.
-59. A GitHub Action that runs `adhd eval` on PRs touching `config/` or `prompts/`.
-60. A one-command demo from a clean checkout.
-61. A devcontainer so a contributor can run a fixture in minutes.
-62. Release notes generated from the recorded-run diff.
+58. **Publish to npm** — not published (that needs the owner's credentials and consent), but the
+    package is now verifiable, and checking it found three defects. `scripts/demo.sh` was published
+    while the corpus it reads was not; the demo ran `npm run build` against a `tsconfig.json` that is
+    not published; and `files` omitted `agents/`, `skills/` and `.claude-plugin/`, so `adhd doctor`
+    errored on an installed copy and the Claude Code plugin — one of the four v0 deliverables —
+    shipped as nothing at all. The same family as hygiene defects 55 and 16, and it keeps happening
+    for the same reason: development never exercises the published layout. A test now reconstructs
+    the tarball's file list and asserts the CLI, the doctor and the demo all work from it.
+59. ~~A GitHub Action for library changes~~ **Built** as `.github/workflows/library.yml`,
+    path-filtered on `config/`, `prompts/`, `evals/fixtures/` and `agents/`. It gates on validate,
+    doctor, lint, eval and the assertion gate, and **reports** orthogonality, retirement health, axis
+    coverage, collisions and the discrimination audit into the step summary without gating on them.
+    The split is deliberate: `frames --orthogonality` exits non-zero on a flagged pair, and the one
+    pair it flags today is one `docs/RETIREMENT.md` says explicitly to watch and not act on. Gating
+    on it would fail a PR for a rate the policy refuses to act on at this sample size.
+60. ~~A one-command demo~~ **Built** as `npm run demo`. It cannot show a run and says so: D2 means
+    this package never calls a model, so a run needs a host to spawn subagents. What it shows is
+    everything either side of that — the compile and the D5 gate a user would confirm, then a real
+    recorded run's pruned block, then the evidence commands and the harness. A demo implying it had
+    just reasoned would misrepresent the one decision the repository is built on.
+61. ~~A devcontainer~~ **Built**, Node 22, `npm ci && npm run build && npm test` on create. It
+    supplies no inference and should not: a container that could run a fixture end to end would have
+    to bring the host that spawns subagents, which the design puts outside this repository.
+62. **Release notes from the recorded-run diff.** Not built. There are no releases, one version, and
+    `adhd diff` already reports what changed between two runs — which is the part with evidence behind
+    it. Generating prose about a version boundary that does not exist yet is surface area the
+    catalogue's own ordering rule says loses. Worth revisiting the first time something is published.
 
 ## Tier 3 — listed, mostly not worth building
 

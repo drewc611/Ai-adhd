@@ -18,7 +18,11 @@
     "docs",
     "assets",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "scripts",
+    "agents",
+    "skills",
+    ".claude-plugin"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -26,7 +30,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "adhd": "node dist/src/cli.js",
     "mcp": "node dist/src/mcp.js",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "demo": "bash scripts/demo.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

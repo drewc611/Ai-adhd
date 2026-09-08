@@ -236,13 +236,14 @@ carrying it.
 ```
 config/     frames, routing, critic rubric      <- the actual IP
 prompts/    orchestrator, branch, critic, deepen, synthesis
-docs/       architecture, traps, decisions, features, backlog, retirement
+docs/       architecture, traps, decisions, features, backlog, retirement, config (generated)
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       329 tests over all of it
+test/       362 tests over all of it
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
+scripts/    demo.sh: what a clean checkout can show without a model
 ```
 
 Nothing under `src/` calls a model. It compiles briefs, enforces the isolation contract, scores
@@ -282,6 +283,7 @@ node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates i
 node dist/src/cli.js frames --collisions     # which frame names are also ordinary prose
 node dist/src/cli.js frames --health         # docs/RETIREMENT.md's bar, counted
 node dist/src/cli.js frames --axes           # frames per axis, and axes no run has exercised
+node dist/src/cli.js frames --drift          # runs that used a frame whose definition has changed since
 node dist/src/cli.js cost                    # token spend per run, by phase and by frame, against the estimate
 node dist/src/cli.js os stats                # throughput, phase timing and lease expiry rate from the journal
 node dist/src/cli.js replay                  # re-render every recorded synthesis and report drift
@@ -289,6 +291,14 @@ node dist/src/cli.js doctor                  # does config, prompts, agents, too
 node dist/src/cli.js lint [fixture]          # can a fixture's patterns compile, and can they fail
 node dist/src/cli.js eval --history          # which runs have ever held each assertion
 node dist/src/cli.js eval --gate             # fail when an assertion stops holding on a run it used to
+node dist/src/cli.js matrix                  # every assertion against every run of its fixture, as a grid
+node dist/src/cli.js export <run>            # one run as a single self-contained Markdown file
+node dist/src/cli.js open <run>              # what a run directory holds, and what its absences mean
+node dist/src/cli.js init <dir>              # scaffold config/ and prompts/ to extend, not start blank
+node dist/src/cli.js completions bash        # generated from the real command list
+node dist/src/cli.js schema-doc              # regenerate docs/CONFIG.md from the zod schemas
+node dist/src/cli.js os watch <run>          # redraw a run's status; one line per change when piped
+npm run demo                                 # what a clean checkout can show without a model
 node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
 node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
 node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?
