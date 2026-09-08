@@ -282,6 +282,14 @@ green and there is no evidence of a problem, so bumping a working action on cosm
 inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 requires Node
 22.12 and this package supports Node 20.
 
+70. **Two fixture assertions that `adhd lint` flags** (owner's call). `002/or_so_noticed` matches
+    `or so`, which is in 002's prompt verbatim, so any branch quoting the question satisfies an
+    assertion meant to check the imprecision is *treated as evidence* — and the negative control
+    holds it too. `003/one_way_door` lists `reversib` alongside `irreversib`, so the second can
+    never be the alternative that matches. Neither is changed here. Tightening an assertion after
+    seeing what it does is the mirror image of the loosening D6 refuses, and both would move a
+    recorded outcome: 002 currently holds `or_so_noticed` on both its runs.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

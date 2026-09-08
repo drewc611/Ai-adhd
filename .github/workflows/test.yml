@@ -30,3 +30,8 @@ jobs:
       # config, prompts, agents, D4 tool grants, published entry points and the recorded corpus
       # all agree with each other. Warnings do not fail; errors do.
       - run: node dist/src/cli.js doctor
+      # Fixture patterns compile, can fail, and use no bare dot as a separator.
+      - run: node dist/src/cli.js lint
+      # An assertion that used to hold on a run still holds on it. Finer than `eval`, which
+      # compares a run against its own recorded expectation and so stays green as it degrades.
+      - run: node dist/src/cli.js eval --gate

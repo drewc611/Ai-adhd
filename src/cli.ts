@@ -8,6 +8,7 @@ import { axisCoverage, diffRuns, frameHealth, frameStats, labelCollisions, listF
 import { costReport } from "./cost.js";
 import { replayAll, replayRun } from "./replay.js";
 import { doctor } from "./doctor.js";
+import { assertionHistory, lintFixtures, regressionGate } from "./fixtures.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
@@ -103,6 +104,9 @@ program
   .option("--fixtures <dir>")
   .option("--recorded <dir>")
   .option("--audit", "report which assertions discriminate a real run from the negative control")
+  .option("--history", "which runs have ever held each assertion")
+  .option("--gate", "fail when an assertion that used to hold on a run stops holding on it")
+  .option("--update", "with --gate, rewrite evals/assertion-baseline.json to what holds now")
   .option("--json", "machine readable")
   .action((o) => {
     try {
@@ -111,6 +115,15 @@ program
         const a = auditFixtures(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded });
         console.log(o.json ? JSON.stringify(a.items, null, 2) : a.text);
         return;
+      }
+      if (o.history) {
+        console.log(assertionHistory(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded }).text);
+        return;
+      }
+      if (o.gate) {
+        const g = regressionGate(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded, update: Boolean(o.update) });
+        console.log(g.text);
+        process.exit(g.regressions.length ? 1 : 0);
       }
       const r = runEval(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded });
       console.log(o.json ? JSON.stringify(r, null, 2) : formatEvalReport(r));
@@ -391,6 +404,19 @@ os.command("stats")
       const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
       const r = kernelStats(root);
       console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("lint [fixture]")
+  .description("check a fixture's patterns before recording against it: do they compile, can they fail, do they use a bare dot as a separator")
+  .option("--fixtures <dir>")
+  .option("--json")
+  .action((fixture, o) => {
+    try {
+      const r = lintFixtures(loadConfig(program.opts().root), { fixturesDir: o.fixtures, only: fixture });
+      console.log(o.json ? JSON.stringify({ errors: r.errors, warnings: r.warnings, fixtures: r.fixtures }, null, 2) : r.text);
+      process.exit(r.errors.length ? 1 : 0);
     } catch (e) { fail(e); }
   });
 
