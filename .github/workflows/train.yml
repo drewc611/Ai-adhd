@@ -84,6 +84,24 @@ jobs:
             --max-seconds "${{ github.event.inputs.max_seconds || 1500 }}" \
             --min-count 2
 
+      # Held-out perplexity, which is the only number in the record that can get worse. Vocabulary
+      # size, n-gram count and wall clock all rise when the model degrades, so a weekly job that
+      # reported only those would call a memorised corpus an improvement.
+      - name: held-out perplexity
+        working-directory: analysis
+        run: |
+          python - <<'PY' | tee models/heldout.json
+          import json
+          from adhd_analysis.text.budget import Budget
+          from adhd_analysis.text.corpora import Library
+          from adhd_analysis.text.evaluate import SplitLibrary, evaluate
+          from adhd_analysis.text.ngram import KneserNey
+
+          model = KneserNey.load("models/background.kn.gz")
+          held = SplitLibrary(Library.load("corpora.yaml"), every=20, side="heldout")
+          print(json.dumps(vars(evaluate(model, held, Budget.weekly())), indent=2))
+          PY
+
       - name: report
         working-directory: analysis
         run: |
@@ -122,5 +140,6 @@ jobs:
           path: |
             analysis/models/background.kn.gz
             analysis/models/training-record.json
+            analysis/models/heldout.json
             analysis/models/report.txt
           retention-days: 90

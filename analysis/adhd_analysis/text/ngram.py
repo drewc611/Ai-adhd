@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from .budget import Budget
+from .budget import Budget, BudgetExceeded
 from .tokenize import BOS, EOS, UNK, Vocab
 
 Gram = tuple[int, ...]
@@ -196,7 +196,17 @@ class KneserNey:
         return path
 
     @classmethod
-    def load(cls, path: str | Path) -> KneserNey:
+    def load(cls, path: str | Path, budget: "Budget | None" = None) -> KneserNey:
+        """Read a model back. Optionally under a ceiling, and there is a reason to pass one.
+
+        `Budget` governs reading a corpus and counting n-grams, and until this argument existed it
+        governed nothing about loading the result. A model trained under a 9.5GB ceiling could then
+        be loaded into a process that went well past it, because the table is rebuilt in memory and
+        nothing was watching. Observed at 11.9GB against a 9.5GB ceiling while comparing orders.
+
+        Checked per batch of lines rather than per line: the check reads the resident set through a
+        syscall, and at one call per n-gram it costs more than the load.
+        """
         path = Path(path)
         with gzip.open(path, "rt", encoding="utf-8") as fh:
             head = json.loads(fh.readline())
@@ -214,9 +224,15 @@ class KneserNey:
             )
             order = head["order"]
             counts: list[dict[Gram, int]] = [{} for _ in range(order)]
+            loaded = 0
             for line in fh:
                 k, gram, c = line.rstrip("\n").split("\t")
                 counts[int(k)][tuple(int(x) for x in gram.split(","))] = int(c)
+                loaded += 1
+                if budget is not None and loaded % 200_000 == 0:
+                    budget.touch()
+                    if not budget.allows():
+                        raise BudgetExceeded(f"loading {path} refused after {loaded:,} n-grams: {budget.stopped_because}")
         m = cls(order=order, vocab=vocab, counts=counts, meta=head.get("meta", {}))
         m.discounts = [m._discounts(m.counts[k]) for k in range(order)]
         m.hist = []

@@ -10,7 +10,7 @@ cd analysis
 pip install -e '.[dev]'
 python -m adhd_analysis --root ..              # the report
 python -m adhd_analysis --root .. --json       # the same numbers, machine readable
-pytest                                         # 43 tests
+pytest                                         # 52 tests
 ```
 
 ## Why this exists
@@ -159,21 +159,30 @@ artifacts being scored are engineering arguments with a fixed shape, and that is
 almost exactly. A model trained on public-domain novels would faithfully report that a branch
 artifact reads unlike a Victorian novel.
 
-492 RFCs plus the repository's own prose: 5.63M tokens, 39,268-word vocabulary, 5.41M n-grams,
-57 seconds, 1413MB peak. No ceiling bit and every discount row is a real modified-Kneser-Ney
-estimate rather than the 0.75 fallback.
+1,974 RFCs plus the repository's own prose: **22.9M tokens, 101,051-word vocabulary, 17.4M
+4-grams, 206 seconds, 4710MB peak.** No ceiling bit and every discount row is a real
+modified-Kneser-Ney estimate rather than the 0.75 fallback.
 
 Two comparisons, neither preregistered:
 
-- **Pruned against kept**: 9.62 bits against 9.59, permutation p = 0.72. Null, and null is the
+- **Pruned against kept**: 9.72 bits against 9.74, permutation p = 0.87. Null, and null is the
   better outcome — it says the detectors are catching something the surface statistics miss.
-- **T1 fired against the rest**: 9.78 bits against 9.55, p = 0.048, and **the sign is backwards**.
+- **T1 fired against the rest**: 9.94 bits against 9.68, p = 0.0455, and **the sign is backwards**.
   T1 is the consensus trap, so the artifacts it fires on should read as *more* predictable. They
   read as less. The detector is a written rule over what an artifact claims, not over how it
   reads, and on this evidence those measure different things.
 
-Two comparisons on 35 artifacts, and a nominal 0.048 among them is a reason to look again with
-more runs rather than a result. The report says so itself, in the output, every time.
+**The T1 result survived a fourfold corpus increase.** On 492 RFCs it was +0.226 bits at p = 0.048;
+on 1,974 it is +0.261 at p = 0.0455, with the per-artifact OOV rate falling from 13–24% to 1–5%
+and the training OOV from 2.7% to 0.4%. Quadrupling the background corpus is an independent
+perturbation, and an effect that was an artifact of a thin corpus would have washed out rather
+than strengthened. The pruned-against-kept null held too, and its tiny difference flipped sign,
+which is what noise looks like.
+
+What that does *not* fix is the sample. It is the same 35 artifacts with 7 in the fired group, so
+the p-value carries the same caveat it always did — a bigger corpus tests the measure, not the
+sample. Backlog item 1, multi-seed replay, is what tests the sample. The report prints the caveat
+beside the number every time.
 
 **Two things the measure will lie about if you let it.** It is relative to what it trained on:
 against these docs, "it is important to note that this is a comprehensive solution" scores as
@@ -181,6 +190,49 @@ against these docs, "it is important to note that this is a comprehensive soluti
 invented words to `<unk>`, which is common in the training data by construction, so nonsense reads
 as unremarkable rather than original. Mean surprisal is taken over in-vocabulary tokens only and
 the OOV rate is reported beside it.
+
+### Held-out perplexity, and the two defects finding it exposed
+
+```
+python -m adhd_analysis.text.evaluate --manifest corpora.yaml --orders 3,4,5 --out models/orders
+```
+
+Until this existed, "we trained on more text" was a claim with no way to be wrong. The trainer
+reports vocabulary size, n-gram count and wall clock, and **all three go up when the model gets
+worse**: a model that memorises its corpus has the largest table available.
+
+Documents are split by a deterministic stride, one in twenty held out, and the vocabulary is built
+from the training half only — `SplitLibrary` yields one side, so `train()` never sees the other.
+Building the vocabulary over everything hands the model every word it is about to be tested on and
+the OOV rate collapses for a reason that has nothing to do with the model. The stride is over
+*documents*, never sentences: two sentences from one RFC share a topic, an author and a vocabulary.
+
+Over 1,974 RFCs, 21.8M training tokens, scored on the same 1,088,715 held-out tokens:
+
+| order | n-grams | held-out perplexity | peak RSS | seconds |
+|---|---|---|---|---|
+| 3 | 7.5M | 46.2 | 1.9GB | 102 |
+| 4 | 16.7M | 38.6 | 4.9GB | 207 |
+| 5 | 27.8M | **36.0** | 9.2GB | 340 |
+
+**Order 5 has the best perplexity and order 4 is still the right default.** 3→4 buys 16.4% for
+2.2x the table; 4→5 buys 6.8% for another 1.7x and 9.2GB, which is past `Budget.weekly()`'s
+5120MB. Order 5 does not fit a hosted runner at this corpus size and order 4 fits with about 200MB
+to spare. The corpus size is what decides it, not taste.
+
+**The first run of this comparison got the answer backwards**, and its own output said so. It
+reported order 5 at perplexity 101.1 and named order 4 the winner. Two numbers gave it away: the
+vocabulary was identical across all three orders and the OOV rates were not, which is impossible on
+one held-out set. Scoring is deeper per token at a higher order, so the wall-clock ceiling shared
+with training truncated order 5's evaluation and not order 3's, and the three orders were ranked on
+three different slices of text. `comparable()` now refuses to print a ranking when the held-out
+token counts differ or any evaluation was cut short.
+
+**And loading a model was outside the budget entirely.** `Budget` governed reading a corpus and
+counting n-grams and nothing about reading the result back, so a model trained under a 9.5GB
+ceiling was loaded into a process that reached 11.9GB. `KneserNey.load` now takes an optional
+budget, and `Budget.touch()` exists because `spend(0)` never advances the counter that gates the
+periodic memory check — a load spends memory and no tokens.
 
 ### The ceiling
 

@@ -39,12 +39,24 @@ evidence. "The corpus is bigger now" is not — that is the ceiling working.
 Above those, the failure mode changes from a truncated model to a killed job, and the record that
 would tell you what happened is the thing that does not get written.
 
-**The arithmetic you are budgeting against, measured, not guessed.** At order 4 over RFC text:
-492 documents produced 5.63M tokens, 5.41M distinct n-grams, 1413MB peak resident set and 57
-seconds. That is roughly **250MB and 10 seconds per million tokens**, and the n-gram table is what
-dominates both. Against `Budget.weekly()`'s 5120MB, the resident-set ceiling binds at about 20M
-tokens — well before the 40M token ceiling does. So the token ceiling is not the one that will
-stop a growing corpus, and raising it changes nothing.
+**The arithmetic you are budgeting against, measured, not guessed.** Over 1,974 RFCs, 21.8M
+training tokens, one held-out document in twenty:
+
+| order | n-grams | held-out perplexity | peak RSS (train) | peak RSS (score) | seconds |
+|---|---|---|---|---|---|
+| 3 | 7.5M | 46.2 | ~2.0GB | 1889MB | 102 |
+| 4 | 16.7M | 38.6 | ~5.2GB | 4905MB | 207 |
+| 5 | 27.8M | **36.0** | ~9.5GB | 9153MB | 340 |
+
+**Order 5 has the best perplexity and you should still choose 4.** Going 3→4 buys 16.4% for 2.2x
+the table; 4→5 buys 6.8% for another 1.7x and pushes the resident set to 9.2GB. `Budget.weekly()`
+allows 5120MB, so order 5 does not fit on a hosted runner at this corpus size and order 4 does,
+with about 200MB to spare. That is the trade, and it is the corpus size that decides it: a smaller
+corpus makes 5 affordable and a larger one makes 4 marginal.
+
+Scoring costs about as much memory as training and is not free. A ceiling sized for training alone
+is a ceiling that bites during evaluation, which is how the first order comparison silently scored
+three orders on three different amounts of held-out text and named the wrong winner.
 
 **Prefer `min_count` and `order` over ceilings.** Both cut the table superlinearly and both are
 modelling decisions with a stated effect: `min_count` 2 to 3 roughly halves a technical

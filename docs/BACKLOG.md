@@ -319,6 +319,11 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     direction chosen too early — is a design argument and not a finding. It needs one real
     mission, which costs real tokens, and is the owner's call for the same reason D5 exists.
 
+74. **Order 5, if the corpus ever shrinks or the runner grows** (owner's call). Held-out
+    perplexity is best at order 5 (36.0 against 38.6) and it costs 9.2GB, past `Budget.weekly()`'s
+    5120MB. At this corpus size order 4 is the only one that fits a hosted runner. A smaller corpus
+    or a larger runner changes the answer, and D13 has the measured table to re-decide from.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.
