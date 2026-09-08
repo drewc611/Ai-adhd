@@ -259,7 +259,13 @@ can be wrong without saying so.
     `HORIZON` became `SUCCESSOR`. Every reader forwards at the point it reads; the recorded runs are
     not rewritten. Without it the corpus split and `frames --stats` listed the old and new ids as
     separate frames with one marked "not in library".
-57. A `config/` schema doc generated from the zod schemas.
+57. ~~A `config/` schema doc generated from the zod schemas~~ **Built** as `adhd schema-doc`, with the
+    output checked in at `docs/CONFIG.md` and a test that fails when the two disagree. Generated
+    because the hand-written version of this has already failed twice here: the README's layout block
+    omitted three directories, and `docs/RETIREMENT.md`'s standing table missed a frame the tooling had
+    put on its own list. It says explicitly what it cannot tell you — a generated table is honest about
+    shape and silent about intent — and points at the JSDoc and `docs/DECISIONS.md` for why a field
+    exists. `crossCheck`'s rules are named in the preamble because none of them is per-field.
 
 ### Distribution
 58. Publish to npm under a scoped name.

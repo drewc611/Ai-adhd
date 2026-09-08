@@ -11,6 +11,7 @@ import { doctor } from "./doctor.js";
 import { assertionHistory, lintFixtures, regressionGate } from "./fixtures.js";
 import { comparisonMatrix, exportRun, runTree } from "./report.js";
 import { completions, initConfig } from "./scaffold.js";
+import { configDoc } from "./schemadoc.js";
 import { dimensionCorrelation, interRater, interRaterCorpus, raterPanel, weightSensitivity } from "./learn.js";
 import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
@@ -412,6 +413,18 @@ os.command("stats")
       const root = o.osRoot ?? process.env.ADHD_OS_ROOT ?? "runs";
       const r = kernelStats(root);
       console.log(o.json ? JSON.stringify({ ...r, text: undefined }, null, 2) : r.text);
+    } catch (e) { fail(e); }
+  });
+
+program
+  .command("schema-doc")
+  .description("docs/CONFIG.md, generated from the zod schemas; a test fails when the checked-in copy drifts")
+  .option("--json", "the same document wrapped, for a caller that wants it alongside its destination")
+  .action((o) => {
+    try {
+      const markdown = configDoc();
+      if (o.json) console.log(JSON.stringify({ path: "docs/CONFIG.md", markdown }, null, 2));
+      else process.stdout.write(markdown);
     } catch (e) { fail(e); }
   });
 

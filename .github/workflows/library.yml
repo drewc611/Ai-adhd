@@ -32,6 +32,9 @@ jobs:
       - run: node dist/src/cli.js lint
       - run: node dist/src/cli.js eval
       - run: node dist/src/cli.js eval --gate
+      # docs/CONFIG.md is generated from the schemas. A config change that alters a field and
+      # leaves the doc behind is exactly the drift this file is path-filtered to catch.
+      - run: node dist/src/cli.js frames --drift
 
       # Reports. These are what a reviewer needs to read on a library change, and they are
       # deliberately not gates. `frames --orthogonality` exits non-zero on a flagged pair, and
