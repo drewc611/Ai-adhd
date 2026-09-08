@@ -1237,10 +1237,145 @@ provides. A 2.9x perplexity penalty for an economy that saved 7GB of memory the 
 
 ### What the corpus is, and what it is not
 
-4,901 RFCs, 615 PEPs, 529 EIPs. The PEPs and EIPs are CC0 or public domain and the RFCs are not,
-which is recorded in `docs/PROVENANCE.md` along with the position that matters: nothing is
+4,901 RFCs, 615 PEPs, 529 EIP *files*. The PEPs and EIPs are CC0 or public domain and the RFCs are
+not, which is recorded in `docs/PROVENANCE.md` along with the position that matters: nothing is
 redistributed, so the question is use rather than distribution.
+
+**Corrected in D15: 225 of those 529 EIP files were 130-byte forwarding stubs, so the real count was
+304 documents.** The wrong number is left above rather than edited out, because what it was wrong
+about is the point — a file count is not a document count, and nothing here checked.
 
 The mixed corpus is more *genre*-diverse and less *n-gram*-diverse than RFC-only text, which is
 counterintuitive and measured: 0.66 grams per token against 0.76. PEPs and EIPs share a template.
 Adding text is not the same as adding variety, and the ratio is how to tell which one happened.
+
+**Also corrected in D15:** blaming genre for all of that gap was wrong. A third run on the same genre
+mix at 68.0M tokens gives 0.62, so the ratio falls with corpus *size* as well, and by more than the
+genre difference accounts for.
+
+
+## D15. A 68M-token corpus, a third memory point, and two ceilings that could bind in silence
+
+**Asked.** Keep training on piles of text.
+
+**Resolved.** The existing sources were exhausted at the ranges already probed, so growing the pile
+meant either new sources or a wider network boundary. Both were available and only one was taken.
+
+### The corpus
+
+7,344 documents and 351MB across four third-party sources, up from 6,067 and 283MB.
+
+| source | files | bytes | licence |
+|---|---|---|---|
+| rfc | 6,330 | 335,047,210 | IETF Trust, BCP 78 |
+| pep | 615 | 11,785,368 | public domain and CC0-1.0 |
+| eip | 323 | 3,016,476 | CC0-1.0 |
+| erc | 54 | 882,724 | CC0-1.0 |
+
+The 1,429 new RFCs came from a source already in the allowlist, stopped by a byte ceiling rather than
+a request budget: probing is about 95% efficient there, 1,429 fetched against 71 missing. The ERCs
+are new and small, and the reason for adding them was never volume.
+
+### 43% of the EIP corpus was not a document
+
+225 of its 529 files were 128 to 132 bytes — four lines of front matter and "This file was moved to
+.../ERCS/erc-N.md" — left behind when Ethereum moved application-layer standards into
+`ethereum/ERCs`. That corrects a count this repository published in D14 and the README: 304 real
+documents, not 529.
+
+The count is the smaller half. 225 copies of identical four-line boilerplate were in the training
+text of a model whose only job is to say how predictable a document is. That is not a neutral absence
+of text; it is the most template-like prose available, and it was teaching the background model that
+engineering documents repeat themselves. The fetcher refuses a stub on arrival and sweeps cached ones
+out of the corpus directory — a sweep rather than a check inside the probe loop, because whether a
+stub gets removed should not depend on whether that run's spread landed on its number. The first
+version did it in the loop and left 214 of 225 in place.
+
+### The model
+
+| | tokens | vocab | n-grams | grams/token | peak RSS | MB/M grams | seconds |
+|---|---|---|---|---|---|---|---|
+| 1,974 RFCs | 22.9M | 101,051 | 17.4M | 0.76 | 4.7GB | 270 | 206 |
+| mixed, unpruned | 55.4M | 177,507 | 36.5M | 0.66 | 9.5GB | 260 | 622 |
+| **mixed + ERC** | **68.0M** | **205,907** | **42.4M** | **0.62** | **10.9GB** | **257** | **718** |
+
+`prunes: 0`, no ceiling bit on either pass, `vocab_truncated: {types: 0, tokens: 0}`.
+
+Held-out perplexity **6.396** on 3,464,186 tokens at 0.13% OOV, fingerprint `92cedd81b2261713`.
+
+**That is not an improvement on 6.06 and not a regression from it.** A larger corpus means a
+different stride split, so the fingerprint changed and `comparable_heldout` refuses the comparison —
+which is the function doing its job rather than an inconvenience. The two numbers are about two
+different tests, and the smaller one may simply be the easier set. Comparing them is the mistake D14
+recorded and this is the first run where refusing it costs something.
+
+### Grams-per-token falls with size, not only with genre
+
+D14 said 0.66 against 0.76 was because "PEPs and EIPs share a template". This run rules that out as
+the whole explanation: it is the same genre mix, it has a slightly *higher* RFC share (95.4% of bytes
+against 94.0%, which should push the ratio back toward 0.76), and the ratio fell again to 0.62. More
+text means more n-grams already seen. Genre matters too, and it is not the whole story — a memory
+estimate that extrapolates a small run's ratio to a large corpus will over-provision.
+
+MB per million n-grams is the stable factor: 270, 260, 257 across a 2.4x range in table size.
+
+### The T1 effect across five corpora
+
+| corpus | tokens | difference | p |
+|---|---|---|---|
+| 492 RFCs | 5.6M | +0.226 bits | 0.048 |
+| 1,974 RFCs | 22.9M | +0.261 | 0.0455 |
+| mixed, pruned | 40.0M | +0.224 | 0.0950 |
+| mixed, unpruned | 55.4M | +0.243 | 0.0780 |
+| mixed + ERC | 68.0M | +0.211 | 0.1339 |
+
+Twelve times the corpus and the difference stays between +0.21 and +0.26 bits. The p-value has now
+wandered to 0.134, which is further from 0.05 than any earlier run, and reading that as the effect
+weakening would be reading the p-value as the finding — the mistake D14 already had to correct once.
+What it is is a small effect measured on 7 artifacts against 28. **Background text is not the
+constraint and never was.** Backlog item 1, multi-seed replay, is the only thing that moves n.
+
+Pruned against kept stays null: −0.074 bits, p = 0.51, and its sign has changed between runs. That is
+what noise looks like.
+
+### Two ceilings that could have bound in silence
+
+Neither was found by a failing test. Both are the same class as the truncated tables D13 and D14 had
+to correct.
+
+**The weekly job wrote the corpus where nothing reads it.** `fetch_corpus.py --out` is the parent
+directory and each source gets a subdirectory, so `--out corpora/rfc` produces
+`corpora/rfc/rfc/*.txt` while `corpora.yaml` reads `corpora/rfc/*.txt`. Verified rather than
+inferred, with a one-probe run. Every third-party entry in the manifest is `required: false`, which
+is what makes a clean checkout trainable and also what makes this silent: the loader shrugs, training
+succeeds, the record looks plausible, and the model describes 250KB of the repository's own docs.
+`train.yml` had never fired, so no model was built that way — timing rather than a safeguard, so the
+fix ships with one. A step now fails the job when the fetched sources total under 10MB.
+
+**A vocabulary ceiling that bound was invisible.** `Vocab.build` reported one `dropped_types` count
+covering both types below `min_count` and types that met it and were cut because `max_size` filled
+up. Only the first is a modelling decision; the second raises the OOV rate for a reason the rate
+cannot show and makes perplexity incomparable. This mattered immediately: the run reached **205,907**
+types against a default ceiling of **200,000**, so the default would have bound and the record would
+not have said so. `vocab_truncated` is now in the record and the weekly job annotates it.
+
+### What was not taken
+
+Rust RFCs (MIT OR Apache-2.0) and Kubernetes KEPs (Apache-2.0) are better licensed than the largest
+source in the corpus and are the same genre. Neither is numerically enumerable and `rust-lang/rfcs`
+checks in no index — `SUMMARY.md` and `text/SUMMARY.md` are both 404 — so the only listing mechanism
+is GitHub's tree API. That means allowing `api.github.com` in the prefix allowlist and accepting a
+JSON response where the fetcher accepts `text/plain` and nothing else.
+
+D10 banned network in a scheduled job because a job that can fetch is a job that can fetch weights,
+and `text/plain` only is one of four things keeping the exception small. A JSON carve-out is a real
+widening of that boundary rather than another row in a table, so it is backlog item 75 and the
+owner's call.
+
+Bitcoin BIPs were refused for a different reason and the difference is worth keeping separate:
+`bitcoin/bips` has no repository licence file at all — `LICENSE`, `LICENSE.md` and `COPYING` are all
+404 — and each BIP carries its own non-uniform `License:` header. The plumbing here would fetch them.
+Doing so would mean reading a licence per document or asserting terms nobody read, and the second is
+how a corpus acquires text nobody checked. `UNLICENSED_AT_SOURCE` records it. The XMPP XEPs were
+dropped for a duller reason: the source form is XML, and a word-frequency model trained on it learns
+tag names.

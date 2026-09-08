@@ -58,17 +58,25 @@ Scoring costs about as much memory as training and is not free. A ceiling sized 
 is a ceiling that bites during evaluation, which is how the first order comparison silently scored
 three orders on three different amounts of held-out text and named the wrong winner.
 
-**Budget memory per n-gram, not per token.** Measured at order 4 on two unpruned runs:
+**Budget memory per n-gram, not per token.** Measured at order 4 on three unpruned runs:
 
 | corpus | tokens | n-grams | grams/token | peak RSS | MB per M grams |
 |---|---|---|---|---|---|
 | 1,974 RFCs | 22.9M | 17.4M | 0.76 | 4.7GB | 270 |
-| 4,901 RFCs + 615 PEPs + 529 EIPs | 55.4M | 36.5M | 0.66 | 9.5GB | 260 |
+| 4,901 RFCs + 615 PEPs + 529 EIP files | 55.4M | 36.5M | 0.66 | 9.5GB | 260 |
+| 6,330 RFCs + 615 PEPs + 323 EIPs + 54 ERCs | 68.0M | 42.4M | 0.62 | 10.9GB | 257 |
 
-**~265MB per million n-grams is stable. Grams-per-token is not** — it is a property of the corpus,
-0.76 on RFC-only text against 0.66 on the mixed corpus, because PEPs and EIPs carry boilerplate that
-repeats. So the memory a run needs is `grams_per_token × tokens × 265MB/M`, and the first factor has
-to be measured on the corpus at hand rather than carried over.
+**~260MB per million n-grams is stable across a 2.4x range.** So the memory a run needs is
+`grams_per_token × tokens × 260MB/M`, and the first factor has to be measured rather than carried
+over — it is 0.76, 0.66 and 0.62 on those three runs.
+
+**Grams-per-token falls with corpus size, and an earlier version of this brief blamed genre for all
+of it.** That version said 0.66 against 0.76 was because "PEPs and EIPs carry boilerplate that
+repeats". The third row rules that out: the second and third runs are the same genre mix, the third
+has a slightly *higher* RFC share (95.4% of bytes against 94.0%), and its ratio still fell to 0.62.
+More text means more n-grams already seen, so the ratio drops with scale whatever the sources are.
+Genre matters too; it is not the whole story, and a memory estimate that extrapolates a small run's
+ratio to a large one will over-provision.
 
 An earlier version of this table said 0.53 for the mixed corpus. That was wrong, and how it was
 wrong is worth keeping: it was derived from a *pruned* run by adding the counts-of-counts snapshot's
