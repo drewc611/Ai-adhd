@@ -1,0 +1,84 @@
+name: publish-python
+# The analysis package, to PyPI, on its own tag.
+#
+# Its own tag because it is its own package with its own version. `analysis/pyproject.toml` says
+# 0.1.0 while `package.json` says 0.0.1, and they move for different reasons: the TypeScript
+# version tracks the architecture, this one tracks the statistics. Sharing `v*` would force a
+# release of one every time the other changed.
+#
+# No stored token. PyPI's trusted publishing exchanges a GitHub OIDC identity for a credential that
+# expires within fifteen minutes, so the thing an attacker could steal from this repository does
+# not exist. It does need a one-time setup on PyPI naming this repository, this workflow file and
+# this environment; until that exists the upload step fails saying exactly that, which is the
+# correct failure for a publish nobody has authorised.
+on:
+  push:
+    tags: ["analysis-v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: build and check the distribution without uploading
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-python
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -e '.[dev]'
+        working-directory: analysis
+      - run: pytest
+        working-directory: analysis
+
+      - name: the tag is the version
+        if: github.event_name == 'push'
+        working-directory: analysis
+        run: |
+          TAG="${GITHUB_REF_NAME#analysis-v}"
+          HAVE=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$TAG" != "$HAVE" ]; then
+            echo "::error::tag says $TAG and pyproject.toml says $HAVE" >&2
+            exit 1
+          fi
+          echo "version agrees at $HAVE"
+
+      - name: build
+        working-directory: analysis
+        run: |
+          pip install build twine
+          python -m build
+          # `twine check` catches the README rendering failures PyPI rejects on upload, which is
+          # the one class of error that only shows up after the version number is spent.
+          twine check dist/*
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        if: github.event_name == 'push'
+        with:
+          packages-dir: analysis/dist
+
+      - name: summary
+        run: |
+          {
+            echo "## adhd-analysis"
+            echo
+            echo "\`pip install adhd-analysis\`"
+            echo
+            echo "Published with PyPI trusted publishing: no API token is stored in this repository."
+          } >> "$GITHUB_STEP_SUMMARY"

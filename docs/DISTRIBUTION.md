@@ -1,15 +1,59 @@
 # Distribution
 
-Four surfaces, at three different stages. What is live, what needs one credential the repository
-cannot hold, and what is blocked on architecture rather than on paperwork.
+Where this can go, what each venue is actually good for, and which ones need something only the
+owner can give. Researched against the live services rather than from memory: `ai-adhd` and
+`adhd-analysis` were both checked as available, and none of the four directories below has indexed
+this repository yet.
 
-| surface | state | what a user runs | blocked on |
+| venue | state | what a user runs | needs |
 |---|---|---|---|
-| Claude Code plugin marketplace | **live on merge** | `/plugin marketplace add drewc611/Ai-adhd` | nothing |
-| npm | ready, unpublished | `npx ai-adhd --help` | an `NPM_TOKEN` repository secret |
-| Official MCP Registry | ready, unpublished | any registry-aware MCP host | the npm publish above |
-| PyPI (`analysis/`) | ready, unpublished | `pip install adhd-analysis` | a PyPI token, and a decision that it is worth it |
-| OpenAI ChatGPT app directory | **not possible as built** | — | see below |
+| Claude Code marketplace | **live** | `/plugin marketplace add drewc611/Ai-adhd` | nothing |
+| GitHub Packages | **wired, fires on a tag** | authenticated `npm install` | nothing — `GITHUB_TOKEN` |
+| Citation metadata | **live** | GitHub's "Cite this repository" | nothing |
+| npm | wired, fires on a tag | `npx ai-adhd` | an `NPM_TOKEN` secret |
+| Official MCP Registry | wired, fires on a tag | any registry-aware host | the npm publish above |
+| PyPI (`analysis/`) | wired, fires on a tag | `pip install adhd-analysis` | one PyPI web form, no secret |
+| Zenodo DOI | ready | a citable DOI per release | one OAuth toggle |
+| Glama | auto-indexes GitHub | its directory | probably nothing |
+| Smithery, mcp.so, PulseMCP | submission | their directories | a form, after the registry |
+| OpenAI app directory | **refused** | — | see below |
+
+## The three that cost nothing
+
+**GitHub Packages** takes `GITHUB_TOKEN` with `packages: write`, minted per run and gone when the
+job ends. There is no secret to add and none to rotate. It is a second home for the same tarball
+rather than a substitute for npm: GitHub Packages requires an authenticated `npm install` even for
+a public package, so it reaches people who already have a token and not the `npx` case. The name is
+rewritten to `@drewc611/ai-adhd` for that step only, because GitHub Packages requires the scope to
+match the owner and the npmjs name is deliberately unscoped so `npx ai-adhd` works without one.
+
+**`CITATION.cff`** makes GitHub render a "Cite this repository" button immediately, and Zenodo
+reads the same file when the owner enables the integration. It costs a file.
+
+**PyPI** turns out not to need a token either. Trusted publishing exchanges a GitHub OIDC identity
+for a credential that expires within fifteen minutes, so the thing an attacker could steal from
+this repository does not exist. It needs one web form on PyPI naming this repository, this workflow
+and the `pypi` environment — a click, not a secret. Until that exists the upload step fails saying
+exactly that, which is the correct failure for a publish nobody has authorised.
+
+`publish-python.yml` fires on `analysis-v*` rather than `v*`, because the analysis package is its
+own package with its own version: `pyproject.toml` says 0.1.0 while `package.json` says 0.0.1, and
+they move for different reasons. Sharing a tag would force a release of one whenever the other
+changed.
+
+## The MCP directories
+
+The official registry feeds the rest, so it goes first and the others follow. Glama auto-indexes
+open-source MCP servers from GitHub and may pick this up without being asked; Smithery, mcp.so and
+PulseMCP take a submission. None of them is worth chasing before the registry entry exists, because
+the registry is what most of them read.
+
+## Zenodo
+
+A DOI per GitHub release, which is what makes the findings citable rather than linkable — the
+chance-corrected reliability result and the T1 sign result are the parts of this repository someone
+might want to reference. It needs the owner to authorise Zenodo against their GitHub account and
+toggle this repository on. `CITATION.cff` is already in place for when they do.
 
 ## Claude Code
 
@@ -94,9 +138,10 @@ The three remaining requirements are also things the repository cannot supply on
 the owner controls, the owner's own verified identity, and a role assignment in the owner's OpenAI
 organisation.
 
-## PyPI
+## PyPI, the part that changed
 
-`analysis/` is a working package with a console script and 43 tests, and nothing depends on it
-being installable from an index — `pip install -e analysis` is what CI does and what the trainer
-agent's brief says to run. Publishing it means owning a name and a release cadence for a package
-whose only consumer is this repository. Worth doing if someone asks; not worth doing first.
+An earlier version of this file said publishing `analysis/` was not worth doing first because it
+needed a token and a release cadence for a package whose only consumer is this repository. The
+token turned out not to be needed — trusted publishing is OIDC — and the cadence turned out to be
+free, because a separate tag prefix keeps it from dragging the TypeScript release along. What is
+left is one web form on PyPI, and `adhd-analysis` is still available.

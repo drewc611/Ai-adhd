@@ -938,6 +938,40 @@ server once the npm publish lands, and that includes hosts other than Claude Cod
 distribution to the MCP ecosystem, which is the part of "everywhere possible" that does not require
 becoming a different project.
 
+### D11 amendment: three surfaces that needed nothing after all
+
+Asked again where this could be published, the useful answer was not a longer list of directories.
+It was that two of the venues written off as needing a credential do not.
+
+**GitHub Packages takes `GITHUB_TOKEN`.** Minted per run, gone when the job ends, nothing stored
+and nothing to rotate. It is a second home for the same tarball rather than a substitute for npm —
+it requires an authenticated `npm install` even for a public package, so it reaches people who
+already have a token and not the `npx` case. The package name is rewritten to `@drewc611/ai-adhd`
+for that step alone, because the registry requires the scope to match the owner and the npmjs name
+is unscoped on purpose, and restored afterwards so the next step and the README's install line
+still refer to the same thing.
+
+**PyPI does not need a token either.** Trusted publishing exchanges a GitHub OIDC identity for a
+credential that expires within fifteen minutes, so the thing an attacker could steal from this
+repository does not exist. It needs one web form naming this repository, this workflow and the
+`pypi` environment. `publish-python.yml` fires on `analysis-v*` rather than `v*`: the analysis
+package has its own version for its own reasons — `pyproject.toml` at 0.1.0 against `package.json`
+at 0.0.1 — and a shared tag would force a release of one whenever the other moved.
+
+**`CITATION.cff` costs a file** and makes GitHub render a citation immediately. It carries no email
+address: an author is identified by name and alias, and an address in a public repository is a
+mailing list subscription nobody asked for. Zenodo reads the same file whenever the owner
+authorises it, which is the route that makes the reliability and T1 findings citable rather than
+merely linkable.
+
+The MCP directories — Glama, Smithery, mcp.so, PulseMCP — read the official registry, so none of
+them is worth chasing before that entry exists. Glama auto-indexes open-source servers from GitHub
+and may take this without being asked. Checked live: none has indexed this repository yet, and
+`ai-adhd` and `adhd-analysis` are both still available.
+
+`NPM_TOKEN` remains the single secret this repository cannot create for itself, and it now blocks
+exactly one surface rather than two.
+
 ## D12. The SuperAgent: a harness for hours of work that still never reasons
 
 **Asked.** A SuperAgent that researches, codes and creates, using sandboxes, memory, tools, skills,

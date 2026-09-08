@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "ADHD: Anchoring Defeat by Heterogeneous Divergence"
+message: "If you use this architecture or its findings, please cite it."
+type: software
+authors:
+  - alias: drewc611
+    name: "drewc611"
+repository-code: "https://github.com/drewc611/Ai-adhd"
+url: "https://github.com/drewc611/Ai-adhd#readme"
+license: MIT
+version: 0.0.1
+abstract: >-
+  A reasoning architecture in which N subagents reason under deliberately distorted frames in
+  genuinely separate context windows, a blind critic scores them against a rubric that punishes
+  fluency rather than rewarding it, eight written detectors prune mechanically, and what was pruned
+  ships alongside what was kept. The library compiles briefs, enforces the isolation contract and
+  scores what comes back; it never calls a model. Ships with a corpus analysis package reporting
+  chance-corrected inter-rater reliability and a background language model trained from scratch on
+  a document library.
+keywords:
+  - reasoning
+  - multi-agent
+  - subagent isolation
+  - anchoring
+  - inter-rater reliability
+  - Krippendorff alpha
+  - language model
+  - Model Context Protocol
