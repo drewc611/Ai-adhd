@@ -58,6 +58,25 @@ Scoring costs about as much memory as training and is not free. A ceiling sized 
 is a ceiling that bites during evaluation, which is how the first order comparison silently scored
 three orders on three different amounts of held-out text and named the wrong winner.
 
+**The n-grams-per-token ratio is a property of the corpus, not of the order, and the table above is
+only true of the corpus it was measured on.** Measured at order 4:
+
+| corpus | tokens | n-grams | per token | peak RSS |
+|---|---|---|---|---|
+| 1,974 RFCs | 22.9M | 17.4M | 0.76 | 4.7GB |
+| 4,901 RFCs + 615 PEPs + 529 EIPs | 40.0M | 21.3M before pruning | 0.53 | 4.2GB |
+
+The mixed corpus produces *fewer* distinct contexts per token, because PEPs and EIPs carry heavy
+boilerplate. So a prediction of which ceiling binds does not survive a change of corpus, and the
+one this brief made — "the resident set binds at about 20M tokens, well before the token ceiling" —
+was wrong on the very next run: at 40M tokens the resident set was 4.2GB against an 11GB ceiling and
+the **n-gram ceiling** bound first, pruning 8.9M singletons out of the table.
+
+**Read all four ceilings together before raising one.** Raising `max_rss_mb` alone is what caused
+that: a table pruned under a 12M n-gram ceiling while 7GB of memory sat unused. When a record shows
+`prunes > 0`, the model is a pruned model and its discounts came from a pre-prune snapshot — say so
+rather than treating it as a normal run.
+
 **Prefer `min_count` and `order` over ceilings.** Both cut the table superlinearly and both are
 modelling decisions with a stated effect: `min_count` 2 to 3 roughly halves a technical
 vocabulary's type count, and dropping order 5 to 4 removes the order where most of the singletons

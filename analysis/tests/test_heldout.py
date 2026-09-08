@@ -171,3 +171,41 @@ def test_orders_scored_on_different_text_are_refused_a_ranking(tmp_path):
 
     truncated = [OrderResult(3, rec, full), OrderResult(4, rec, full, truncated="wall clock: 5s >= 5s")]
     assert "truncated" in (comparable(truncated) or "")
+
+
+def test_a_heldout_number_carries_the_identity_of_the_text_it_was_scored_on(tmp_path):
+    """Two perplexities from different held-out sets are two numbers about two different tests.
+
+    The repository nearly published exactly that mistake: 38.6 on 1,974 RFCs against 17.4 on 6,067
+    mixed documents, read as the model improving when the added sources were simply more formulaic.
+    Invisible in the two numbers alone, which is why the fingerprint is carried rather than derived
+    at comparison time.
+    """
+    from adhd_analysis.text.evaluate import comparable_heldout
+
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    held = SplitLibrary(lib, every=10, side="heldout")
+    first = evaluate(model, held, Budget.smoke())
+    again = evaluate(model, held, Budget.smoke())
+    assert first.fingerprint and len(first.fingerprint) == 16
+    assert first.fingerprint == again.fingerprint, "the same held-out set fingerprinted differently"
+    assert comparable_heldout(first, again) is None
+
+    # A different stride is a different set of documents, so the numbers stop being comparable even
+    # though the corpus and the model did not change.
+    other = evaluate(model, SplitLibrary(lib, every=7, side="heldout"), Budget.smoke())
+    assert other.fingerprint != first.fingerprint
+    why = comparable_heldout(first, other)
+    assert why and "different held-out text" in why
+
+    # A bigger corpus is a different set too, which is the case that nearly got published.
+    bigger = evaluate(model, SplitLibrary(_library(tmp_path / "more", n=90), every=10, side="heldout"), Budget.smoke())
+    assert comparable_heldout(first, bigger) is not None
+
+    # A number from before fingerprints existed is refused rather than assumed to match.
+    from dataclasses import replace
+
+    assert "before held-out sets carried a fingerprint" in (comparable_heldout(first, replace(first, fingerprint="")) or "")

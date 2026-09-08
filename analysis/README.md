@@ -10,7 +10,7 @@ cd analysis
 pip install -e '.[dev]'
 python -m adhd_analysis --root ..              # the report
 python -m adhd_analysis --root .. --json       # the same numbers, machine readable
-pytest                                         # 57 tests
+pytest                                         # 58 tests
 ```
 
 ## Why this exists
