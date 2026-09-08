@@ -234,8 +234,21 @@ can be wrong without saying so.
     a diff.
 
 ### Config and library
-52. Config overlays, so a team can extend the shipped frames without forking.
-53. Frame versioning, so a stance edit does not silently invalidate old recordings.
+52. **Config overlays.** Not built, and it needs a decision first. `adhd init` copies, which forks:
+    a team that scaffolds gets no way to pull later library improvements, and I named that as a weak
+    point when shipping it. An overlay fixes that, but its merge semantics are a real choice — does
+    an overlay frame with an existing id replace it, or error? does a routing class merge its
+    `frames` list or replace it? — and every answer changes what a recorded run's `frame_hash` means
+    for someone running a merged library. Owner's call, backlog 71.
+53. ~~Frame versioning~~ **Built** as `frame_hash` on each planned branch, reported by
+    `adhd frames --drift`. `former_ids` handles a rename; nothing handled a stance edit, so
+    changing what PARTICULARIST is instructed to do left every recorded run still saying
+    PARTICULARIST — `frames --stats` pooling two different frames as one, `--orthogonality`
+    pooling their pair histories, and `docs/RETIREMENT.md`'s bar counted across both. The hash
+    covers axis, attacks, tools, stance, probes and forbidden, and deliberately not `name` or
+    `former_ids`: a rename must not read as a redefinition, which is the point of having two
+    mechanisms. All 35 recorded branches predate the stamp and report **unknown, not unchanged** —
+    assuming they match would invent the fact the report exists to establish.
 54. ~~A rubric linter~~ **Built** into `adhd doctor`, and deliberately not a quality judgement:
     CLAUDE.md forbids replacing the critic rubric with one. It checks arithmetic and shape —
     anchors contiguous from zero, weights positive, every dimension on the same anchor range

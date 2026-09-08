@@ -239,7 +239,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 docs/       architecture, traps, decisions, features, backlog, retirement
 evals/      fixtures with must_surface assertions, recorded runs and controls
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       343 tests over all of it
+test/       348 tests over all of it
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     the four subagent definitions and their tool grants
 assets/     the mark, the banner, the run explorer shell
@@ -283,6 +283,7 @@ node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates i
 node dist/src/cli.js frames --collisions     # which frame names are also ordinary prose
 node dist/src/cli.js frames --health         # docs/RETIREMENT.md's bar, counted
 node dist/src/cli.js frames --axes           # frames per axis, and axes no run has exercised
+node dist/src/cli.js frames --drift          # runs that used a frame whose definition has changed since
 node dist/src/cli.js cost                    # token spend per run, by phase and by frame, against the estimate
 node dist/src/cli.js os stats                # throughput, phase timing and lease expiry rate from the journal
 node dist/src/cli.js replay                  # re-render every recorded synthesis and report drift

@@ -225,6 +225,12 @@ export const PlanBranchSchema = z
     axis: z.string(),
     agent: z.enum(["adhd-branch", "adhd-branch-search"]),
     tools: z.array(ToolNameSchema),
+    /**
+     * The frame's definition when this branch was dispatched (catalogue 53). Optional, because
+     * every run recorded before this existed has none, and inventing one for them would claim
+     * knowledge the corpus does not have. `adhd frames --drift` reports those as unknown.
+     */
+    frame_hash: z.string().optional(),
     brief_path: z.string(),
     artifact_path: z.string(),
   })

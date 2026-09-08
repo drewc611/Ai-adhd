@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameHealth, frameStats, labelCollisions, orthogonality } from "../src/frames.js";
+import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameStats, labelCollisions, orthogonality } from "../src/frames.js";
+import { frameHash } from "../src/hash.js";
+import { compile } from "../src/compile.js";
 
 /** A recorded run is a directory with score.json and, optionally, deepen/<frame>.yaml. */
 function recordRun(
@@ -390,4 +392,79 @@ test("axis coverage names every axis in the library and marks the ones no run ha
   const mechanism = a.axes.find((x) => x.axis === "mechanism")!;
   assert.deepEqual(mechanism.frames.sort(), ["FIRST_PRINCIPLES", "MECHANIC"]);
   assert.deepEqual(mechanism.exercised, ["MECHANIC"]);
+});
+
+// ---- frame definition drift (catalogue 53) --------------------------------------------------
+
+test("a frame hash covers what a branch is asked to do, and not what the frame is called", () => {
+  // The two mechanisms have to stay separate. `former_ids` says a frame was renamed; the hash
+  // says a frame was redefined. If renaming changed the hash, every rename would read as a
+  // redefinition and the corpus would report drift for a change that altered no instruction.
+  const f = cfg.frames.frames.find((x) => x.id === "PARTICULARIST")!;
+  const base = frameHash(f);
+  assert.equal(frameHash({ ...f, name: "Something else" } as typeof f), base, "a display-name change is not a redefinition");
+  assert.equal(frameHash({ ...f, attacks: [...f.attacks].reverse() } as typeof f), base, "attack order is not meaningful");
+  assert.notEqual(frameHash({ ...f, stance: f.stance + " Also do this." } as typeof f), base, "a stance edit changes what the branch is asked to do");
+  assert.notEqual(frameHash({ ...f, probes: [...f.probes, "another question"] } as typeof f), base);
+  assert.notEqual(frameHash({ ...f, forbidden: f.forbidden.slice(1) } as typeof f), base);
+  assert.notEqual(frameHash({ ...f, tools: ["WebSearch"] } as typeof f), base);
+});
+
+test("a run recorded before the stamp is unknown, which is not unchanged", () => {
+  // Assuming the corpus matches would invent the fact the report exists to establish.
+  const d = frameDrift(cfg);
+  assert.deepEqual(d.changed, []);
+  assert.ok(d.unknown.length >= 35, `only ${d.unknown.length} branches read as unknown`);
+  for (const r of d.rows) assert.equal(r.changed, null);
+  assert.match(d.text, /unknown is not unchanged/);
+});
+
+test("a stamped run whose frame has since been edited reports CHANGED", () => {
+  // The mechanism, exercised rather than asserted. Without it a stance edit leaves every
+  // recorded run still saying the frame's name, so `frames --stats` pools two different frames
+  // as one and RETIREMENT.md's bar is counted across both.
+  const dir = join(tmp(), "recorded");
+  const run = join(dir, "999-stamped");
+  mkdirSync(run, { recursive: true });
+  const edited = cfg.frames.frames.find((f) => f.id === "LEDGER")!;
+  writeFileSync(
+    join(run, "plan.json"),
+    JSON.stringify({
+      branches: [
+        { frame: "LEDGER", frame_hash: frameHash({ ...edited, stance: "a different instruction entirely" }) },
+        { frame: "PARTICULARIST", frame_hash: frameHash(cfg.frames.frames.find((f) => f.id === "PARTICULARIST")!) },
+      ],
+    }),
+  );
+  const d = frameDrift(cfg, dir);
+  assert.deepEqual(d.changed.map((r) => r.frame), ["LEDGER"]);
+  assert.equal(d.rows.find((r) => r.frame === "PARTICULARIST")!.changed, false);
+  assert.match(d.text, /^CHANGED\s+999-stamped\/LEDGER/m);
+  assert.match(d.text, /not evidence about the frame that carries the id today/);
+});
+
+test("drift forwards a renamed frame rather than reporting it as gone", () => {
+  // A run that wrote END_USER is a run about SUPPLICANT. Reporting it as a frame the library no
+  // longer has would turn every rename into a false drift finding.
+  const dir = join(tmp(), "recorded");
+  const run = join(dir, "999-renamed");
+  mkdirSync(run, { recursive: true });
+  const supplicant = cfg.frames.frames.find((f) => f.id === "SUPPLICANT")!;
+  writeFileSync(join(run, "plan.json"), JSON.stringify({ branches: [{ frame: "END_USER", frame_hash: frameHash(supplicant) }] }));
+  const d = frameDrift(cfg, dir);
+  assert.equal(d.rows.length, 1);
+  assert.equal(d.rows[0]!.frame, "SUPPLICANT");
+  assert.equal(d.rows[0]!.changed, false, "a rename read as a redefinition");
+});
+
+test("a new compile stamps every branch, so the corpus stops being unknown from here", () => {
+  const r = compile(cfg, "What timeouts should I set on this HTTP client?", { problem_class: "design_decision" }, { seed: 1 });
+  assert.equal(r.kind, "plan");
+  if (r.kind !== "plan") return;
+  const plan = r.plan;
+  assert.ok(plan.branches.length >= 5);
+  for (const b of plan.branches) {
+    assert.ok(b.frame_hash, `${b.frame} was dispatched without a definition stamp`);
+    assert.equal(b.frame_hash, frameHash(cfg.frames.frames.find((f) => f.id === b.frame)!));
+  }
 });
