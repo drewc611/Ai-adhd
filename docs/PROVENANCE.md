@@ -78,6 +78,11 @@ is not the same per source. Measured 2026-09-08:
   0% in 200–600, 21% in 600–1200, 8% in 1200–2000, 0% in 2000–4000, 4% above — so no upper bound
   makes uniform probing efficient, and reaching N documents costs roughly 10N requests. The
   `missing` count in the fetcher's output is that yield rather than a fault.
+- **ERCs**: 54 documents from 600 probes, 9%, which is the EIP figure and for the same reason — the
+  two series share one number space. The 883KB it yielded is small next to a 335MB corpus, and the
+  point of adding the source was never the volume: it is where the EIP stubs' text went.
+- **RFCs**: the opposite problem. 1,429 fetched against 71 missing on the top-up run, so probing is
+  about 95% efficient and the constraint is the byte ceiling rather than the request count.
 
 ### Why these and not others
 
