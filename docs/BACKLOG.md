@@ -302,10 +302,15 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     it? Each answer changes what `frame_hash` means for a run under a merged library, and one of
     them quietly makes the drift report unable to say which definition ran.
 
-72. **Publishing to npm** (owner's action). The package is verified — a test reconstructs the
-    tarball's file list and asserts the CLI, `adhd doctor` and `scripts/demo.sh` all work from it —
-    but publishing needs credentials and a decision about the name, which `package.json` currently
-    leaves as the unscoped `adhd`.
+72. ~~**Publishing to npm** (owner's action).~~ **The name decided itself and the pipeline is
+    built; one secret remains.** npm already serves `adhd`: a 2022 stub at 0.0.0, description
+    "unstable wip, do not use atm". Publishing under it is a 403 that reads like a permissions
+    problem, so the package is now `ai-adhd` and the CLI binary is still `adhd`.
+    `.github/workflows/release.yml` publishes on a `v*` tag and then registers the same version
+    with the official MCP Registry, which needs no secret because it verifies the
+    `io.github.drewc611/*` namespace from the workflow's own OIDC identity. **npm still needs an
+    `NPM_TOKEN` repository secret, which only the owner can add.** Until it is there, a tag fails
+    at the npm step with that sentence. See `docs/DISTRIBUTION.md`.
 
 ## Not doing, and why
 

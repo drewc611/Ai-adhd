@@ -136,13 +136,36 @@ test("the skill has a name and a description that says when not to use it", () =
   assert.match(String(fm["description"]), /Do not use/i);
 });
 
-test("plugin.json points at existing skill, agents, and MCP entry", () => {
+test("plugin.json ships the four run agents and nothing that maintains this repository", () => {
   const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
   assert.deepEqual(p["skills"], ["./skills/adhd", "./skills/adhd-worker"]);
-  assert.deepEqual(p["agents"], ["./agents"]);
+
+  // Not `./agents`. That directory also holds adhd-trainer and adhd-governor, which maintain this
+  // repository's background model and would arrive at a plugin user as two agents referencing
+  // paths they do not have.
+  const shipped = p["agents"] as string[];
+  assert.deepEqual([...shipped].sort(), Object.keys(PERMITTED).map((f) => `./agents/${f}`).sort());
+  for (const rel of shipped) assert.ok(existsSync(join(cfg.root, rel)), `plugin.json ships ${rel}, which is not there`);
+  for (const m of Object.keys(MAINTENANCE))
+    assert.ok(!shipped.includes(`./agents/${m}`), `plugin.json ships ${m}, a maintenance agent`);
+});
+
+/**
+ * `dist/` is gitignored, so a plugin installed from the git source has no built MCP server. The
+ * launcher exists to turn ERR_MODULE_NOT_FOUND with a path inside the host's plugin cache into a
+ * sentence naming the two commands that fix it.
+ */
+test("the MCP entry goes through the launcher, which is committed and diagnoses a missing build", () => {
+  const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
   const mcp = (p["mcpServers"] as Record<string, { command: string; args: string[] }>)["adhd"]!;
   assert.equal(mcp.command, "node");
-  assert.match(mcp.args[0]!, /dist\/src\/mcp\.js$/);
+  assert.match(mcp.args[0]!, /bin\/adhd-mcp\.mjs$/);
+
+  const launcher = join(cfg.root, "bin", "adhd-mcp.mjs");
+  assert.ok(existsSync(launcher), "bin/adhd-mcp.mjs is not committed, so the plugin points at nothing");
+  const body = readFileSync(launcher, "utf8");
+  assert.match(body, /npm install && npm run build/, "the launcher does not say how to fix a missing build");
+  assert.ok(!/execSync|spawn|child_process/.test(body), "the launcher builds on the user's behalf; hosts start servers without asking");
 });
 
 test("every path package.json publishes exists after a build", () => {

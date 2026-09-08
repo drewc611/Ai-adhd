@@ -1,5 +1,5 @@
 {
-  "name": "adhd",
+  "name": "ai-adhd",
   "version": "0.0.1",
   "description": "Anchoring Defeat by Heterogeneous Divergence. Compiler, validator, scorer, and eval harness for a subagent reasoning architecture. Never calls a model.",
   "type": "module",
@@ -19,6 +19,7 @@
     "assets",
     "LICENSE",
     "README.md",
+    "bin",
     "scripts",
     "agents",
     "skills",
@@ -69,5 +70,6 @@
       "import": "./dist/src/index.js"
     },
     "./package.json": "./package.json"
-  }
+  },
+  "mcpName": "io.github.drewc611/adhd"
 }

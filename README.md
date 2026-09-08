@@ -236,10 +236,11 @@ carrying it.
 ```
 config/     frames, routing, critic rubric      <- the actual IP
 prompts/    orchestrator, branch, critic, deepen, synthesis
-docs/       architecture, traps, decisions, features, backlog, retirement, config (generated)
+docs/       architecture, traps, decisions, manifest, distribution, backlog, config (generated)
 evals/      fixtures with must_surface assertions, recorded runs and controls
+bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       376 tests over all of it
+test/       384 tests over all of it
 analysis/   Python: reliability, bootstrap intervals, a language model trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one)
 agents/     four run subagents, plus the trainer and its governor
@@ -260,13 +261,27 @@ measuring instrument.
 
 ## Install
 
-As a Claude Code plugin, from a checkout:
+As a Claude Code plugin, from the marketplace this repository is:
+
+```
+/plugin marketplace add drewc611/Ai-adhd
+/plugin install adhd@adhd
+```
+
+The skill, the four run agents and the commands work immediately. The MCP server needs a build,
+because `dist/` is a build artifact; `bin/adhd-mcp.mjs` says so in a sentence rather than failing
+with a path inside the host's plugin cache.
+
+From a checkout, with everything built:
 
 ```
 git clone https://github.com/drewc611/Ai-adhd.git && cd Ai-adhd
 npm install && npm run build
-claude plugin add .            # or point your plugin marketplace at this directory
+claude plugin marketplace add .
 ```
+
+`docs/DISTRIBUTION.md` covers the other surfaces: npm, the official MCP Registry, and why the
+OpenAI app directory is blocked on architecture rather than on paperwork.
 
 The plugin registers the `/adhd` skill, the branch, critic, and deepen agents, and the MCP
 server. The MCP server can also be used on its own by any MCP host:
@@ -355,7 +370,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D10 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D11 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing

@@ -10,22 +10,30 @@
     "reasoning",
     "divergence",
     "subagents",
-    "critic"
+    "critic",
+    "isolation",
+    "eval",
+    "mcp"
   ],
   "skills": [
     "./skills/adhd",
     "./skills/adhd-worker"
   ],
   "agents": [
-    "./agents"
+    "./agents/adhd-branch.md",
+    "./agents/adhd-branch-search.md",
+    "./agents/adhd-critic.md",
+    "./agents/adhd-deepen.md"
   ],
   "mcpServers": {
     "adhd": {
       "command": "node",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/dist/src/mcp.js"
+        "${CLAUDE_PLUGIN_ROOT}/bin/adhd-mcp.mjs"
       ]
     }
   },
-  "repository": "https://github.com/drewc611/Ai-adhd"
+  "repository": "https://github.com/drewc611/Ai-adhd",
+  "displayName": "ADHD",
+  "homepage": "https://github.com/drewc611/Ai-adhd#readme"
 }

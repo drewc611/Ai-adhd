@@ -858,3 +858,82 @@ fired group, and a nominal p of 0.048. `docs/EXPERIMENTS.md` refuses to act on f
 and so does this entry. It is a reason to want more runs, which is backlog item 1, and it is not a
 finding. The report prints that caveat in its own output every time it prints the number, because
 the number will otherwise be quoted without it.
+
+## D11. Distribution: which marketplaces this can be on, and one it cannot
+
+**Asked.** Get it onto the Claude marketplace, and onto every marketplace possible including
+OpenAI's and Anthropic's.
+
+**Resolved.** Live on the Claude Code plugin surface. Built and one secret away on npm and the
+official MCP Registry. Refused on OpenAI, for a reason that is architecture rather than paperwork.
+
+### There is no Anthropic marketplace to submit to, and that is not a problem
+
+Claude Code ships Anthropic's own marketplace pre-registered and reserves its names
+(`claude-code-marketplace`, `claude-plugins-official`, `anthropic-plugins` and others). There is no
+public submission process for third parties. Distribution works the other way round: a marketplace
+*is* a git repository with a `.claude-plugin/marketplace.json` in it, and users add it by name.
+
+So this repository is now its own marketplace. `/plugin marketplace add drewc611/Ai-adhd`, then
+`/plugin install adhd@adhd`. Nothing is pending and nobody has to approve it.
+
+**A defect the packaging work exposed.** `dist/` is a build artifact and is gitignored, so a plugin
+installed from the git source had an `mcpServers` entry pointing at a file that was not there. The
+host would have reported `ERR_MODULE_NOT_FOUND` with a path inside its own plugin cache, which
+tells a user nothing. `bin/adhd-mcp.mjs` now sits in front of it and prints what is missing and the
+one or two commands that fix it, varying on whether `node_modules` is present. It deliberately does
+not build: hosts start MCP servers without asking, and a server that runs `npm install` on first
+start is a surprise with a network fetch in it.
+
+**The plugin ships four agents, not six.** `agents/` also holds `adhd-trainer` and `adhd-governor`,
+which maintain this repository's own background model. Shipping `./agents` wholesale would hand a
+plugin user two agents referencing paths they do not have, so `plugin.json` names the four run
+agents explicitly and a test fails if a maintenance agent appears in that list.
+
+### The npm name decided itself
+
+npm already serves `adhd` — a 2022 stub at version 0.0.0, description "unstable wip, do not use
+atm". Publishing under it returns a 403 that reads like a permissions problem rather than a name
+collision. Backlog item 72 called the name the owner's decision; the registry made it. The package
+is `ai-adhd`, matching the GitHub repository, and the CLI binary is still `adhd`.
+
+### The registry order is load-bearing
+
+`.github/workflows/release.yml` fires on a `v*` tag: gates, then npm, then the MCP Registry. npm
+first because the registry proves package ownership by reading `mcpName` out of the published
+`package.json` and checking it matches the server name being claimed. Reversed, the publish fails
+naming a missing field rather than the race that caused it.
+
+The registry step needs no secret. It authenticates with GitHub OIDC, which is what proves the
+`io.github.drewc611/*` namespace: that namespace is claimable only by a workflow running in a
+repository owned by drewc611. npm has no equivalent path, so `NPM_TOKEN` is a stored secret and is
+the one thing here the repository cannot create for itself. Until it exists a tag fails at that
+step with exactly that sentence.
+
+Four files carry the version — `package.json`, `server.json`, `plugin.json`, `marketplace.json` —
+and they disagree silently. `test/marketplace.test.ts` checks them against each other on every
+run, and the release workflow checks all four against the tag before publishing anything.
+
+### OpenAI is refused, and not for want of an account
+
+The ChatGPT app directory takes MCP servers. Its requirements are a stable publicly reachable
+HTTPS endpoint serving `/mcp`, domain verification through a token at
+`/.well-known/openai-apps-challenge`, developer identity verification, and an organisation role
+carrying Apps Management write.
+
+The first one does not survive contact with D2. This MCP server is stdio and local because the
+*host* supplies inference by spawning isolated subagents; the server compiles briefs and validates
+contracts and never calls a model. A hosted remote server has no subagents to spawn, so it would
+have to call one to do anything — the inference client CLAUDE.md bans on its first page. And D2's
+argument is not about cost or vendor lock-in: branch isolation is a property of separate context
+windows, and a remote server holding one conversation has none. Publishing there would mean
+shipping something that demonstrates the opposite of what this repository claims.
+
+The other three are things only the owner can supply: a domain they control, their own verified
+identity, and a role assignment in their OpenAI organisation. They are not the reason for the
+refusal, but they would each independently block it.
+
+The nearest thing that is possible: any MCP host that reads the official registry will find this
+server once the npm publish lands, and that includes hosts other than Claude Code. That is
+distribution to the MCP ecosystem, which is the part of "everywhere possible" that does not require
+becoming a different project.

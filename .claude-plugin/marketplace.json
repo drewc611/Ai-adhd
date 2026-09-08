@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "adhd",
+  "description": "Anchoring Defeat by Heterogeneous Divergence: N isolated subagents under distorted frames, a blind critic, mechanical trap detectors, and adversarial deepening.",
+  "owner": {
+    "name": "drewc611",
+    "url": "https://github.com/drewc611"
+  },
+  "plugins": [
+    {
+      "name": "adhd",
+      "source": "./",
+      "displayName": "ADHD",
+      "description": "Runs a reasoning problem through five to seven isolated subagents under deliberately distorted frames, scores them blind against a rubric that punishes fluency, prunes on eight written trap detectors, and ships what it pruned along with what it kept.",
+      "version": "0.0.1",
+      "author": {
+        "name": "drewc611",
+        "url": "https://github.com/drewc611"
+      },
+      "homepage": "https://github.com/drewc611/Ai-adhd#readme",
+      "repository": "https://github.com/drewc611/Ai-adhd",
+      "license": "MIT",
+      "category": "reasoning",
+      "keywords": [
+        "reasoning",
+        "divergence",
+        "subagents",
+        "critic",
+        "isolation",
+        "eval",
+        "mcp"
+      ],
+      "tags": [
+        "multi-agent",
+        "critique",
+        "decision-making",
+        "research"
+      ]
+    }
+  ]
+}
