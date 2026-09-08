@@ -73,13 +73,103 @@ def test_every_source_records_a_licence_and_where_it_was_verified():
         assert source.licence_url.startswith("https://"), f"{source.name} has no verifiable licence url"
     # The one source that is not under a free licence must say so rather than reading like the rest.
     assert "not a free licence" in fetch_corpus.SOURCES["rfc"].licence
-    for name in ("pep", "eip"):
+    for name in ("pep", "eip", "erc"):
         assert "CC0" in fetch_corpus.SOURCES[name].licence
 
     # Recorded rather than guessed at: licence verified, enumeration not implemented.
     assert set(fetch_corpus.UNIMPLEMENTED) == {"rust-rfcs", "k8s-keps"}
     for lic, url in fetch_corpus.UNIMPLEMENTED.values():
         assert lic and url.startswith("https://")
+
+    # A different refusal with a different reason, and the distinction is the point. These two are
+    # reachable and numerically enumerable, so the plumbing is not what stops them: `bitcoin/bips`
+    # has no repository licence file and each BIP carries its own non-uniform `License:` header.
+    assert set(fetch_corpus.UNLICENSED_AT_SOURCE) == {"bitcoin-bips"}
+    for why, url in fetch_corpus.UNLICENSED_AT_SOURCE.values():
+        assert why and url.startswith("https://")
+        assert not any(url.startswith(p) for p in fetch_corpus.allowed_prefixes()), url
+
+
+STUB = (
+    b"---\neip: 20\ncategory: ERC\nstatus: Moved\n---\n\n"
+    b"This file was moved to https://github.com/ethereum/ercs/blob/master/ERCS/erc-20.md\n"
+)
+
+
+def test_a_forwarding_stub_is_never_written_to_disk(tmp_path, monkeypatch):
+    """225 of these were 43% of the EIP corpus's file count and none of them is a document.
+
+    Identical boilerplate repeated 225 times is worse than absent: it is exactly the template text
+    that teaches a background model to find engineering prose predictable, which is the measurement
+    the genericity report exists to make.
+    """
+    source = fetch_corpus.SOURCES["eip"]
+    monkeypatch.setattr(fetch_corpus.time, "sleep", lambda _: None)
+    monkeypatch.setattr(fetch_corpus, "get", lambda url, timeout=60.0: STUB if "eip-20." in url else b"real text\n")
+
+    result = fetch_corpus.fetch_source(source, tmp_path, limit=source.highest, delay=0.0, max_bytes=10**9, spread=False)
+
+    assert result.stubs >= 1
+    written = sorted(p.name for p in tmp_path.glob("*.md"))
+    assert source.filename.format(n=20) not in written
+    assert written, "the non-stub responses should still have been written"
+    for name in written:
+        assert b"This file was moved" not in (tmp_path / name).read_bytes()
+
+
+def test_the_sweep_removes_a_cached_stub_this_run_would_never_have_probed(tmp_path):
+    """The reason the sweep is a sweep and not a check inside the probe loop.
+
+    The first version checked `dest.exists()` for each candidate number, so a stub only got removed
+    if that run's spread happened to land on it. It left 214 of 225 in place. Nothing here makes a
+    request: a stub on disk is already known to be one.
+    """
+    source = fetch_corpus.SOURCES["eip"]
+    unprobed = tmp_path / source.filename.format(n=7999)
+    unprobed.write_bytes(STUB)
+    real = tmp_path / source.filename.format(n=1)
+    real.write_bytes(b"a real document\n" * 400)
+
+    removed = fetch_corpus.sweep_stubs(source, tmp_path)
+
+    assert removed == 1 and not unprobed.exists() and real.exists()
+    assert fetch_corpus.sweep_stubs(source, tmp_path) == 0, "the sweep is not idempotent"
+
+
+def test_the_sweep_does_not_read_large_documents_off_disk(tmp_path):
+    """A 141KB document is not a 130-byte stub and the sweep must not open one to find that out.
+
+    Without the size guard this reads every file in a 5,000-file corpus on every run. The document
+    below carries the marker text on purpose: size decides first.
+    """
+    source = fetch_corpus.SOURCES["eip"]
+    big = tmp_path / source.filename.format(n=1)
+    big.write_bytes(b"x" * 5000 + STUB)
+
+    assert fetch_corpus.sweep_stubs(source, tmp_path) == 0 and big.exists()
+
+
+def test_a_source_with_no_stub_marker_is_swept_over(tmp_path):
+    """`rfc` has no marker, so the sweep must not touch its cache whatever the files contain."""
+    source = fetch_corpus.SOURCES["rfc"]
+    assert not source.stub_marker
+    cached = tmp_path / source.filename.format(n=1)
+    cached.write_bytes(STUB)
+
+    assert fetch_corpus.sweep_stubs(source, tmp_path) == 0 and cached.exists()
+
+
+def test_eip_and_erc_cannot_write_the_same_file_or_read_the_same_url():
+    """The two series share a number space, so overlap would double-count identical documents.
+
+    They cannot: a number lives in one repository or the other, the one it left holds a stub the
+    fetcher refuses, and the filenames differ anyway so a mixed corpus directory stays legible.
+    """
+    eip, erc = fetch_corpus.SOURCES["eip"], fetch_corpus.SOURCES["erc"]
+    assert eip.filename.format(n=20) != erc.filename.format(n=20)
+    assert set(eip.prefixes).isdisjoint(erc.prefixes)
+    assert not any(erc.template.startswith(p) for p in eip.prefixes)
+    assert not any(eip.template.startswith(p) for p in erc.prefixes)
 
 
 def test_the_refusal_list_covers_the_weight_formats():

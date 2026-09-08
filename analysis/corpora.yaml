@@ -67,6 +67,17 @@ corpora:
     include: ["*.md"]
     licence: "CC0-1.0"
 
+  # Where 225 of the EIP numbers went. Ethereum moved application-layer standards into
+  # `ethereum/ERCs` and left a 130-byte forwarding file at each vacated number, so 43% of the EIP
+  # corpus's file count was four lines of front matter and a URL. The fetcher refuses those now and
+  # takes the real text from here. Same process, same CC0 dedication, no overlap: a number lives in
+  # one repository or the other.
+  - name: erc
+    path: corpora/erc
+    required: false
+    include: ["*.md"]
+    licence: "CC0-1.0"
+
   # Anything else on disk. Replace `path` and set `enabled: true`.
   - name: library
     path: /path/to/your/documents
