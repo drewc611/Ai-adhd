@@ -98,3 +98,58 @@ test("the release workflow is tag-driven, uses OIDC, and stores no registry toke
   // order fails describing a missing field rather than a race.
   assert.ok(wf.indexOf("npm publish --provenance") < wf.indexOf("mcp-publisher publish"), "the registry publish runs before npm");
 });
+
+// ---- the surfaces added after the first release path ----------------------------------------
+
+test("CITATION.cff exists, parses, and agrees with package.json", () => {
+  const p = join(ROOT, "CITATION.cff");
+  assert.ok(existsSync(p), "no CITATION.cff, so GitHub renders no citation and Zenodo has no metadata");
+  const cff = readFileSync(p, "utf8");
+  for (const key of ["cff-version:", "message:", "title:", "authors:", "type: software"])
+    assert.ok(cff.includes(key), `CITATION.cff has no ${key}`);
+  assert.match(cff, new RegExp(`^version: ${pkg["version"]}$`, "m"), "the citation advertises a version the package does not carry");
+  assert.match(cff, new RegExp(`^license: ${pkg["license"]}$`, "m"));
+  // The owner's email is theirs, and a citation file is a published file. Name and alias identify
+  // an author; an address in a public repository is a mailing list subscription they did not ask for.
+  assert.ok(!/@[a-z0-9.-]+\.[a-z]{2,}/i.test(cff.replace(/https?:\/\/\S+/g, "")), "CITATION.cff carries an email address");
+});
+
+/**
+ * GitHub Packages is the only registry here that needs no stored secret, and that is the whole
+ * reason it is worth having. A step that reached for a personal token instead would give up the
+ * property without changing what it publishes.
+ */
+test("the GitHub Packages step uses the run's own token and nothing stored", () => {
+  const wf = readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf8");
+  const step = wf.slice(wf.indexOf("publish to GitHub Packages"), wf.indexOf("- name: summary"));
+  assert.ok(step.length > 0, "there is no GitHub Packages step");
+  assert.match(step, /secrets\.GITHUB_TOKEN/, "the step does not use the run's own token");
+  assert.ok(!/secrets\.(NPM_TOKEN|NODE_TOKEN|PAT|GH_TOKEN)/.test(step), "the step reaches for a stored token");
+  assert.match(step, /npm\.pkg\.github\.com/, "the step does not target GitHub Packages");
+  assert.match(wf, /^\s*packages: write$/m, "the workflow lacks the packages: write permission");
+  // The name is rewritten for that registry only; leaving it rewritten would change what the next
+  // step publishes and what the README's install line refers to.
+  assert.match(step, /git checkout package\.json/, "the scoped name is not restored after the publish");
+});
+
+test("PyPI publishing is trusted publishing, on its own tag, with no token", () => {
+  const wf = readFileSync(join(ROOT, ".github", "workflows", "publish-python.yml"), "utf8");
+  assert.match(wf, /tags: \["analysis-v\*"\]/, "the Python package shares the TypeScript release tag");
+  assert.match(wf, /pypa\/gh-action-pypi-publish/);
+  assert.match(wf, /^\s*id-token: write$/m, "no OIDC permission, so trusted publishing cannot authenticate");
+  assert.ok(!/password:|PYPI_(API_)?TOKEN|TWINE_PASSWORD/.test(wf), "a stored PyPI credential, and trusted publishing needs none");
+  assert.match(wf, /twine check/, "nothing checks that the README renders before the version is spent");
+
+  // `v*` must not match `analysis-v1.0.0`, or one tag fires both releases.
+  const release = readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf8");
+  assert.match(release, /tags: \["v\*"\]/);
+  assert.ok(!"analysis-v0.1.0".startsWith("v"), "the two tag patterns overlap");
+});
+
+test("docs/DISTRIBUTION.md names every workflow that publishes anywhere", () => {
+  const doc = readFileSync(join(ROOT, "docs", "DISTRIBUTION.md"), "utf8");
+  for (const surface of ["GitHub Packages", "PyPI", "Zenodo", "MCP Registry", "Claude Code"])
+    assert.ok(doc.includes(surface), `DISTRIBUTION.md does not cover ${surface}`);
+  // A publishing workflow nobody documented is one nobody will know fired.
+  assert.ok(doc.includes("CITATION.cff"), "the citation file is undocumented");
+});

@@ -24,6 +24,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  packages: write
 
 concurrency:
   group: release
@@ -118,6 +119,29 @@ jobs:
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish
 
+      # The one registry that needs no secret at all: GITHUB_TOKEN with `packages: write`, minted
+      # per run and gone when the job ends. It is a second home for the same tarball rather than a
+      # substitute for npm — GitHub Packages requires an authenticated `npm install` even for a
+      # public package, so it reaches people who already have a token and not the `npx` case.
+      #
+      # The name is rewritten for this step only. GitHub Packages requires the scope to match the
+      # owner, and the npmjs name is deliberately unscoped so `npx ai-adhd` works without one.
+      # Rewriting in the workflow keeps one name in package.json and one install line in the README.
+      - name: publish to GitHub Packages
+        if: github.event_name == 'push'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.name = `@${process.argv[1].split("/")[0]}/${pkg.name}`;
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+            console.log(`publishing as ${pkg.name}`);
+          ' "${{ github.repository }}"
+          npm publish --access public --registry https://npm.pkg.github.com
+          git checkout package.json
+
       - name: summary
         run: |
           {
@@ -126,6 +150,7 @@ jobs:
             echo "| surface | identifier | how a user gets it |"
             echo "|---|---|---|"
             echo "| npm | \`$(node -p 'require("./package.json").name')\` | \`npx ai-adhd --help\` |"
+            echo "| GitHub Packages | \`@${{ github.repository_owner }}/$(node -p 'require("./package.json").name')\` | authenticated \`npm install\` |"
             echo "| MCP Registry | \`$(node -p 'require("./server.json").name')\` | any registry-aware MCP host |"
             echo "| Claude Code | \`adhd@adhd\` | \`/plugin marketplace add drewc611/Ai-adhd\` |"
           } >> "$GITHUB_STEP_SUMMARY"
