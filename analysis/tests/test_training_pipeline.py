@@ -88,11 +88,22 @@ def test_a_manifest_naming_a_missing_path_fails_loudly():
 
 def test_the_shipped_manifest_trains_on_a_clean_checkout(tmp_path):
     """The first three entries are the repository's own prose, so `pip install && train` works with
-    nothing configured. If this fails, a new contributor's first run of the weekly job fails too."""
+    nothing configured. If this fails, a new contributor's first run of the weekly job fails too.
+
+    The `rfc` entry is `required: false` and is empty until `scripts/fetch_corpus.py` has run, so
+    this asserts the checked-in sources have files and that an optional absent one contributes zero
+    without stopping the load. Asserting every source is non-empty is what a clean CI checkout
+    fails on, and it fails there rather than on a laptop where the corpus happens to exist.
+    """
     lib = Library.load(MANIFEST)
     described = lib.describe()
-    assert [d["name"] for d in described][:3] == ["repo-docs", "repo-prompts", "repo-readme"]
-    assert all(d["files"] > 0 for d in described), described
+    always = [d for d in described if d["name"] in {"repo-docs", "repo-prompts", "repo-readme"}]
+    assert [d["name"] for d in always] == ["repo-docs", "repo-prompts", "repo-readme"]
+    assert all(d["files"] > 0 for d in always), always
+
+    optional = {d["name"]: d for d in described} .get("rfc")
+    assert optional is not None, "the manifest no longer declares the fetched corpus"
+    assert optional["files"] >= 0
 
     rec = train(lib, tmp_path / "bg.kn.gz", order=3, min_count=2, budget=Budget.smoke())
     assert rec.vocab_size > 500
