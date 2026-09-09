@@ -18,7 +18,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, relative, resolve, sep } from "node:path";
 import { ContractError } from "../errors.js";
@@ -43,17 +43,41 @@ export interface FileChange {
 
 const digest = (p: string): string => createHash("sha256").update(readFileSync(p)).digest("hex");
 
+/**
+ * Every real file under `root`, relative to `base`. **`lstat`, not `stat`, and symlinks are skipped
+ * rather than followed.**
+ *
+ * Following them costs two things. A link to a directory makes this recurse outside the tree, so
+ * `diff` reports files that were never in the sandbox and `promote` copies them into the source. A
+ * link that points at its own ancestor makes it recurse until the path length kills the process, and
+ * a build tool can leave one of those behind without anyone doing anything hostile.
+ */
 function walk(root: string, base = root): string[] {
   const out: string[] = [];
   for (const name of readdirSync(root)) {
     if (SKIP.has(name)) continue;
     const p = join(root, name);
-    const st = statSync(p);
+    const st = lstatSync(p);
+    if (st.isSymbolicLink()) continue;
     if (st.isDirectory()) out.push(...walk(p, base));
     else if (st.isFile()) out.push(relative(base, p));
   }
   return out;
 }
+
+/**
+ * Where a sandbox's metadata lives: a sibling of the sandbox, never a file inside it.
+ *
+ * This used to be `<root>/.adhd-sandbox.json`, and the `source` field in it is what `promote`
+ * copies to. A stage writes inside its sandbox — that is the entire point of the sandbox — so it
+ * could rewrite that field and redirect the promotion anywhere the process can write. Worse than
+ * write: every file already in the redirected directory is absent from the sandbox, so `diff` calls
+ * it `removed` and `promote` deletes it. One JSON edit, inside the one directory the stage is
+ * supposed to own, and `refused` still comes back empty.
+ *
+ * A sibling path is outside the tree the stage was handed, so the same edit is no longer available.
+ */
+const metaPath = (root: string): string => `${resolve(root)}.json`;
 
 /**
  * Is `candidate` inside `parent`? Resolved and separator-terminated, because a prefix comparison
@@ -73,18 +97,19 @@ export class Sandbox {
     if (!existsSync(source)) throw new ContractError("sandbox", [`source ${source} does not exist`]);
     if (contains(source, root)) throw new ContractError("sandbox", [`sandbox ${root} is inside its own source ${source}; the copy would recurse`]);
     if (existsSync(root)) rmSync(root, { recursive: true, force: true });
+    rmSync(metaPath(root), { force: true });
     mkdirSync(root, { recursive: true });
     cpSync(source, root, { recursive: true, filter: (src) => !SKIP.has(relative(source, src).split(sep)[0] ?? "") && !SKIP.has(src.split(sep).pop() ?? "") });
 
     const files = walk(root);
     const info: SandboxInfo = {
-      root,
-      source,
+      root: resolve(root),
+      source: resolve(source),
       files: files.length,
       bytes: files.reduce((n, f) => n + statSync(join(root, f)).size, 0),
       created_at: new Date().toISOString(),
     };
-    writeFileSync(join(root, ".adhd-sandbox.json"), JSON.stringify({ ...info, policy }, null, 2) + "\n");
+    writeFileSync(metaPath(root), JSON.stringify({ ...info, policy }, null, 2) + "\n");
     return { sandbox: new Sandbox(root, policy), info };
   }
 
@@ -108,10 +133,26 @@ export class Sandbox {
    * mtimes reliably across filesystems, so an mtime comparison reports the whole tree as modified
    * on some machines and nothing on others.
    */
+  /**
+   * The metadata this sandbox was created with, refusing rather than guessing if it has moved.
+   *
+   * The root check is cheap and catches the case where a metadata file was copied next to a
+   * different sandbox: `promote` would then read a source that has nothing to do with this tree.
+   */
+  private info(): SandboxInfo {
+    const p = metaPath(this.root);
+    if (!existsSync(p)) throw new ContractError("sandbox", [`no sandbox metadata at ${p}; this sandbox was not created by Sandbox.create`]);
+    const info = JSON.parse(readFileSync(p, "utf8")) as SandboxInfo;
+    if (resolve(info.root) !== resolve(this.root))
+      throw new ContractError("sandbox", [`metadata at ${p} describes ${info.root}, not ${resolve(this.root)}`]);
+    if (!existsSync(info.source)) throw new ContractError("sandbox", [`source ${info.source} no longer exists`]);
+    return info;
+  }
+
   diff(): FileChange[] {
-    const info = JSON.parse(readFileSync(join(this.root, ".adhd-sandbox.json"), "utf8")) as SandboxInfo;
+    const info = this.info();
     const before = new Set(walk(info.source));
-    const after = new Set(walk(this.root).filter((f) => f !== ".adhd-sandbox.json"));
+    const after = new Set(walk(this.root));
     const out: FileChange[] = [];
     for (const f of after) {
       const dst = join(this.root, f);
@@ -152,9 +193,12 @@ export class Sandbox {
    * stage was not allowed to write fails having moved nothing.
    */
   promote(opts: { dryRun?: boolean } = {}): { promoted: FileChange[]; refused: string[] } {
-    const info = JSON.parse(readFileSync(join(this.root, ".adhd-sandbox.json"), "utf8")) as SandboxInfo;
+    const info = this.info();
     const changes = this.diff();
     const refused = changes.map((c) => this.mayWrite(c.path)).filter((x): x is string => x !== null);
+    // `mayWrite` checks the sandbox side. The destination is a second resolution against a second
+    // root, and a path that stays inside the sandbox does not by itself stay inside the source.
+    for (const c of changes) if (!contains(info.source, resolve(info.source, c.path))) refused.push(`${c.path} resolves outside the source ${info.source}`);
     if (refused.length) return { promoted: [], refused };
     if (opts.dryRun) return { promoted: changes, refused: [] };
     for (const c of changes) {
@@ -170,5 +214,6 @@ export class Sandbox {
 
   destroy(): void {
     rmSync(this.root, { recursive: true, force: true });
+    rmSync(metaPath(this.root), { force: true });
   }
 }

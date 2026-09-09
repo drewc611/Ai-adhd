@@ -58,9 +58,12 @@ jobs:
       # Claude Code user installs; a tag that matches one of them and not the others produces a
       # release nobody can reproduce.
       - name: versions agree with the tag
+        # `GITHUB_EVENT_NAME` is already in every runner's environment; naming it here is only so the
+        # script below reads it as a variable. `github.event_name` comes from a fixed set and was
+        # never injectable, and the rule holds without exemptions anyway.
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          [ "${{ github.event_name }}" = "workflow_dispatch" ] && TAG=""
+          [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && TAG=""
           node -e '
             const fs = require("fs");
             const tag = process.argv[1];
@@ -131,6 +134,7 @@ jobs:
         if: github.event_name == 'push'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           node -e '
             const fs = require("fs");
@@ -138,11 +142,13 @@ jobs:
             pkg.name = `@${process.argv[1].split("/")[0]}/${pkg.name}`;
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
             console.log(`publishing as ${pkg.name}`);
-          ' "${{ github.repository }}"
+          ' "$REPO"
           npm publish --access public --registry https://npm.pkg.github.com
           git checkout package.json
 
       - name: summary
+        env:
+          OWNER: ${{ github.repository_owner }}
         run: |
           {
             echo "## Released \`$(node -p 'require("./package.json").version')\`"
@@ -150,7 +156,7 @@ jobs:
             echo "| surface | identifier | how a user gets it |"
             echo "|---|---|---|"
             echo "| npm | \`$(node -p 'require("./package.json").name')\` | \`npx ai-adhd --help\` |"
-            echo "| GitHub Packages | \`@${{ github.repository_owner }}/$(node -p 'require("./package.json").name')\` | authenticated \`npm install\` |"
+            echo "| GitHub Packages | \`@$OWNER/$(node -p 'require("./package.json").name')\` | authenticated \`npm install\` |"
             echo "| MCP Registry | \`$(node -p 'require("./server.json").name')\` | any registry-aware MCP host |"
             echo "| Claude Code | \`adhd@adhd\` | \`/plugin marketplace add drewc611/Ai-adhd\` |"
           } >> "$GITHUB_STEP_SUMMARY"

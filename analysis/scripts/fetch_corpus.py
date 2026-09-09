@@ -48,6 +48,10 @@ REFUSED_SUFFIXES = {
 
 USER_AGENT = "adhd-corpus-fetch/2 (+https://github.com/drewc611/Ai-adhd)"
 
+#: Largest single response this will hold. The per-source `--max-bytes` ceiling is checked between
+#: documents, so without this one response of any size at all is read into memory in one call.
+MAX_DOCUMENT_BYTES = 16 * 1024 * 1024
+
 
 class FetchRefused(RuntimeError):
     """Raised for anything the prefix allowlist, the content type or the extension rules reject."""
@@ -208,14 +212,41 @@ def _check_url(url: str) -> None:
         raise FetchRefused(f"{url}: refused extension; this fetches text, not binaries or archives")
 
 
+class CheckedRedirects(urllib.request.HTTPRedirectHandler):
+    """Re-run the allowlist on every hop, because the check before the request only covers the first.
+
+    `urllib.request.urlopen` follows redirects with a handler whose only scheme guard is
+    `('http', 'https', 'ftp', '')` — verified against the installed stdlib rather than remembered. So
+    an allowlisted host answering 302 sends this fetcher wherever it likes, over plain http if it
+    prefers, and both the https-only rule and the prefix allowlist are gone after one hop. Neither
+    the docstring at the top of this file nor `test/boundary.test.ts` covered the hop, because both
+    were written about the call and not about the exchange.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102 - stdlib signature
+        _check_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+#: Built once. `build_opener` with a handler instance replaces the default of the same class, so
+#: this is the redirect handler for every request below rather than an extra one.
+_OPENER = urllib.request.build_opener(CheckedRedirects())
+
+
 def get(url: str, timeout: float = 60.0) -> bytes:
     _check_url(url)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 - scheme and prefix checked above
+    with _OPENER.open(req, timeout=timeout) as r:  # noqa: S310 - scheme and prefix checked on every hop
+        # Where the response actually came from, which after a redirect is not where it was asked
+        # for. Checked again here: a handler is a moving part, and this is one line.
+        _check_url(r.url)
         ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip()
         if ctype != "text/plain":
             raise FetchRefused(f"{url}: content type {ctype!r}, expected text/plain")
-        return r.read()
+        body = r.read(MAX_DOCUMENT_BYTES + 1)
+        if len(body) > MAX_DOCUMENT_BYTES:
+            raise FetchRefused(f"{url}: over {MAX_DOCUMENT_BYTES:,} bytes; this fetches documents, not archives")
+        return body
 
 
 @dataclass

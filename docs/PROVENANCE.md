@@ -141,7 +141,12 @@ word-frequency model trained on it learns tag names.
 
 The one file in this repository that reaches the network, and the only one that may:
 
-- **https only.**
+- **https only, on every hop.** The check used to run once, before the request, and
+  `urllib.request.urlopen` follows redirects with a handler whose only scheme guard is
+  `('http', 'https', 'ftp', '')` — read from the installed stdlib, not remembered. So an allowlisted
+  host answering 302 could send the fetcher anywhere, over plain http if it preferred, and both this
+  rule and the one below were gone after one hop. A redirect handler now re-runs the whole check on
+  every hop and the response's final URL is checked again after the exchange.
 - **An allowlist of URL prefixes, not hosts.** `raw.githubusercontent.com` serves every public
   repository on GitHub; allowing the host would allow all of them. Allowing
   `https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/` allows the EIPs and nothing else.
@@ -151,6 +156,8 @@ The one file in this repository that reaches the network, and the only one that 
   that forgot to decode. Both were found by testing the allowlist against its own bypasses rather
   than against the URLs it was written for, and both are now test cases.
 - **`text/plain` only**, checked on the response header.
+- **A ceiling on one response.** The per-source byte ceiling is checked between documents, so
+  without this a single response of any size was read into memory in one call.
 - **A refusal list of the extensions weights arrive in** — `.safetensors`, `.gguf`, `.ckpt`, `.pt`,
   `.onnx`, `.bin`, plus archives and shared objects.
 - **A byte ceiling per source**, and a request delay that should not be lowered.
@@ -158,6 +165,12 @@ The one file in this repository that reaches the network, and the only one that 
 `analysis/adhd_analysis/` imports no networking module at all, and `test/boundary.test.ts` asserts
 the list of network-reaching files in `analysis/` is exactly one entry long. Adding a second is a
 test failure rather than a review comment.
+
+The redirect hole is worth keeping in view rather than quietly fixing, because of where it was. This
+list was written, tested and cited as the boundary, and every item on it was true of the call and
+none of it was true of the exchange. `test/boundary.test.ts` pinned that `_check_url` exists and that
+it normalises and refuses traversal; nothing pinned that it runs more than once. A constraint checked
+before an operation is not a constraint on the operation.
 
 ## Attribution
 
