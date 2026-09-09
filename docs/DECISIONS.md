@@ -1485,3 +1485,108 @@ spending it on order beats spending it on text, at least across this range.
 Order 5 cannot be measured here. The 257MB-per-million-n-grams law puts an order-5 table at this
 corpus around 17.5GB and the machine has 15GB. D13's order-5 figure stands at 22.9M tokens and does
 not transfer.
+
+
+## D17. E2: reading a genre is worth about 2.8x on that genre
+
+**Asked.** Keep training the model until it can read by itself. Registered as E2 in
+`docs/EXPERIMENTS.md` before either run, because the reachable half of that question is whether the
+model has general competence on technical prose or has memorised one genre.
+
+**Resolved.** It is much more an RFC model than a model of technical prose. Both preregistered
+readings landed against the flattering interpretation, and the registration itself was
+under-specified in one way that is worth recording.
+
+### E2b, the well-powered half: 2.83x on identical text
+
+A model trained with `pep` removed from the library entirely, against the shipped model which read
+584 of the 615 PEPs, both scored on the **same 31 held-out PEPs**. Same fingerprint
+`0ee3b7d301e67e59`, and `comparable_heldout` returns None.
+
+| model | PEPs read | OOV | perplexity |
+|---|---|---|---|
+| shipped | 584 | 1.36% | **54.30** |
+| `pep` never in the library | 0 | 2.96% | **153.53** |
+
+**Ratio 2.83x.** The registered form of this comparison — 615 PEPs against the 31-document held-out
+subset — gives 2.99x, and the tightened version above removes the set-size confound. Both are
+reported; 2.83x on identical text is the one to quote.
+
+Against the registered readings: a ratio near 1 would have said competence comes from technical
+English generally, and above about 3 would have said most of it is the source being in the training
+text. 2.83 is on that line and not under it. The threshold was written as "about 3" precisely so a
+value like this could not be read as clearing it.
+
+**Part of the gap is vocabulary, not modelling, and this run does not separate them.** OOV goes 1.36%
+to 2.96%, so the never-seen model is also missing PEP-specific words. Splitting the two needs a
+perplexity restricted to in-vocabulary tokens for both models — `genericity.py` already does exactly
+that for surprisal, and `evaluate.py` does not. Backlog item 77.
+
+### E2a, per genre, and where the registration fell short
+
+The shipped model on the held-out side of the full split, narrowed to one source at a time:
+
+| source | documents | tokens | OOV | perplexity |
+|---|---|---|---|---|
+| rfc | 316 | 3,275,441 | 0.74% | **24.78** |
+| pep | 31 | 129,811 | 1.36% | 54.30 |
+| eip | 16 | 35,869 | 2.23% | 103.70 |
+| erc | 3 | 14,147 | 3.46% | 229.64 |
+| repo-docs | 1 | 1,495 | 0.80% | 351.82 |
+
+RFCs lowest, as registered — that was the sanity check on the split and it passed.
+
+The registered bands were: within about 2x means general competence on the genre family, beyond about
+5x means an RFC model that tolerates the others. The full spread is **9.3x**. But the rows are not
+equally trustworthy and the ordering tracks document count as closely as it tracks genre: rfc against
+pep is 2.19x on 316 and 31 documents, eip is 4.18x on 16, erc is 9.27x on 3.
+
+**So the registration under-specified the design.** A stride of 20 over a corpus that is 95% RFCs
+leaves 31 held-out PEPs and 16 held-out EIPs, which is too few to separate its own two readings. That
+is a flaw in what was registered, not a reason to pick whichever band reads better. The row to trust
+is `pep` at 2.19x, and E2b is the well-powered version of the same question at 615 documents.
+`repo-docs` at one document is not evidence of anything and was registered as such.
+
+### What this does and does not do to the genericity measure
+
+The 35 scored artifacts are branch and critic prose. None of them is in the corpus, so every one is
+maximally out of domain — which is the regime E2 says the model is weakest in. The absolute figures
+around 9.6 bits are closer to *how unlike an RFC is this* than to *how predictable is this*. The
+genericity report already said so in prose — "Name the corpus or do not quote the number" — and now
+there is a number behind it.
+
+What it does not do is undermine T1, and there is direct evidence rather than an argument. Re-running
+the genericity analysis against the honest train-half model moves the T1 difference from +0.211 to
+**+0.204** and the p-value from 0.1339 to 0.1449. The scale is corpus-specific; the difference between
+two groups of equally out-of-domain artifacts barely moves. E2's registration predicted exactly this
+and said it was not what E2 tested.
+
+### The T1 difference across six corpora
+
+| corpus | tokens | difference | p |
+|---|---|---|---|
+| 492 RFCs | 5.6M | +0.226 bits | 0.048 |
+| 1,974 RFCs | 22.9M | +0.261 | 0.0455 |
+| mixed, pruned | 40.0M | +0.224 | 0.0950 |
+| mixed, unpruned | 55.4M | +0.243 | 0.0780 |
+| mixed + ERC | 68.0M | +0.211 | 0.1339 |
+| **train half, honest** | **64.5M** | **+0.204** | **0.1449** |
+
+Fourteen times the corpus and the difference stays inside +0.20 to +0.26 bits. The p-value has drifted
+up across the last four rows, which is either a small effect being estimated against a better model or
+noise at n=7, and nothing here separates those. Pruned against kept remains null: −0.083 bits, p =
+0.46, sign still changing between runs.
+
+### The shipped model
+
+Order 4 with `--held-out-every 20`: 64,549,478 tokens over the training half, 199,190-word vocabulary,
+40,831,784 4-grams, `prunes: 0`, `vocab_truncated` zero, 10,703MB peak, 709 seconds, and
+`split: {"every": 20, "side": "train"}` recorded so `evaluate` will accept it.
+
+**Held-out perplexity 26.29** on 3,464,189 tokens at 0.79% OOV. The first figure this repository has
+published under that name that is actually one.
+
+Reproducibility note worth keeping: this run and the `compare_orders` order-4 run scored 26.289920 and
+26.289909 on held-out sets whose fingerprints differ, because the repository's own documents are in
+the corpus and were edited between the runs. Two ten-millionths of a difference from three tokens of
+text — the fingerprint refused the comparison and the numbers agree anyway.
