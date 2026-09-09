@@ -135,7 +135,9 @@ def train(
             # path that trained on the whole manifest and scored a slice of it anyway. A rule a
             # document states and no code enforces is a rule that holds until someone is in a hurry.
             "split": (
-                {"every": library.every, "side": library.side}
+                {"frozen": library.fingerprint, "side": library.side}
+                if hasattr(library, "fingerprint") and hasattr(library, "side")
+                else {"every": library.every, "side": library.side}
                 if hasattr(library, "every") and hasattr(library, "side")
                 else None
             ),
@@ -182,6 +184,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-ngrams", type=int, default=None)
     ap.add_argument("--max-rss-mb", type=int, default=None)
     ap.add_argument(
+        "--held-out-file",
+        default=None,
+        metavar="PATH",
+        help="train on everything except the documents named in this frozen set. Unlike a stride, the "
+        "names do not move when the corpus grows, so two runs weeks apart are scored on the same text "
+        "and their perplexities can be compared. Everything not named here is training data, "
+        "including everything fetched after the set was cut.",
+    )
+    ap.add_argument(
         "--held-out-every",
         type=int,
         default=None,
@@ -204,7 +215,11 @@ def main(argv: list[str] | None = None) -> int:
             setattr(b, attr, val)
 
     library = Library.load(args.manifest)
-    if args.held_out_every is not None:
+    if args.held_out_file is not None:
+        from .evaluate import FrozenSplit
+
+        library = FrozenSplit.load(library, args.held_out_file, side="train")
+    elif args.held_out_every is not None:
         # Imported here rather than at module scope: evaluate imports train, and the other direction
         # at import time is a cycle.
         from .evaluate import SplitLibrary

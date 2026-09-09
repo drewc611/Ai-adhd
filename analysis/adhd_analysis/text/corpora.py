@@ -57,22 +57,47 @@ class Source:
                 seen.add(p)
                 yield p
 
+    def identified(self) -> Iterator[tuple[str, str]]:
+        """`(document id, text)`, where the id is the file's path relative to this source.
+
+        A frozen evaluation set has to name documents in a way that survives the corpus growing
+        around them. Position cannot: a stride over the library selects different documents the
+        moment anything is added, which is exactly why a held-out perplexity stops being comparable
+        to last week's. A name does not move. `rfc9110.txt` is `rfc9110.txt` whatever arrives beside
+        it, so the training half can keep growing while the test set stays put.
+
+        One file usually holds one document. A JSONL source holds many, so the id carries the record
+        index after a `#` — without it a frozen set could name only the whole file.
+        """
+        for p in self.files():
+            rel = p.relative_to(self.path).as_posix()
+            docs = list(self._read(p))
+            if len(docs) == 1:
+                yield rel, docs[0]
+            else:
+                for i, doc in enumerate(docs):
+                    yield f"{rel}#{i}", doc
+
     def documents(self) -> Iterator[str]:
         for p in self.files():
-            try:
-                if p.suffix == ".gz":
-                    with gzip.open(p, "rt", encoding="utf-8", errors="replace") as fh:
-                        yield from _lines_or_whole(fh.read(self.max_bytes_per_file), self.jsonl_field, p)
+            yield from self._read(p)
+
+    def _read(self, p: Path) -> Iterator[str]:
+        """Every document in one file. Both public iterators go through here so they cannot diverge."""
+        try:
+            if p.suffix == ".gz":
+                with gzip.open(p, "rt", encoding="utf-8", errors="replace") as fh:
+                    yield from _lines_or_whole(fh.read(self.max_bytes_per_file), self.jsonl_field, p)
+            else:
+                if p.stat().st_size > self.max_bytes_per_file:
+                    # Truncating mid-file is fine for a background language model and is not
+                    # fine for anything that needs whole documents. Nothing here does.
+                    text = p.read_text(encoding="utf-8", errors="replace")[: self.max_bytes_per_file]
                 else:
-                    if p.stat().st_size > self.max_bytes_per_file:
-                        # Truncating mid-file is fine for a background language model and is not
-                        # fine for anything that needs whole documents. Nothing here does.
-                        text = p.read_text(encoding="utf-8", errors="replace")[: self.max_bytes_per_file]
-                    else:
-                        text = p.read_text(encoding="utf-8", errors="replace")
-                    yield from _lines_or_whole(text, self.jsonl_field, p)
-            except (OSError, UnicodeError) as e:
-                raise CorpusError(f"corpus '{self.name}' could not read {p}: {e}") from e
+                    text = p.read_text(encoding="utf-8", errors="replace")
+                yield from _lines_or_whole(text, self.jsonl_field, p)
+        except (OSError, UnicodeError) as e:
+            raise CorpusError(f"corpus '{self.name}' could not read {p}: {e}") from e
 
 
 def _lines_or_whole(text: str, jsonl_field: str | None, where: Path) -> Iterator[str]:
@@ -101,6 +126,12 @@ class Library:
         for s in self.sources:
             for doc in s.documents():
                 yield s.name, doc
+
+    def identified(self) -> Iterator[tuple[str, str, str]]:
+        """`(source, document id, text)`. What a frozen evaluation set is written in terms of."""
+        for s in self.sources:
+            for ident, doc in s.identified():
+                yield s.name, ident, doc
 
     def describe(self) -> list[dict]:
         out = []

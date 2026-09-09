@@ -11,6 +11,7 @@ in the held-out half is out of vocabulary.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,6 +20,7 @@ import pytest
 from adhd_analysis.text.budget import Budget
 from adhd_analysis.text.corpora import Library, Source
 from adhd_analysis.text.evaluate import (
+    FrozenSplit,
     SplitLibrary,
     comparable_heldout,
     compare_orders,
@@ -346,3 +348,82 @@ def test_two_scorings_of_one_set_are_not_comparable_when_they_asked_different_qu
     assert everything.fingerprint == known_only.fingerprint, "the text differed, so this tests nothing"
     why = comparable_heldout(everything, known_only)
     assert why is not None and "in-vocabulary targets only" in why
+
+
+def _frozen(dirpath: Path, lib: Library, every: int = 10) -> Path:
+    """Cut a frozen set the way `scripts/cut_heldout.py` does, without shelling out to it."""
+    import hashlib
+
+    names = [f"{s}/{i}" for n, (s, i, _) in enumerate(lib.identified()) if n % every == 0]
+    dirpath.mkdir(parents=True, exist_ok=True)
+    p = dirpath / f"heldout-{every}.json"
+    p.write_text(json.dumps({"fingerprint": hashlib.sha256("\n".join(names).encode()).hexdigest()[:16], "documents": names}))
+    return p
+
+
+def test_a_frozen_set_does_not_move_when_the_corpus_grows(tmp_path):
+    """The property the whole thing exists for, and the one a stride cannot have.
+
+    `SplitLibrary` picks every Nth document by position, so adding anything reshuffles which
+    documents are held out: the fingerprint changes and this week's perplexity stops being comparable
+    to last week's. That is why the weekly job trained every week and learned nothing from its own
+    number. Names do not move, so the corpus can keep growing — and everything new lands in the
+    training half, which is the other half of the point.
+    """
+    lib = _library(tmp_path, n=40)
+    spec = _frozen(tmp_path / "sets", lib)
+    before = {d for _, d in FrozenSplit.load(lib, spec, side="heldout").documents()}
+    stride_before = {d for _, d in SplitLibrary(lib, every=10, side="heldout").documents()}
+
+    for i in range(40, 60):
+        (tmp_path / "docs" / f"doc{i}.txt").write_text(" ".join(f"a later document {i} arrives ." for _ in range(20)))
+    grown = Library(lib.sources)
+
+    after = {d for _, d in FrozenSplit.load(grown, spec, side="heldout").documents()}
+    stride_after = {d for _, d in SplitLibrary(grown, every=10, side="heldout").documents()}
+
+    assert after == before, "the frozen set moved when the corpus grew"
+    assert stride_after != stride_before, "the stride did not move, so this test is not testing anything"
+
+    train_after = {d for _, d in FrozenSplit.load(grown, spec, side="train").documents()}
+    assert any("a later document" in d for d in train_after), "new documents did not reach the training half"
+    assert not any("a later document" in d for d in after), "a new document leaked into the frozen test set"
+
+
+def test_the_two_frozen_sides_are_disjoint_and_complete(tmp_path):
+    lib = _library(tmp_path, n=40)
+    spec = _frozen(tmp_path / "sets", lib)
+    held = [d for _, d in FrozenSplit.load(lib, spec, side="heldout").documents()]
+    train = [d for _, d in FrozenSplit.load(lib, spec, side="train").documents()]
+
+    assert held and train
+    assert set(held).isdisjoint(train)
+    assert len(held) + len(train) == len(list(lib.documents()))
+
+
+def test_a_frozen_model_may_be_scored_on_its_complement_and_nothing_else(tmp_path):
+    lib = _library(tmp_path, n=40)
+    spec = _frozen(tmp_path / "sets", lib)
+    rec = train(FrozenSplit.load(lib, spec, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    assert rec.to_dict()["split"] == {"frozen": json.loads(spec.read_text())["fingerprint"], "side": "train"}
+    assert in_sample_refusal(model, FrozenSplit.load(lib, spec, side="heldout")) is None
+    assert "the train side and this is the train side" in (
+        in_sample_refusal(model, FrozenSplit.load(lib, spec, side="train")) or ""
+    )
+    # A stride split is not this model's complement whatever its size: the record names no stride.
+    assert in_sample_refusal(model, SplitLibrary(lib, every=10, side="heldout")) is not None
+
+
+def test_a_model_trained_against_a_different_frozen_set_is_refused(tmp_path):
+    """Re-cutting the set invalidates every model measured against the old one, and says so."""
+    lib = _library(tmp_path, n=40)
+    mine = _frozen(tmp_path / "sets", lib, every=10)
+    other = _frozen(tmp_path / "sets", lib, every=7)
+
+    rec = train(FrozenSplit.load(lib, mine, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    why = in_sample_refusal(model, FrozenSplit.load(lib, other, side="heldout"))
+    assert why is not None and "was not trained against frozen set" in why

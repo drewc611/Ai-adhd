@@ -23,6 +23,7 @@ model can lower its perplexity by knowing fewer words.
 
 from __future__ import annotations
 
+import json
 import hashlib
 import math
 import sys
@@ -62,6 +63,46 @@ class SplitLibrary:
 
     def describe(self) -> list[dict]:
         return [{**d, "split": self.side, "every": self.every} for d in self.base.describe()]
+
+
+class FrozenSplit:
+    """One side of a split defined by a checked-in list of document names.
+
+    The stride split moves. `SplitLibrary` picks every Nth document by position, so adding anything
+    to the corpus reshuffles which documents are held out, the fingerprint changes, and this week's
+    perplexity is not comparable to last week's — `comparable_heldout` says so, correctly. The weekly
+    job therefore trained every week and learned nothing from the number it produced.
+
+    Names do not move. `analysis/heldout.json` lists `source/document-id` pairs; a document in that
+    list is never trained on and is always scored, and **everything else, including everything
+    fetched from now on, is training data.** That is the point: the corpus keeps growing and the test
+    set stays put, which is what makes two weeks comparable at all.
+
+    What it costs, stated because it is real: the frozen set ages. It is a fixed sample of the corpus
+    as it stood when it was cut, and the further the corpus grows the less of it that sample
+    represents. The answer is a new registration cutting a new set, not quietly adding to this one —
+    a test set that grows when results disappoint is not a test set.
+    """
+
+    def __init__(self, base: Library, names: set[str], fingerprint: str, *, side: str) -> None:
+        if side not in ("train", "heldout"):
+            raise ValueError(f"side must be train or heldout, not {side}")
+        self.base, self.names, self.fingerprint, self.side = base, names, fingerprint, side
+        self.every = None
+
+    @classmethod
+    def load(cls, base: Library, path: str | Path, *, side: str) -> FrozenSplit:
+        spec = json.loads(Path(path).read_text())
+        return cls(base, set(spec["documents"]), spec["fingerprint"], side=side)
+
+    def documents(self) -> Iterator[tuple[str, str]]:
+        for source, ident, doc in self.base.identified():
+            held = f"{source}/{ident}" in self.names
+            if held == (self.side == "heldout"):
+                yield source, doc
+
+    def describe(self) -> list[dict]:
+        return [{**d, "split": self.side, "frozen": self.fingerprint} for d in self.base.describe()]
 
 
 @dataclass
@@ -113,6 +154,19 @@ def in_sample_refusal(model: KneserNey, held) -> str | None:
     trained_on = {s["name"] for s in model.meta.get("sources", [])}
     scoring = {d["name"] for d in held.describe()}
     if scoring and not (scoring & trained_on):
+        return None
+
+    # A frozen split names its documents rather than striding, so the stride rules below cannot
+    # read it. Complementary sides of the *same* frozen set are what may be compared.
+    frozen = getattr(held, "fingerprint", None) if isinstance(held, FrozenSplit) else None
+    if frozen is not None:
+        split = model.meta.get("split", "absent")
+        if split == "absent":
+            return "this model was trained before the training split was recorded"
+        if not isinstance(split, dict) or split.get("frozen") != frozen:
+            return f"the model was not trained against frozen set {frozen}; it records {split}"
+        if split.get("side") == held.side:
+            return f"the model trained on the {held.side} side and this is the {held.side} side"
         return None
 
     split = model.meta.get("split", "absent")
