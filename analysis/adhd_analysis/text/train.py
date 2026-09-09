@@ -32,6 +32,11 @@ class TrainingRecord:
     model_path: Path
     order: int
     vocab_size: int
+    #: The count below which a type is dropped. On the record because it is what decides the
+    #: vocabulary, and therefore the OOV rate printed two fields down: a record that reports 0.39%
+    #: OOV without saying whether the threshold was 2 or 3 cannot explain its own number. It was in
+    #: the model's meta and not here, so reading the record meant opening the model.
+    min_count: int
     documents: int
     sentences: int
     tokens_seen: int
@@ -57,6 +62,7 @@ class TrainingRecord:
             "model": str(self.model_path),
             "order": self.order,
             "vocab_size": self.vocab_size,
+            "min_count": self.min_count,
             "documents": self.documents,
             "sentences": self.sentences,
             "tokens_seen": self.tokens_seen,
@@ -151,6 +157,7 @@ def train(
         model_path=path,
         order=order,
         vocab_size=len(vocab),
+        min_count=min_count,
         documents=sum(s["files"] for s in model.meta["sources"]),
         sentences=n_sentences,
         tokens_seen=b2.tokens,
