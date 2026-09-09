@@ -323,3 +323,31 @@ ever asking who pays. If it is what makes the control pass, it is recitation and
 - If the rate reaches 3/3 the item stops being `sometimes` and the audit stops flagging it. That is
   the outcome to be most suspicious of, because a pattern that suddenly matches everything is what a
   pattern loosened to quiet a report looks like.
+
+### E3 result, 2026-09-09
+
+**The negative control failed all three candidates.** `001-linear-cot` contains none of `payer`,
+`retry budget` or `priced in`, so the registered adoption rule permitted all three.
+
+**Two were adopted and the third was refused anyway.** Adopting all three would have taken
+`retry_cost` to 3/3, which this registration named in advance as the outcome to be most suspicious
+of, so the matches were read rather than counted:
+
+| pattern | control | what it matched in a real run | adopted |
+|---|---|---|---|
+| `payer` | fails | seed 2, T7 detector output: "priced in currency and payer" | yes |
+| `priced in` | fails | seed 2, same line | yes |
+| `retry budget` | fails | altframes: "a retry budget of about 10 percent of traffic" | **no** |
+
+`retry budget` names a currency and no payer, and this item's own description asks for who *and* in
+what currency. **A pattern can clear the control test and still admit text the description excludes**,
+which is the gap the control test cannot see, and it is worth more than the extra passing run.
+
+`retry_cost` goes 1/3 to **2/3** and stays `sometimes`. The prediction that seed 2 would match held;
+the prediction about altframes was unstated and it turned out to hinge on the pattern that was
+refused. The wider reading: **the item was never the frame-library gap E1b took it for.** `LEDGER`
+surfaced the cost question at both seeds. What differed was the wording, and the fixture only knew
+one of them.
+
+Nothing in fixture 001 is at 3/3 except `trap_named`, which asks least.
+

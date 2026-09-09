@@ -84,16 +84,21 @@ recorded runs of this fixture it has passed once — in the run it was written a
 |---|---|---|---|---|
 | the human who can cancel | ok | **miss** | ok | 2/3 |
 | the retry target questioned | ok | ok | **miss** | 2/3 |
-| who pays for the retry | ok | **miss** | **miss** | **1/3** |
+| who pays for the retry | ok | ok | **miss** | 2/3 |
 | a trap named | ok | ok | ok | 3/3 |
 
 **The four assertions have different dependencies, and that is the finding.** An earlier version of
 this paragraph explained the seed-2 misses away as a quirk of one sample rather than anything to do
-with the frame library. E1b in `docs/EXPERIMENTS.md` ran afterwards and contradicted it: *who pays
-for the retry* missed at seed 2 **and** again under a different frame set, and at seed 1 it was
-`LEDGER`'s — a frame that was pruned at seed 2 and never dispatched in E1b. On that evidence it needs
-a specific frame, alive, which is a fact about the library exactly. *The human who can cancel*
-survived the frame swap and not the reseed, so for that one the sample reading holds.
+with the frame library, and E1b contradicted it. E3 then found that one of the two was neither: *who
+pays for the retry* had missed at seed 2 because the assertion's patterns only recognised seed 1's
+wording. `LEDGER` priced retries as a share of traffic and the critic's own detector output named the
+payer; the regexes wanted "pays for" and got "payer". Widening a pattern after seeing which runs
+failed is the move this repo refuses, so E3 registered the candidates and the adoption rule first and
+let the negative control decide. Two of three were adopted. The third, `retry budget`, cleared the
+control and was refused anyway: it matches a currency with no payer, and this item asks for both.
+
+*The human who can cancel* survived the frame swap and not the reseed, so for that one the sample
+reading holds. Nothing here is at 3/3 except the assertion that asks least.
 
 The audit reports these rates rather than leaving them to prose, and a `sometimes` verdict is not a
 pattern to loosen: it says nothing in the dispatched set reliably asks that question. The only

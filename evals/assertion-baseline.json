@@ -11,7 +11,8 @@
       "001-seed2"
     ],
     "001/retry_cost": [
-      "001-first-run"
+      "001-first-run",
+      "001-seed2"
     ],
     "001/retry_target_questioned": [
       "001-first-run",
