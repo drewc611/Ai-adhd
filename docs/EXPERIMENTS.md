@@ -92,6 +92,12 @@ Two of those are two of the four bullets the README's motivating-failure section
 point of the whole system. Under the reading registered above they were never properties of the
 frame set; they were one sample.
 
+> **Superseded for one of the two by E1b, below.** `retry_cost` missed again under a different frame
+> set, so "one sample" is wrong for it: at seed 1 it was `LEDGER`'s, and `LEDGER` was pruned at seed
+> 2 and never dispatched in E1b. `human_cancel` survived the frame swap, so the reading holds there.
+> Left standing rather than rewritten, per this file's own rule — a registered reading that turned
+> out half right is worth more than a tidy one.
+
 The prune set moved as hard:
 
 | frame | seed 1 | seed 2 |
@@ -258,3 +264,62 @@ registration set; and the registration under-specified one thing, which is that 
 31 held-out PEPs and 16 held-out EIPs — too few to separate its own two readings. E2b at 615
 documents is the well-powered half and is the number to quote.
 
+
+---
+
+## E3. Is `001/retry_cost` a gap in the library or a gap in the pattern?
+
+**Registered 2026-09-09, before the widened pattern was run against anything.** The candidate
+patterns are fixed below and the adoption rule is fixed with them.
+
+`retry_cost` has matched 1 real run in 3, which `adhd eval --audit` now reports as `sometimes`. The
+obvious reading is that nothing in the dispatched frame set reliably asks who pays. Reading the runs
+says otherwise. At seed 2 `LEDGER` produced:
+
+> cap retries with a retry budget of a few percent of traffic
+
+and the critic's own T7 detector output on that position reads:
+
+> Every recommendation is priced in currency and payer
+
+That is the cost of retries, named, with a payer. None of the five existing patterns match it:
+the text says *payer* and not "pays for", *retry budget* and not "cost of the retry". The patterns
+were written against seed 1's wording, which was "the bill … is paid by" and "who pays for it".
+
+**Widening a pattern after seeing which runs failed is the mirror of tightening one after seeing
+which the control cleared**, and this file refuses that under D6. So the widening is registered
+first, and the negative control decides whether it is adopted.
+
+### The candidate patterns
+
+Added to `retry_cost.any_of`, and nothing else changes:
+
+| pattern | what it is meant to catch | risk |
+|---|---|---|
+| `payer` | the noun form of "pays for" | low; the control never asks who absorbs anything |
+| `retry budget` | retries priced as a share of traffic | **highest**, see below |
+| `priced in` | an explicit statement that a cost was assigned | low |
+
+`retry budget` is the one to watch. It is standard SRE vocabulary and **the negative control cites
+the Google SRE Book**, so it is exactly the phrase a fluent consensus answer might reach for without
+ever asking who pays. If it is what makes the control pass, it is recitation and not divergence.
+
+### The adoption rule, fixed now
+
+- **Adopt only if `001-linear-cot` still fails `retry_cost` with the widened set.** The control is
+  the whole point: a pattern the consensus answer satisfies does not measure divergence, and the
+  audit already says so about `003/reframe`.
+- **If the control passes, the widening is refused and reverted**, and which pattern did it is
+  recorded. Per-pattern, not all-or-nothing: if one of the three admits the control and the other two
+  do not, the other two may stand and the offender is dropped.
+- The `must_not` items and every other assertion are untouched. This is one item's vocabulary.
+
+### Predictions, so the result can be wrong
+
+- Seed 2 matches on `payer` and on `retry budget`, taking the rate to at least 2/3.
+- `001-altframes` is unknown to me at the time of writing; I have not searched it for these strings.
+- The control fails all three. Stated as the expected outcome precisely so that the control passing
+  is a result and not a surprise to be explained away.
+- If the rate reaches 3/3 the item stops being `sometimes` and the audit stops flagging it. That is
+  the outcome to be most suspicious of, because a pattern that suddenly matches everything is what a
+  pattern loosened to quiet a report looks like.
