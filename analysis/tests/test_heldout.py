@@ -427,3 +427,19 @@ def test_a_model_trained_against_a_different_frozen_set_is_refused(tmp_path):
 
     why = in_sample_refusal(model, FrozenSplit.load(lib, other, side="heldout"))
     assert why is not None and "was not trained against frozen set" in why
+
+def test_the_shipped_frozen_set_holds_out_no_document_a_commit_can_rewrite():
+    """A frozen set fixes which documents are scored. It cannot fix what they say.
+
+    The first cut of `analysis/heldout.json` put `docs/ARCHITECTURE.md` and `README.md` in the set,
+    and those are rewritten whenever a decision is recorded — so writing one would have moved the
+    next perplexity for a reason that has nothing to do with the model, silently, because the
+    fingerprint is over names. Repository prose stays in the training half, where mutating text is
+    harmless.
+    """
+    spec = json.loads((ROOT / "analysis" / "heldout.json").read_text())
+    assert spec["documents"], "the shipped frozen set is empty"
+    mutable = {"repo-docs", "repo-prompts", "repo-readme"}
+    offenders = [n for n in spec["documents"] if n.split("/")[0] in mutable]
+    assert not offenders, f"the frozen set holds documents this repository rewrites: {offenders}"
+    assert len(spec["fingerprint"]) == 16
