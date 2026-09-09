@@ -351,3 +351,62 @@ one of them.
 
 Nothing in fixture 001 is at 3/3 except `trap_named`, which asks least.
 
+
+---
+
+## E4. Can held-out perplexity be beaten at order 4, min_count 2?
+
+**Registered 2026-09-09, before any cell was trained.** The grid, the primary statistic and the
+refusal conditions are fixed here.
+
+The shipped model scores **26.30** held out. The instruction was to make that better, and there are
+two honest levers left at this corpus size and two dishonest ones.
+
+**Honest.** Order 5 has better perplexity than order 4 wherever both have been measured — 36.0
+against 38.6 at 22.9M tokens, a 6.8% gain — and it does not fit: 1.7x order 4's 40.8M n-grams is
+about 69M, which the measured 257MB per million puts near 17.7GB against a machine with 15.4GB. The
+lever that might buy the room is `min_count`, which the governor brief already prefers over ceilings:
+3 rather than 2 roughly halves a technical vocabulary's type count and cuts the table with it.
+
+**Dishonest, and named so they are not drifted into.** Scoring in sample, which is D16. Choosing the
+corpus that flatters the number, which is what `comparable_heldout` exists to refuse. Neither is
+available here and neither is being attempted.
+
+### The grid
+
+Three cells, all trained on one frozen corpus with `--held-out-every 20` and scored on the identical
+held-out half:
+
+| cell | order | min_count | why it is in the grid |
+|---|---|---|---|
+| A | 4 | 2 | the baseline, retrained on this snapshot so every fingerprint matches |
+| B | 5 | 3 | the candidate |
+| C | 4 | 3 | **the control that makes B readable** |
+
+Cell C is not optional. Without it, a win for B cannot be attributed: `min_count` 3 changes the
+vocabulary and the order changes the model, and B moves both at once.
+
+### The primary statistic, and a gap in the tooling
+
+`min_count` 3 drops types that `min_count` 2 keeps, so B and C have smaller vocabularies and higher
+OOV than A. All-targets perplexity would then move partly for a vocabulary reason and partly for a
+modelling one, which is the confusion backlog 77 was opened to end.
+
+**The primary statistic is in-vocabulary-only perplexity**, with all-targets and the OOV rate
+reported beside it. Note what this exposes: `comparable_heldout` compares fingerprints and the
+in-vocabulary flag, and it will happily compare two all-targets numbers from models with *different
+vocabularies*. It should not. That is the same shape as every check corrected in D16 and D18 —
+comparing a property next to the one that matters — and it is recorded here rather than fixed
+mid-experiment.
+
+### Fixed readings
+
+- **B wins only if it beats A on in-vocabulary-only perplexity and C does not beat A by as much.**
+  If C matches B, the gain was `min_count` and order 5 bought nothing.
+- **A ceiling that binds voids the cell.** If B stops on the resident-set ceiling its table is
+  truncated and its perplexity describes a prefix; the record's `stopped_because` decides, not the
+  number. This is the most likely single outcome and it is a result, not a failure to explain away.
+- **If nothing beats 26.30, that is the answer** and 26.30 stands as the best this corpus and this
+  machine produce. Reporting a loss is the point of fixing the grid in advance.
+- No cell's `min_count` or order is adjusted after seeing a result. A fourth cell may only be added
+  as a new registration.
