@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { hostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { parse as parseYaml } from "yaml";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { z } from "zod";
 import type { Config } from "./config.js";
 import { compile, previewText } from "./compile.js";
@@ -139,6 +139,35 @@ export interface ClaimedTask extends Task {
 }
 
 const RUN_DIR_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$/;
+
+/**
+ * A name that is safe to put in a path, checked before it becomes one.
+ *
+ * `recordRun` builds `evals/recorded/<fixture>-<name>` and then `cpSync(..., { recursive: true })`
+ * over it. Nothing validated either half, so a name of `../../../../tmp/x` wrote a whole run
+ * directory outside the repository, and `force` overwrote whatever was there. The kernel already
+ * held run ids to this shape; the record path was the one place that did not.
+ */
+function assertPathSegment(what: string, value: string): void {
+  if (!RUN_DIR_RE.test(value))
+    throw new ContractError("record", [`${what} ${JSON.stringify(value)} is not a path segment; expected ${RUN_DIR_RE}`]);
+}
+
+/**
+ * Resolve a path the run's own plan supplied, refusing anything that leaves the run directory.
+ *
+ * These come from the compiler rather than from a worker, so this is not closing a hole a subagent
+ * can reach — it is making the run directory a boundary that holds without depending on which file
+ * produced the path. A plan edited on disk, or a compiler change that lets a frame id into a
+ * filename, both fail here instead of writing somewhere else.
+ */
+function insideRun(runDir: string, relPath: string): string {
+  const abs = resolve(runDir, relPath);
+  const root = resolve(runDir);
+  if (abs !== root && !abs.startsWith(root + sep))
+    throw new ContractError("kernel", [`${relPath} resolves outside the run directory ${root}`]);
+  return abs;
+}
 
 export class Kernel {
   readonly root: string;
@@ -429,7 +458,7 @@ export class Kernel {
         task.attempts += 1;
         this.save(rec);
         this.journal("claimed", { run_id: rec.run_id, task: task.id, worker, attempt: task.attempts });
-        const brief = readFileSync(join(this.runDir(rec.run_id), task.brief_path), "utf8");
+        const brief = readFileSync(insideRun(this.runDir(rec.run_id), task.brief_path), "utf8");
         // A continuation claimed by a different worker runs as a fresh agent: the pass B brief
         // carries the pass A scores, so a fresh critic can do it; the preference was a saving.
         const continues = task.continues && task.prefer_worker === worker ? task.continues : null;
@@ -465,8 +494,8 @@ export class Kernel {
       // position to a frame that never held it, which is the one thing the isolation contract
       // is supposed to guarantee. The task knows what it asked for, so check it here.
       for (const p of Kernel.misdirected(task, clean)) throw new ContractError("return", [p]);
-      writeFileSync(join(this.runDir(runId), task.artifact_path), clean.endsWith("\n") ? clean : clean + "\n");
-      if (clean !== output) writeFileSync(join(this.runDir(runId), task.artifact_path + ".raw.md"), output);
+      writeFileSync(insideRun(this.runDir(runId), task.artifact_path), clean.endsWith("\n") ? clean : clean + "\n");
+      if (clean !== output) writeFileSync(insideRun(this.runDir(runId), task.artifact_path + ".raw.md"), output);
       task.status = "done";
       task.returned_at = this.now().toISOString();
       if (tokens !== undefined && Number.isFinite(tokens)) task.tokens = Math.round(tokens);
@@ -930,6 +959,10 @@ import { runEval } from "./eval.js";
  * artifacts. The human adds "what it did not surface" by hand; the skeleton says so.
  */
 export function recordRun(cfg: Config, kernel: Kernel, runId: string, opts: { fixtureId: string; name: string; force?: boolean }) {
+  // Before anything reads the run, so a bad name is refused as a bad name rather than reaching a
+  // path. Both halves land in `evals/recorded/<fixture>-<name>` under a recursive copy.
+  assertPathSegment("fixture id", opts.fixtureId);
+  assertPathSegment("name", opts.name);
   const status = kernel.status(runId);
   if (!["done", "done_run_level", "cancelled"].includes(status.state)) throw new ContractError("record", [`run ${runId} is ${status.state}; only finished runs are recorded`]);
   const dest = join(cfg.root, "evals", "recorded", `${opts.fixtureId}-${opts.name}`);

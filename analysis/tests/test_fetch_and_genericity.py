@@ -223,3 +223,48 @@ def test_the_genericity_report_names_its_corpus_and_counts_its_comparisons():
     assert "`toy`" in out, "the report quotes surprisal without naming what produced it"
     assert "comparison(s) are reported above and neither is preregistered" in out
     assert "Name the corpus or do not quote the number." in out
+
+
+def test_a_redirect_off_the_allowlist_is_refused_at_the_hop(monkeypatch):
+    """The check before the request only covers the first URL, and a 302 is a second one.
+
+    `urllib.request.urlopen` follows redirects with a handler whose only scheme guard is
+    `('http', 'https', 'ftp', '')`, so an allowlisted host answering 302 could send this fetcher
+    anywhere, over plain http if it preferred. Both the https-only rule and the prefix allowlist were
+    gone after one hop, and neither this file nor `test/boundary.test.ts` covered the hop because
+    both were written about the call rather than the exchange.
+    """
+    handler = fetch_corpus.CheckedRedirects()
+    good = fetch_corpus.SOURCES["eip"].template.format(n=20)
+
+    for hostile in [
+        "http://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/eip-20.md",  # downgraded
+        "https://evil.example/eip-20.md",  # another host
+        "https://raw.githubusercontent.com/evil/repo/master/x.md",  # same host, another repository
+        "ftp://raw.githubusercontent.com/x",  # a scheme the stdlib handler permits
+    ]:
+        with pytest.raises(fetch_corpus.FetchRefused):
+            handler.redirect_request(None, None, 302, "Found", {}, hostile)
+
+    # A redirect that stays inside the allowlist is not refused by the check; it goes on to the
+    # stdlib's own handling, which needs a real request object and is not what this is testing.
+    with pytest.raises(AttributeError):
+        handler.redirect_request(None, None, 302, "Found", {}, good)
+
+
+def test_the_redirect_handler_replaces_the_default_rather_than_joining_it():
+    """A chain holding both handlers would follow whichever the stdlib picked first."""
+    names = [type(h).__name__ for h in fetch_corpus._OPENER.handlers]
+    assert "CheckedRedirects" in names
+    assert "HTTPRedirectHandler" not in names, names
+
+
+def test_one_response_cannot_be_arbitrarily_large():
+    """`--max-bytes` is a per-source total checked between documents, not a cap on one read.
+
+    Without a cap the whole body goes into memory in a single call, so one response decides how much
+    memory this needs however small the per-source ceiling is.
+    """
+    assert fetch_corpus.MAX_DOCUMENT_BYTES <= 64 * 1024 * 1024
+    body = fetch_corpus.Path(fetch_corpus.__file__).read_bytes()
+    assert len(body) < fetch_corpus.MAX_DOCUMENT_BYTES, "the guard has to be bigger than a real document"

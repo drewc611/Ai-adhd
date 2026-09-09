@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ContractError, RunAbort } from "../src/errors.js";
@@ -227,6 +227,83 @@ test("the command allowlist matches the whole string, not a prefix", () => {
     // Prefix matching on `echo ok` would let this through, and a verify stage runs what it is told.
     assert.throws(() => sandbox.run("echo ok && echo sneaky"), ContractError);
     assert.throws(() => sandbox.run("rm -rf /"), ContractError);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a stage cannot redirect its own promotion by editing metadata", () => {
+  // The sandbox's metadata carries `source`, and `promote` copies there. It used to live at
+  // `<root>/.adhd-sandbox.json` — inside the tree the stage writes to, which is the one thing a
+  // stage is for. Rewriting that field pointed the promotion anywhere the process could reach, and
+  // it was worse than a write: everything already in the redirected directory is absent from the
+  // sandbox, so `diff` called it `removed` and `promote` deleted it, with `refused` still empty.
+  const home = box();
+  try {
+    const source = join(home, "tree");
+    const elsewhere = join(home, "elsewhere");
+    mkdirSync(source, { recursive: true });
+    mkdirSync(elsewhere, { recursive: true });
+    writeFileSync(join(source, "a.txt"), "original\n");
+    writeFileSync(join(elsewhere, "keep.txt"), "do not touch\n");
+
+    const { sandbox } = Sandbox.create(join(home, "box"), source, { writable: [], network: false, commands: [] });
+    assert.ok(!existsSync(join(sandbox.root, ".adhd-sandbox.json")), "metadata is inside the tree the stage writes to");
+    assert.ok(existsSync(`${sandbox.root}.json`), "metadata is not beside the sandbox");
+
+    writeFileSync(join(sandbox.root, "a.txt"), "changed by the stage\n");
+    writeFileSync(join(sandbox.root, ".adhd-sandbox.json"), JSON.stringify({ root: sandbox.root, source: elsewhere }));
+
+    const r = sandbox.promote();
+    assert.equal(r.refused.length, 0);
+    assert.deepEqual(readdirSync(elsewhere), ["keep.txt"], "the promotion was redirected out of its source");
+    assert.equal(readFileSync(join(elsewhere, "keep.txt"), "utf8"), "do not touch\n");
+    assert.equal(readFileSync(join(source, "a.txt"), "utf8"), "changed by the stage\n", "the real change did not land");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("metadata describing a different sandbox is refused rather than followed", () => {
+  const home = box();
+  try {
+    const source = join(home, "tree");
+    mkdirSync(source, { recursive: true });
+    writeFileSync(join(source, "a.txt"), "1\n");
+    const { sandbox } = Sandbox.create(join(home, "box"), source, { writable: [], network: false, commands: [] });
+
+    const meta = JSON.parse(readFileSync(`${sandbox.root}.json`, "utf8")) as { root: string; source: string };
+    writeFileSync(`${sandbox.root}.json`, JSON.stringify({ ...meta, root: join(home, "some-other-box") }));
+    assert.throws(() => sandbox.promote(), /describes .*some-other-box/);
+
+    rmSync(`${sandbox.root}.json`);
+    assert.throws(() => sandbox.promote(), /no sandbox metadata/);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("the walk skips symlinks rather than following them out of the tree", () => {
+  // Two failures, one fix. A link to a directory outside made `diff` report files that were never in
+  // the sandbox and `promote` copy them into the source. A link to an ancestor made the walk recurse
+  // until the path length killed it, and a build tool can leave one behind with nobody doing
+  // anything hostile.
+  const home = box();
+  try {
+    const source = join(home, "tree");
+    const outside = join(home, "outside");
+    mkdirSync(source, { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(source, "a.txt"), "1\n");
+    writeFileSync(join(outside, "leak.txt"), "not the sandbox's\n");
+
+    const { sandbox } = Sandbox.create(join(home, "box"), source, { writable: [], network: false, commands: [] });
+    symlinkSync(outside, join(sandbox.root, "escape"));
+    symlinkSync(sandbox.root, join(sandbox.root, "loop"));
+
+    assert.deepEqual(sandbox.diff(), [], "a symlink changed nothing and yet something was reported");
+    assert.equal(sandbox.promote().promoted.length, 0);
+    assert.deepEqual(readdirSync(source), ["a.txt"]);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

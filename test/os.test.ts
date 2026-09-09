@@ -5,7 +5,7 @@ import { hostname } from "node:os";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { artifact, cfg, passA, passB, tmp, yaml } from "./helpers.js";
-import { Kernel } from "../src/os.js";
+import { Kernel, recordRun } from "../src/os.js";
 
 const PROBLEM = "What timeouts should I set on this HTTP client?";
 
@@ -904,4 +904,31 @@ test("equal priorities fall back to submission order, and a negative priority si
 
   const order = claimOrder(k, 15);
   assert.deepEqual([...new Set(order)], ["later_high", "also_high", "background"], "priority did not order the runs, or the tie did not fall back to submission order");
+});
+
+
+test("recording a run refuses a name that is not a path segment", () => {
+  // `recordRun` builds `evals/recorded/<fixture>-<name>` and copies a whole run directory over it,
+  // replacing what is there when `force` is set. Nothing validated either half, so a name of
+  // `../../../../tmp/x` wrote outside the repository. The kernel already held run ids to this shape;
+  // this was the one path built from strings that reached it unchecked.
+  const { k } = kernel();
+
+  for (const [fixtureId, name] of [
+    ["001", "../../../../tmp/pwned"],
+    ["001", "a/b"],
+    ["..", "x"],
+    ["001", ""],
+    ["001", ".hidden"],
+  ] as const) {
+    assert.throws(
+      () => recordRun(cfg, k, "whatever", { fixtureId, name }),
+      /is not a path segment/,
+      `${fixtureId}-${name} was accepted`,
+    );
+  }
+
+  // A well-formed pair gets past the name check and fails on the run instead, which is the next
+  // thing wrong with it rather than the thing being tested.
+  assert.throws(() => recordRun(cfg, k, "no_such_run", { fixtureId: "001", name: "first-run" }), /bad run id|no such run|is /);
 });

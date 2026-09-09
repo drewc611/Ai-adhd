@@ -112,10 +112,14 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.ref }}
+        # Through `env:` like the two above. `github.repository` is the repository's own name and
+        # carries nothing an attacker picks, so this one was never exploitable — but a rule with an
+        # exemption list is a rule that rots, and `$REPO` costs nothing.
+        REPO: ${{ github.repository }}
       run: |
         echo "Open CodeQL alerts on $REF"
         gh api --paginate \
           -H "Accept: application/vnd.github+json" \
-          "repos/${{ github.repository }}/code-scanning/alerts?state=open&ref=$REF&per_page=100" \
+          "repos/$REPO/code-scanning/alerts?state=open&ref=$REF&per_page=100" \
           --jq '.[] | "\(.rule.security_severity_level // .rule.severity | ascii_upcase)  \(.rule.id)\n  \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)\n  \(.rule.description)\n  \(.most_recent_instance.message.text)\n"' \
           || echo "could not read alerts (needs security-events: read on this token)"

