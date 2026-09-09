@@ -351,6 +351,17 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     because a pruned model has less of the tail to memorise and also less to generalise from. Until
     this runs, `agents/adhd-governor.md` says not to quote 2.9x as measured.
 
+77. **Separate the vocabulary half of the generalisation gap** (small). D17 measures 2.83x between a
+    model that read 584 PEPs and one that read none, on the same 31 documents, and OOV goes 1.36% to
+    2.96% across that pair. Part of the gap is that the never-seen model lacks PEP-specific words and
+    part is that it models PEP prose worse, and this run does not say which is which.
+
+    `genericity.py` already computes surprisal over in-vocabulary tokens only, with the OOV rate
+    beside it, for exactly this reason. `evaluate.py` does not. Adding the same option there and
+    re-scoring the two models on the same 31 documents settles it in about two minutes of compute. No
+    prediction recorded, because either answer is interesting: mostly vocabulary would say the model
+    generalises better than 2.83x suggests, and mostly modelling would say worse.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

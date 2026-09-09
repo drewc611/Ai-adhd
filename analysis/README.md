@@ -165,9 +165,19 @@ modified-Kneser-Ney estimate rather than the 0.75 fallback.
 
 That run reported perplexity **6.06** on 3,097,500 tokens at 0.15% OOV and called it held-out.
 **D16 corrects it**: the model trained on the whole manifest and was then scored on one document in
-twenty of that same manifest, so 6.06 is a memorisation score. The honest figure at order 4 on the
-current 68M-token corpus is **26.29**, and the 0.15% OOV was the tell — an unseen set gives about
-0.79%. `evaluate` refuses that combination now rather than returning a number.
+twenty of that same manifest, so 6.06 is a memorisation score. The 0.15% OOV was the tell — an unseen
+set gives about 0.79% — and `evaluate` refuses that combination now rather than returning a number.
+
+The shipped model trains with `--held-out-every 20`: **64.5M tokens, 199,190-word vocabulary, 40.8M
+4-grams, 709 seconds, 10,703MB peak, nothing pruned, `split` recorded.** Held-out perplexity **26.29**
+on 3,464,189 tokens at 0.79% OOV — the first figure here published under that name that is one.
+
+D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
+scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre
+is worth about **2.83x** on that genre, so this is much more an RFC model than a model of technical
+prose. Per genre it runs 24.8 on RFCs, 54.3 on PEPs, 103.7 on EIPs. The artifacts the genericity
+measure scores are in none of those genres, which is why that report says to name the corpus or not
+quote the number.
 
 Two comparisons, neither preregistered:
 

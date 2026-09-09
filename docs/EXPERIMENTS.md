@@ -250,3 +250,11 @@ between artifacts scored by one model; a model with a different generalisation p
 every artifact's surprisal without moving the difference between two groups of them. That would need
 its own run and is not registered here.
 
+### E2 result, 2026-09-09
+
+Both runs are in **D16's successor, D17**. In short: reading a genre is worth **2.83x** on that genre,
+measured on identical text; the per-genre spread is wider than the "general competence" band this
+registration set; and the registration under-specified one thing, which is that a stride of 20 leaves
+31 held-out PEPs and 16 held-out EIPs — too few to separate its own two readings. E2b at 615
+documents is the well-powered half and is the number to quote.
+
