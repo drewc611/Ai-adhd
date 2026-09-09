@@ -72,6 +72,8 @@ class HeldOut:
     in_vocabulary: int
     oov_rate: float
     perplexity: float
+    #: True when OOV targets were left out of the sum. See `evaluate(in_vocabulary_only=...)`.
+    in_vocabulary_only: bool = False
     #: Identity of the text this was scored on: a digest over each held-out document's own content.
     #:
     #: Carried because a perplexity without it is a number nobody can compare safely, and the
@@ -141,6 +143,7 @@ def evaluate(
     budget: Budget | None = None,
     *,
     allow_in_sample: bool = False,
+    in_vocabulary_only: bool = False,
 ) -> HeldOut:
     """Perplexity of a trained model on documents it never saw.
 
@@ -152,6 +155,13 @@ def evaluate(
     Refuses outright when the model trained on the text being scored — see `in_sample_refusal`.
     `allow_in_sample=True` is for deliberately measuring the gap between seen and unseen text, which
     is a real measurement and reads as one in a diff. It is not a way past a failing check.
+
+    `in_vocabulary_only=True` drops OOV targets from the sum, leaving contexts alone, which is the
+    definition `genericity.py` already uses for surprisal. It separates two things the ordinary
+    figure adds together: how many words the model does not have, and how well it predicts the ones
+    it does. Note the direction is not obvious — `<unk>` is common in training by construction, so an
+    OOV target can be *less* surprising than a real word, and dropping those can push perplexity up.
+    The OOV rate is reported unchanged either way, because it is the other half of the answer.
     """
     if not allow_in_sample:
         why = in_sample_refusal(model, held)
@@ -176,9 +186,11 @@ def evaluate(
             n_tokens += len(ts)
             in_vocab += sum(1 for t in ts if t in model.vocab.stoi)
             b.spend(len(ts))
-            lp, n = model.logprob(model.vocab.encode(ts))
-            total_logprob += lp
-            predictions += n
+            terms = model.logprob_terms(model.vocab.encode(ts))
+            if in_vocabulary_only:
+                terms = [t for t in terms if t[1]]
+            total_logprob += sum(lp for lp, _ in terms)
+            predictions += len(terms)
             if not b.allows():
                 break
         if not b.allows():
@@ -191,6 +203,7 @@ def evaluate(
         in_vocabulary=in_vocab,
         oov_rate=1.0 - (in_vocab / n_tokens if n_tokens else 0.0),
         perplexity=math.exp(-total_logprob / predictions) if predictions else float("inf"),
+        in_vocabulary_only=in_vocabulary_only,
         fingerprint=identity.hexdigest()[:16],
     )
 
@@ -263,6 +276,14 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
         return (
             f"different held-out text ({a.documents} documents / {a.tokens:,} tokens, fingerprint "
             f"{a.fingerprint} against {b.documents} / {b.tokens:,}, fingerprint {b.fingerprint})"
+        )
+    # Same text, different question. One of these sums every position and the other skips the OOV
+    # targets, so they are two measurements that happen to share a fingerprint — which is exactly
+    # the case a fingerprint check alone waves through.
+    if a.in_vocabulary_only != b.in_vocabulary_only:
+        return (
+            "one of these was scored over in-vocabulary targets only and the other over all of them, "
+            "so they are different measurements on the same text"
         )
     return None
 

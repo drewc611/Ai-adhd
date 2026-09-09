@@ -20,6 +20,7 @@ from adhd_analysis.text.budget import Budget
 from adhd_analysis.text.corpora import Library, Source
 from adhd_analysis.text.evaluate import (
     SplitLibrary,
+    comparable_heldout,
     compare_orders,
     evaluate,
     in_sample_refusal,
@@ -191,8 +192,6 @@ def test_a_heldout_number_carries_the_identity_of_the_text_it_was_scored_on(tmp_
     sample and 17.4 was not. The fingerprint is still the right mechanism and is still carried rather
     than derived at comparison time; only the incident that motivated it was misdiagnosed.
     """
-    from adhd_analysis.text.evaluate import comparable_heldout
-
     lib = _library(tmp_path, n=60)
     rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
     model = KneserNey.load(rec.model_path)
@@ -309,3 +308,41 @@ def test_sharing_one_source_is_enough_to_be_refused(tmp_path):
     assert names, "the model records no sources, so nothing can be checked"
     why = in_sample_refusal(model, Library(lib.sources))
     assert why is not None and "every subset of that manifest is training text" in why
+
+
+def test_in_vocabulary_only_scoring_drops_exactly_the_oov_targets(tmp_path):
+    """Backlog 77's instrument: separate "words it does not have" from "words it predicts badly".
+
+    `genericity.py` has used this definition for surprisal since it was written — drop OOV targets,
+    leave contexts alone — and `evaluate.py` did not, so the perplexity figures added the two
+    together. The direction is not obvious either: `<unk>` is common in training by construction, so
+    an OOV target can be less surprising than a real word and dropping those can push perplexity up.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=3, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    everything = evaluate(model, held, Budget.smoke())
+    known_only = evaluate(model, held, Budget.smoke(), in_vocabulary_only=True)
+
+    assert everything.oov_rate > 0, "this corpus has no out-of-vocabulary tokens, so nothing is being tested"
+    assert known_only.oov_rate == everything.oov_rate, "the OOV rate is the other half of the answer and must not move"
+    assert known_only.tokens == everything.tokens
+    assert known_only.perplexity != everything.perplexity
+    assert everything.in_vocabulary_only is False and known_only.in_vocabulary_only is True
+
+
+def test_two_scorings_of_one_set_are_not_comparable_when_they_asked_different_questions(tmp_path):
+    """A fingerprint says the text is the same. It does not say the measurement is."""
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=3, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    everything = evaluate(model, held, Budget.smoke())
+    known_only = evaluate(model, held, Budget.smoke(), in_vocabulary_only=True)
+
+    assert everything.fingerprint == known_only.fingerprint, "the text differed, so this tests nothing"
+    why = comparable_heldout(everything, known_only)
+    assert why is not None and "in-vocabulary targets only" in why

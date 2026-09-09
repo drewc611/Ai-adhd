@@ -144,20 +144,33 @@ class KneserNey:
         disc = self._discount_for(k, c) if c else 0.0
         return max(c - disc, 0.0) / stats.total + gamma * backoff
 
+    def logprob_terms(self, ids: Iterable[int]) -> list[tuple[float, bool]]:
+        """Per-position natural-log probability, and whether that position's target is a real word.
+
+        One loop rather than two conventions. `logprob` sums all of it; a caller asking how the model
+        does on words it *knows* sums only the positions whose second element is true. Contexts are
+        untouched either way, so an `<unk>` in a history still conditions the next prediction — the
+        question being separated is which targets count, not what the model was allowed to read.
+
+        `<unk>` is the marker. `Vocab.encode` maps every out-of-vocabulary token to it and it never
+        occurs as a real token in a corpus, so an id equal to it is exactly an OOV position.
+        """
+        bos, eos, unk = self.vocab.stoi[BOS], self.vocab.stoi[EOS], self.vocab.stoi[UNK]
+        seq = [bos] * (self.order - 1) + list(ids) + [eos]
+        out: list[tuple[float, bool]] = []
+        for i in range(self.order - 1, len(seq)):
+            p = self.prob(tuple(seq[i - self.order + 1 : i]), seq[i])
+            out.append((math.log(p) if p > 0 else -50.0, seq[i] != unk))
+        return out
+
     def logprob(self, ids: Iterable[int]) -> tuple[float, int]:
         """Natural-log probability of a token sequence and the number of predictions made.
 
         The sequence is padded with `order-1` BOS and one EOS, so a one-word artifact and a
         thousand-word one are scored under the same convention and their perplexities compare.
         """
-        bos, eos = self.vocab.stoi[BOS], self.vocab.stoi[EOS]
-        seq = [bos] * (self.order - 1) + list(ids) + [eos]
-        total, n = 0.0, 0
-        for i in range(self.order - 1, len(seq)):
-            p = self.prob(tuple(seq[i - self.order + 1 : i]), seq[i])
-            total += math.log(p) if p > 0 else -50.0
-            n += 1
-        return total, n
+        terms = self.logprob_terms(ids)
+        return sum(lp for lp, _ in terms), len(terms)
 
     def perplexity(self, ids: Iterable[int]) -> float:
         lp, n = self.logprob(ids)
