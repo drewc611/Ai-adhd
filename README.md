@@ -13,7 +13,7 @@
 <p align="center">
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-423-2ea44f" alt="423 TypeScript tests"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-424-2ea44f" alt="424 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-75-2ea44f" alt="75 Python tests"></a>
   <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D18%20resolved-0969da" alt="D1 through D18 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
@@ -77,12 +77,28 @@ What it never surfaces:
 That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
 the whole system. If a run only returns the timeout triple, the run failed.
 
-**It does not pass reliably.** The same problem run at seed 2, with the same five frames, misses
-two of the four bullets above: the human who can cancel, and who pays for the retry. Both are
-recorded in `evals/recorded/001-seed2`, which is kept as failing. Those two findings were
-properties of one sample, not of the frame library, and no claim in this repo rests on a single
-run without saying so. `docs/EXPERIMENTS.md` registers what that experiment was testing, before
-it ran.
+**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the three real
+recorded runs of this fixture it has passed once — in the run it was written against.
+
+| assertion | seed 1 | seed 2 | alt frames | rate |
+|---|---|---|---|---|
+| the human who can cancel | ok | **miss** | ok | 2/3 |
+| the retry target questioned | ok | ok | **miss** | 2/3 |
+| who pays for the retry | ok | **miss** | **miss** | **1/3** |
+| a trap named | ok | ok | ok | 3/3 |
+
+**The four assertions have different dependencies, and that is the finding.** An earlier version of
+this paragraph explained the seed-2 misses away as a quirk of one sample rather than anything to do
+with the frame library. E1b in `docs/EXPERIMENTS.md` ran afterwards and contradicted it: *who pays
+for the retry* missed at seed 2 **and** again under a different frame set, and at seed 1 it was
+`LEDGER`'s — a frame that was pruned at seed 2 and never dispatched in E1b. On that evidence it needs
+a specific frame, alive, which is a fact about the library exactly. *The human who can cancel*
+survived the frame swap and not the reseed, so for that one the sample reading holds.
+
+The audit reports these rates rather than leaving them to prose, and a `sometimes` verdict is not a
+pattern to loosen: it says nothing in the dispatched set reliably asks that question. The only
+assertion that holds everywhere is `trap_named`, which asks almost nothing — any `T[1-8]` anywhere in
+the pruned block. `docs/EXPERIMENTS.md` registered both experiments before they ran.
 
 ## When to reach for it
 
@@ -258,7 +274,7 @@ docs/       architecture, traps, decisions, superagent, manifest, provenance, di
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       423 tests over all of it
+test/       424 tests over all of it
 analysis/   Python: reliability, bootstrap intervals, a language model trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 agents/     four run subagents, five mission subagents, the trainer and its governor
