@@ -115,6 +115,18 @@ class HeldOut:
     perplexity: float
     #: True when OOV targets were left out of the sum. See `evaluate(in_vocabulary_only=...)`.
     in_vocabulary_only: bool = False
+    #: Why the budget stopped the scoring, or None if it read the whole set.
+    #:
+    #: A perplexity over a prefix is not a perplexity over the set, and until this field existed
+    #: nothing on a `HeldOut` said which one you were holding. Measured: the shipped model scores
+    #: 25.65 over 366 documents, and under a ceiling it already exceeds it returns **97.19 over one
+    #: document** with every other field looking ordinary.
+    #:
+    #: `compare_orders` learned this once — `OrderResult.truncated` exists because a shared wall-clock
+    #: ceiling cut order 5's evaluation short and produced a table naming the wrong winner. The fix
+    #: went on the wrapper and not on `HeldOut`, so every other caller stayed exposed, and one of them
+    #: reported a truncated 37.55 next to a complete 25.65 as though they were the same kind of thing.
+    truncated: str | None = None
     #: Identity of the text this was scored on: a digest over each held-out document's own content.
     #:
     #: Carried because a perplexity without it is a number nobody can compare safely, and the
@@ -128,7 +140,8 @@ class HeldOut:
     fingerprint: str = ""
 
     def __str__(self) -> str:
-        return f"perplexity {self.perplexity:8.1f}  OOV {self.oov_rate:5.1%}  over {self.tokens:,} tokens"
+        cut = f"  TRUNCATED ({self.truncated})" if self.truncated else ""
+        return f"perplexity {self.perplexity:8.1f}  OOV {self.oov_rate:5.1%}  over {self.tokens:,} tokens{cut}"
 
 
 def in_sample_refusal(model: KneserNey, held) -> str | None:
@@ -250,7 +263,10 @@ def evaluate(
         if not b.allows():
             break
 
+    # `allows()` is what ended the loop early, and its reason is the only thing that distinguishes a
+    # score over the set from a score over a prefix of it.
     return HeldOut(
+        truncated=b.stopped_because,
         documents=docs,
         sentences=n_sentences,
         tokens=n_tokens,
@@ -307,7 +323,9 @@ def compare_orders(
         scoring = base.restart()
         scoring.max_seconds = base.max_seconds * 4
         held = evaluate(model, held_half, scoring)
-        out.append(OrderResult(order=order, record=rec, held=held, truncated=scoring.stopped_because))
+        # Off the HeldOut rather than off the budget. Two sources for one fact is how they drift, and
+        # the budget object is reused while the HeldOut is the record of that one measurement.
+        out.append(OrderResult(order=order, record=rec, held=held, truncated=held.truncated))
         del model
     return out
 
@@ -324,6 +342,15 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     `comparable()` does the same job across orders. This is the same rule across corpora, which is
     the axis it was missing.
     """
+    # Before the fingerprint check, because a truncated run has a different fingerprint *as a
+    # consequence* of being truncated, and reporting that as "different held-out text" sends the
+    # reader looking for a corpus change. That is not a hypothetical: it cost real time once.
+    for label, side in (("the first", a), ("the second", b)):
+        if side.truncated:
+            return (
+                f"{label} of these was truncated ({side.truncated}), so its perplexity is over "
+                f"{side.documents} document(s) and not over the set"
+            )
     if not a.fingerprint or not b.fingerprint:
         return "one of these was measured before held-out sets carried a fingerprint"
     if a.fingerprint != b.fingerprint:

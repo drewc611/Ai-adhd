@@ -443,3 +443,53 @@ def test_the_shipped_frozen_set_holds_out_no_document_a_commit_can_rewrite():
     offenders = [n for n in spec["documents"] if n.split("/")[0] in mutable]
     assert not offenders, f"the frozen set holds documents this repository rewrites: {offenders}"
     assert len(spec["fingerprint"]) == 16
+
+
+def test_a_truncated_score_says_so_rather_than_looking_finished(tmp_path):
+    """A perplexity over a prefix is not a perplexity over the set, and it used to look identical.
+
+    Measured on the real corpus: the shipped model scores 25.65 over 366 documents, and under a
+    resident-set ceiling it already exceeds it returns **97.19 over one document**, with every other
+    field ordinary. `compare_orders` learned this once — `OrderResult.truncated` exists because a
+    shared wall-clock ceiling cut order 5's evaluation short and produced a table naming the wrong
+    winner — and the fix went on the wrapper rather than on `HeldOut`, leaving every other caller
+    exposed.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    whole = evaluate(model, held, Budget.smoke())
+    assert whole.truncated is None
+    assert "TRUNCATED" not in str(whole)
+
+    # A token ceiling that stops the loop after the first document.
+    tight = Budget(max_tokens=1, max_seconds=10**6, max_ngrams=10**12, max_rss_mb=10**6, check_every=1)
+    cut = evaluate(model, held, tight)
+    assert cut.truncated, "a scoring run the budget stopped reported itself as complete"
+    assert cut.documents < whole.documents
+    assert "TRUNCATED" in str(cut)
+
+
+def test_a_truncated_score_is_refused_before_the_fingerprint_is_blamed(tmp_path):
+    """The reason has to be the real one.
+
+    A truncated run has a different fingerprint *because* it was truncated, so a fingerprint-first
+    check reports "different held-out text" and sends the reader hunting for a corpus change. That
+    happened, and it cost real time.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    whole = evaluate(model, held, Budget.smoke())
+    cut = evaluate(model, held, Budget(max_tokens=1, max_seconds=10**6, max_ngrams=10**12, max_rss_mb=10**6, check_every=1))
+
+    why = comparable_heldout(whole, cut)
+    assert why is not None
+    assert "truncated" in why, why
+    assert "different held-out text" not in why, "the fingerprint got blamed for a truncation"
+    # Either way round.
+    assert "truncated" in (comparable_heldout(cut, whole) or "")
