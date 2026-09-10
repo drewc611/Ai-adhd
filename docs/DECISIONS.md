@@ -1681,3 +1681,126 @@ is `Sandbox.run`, whose allowlist matches the whole command string rather than a
 built from frame labels escape their metacharacters. Workflow permissions are least-privilege
 (`contents: read` everywhere, with `issues: write` on maintenance and `id-token`/`packages` on
 release). The `github-script` step interpolates only `context.*`.
+
+
+## D19. Four measurements, two of them against my own predictions
+
+**Asked.** Keep training; make the scores better.
+
+**Resolved.** Held-out perplexity is **25.65** on a frozen set that will still mean something next
+week. Two backlog items closed and one of them contradicted the prediction recorded when it opened.
+
+### The shipped model
+
+Order 4, `min_count` 3, trained on the training side of a frozen split:
+
+| | |
+|---|---|
+| tokens | 64,564,080 |
+| vocabulary | 148,394 |
+| 4-grams | 40,316,955 |
+| prunes | 0 |
+| peak RSS | 10,604MB |
+| seconds | 578 |
+| split | `{frozen: 8e2d77cbe8901b1e, side: train}` |
+
+**Held-out perplexity 25.65** on 366 frozen documents, 3,455,268 tokens, 0.91% OOV, fingerprint
+`1446762140db7f1a`.
+
+### Backlog 76: pruning costs 1.36x, and I predicted "larger than 2.9x"
+
+Two runs, one corpus, one split, differing only in the n-gram ceiling:
+
+| | n-grams | peak RSS | held-out perplexity |
+|---|---|---|---|
+| unpruned | 40.8M | 10.7GB | **26.30** |
+| pruned (12M ceiling) | 16.8M | 5.4GB | **35.79** |
+
+Same set, fingerprint `d49eed554e253ec3`, no refusal from `comparable_heldout`.
+
+The backlog entry predicted the real cost would be **larger** than the published 2.9x, reasoning that a
+pruned model has less tail to memorise *and* less to generalise from. **Wrong.** The 2.9x came from
+comparing two memorisation scores (D16), and memorisation is exactly where pruning hurts most, because
+dropping singletons drops the memorised tail. Held out, the penalty is less than half that.
+
+**This reverses a shipped recommendation.** `agents/adhd-governor.md` calls pruning "a last resort" on
+the strength of 2.9x. The measured trade is **59% less memory for 36% worse perplexity**, which is a
+reasonable thing to spend. The brief said not to quote 2.9x as measured; now there is a number to
+quote instead.
+
+### Backlog 77: the generalisation gap is modelling, not vocabulary
+
+D17 measured 2.83x between a model that had read 584 PEPs and one that had read none, on the same 31
+documents, and could not say how much of it was the never-seen model simply lacking PEP words.
+
+Over in-vocabulary targets only: **2.82x**. 54.30 → 53.88 and 153.53 → 152.14. The OOV rate doubles
+across the pair and accounts for essentially none of the gap. That is the worse of the two answers the
+backlog registered: the model generalises across the genre family less well than the raw figure
+allowed for, not better.
+
+### E4: `min_count` 3, and my registered primary statistic was the wrong one
+
+Three cells, one frozen corpus, identical held-out text (fingerprint `cccc1976b359cc09`):
+
+| cell | order | min_count | vocab | n-grams | OOV | all targets | in-vocab only |
+|---|---|---|---|---|---|---|---|
+| A | 4 | 2 | 199,214 | 40.84M | 0.79% | 26.29 | 25.89 |
+| B | 5 | 3 | — | — | — | **OOM at 13.94GB** | — |
+| C | 4 | 3 | 148,374 | 40.31M | 0.91% | **25.80** | 25.51 |
+
+**26.29 → 25.80, and it came from `min_count`, not from order.**
+
+The registration fixed in-vocabulary-only perplexity as primary, on the grounds that `min_count` 3
+raises OOV and all-targets would move partly for a vocabulary reason. **That has a mirror flaw the
+result exposed:** in-vocabulary-only scores each model over *its own* in-vocab tokens, and C's set is a
+strict subset of A's — it excludes exactly the count-2 words, which are the hardest to predict. C is
+scored on an easier subset and the statistic flatters it. All-targets is the fair comparison here:
+both models predict the identical 3,464,571 tokens and must assign probability to every position,
+`<unk>` included. In-vocabulary-only was the right instrument for backlog 77, where the model is held
+constant, and the wrong one across models whose vocabularies differ.
+
+Cell B is the registered outcome: order 5 does not fit. It was killed at 13,943MB anon-rss under a
+`--max-rss-mb 14000` that never got to refuse.
+
+**Adopted, with the cost stated.** Artifact OOV over the 35 recorded artifacts rises 0.63% to 0.85%,
+about one token in 450, and the T1 difference is unmoved: +0.206 under A against +0.209 under C. The
+memory saving I expected did not appear — n-grams and peak RSS are within 1.5%. So `min_count` 3 buys
+one thing, 1.9% on held-out text, and costs one small thing.
+
+### A frozen evaluation set, because growth was breaking comparability
+
+The weekly job trained every week and learned nothing from the number it produced, and could not: the
+stride split selects by position, so any corpus addition reshuffles the held-out set, the fingerprint
+changes, and `comparable_heldout` refuses. Names do not move. `analysis/heldout.json` lists 366
+`source/document-id` pairs that are never trained on and always scored; **everything else is training
+data, including everything fetched from now on.** The corpus keeps growing and the test set stays put.
+
+**The first cut was wrong in a way worth keeping.** It included `docs/ARCHITECTURE.md` and `README.md`
+— documents this repository rewrites whenever a decision is recorded. A frozen set fixes which
+documents are scored and cannot fix what they say, and the fingerprint is over names, so recording a
+decision would have moved the next perplexity silently. Repository prose is excluded from the set and
+stays in training, where mutating text is harmless.
+
+### The instrument, in three corrections
+
+**`doctor` said "Nothing disagrees" while its own audit reported five broken assertions.** Eight
+checks, none of which looked at a fixture. Nine now, reporting six warnings: `003/reframe` satisfied
+by a negative control, `004/false_means` never matched, and four assertions holding in only some real
+runs. Warnings rather than errors, because every one is recorded and open and a `sometimes` verdict is
+explicitly not a failure. Silence was the defect; a red light is not the fix.
+
+**The audit counted the reliability rate and threw it away.** `real_matched / real_total` was already
+computed, and the verdict collapsed it: `retry_cost` at 1 in 3 read as `discriminating`, the same word
+as `trap_named` at 3 in 3. A `sometimes` verdict distinguishes them. E3 then found `retry_cost` was the
+pattern rather than the library, and refused one widened candidate that cleared the negative control
+because it admitted text the assertion's own description excludes.
+
+**`Budget.max_rss_mb` is advisory and per-process.** It is polled between batches, so a fast allocation
+crosses the line and the kernel arbitrates — which is how cell B died 57MB under its own ceiling. And
+it cannot see a second job: two runs each honouring 14GB on a 14GB cgroup is 28GB, which is how an
+earlier rescore was killed. The real limit is a cgroup at about 14GB scoped to the shell's process
+group, not the 15GiB the container reports.
+
+`min_count` is on the training record now, found by a crash rather than by review: the record reported
+`oov_rate` and `vocab_size` while the threshold that decides both lived only in the model's meta, so
+reading a record meant opening a 160MB gzip.
