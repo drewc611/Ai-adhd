@@ -410,3 +410,56 @@ mid-experiment.
   machine produce. Reporting a loss is the point of fixing the grid in advance.
 - No cell's `min_count` or order is adjusted after seeing a result. A fourth cell may only be added
   as a new registration.
+
+
+---
+
+## E5. Order 5 pruned to fit, against order 4 unpruned
+
+**Registered 2026-09-10, before the run.** The last lever available on this machine, and the
+arithmetic says it fails.
+
+E4 established that order 5 does not fit: killed at 13,943MB against a cgroup near 14GB. Raising
+`min_count` does not rescue it, and that is measured rather than assumed — going from 2 to 3 changed
+the n-gram table by **−1.3%** (40,839,021 to 40,316,955). `min_count` drops rare *types*, and the
+n-grams containing them mostly survive with `<unk>` in one slot instead of merging. So the table is
+insensitive to it, order 5 needs about 17.6GB by the measured 257MB per million n-grams at any
+threshold, and no vocabulary setting reaches it.
+
+What makes one more attempt worth 15 minutes is backlog 76. Pruning was thought to cost 2.9x and
+actually costs **1.36x** held out. An order-5 table pruned to the size of the order-4 table is
+therefore a real candidate for the first time: same memory, higher order, a known penalty.
+
+### The comparison
+
+| | order | min_count | max_ngrams | note |
+|---|---|---|---|---|
+| baseline | 4 | 3 | none (40.3M, unpruned) | the shipped model, **25.65** |
+| cell D | 5 | 3 | 42,000,000 | pruned to about the baseline's size |
+
+Both against the frozen set (`8e2d77cbe8901b1e`), so the fingerprints match and
+`comparable_heldout` has no grounds to refuse.
+
+### The prediction, which is that it loses
+
+Order 5 bought **6.8%** over order 4 where both were measured (36.0 against 38.6, at 22.9M tokens).
+Pruning costs **36%** at this corpus. 36% against 6.8% is not close, so cell D should land near 33 to
+35 and lose clearly to 25.65.
+
+**Recorded because it is an extrapolation and not a measurement.** Both inputs come from different
+conditions: the order-5 gain was measured on a corpus a third this size, and the pruning penalty was
+measured at order 4, where the pruned tail is shorter. Either could travel badly. If cell D wins, the
+composition was wrong and that is worth more than the 15 minutes.
+
+### Fixed readings
+
+- **Cell D wins only by beating 25.65 on all targets.** In-vocabulary-only is not the statistic here:
+  E4 established it flatters a model whose vocabulary excludes the hardest words, and both cells share
+  `min_count` 3 so it adds nothing anyway.
+- **A ceiling that binds is still a void, not a number.** If D stops on the resident-set ceiling
+  rather than the n-gram ceiling, its table is a prefix and its perplexity describes one.
+- **`prunes` must be greater than zero.** If the 42M ceiling never binds, D is an unpruned order-5
+  model that somehow fit, which contradicts E4 and means something is wrong with the accounting, not
+  that order 5 is free.
+- **If it loses, 25.65 stands as the best this machine produces** and the remaining levers are a bigger
+  machine or a different model class, neither of which is available here.
