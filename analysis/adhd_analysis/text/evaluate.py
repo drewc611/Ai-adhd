@@ -351,6 +351,19 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
                 f"{label} of these was truncated ({side.truncated}), so its perplexity is over "
                 f"{side.documents} document(s) and not over the set"
             )
+    # Same text, counted differently. The fingerprint hashes document *content*, so it cannot see a
+    # change to how that content is tokenized — and a tokenizer change is exactly what makes two
+    # perplexities incomparable while every other field agrees. Demonstrated: fixing the ASCII word
+    # class re-based the shipped baseline from 25.65 to 25.82 on fingerprint `1446762140db7f1a` with
+    # the token count moving 3,455,268 to 3,443,116, and this function called the pair comparable.
+    #
+    # Identical fingerprints with unequal token counts is impossible unless the tokenizer moved, so no
+    # new field is needed to catch it. The counts were already here.
+    if a.fingerprint and a.fingerprint == b.fingerprint and a.tokens != b.tokens:
+        return (
+            f"the same held-out text tokenized to {a.tokens:,} tokens and then to {b.tokens:,}, so the "
+            "tokenizer changed between these measurements and their perplexities are not comparable"
+        )
     if not a.fingerprint or not b.fingerprint:
         return "one of these was measured before held-out sets carried a fingerprint"
     if a.fingerprint != b.fingerprint:

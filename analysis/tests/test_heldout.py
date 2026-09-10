@@ -493,3 +493,30 @@ def test_a_truncated_score_is_refused_before_the_fingerprint_is_blamed(tmp_path)
     assert "different held-out text" not in why, "the fingerprint got blamed for a truncation"
     # Either way round.
     assert "truncated" in (comparable_heldout(cut, whole) or "")
+
+
+def test_the_same_text_counted_differently_is_refused(tmp_path):
+    """The fingerprint hashes document content and cannot see how that content was tokenized.
+
+    Demonstrated on the real corpus: fixing the ASCII word class re-based the baseline from 25.65 to
+    25.82 on fingerprint `1446762140db7f1a`, with the token count moving 3,455,268 to 3,443,116 — the
+    accented words that used to split in two now counting as one. Every other field agreed and this
+    function called the pair comparable.
+
+    Identical fingerprints with unequal token counts cannot happen unless the tokenizer moved, so the
+    counts already sitting on the record are enough to catch it.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    before = evaluate(model, held, Budget.smoke())
+    after = replace(before, tokens=before.tokens - 1234, perplexity=before.perplexity * 1.01)
+
+    assert before.fingerprint == after.fingerprint, "the fixture no longer models a tokenizer change"
+    why = comparable_heldout(before, after)
+    assert why is not None
+    assert "the tokenizer changed" in why, why
+    # Unchanged pairs stay comparable, so the check is not simply refusing everything.
+    assert comparable_heldout(before, before) is None
