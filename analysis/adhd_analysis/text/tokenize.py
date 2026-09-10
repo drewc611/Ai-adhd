@@ -21,11 +21,22 @@ UNK = "<unk>"
 # URLs and code identifiers all fall through to the word branch rather than being special-cased:
 # a corpus of technical documents is mostly those, and stripping them would model a language
 # nobody writes.
+# `[^\W\d_]` is "a word character that is neither a digit nor an underscore", which in Python 3 is
+# Unicode-aware and therefore means *letter* in any script. The previous pattern used `[A-Za-z]`, and
+# ASCII-only word classes do not fail loudly on other alphabets — they truncate. Measured on this
+# corpus: 234 of 1,175 sampled files hold non-ASCII characters, and `Löwis` was being learned as `l`
+# and `wis`, `André` as `andr`, `Viagénie` as `viag` and `nie`. Author lines and references are where
+# a technical corpus keeps its accents, so a fifth of the files were feeding the model broken words.
+#
+# This does not make the tokenizer multilingual. Scripts written without spaces — Chinese, Japanese,
+# Thai — still need segmentation, and `\w+` on them matches a whole run as one token, which is a
+# different wrong answer from the per-character split they used to get. Fixing that is a real piece of
+# work and `docs/DECISIONS.md` records why it is not obviously worth doing for this instrument.
 _TOKEN = re.compile(
     r"""
-    [A-Za-z][A-Za-z0-9_]*(?:'[A-Za-z]+)?   # words, snake_case, don't
+    [^\W\d_][\w]*(?:'[^\W\d_]+)?          # words, snake_case, don't, Löwis, André
   | \d+(?:[.,]\d+)*%?                       # 3.14  1,000  99%
-  | [^\sA-Za-z0-9]                          # one punctuation mark
+  | [^\s\w]                                 # one punctuation mark
     """,
     re.VERBOSE,
 )

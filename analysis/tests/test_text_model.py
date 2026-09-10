@@ -184,3 +184,38 @@ def test_min_count_drops_are_not_reported_as_truncation():
 
     v = Vocab.build(Counter({"kept": 5, "once": 1}), min_count=2, max_size=1000)
     assert v.dropped_types == 1 and v.truncated_types == 0 and v.truncated_tokens == 0
+
+
+def test_accented_words_are_not_truncated():
+    """The tokenizer was ASCII-only, and an ASCII word class does not fail loudly on an accent.
+
+    Measured on the real corpus before this was fixed: 234 of 1,175 sampled files hold non-ASCII
+    characters, and the model was learning `Löwis` as `l` and `wis`, `André` as `andr`, `Viagénie` as
+    `viag` and `nie`. Author lines and references are where a technical corpus keeps its accents, so a
+    fifth of the training files were feeding it broken words.
+    """
+    assert tokens("Martin v. Löwis") == ["martin", "v", ".", "löwis"]
+    assert tokens("André") == ["andré"]
+    assert tokens("Viagénie, Montréal") == ["viagénie", ",", "montréal"]
+    # Whole words in other alphabets rather than one token per letter.
+    assert tokens("Клиент должен") == ["клиент", "должен"]
+    assert tokens("Ο πελάτης") == ["ο", "πελάτης"]
+
+
+def test_the_existing_token_shapes_still_hold():
+    """The accent fix widened a character class, and everything the old pattern got right is regression
+    surface: snake_case identifiers, contractions, decimals, thousands separators and percentages."""
+    assert tokens("snake_case and don't") == ["snake_case", "and", "don't"]
+    assert tokens("3.14 and 1,000 and 99%") == ["3.14", "and", "1,000", "and", "99%"]
+    assert tokens("a-b") == ["a", "-", "b"]
+    assert tokens("HTTP/1.1") == ["http", "/", "1.1"]
+
+
+def test_scripts_without_spaces_are_not_claimed_to_work():
+    """Honest limit, pinned so nobody reads the accent fix as multilingual support.
+
+    Chinese, Japanese and Thai are written without spaces, so a Unicode word class matches a whole run
+    as a single token. That is a different wrong answer from the per-character split it replaced, not a
+    right one, and segmenting them is a separate piece of work.
+    """
+    assert tokens("客户端应该") == ["客户端应该"], "if this changed, the segmentation question was answered"
