@@ -23,8 +23,9 @@ from typing import Iterator
 
 from .budget import Budget
 from .corpora import Library
+from .corpusread import sentence_tokens
 from .ngram import KneserNey, count_ngrams
-from .tokenize import Vocab, sentences, tokens
+from .tokenize import Vocab
 
 
 @dataclass
@@ -82,16 +83,6 @@ class TrainingRecord:
         }
 
 
-def _sentence_tokens(library: Library, budget: Budget) -> Iterator[list[str]]:
-    for _name, doc in library.documents():
-        for s in sentences(doc):
-            ts = tokens(s)
-            if not ts:
-                continue
-            budget.spend(len(ts))
-            yield ts
-            if not budget.allows():
-                return
 
 
 def train(
@@ -110,7 +101,7 @@ def train(
 
     freq: Counter[str] = Counter()
     n_sentences = 0
-    for ts in _sentence_tokens(library, b1):
+    for ts in sentence_tokens(library, b1):
         freq.update(ts)
         n_sentences += 1
     if not freq:
@@ -118,7 +109,7 @@ def train(
     vocab = Vocab.build(freq, min_count=min_count, max_size=max_vocab)
 
     def ids() -> Iterator[list[int]]:
-        for ts in _sentence_tokens(library, b2):
+        for ts in sentence_tokens(library, b2):
             yield vocab.encode(ts)
 
     top, meta = count_ngrams(ids(), order, b2, vocab)

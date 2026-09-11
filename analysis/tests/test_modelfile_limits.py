@@ -96,7 +96,7 @@ def test_a_negative_order_cannot_write_into_the_top_table(tmp_path):
         json.dumps({"itos": ["<unk>", "<s>", "</s>", "a"], "min_count": 2}),
         "-1\t3,3\t999999",
     )
-    with pytest.raises(ModelFileRefused, match="outside the supported range"):
+    with pytest.raises(ModelFileRefused, match="order is -1"):
         KneserNey.load(p)
 
 

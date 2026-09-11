@@ -35,7 +35,7 @@ from typing import Iterable, Iterator
 import numpy as np
 
 from .budget import Budget
-from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header
+from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header, read_vocabulary
 from .tokenize import BOS, EOS, UNK, Vocab
 
 #: What `load` allows itself when no `Budget` says otherwise. Generous against this machine's
@@ -451,22 +451,7 @@ class Transformer:
                     f"{path}: its parameters need {wants_mb:,}MB against a ceiling of {ceiling_mb:,}MB"
                 )
 
-            vline = read_header(fh, path, "vocabulary")
-            itos = vline.get("itos")
-            if not isinstance(itos, list) or not all(isinstance(w, str) for w in itos):
-                raise ModelFileRefused(f"{path}: the vocabulary line is not a list of strings")
-            if len(itos) > config.vocab_size:
-                raise ModelFileRefused(
-                    f"{path}: {len(itos):,} types against a declared vocab_size of {config.vocab_size:,}"
-                )
-            vocab = Vocab(
-                stoi={w: i for i, w in enumerate(itos)},
-                itos=itos,
-                counts=[0] * len(itos),
-                min_count=bounded_int(vline.get("min_count", 2), "min_count", 1, 10**6, path),
-                dropped_types=0,
-                dropped_tokens=0,
-            )
+            vocab = read_vocabulary(fh, path, max_types=config.vocab_size)
             meta = head.get("meta", {})
             m = cls(config, vocab, meta if isinstance(meta, dict) else {})
             seen: set[str] = set()

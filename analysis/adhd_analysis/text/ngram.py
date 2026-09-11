@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from .budget import Budget, BudgetExceeded
-from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header
+from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header, read_vocabulary
 from .tokenize import BOS, EOS, UNK, Vocab
 
 Gram = tuple[int, ...]
@@ -231,37 +231,41 @@ class KneserNey:
             # Twelve is four times the highest order this repository has ever trained, and E5
             # established that five does not fit on this machine at any `min_count`.
             order = bounded_int(head.get("order"), "order", 2, 12, path)
-            vocab_line = read_header(fh, path, "vocabulary")
-            itos = vocab_line.get("itos")
-            if not isinstance(itos, list) or not all(isinstance(w, str) for w in itos):
-                raise ModelFileRefused(f"{path}: the vocabulary line is not a list of strings")
-            vocab = Vocab(
-                stoi={w: i for i, w in enumerate(itos)},
-                itos=itos,
-                counts=[0] * len(itos),
-                min_count=bounded_int(vocab_line.get("min_count", 2), "min_count", 1, 10**6, path),
-                dropped_types=0,
-                dropped_tokens=0,
-            )
+            vocab = read_vocabulary(fh, path)
+            itos = vocab.itos
             counts: list[dict[Gram, int]] = [{} for _ in range(order)]
+            # Hoisted: this was `len(itos)` inside the bounds generator, evaluated once per token id
+            # rather than once per load. Profiled at 55.8 million calls on a 12.4M-gram model.
+            n_types = len(itos)
             loaded = 0
             for line in body_lines(fh, path):
-                parts = line.rstrip("\n").split("\t")
+                # No `rstrip` — `int()` already tolerates the trailing newline on the count, and this
+                # runs twelve million times, so a whole-string pass per line to remove one character
+                # is a whole-string pass per line too many.
+                parts = line.split("\t")
                 if len(parts) != 3:
                     raise ModelFileRefused(f"{path}: an n-gram line has {len(parts)} fields, expected 3")
                 k, gram, c = parts
                 # Range-checked, not just parsed. Python indexes lists from the end on a negative, so
                 # a line whose order field reads `-1` used to write silently into the *top* order
                 # table — a count the format cannot address, landing where the model is read from.
+                #
+                # Written out rather than routed through `bounded_int` because this runs twelve
+                # million times. `int()` already returns an `int` or raises, so the isinstance checks
+                # that make `bounded_int` right for a JSON header are dead weight here, and `min`/`max`
+                # over a tuple is a C loop where `any(... for i in ids)` is a Python generator with a
+                # frame per element. The refusals are identical; only their cost is not.
                 try:
-                    ki = bounded_int(int(k), "an n-gram order", 0, order - 1, path)
-                    ids = tuple(int(x) for x in gram.split(","))
+                    ki = int(k)
+                    ids = tuple(map(int, gram.split(",")))
                     count = int(c)
                 except ValueError as e:
                     raise ModelFileRefused(f"{path}: unreadable n-gram line ({e})") from e
+                if not 0 <= ki < order:
+                    raise ModelFileRefused(f"{path}: an n-gram order is {ki:,}, outside 0 to {order - 1}")
                 if len(ids) != ki + 1:
                     raise ModelFileRefused(f"{path}: a {len(ids)}-gram is filed under order {ki}")
-                if any(i < 0 or i >= len(itos) for i in ids):
+                if min(ids) < 0 or max(ids) >= n_types:
                     raise ModelFileRefused(f"{path}: an n-gram names a token id outside the vocabulary")
                 if count < 1:
                     raise ModelFileRefused(f"{path}: an n-gram has a count of {count}")

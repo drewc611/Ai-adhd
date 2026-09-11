@@ -2078,3 +2078,90 @@ item on that checklist.
 
 Commits here are unsigned and signing is not configured on this machine. Also owner setup, also on
 the checklist, and stated plainly rather than quietly skipped.
+
+
+---
+
+## D23. Regression evidence, a modest performance win, and two duplications extracted early
+
+**Asked.** Do regression testing, performance testing, and refactoring.
+
+### Regression: every published figure had no checked-in evidence
+
+`analysis/models/` and `runs/` are gitignored for good reasons — a model is 160MB and the corpus is
+licence-encumbered — and the consequence nobody had noticed is that **25.82, E6's 30.7 and 64.1, and
+the 64,419,427 tokens the README quotes all lived in JSON that existed only on the machine that
+produced it.** From a clean checkout none of it could be verified, and a figure drifting from its run
+was invisible. That is precisely how 6.06 survived, then 26.29, then 25.65.
+
+`analysis/records/` is now tracked and holds four records at about 2.6KB each: metadata about a
+corpus rather than any of the corpus, so no licence question and no size question.
+`scripts/publish_record.py` rewrites absolute paths relative to the repository root and drops the
+producing machine's identity, because an artifact that diffs on every machine is one people stop
+reading.
+
+Fifteen tests read those records and fail when the prose stops agreeing with them. The two worth
+naming: **A′ and B still share a vocabulary rather than merely a cap**, which is E6's entire claim,
+and **no cell reports a ceiling it did not declare**.
+
+**The central test did not work when first written, and finding that out required attacking it.**
+It concatenated both READMEs and asked whether the record's value appeared anywhere in the result.
+Corrupting `64,419,427` to `64,419,999` in one README left the other carrying the right value, the
+combined string still contained it, and the test passed. It was checking that *some* document quoted
+the record, not that the documents agreed with it — which is the drift it exists to catch. Now
+checked per file, with a companion test that refuses near misses, because a figure one digit from the
+record is drift rather than a different measurement and it reads as authoritative.
+
+### Performance: 1.15x on the n-gram loader, and the profiler pointed at the wrong thing
+
+`KneserNey.load` took **47.2 seconds** for 12,385,471 grams. Under cProfile the validation added by
+D22 looked like the culprit: `any(i < 0 or i >= len(itos) for i in ids)` showed 55.8 million
+generator calls, and `bounded_int` another 12.4 million with two isinstance checks each.
+
+It was not. Phase timing on the real file, without the profiler:
+
+| phase | seconds | share |
+|---|---|---|
+| decompress and bounded line iteration | 4.3 | 11% |
+| parsing and dictionary inserts | 25.2 | 62% |
+| history-stat building after the loop | 11.1 | 27% |
+
+Four changes, none of which alters a single refusal: hoist `len(itos)` out of the bounds check (it
+was being evaluated once per token id rather than once per load), replace the generator with
+`min`/`max` over the tuple, write the order check out rather than routing twelve million lines
+through `bounded_int`'s isinstance checks when `int()` has already guaranteed the type, use `map`
+instead of a generator expression, and drop the per-line `rstrip` because `int()` already tolerates a
+trailing newline.
+
+**Result: 47.2s to 38.8s, which is 1.22x.** Modest, and reported as modest. The profiler inflates
+per-call overhead, so the work that looked like validation was mostly twelve million CPython
+dictionary inserts with tuple keys, and that is near the floor without changing the file format.
+
+The measurement carries a caveat worth stating rather than burying: the baseline is the best of two
+runs and the result is the best of three, and more samples find a lower minimum. The after-spread was
+38.8s to 44.3s across those three, so the honest claim is "about 1.2x" and not a third significant
+figure. Run-to-run variance on this box is several seconds either way.
+
+Verified rather than assumed: cell A′ re-scored after the change at **30.7**, identical to the
+recorded figure.
+
+### Refactoring: two duplications extracted at two copies rather than three
+
+`docs/MANIFEST.md` says to abstract on the third concrete duplication. Both of these are at two, and
+extracting them anyway is a deliberate departure with a reason.
+
+**The vocabulary line** was validated and turned into a `Vocab` identically in both model loaders.
+The rule of three guards against guessing a shape from too few examples; this shape is fixed by the
+file format and there is nothing to guess. What two copies buy instead is two places for a
+*validation* fix to be applied to one of, which is how D18 and D22 both began.
+
+**`sentence_tokens`** was byte-identical in both trainers. It belongs to neither, so it is now in
+`text/corpusread.py` rather than in whichever trainer happened to be written first — and not in
+`corpora.py`, which would make the corpus loader depend on the tokenizer and the budget for the first
+time.
+
+Net 62 lines removed against 62 added, four dead imports dropped, and one refactor caught by a
+security test: rewriting the order check changed the refusal *message* for a negative index, and
+`test_a_negative_order_cannot_write_into_the_top_table` failed on the wording. The attack was still
+refused. The test is now pinned on what the refusal says about the input rather than on which helper
+produced it.

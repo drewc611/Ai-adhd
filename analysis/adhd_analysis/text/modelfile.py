@@ -26,6 +26,8 @@ import json
 from pathlib import Path
 from typing import Iterator, TextIO
 
+from .tokenize import Vocab
+
 #: A vocabulary line for 200,000 types runs about 3MB, so 16MB is generous for a header and still
 #: refuses a bomb long before it is memory worth worrying about.
 MAX_HEADER_BYTES = 16 * 1024 * 1024
@@ -101,3 +103,31 @@ def bounded_int(value: object, name: str, low: int, high: int, path: Path) -> in
     if not low <= value <= high:
         raise ModelFileRefused(f"{path}: {name} is {value:,}, outside the supported range {low} to {high:,}")
     return value
+
+
+def read_vocabulary(fh: TextIO, path: Path, *, max_types: int | None = None) -> Vocab:
+    """The vocabulary line, validated, as a `Vocab`.
+
+    Both model formats put the vocabulary on line two and both need exactly these checks, so this
+    exists at two duplications rather than the three `docs/MANIFEST.md` asks for. The rule of three
+    guards against guessing a shape from too few examples; the shape here is fixed by the file format
+    and there is nothing to guess. What two copies would buy instead is two places for a validation
+    fix to be applied to one of.
+
+    `max_types` is the transformer's extra constraint: its output projection is sized from the config,
+    so a vocabulary longer than the config declares is a file describing two different models.
+    """
+    line = read_header(fh, path, "vocabulary")
+    itos = line.get("itos")
+    if not isinstance(itos, list) or not all(isinstance(w, str) for w in itos):
+        raise ModelFileRefused(f"{path}: the vocabulary line is not a list of strings")
+    if max_types is not None and len(itos) > max_types:
+        raise ModelFileRefused(f"{path}: {len(itos):,} types against a declared vocab_size of {max_types:,}")
+    return Vocab(
+        stoi={w: i for i, w in enumerate(itos)},
+        itos=itos,
+        counts=[0] * len(itos),
+        min_count=bounded_int(line.get("min_count", 2), "min_count", 1, 10**6, path),
+        dropped_types=0,
+        dropped_tokens=0,
+    )

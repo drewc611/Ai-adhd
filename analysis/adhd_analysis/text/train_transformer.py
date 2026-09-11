@@ -22,13 +22,13 @@ import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterator
 
 import numpy as np
 
 from .budget import Budget
 from .corpora import Library
-from .tokenize import BOS, EOS, Vocab, sentences, tokens
+from .corpusread import sentence_tokens
+from .tokenize import BOS, EOS, Vocab
 from .transformer import Adam, Transformer, TransformerConfig, array_batches
 
 #: int32, not int64. The materialised training array is the second largest thing in the process and
@@ -81,16 +81,6 @@ class TransformerRecord:
         )
 
 
-def _sentence_tokens(library: Library, budget: Budget) -> Iterator[list[str]]:
-    for _name, doc in library.documents():
-        for s in sentences(doc):
-            ts = tokens(s)
-            if not ts:
-                continue
-            budget.spend(len(ts))
-            yield ts
-            if not budget.allows():
-                return
 
 
 def cosine_schedule(step: int, total: int, lr: float, warmup: int) -> float:
@@ -142,7 +132,7 @@ def train_transformer(
 
     freq: Counter[str] = Counter()
     n_sentences = 0
-    for ts in _sentence_tokens(library, b1):
+    for ts in sentence_tokens(library, b1):
         freq.update(ts)
         n_sentences += 1
     if not freq:
@@ -159,7 +149,7 @@ def train_transformer(
     bos, eos = vocab.stoi[BOS], vocab.stoi[EOS]
     flat: list[int] = []
     cap = max_train_tokens
-    for ts in _sentence_tokens(library, b2):
+    for ts in sentence_tokens(library, b2):
         flat.append(bos)
         flat.extend(vocab.encode(ts))
         flat.append(eos)
