@@ -520,3 +520,47 @@ def test_the_same_text_counted_differently_is_refused(tmp_path):
     assert "the tokenizer changed" in why, why
     # Unchanged pairs stay comparable, so the check is not simply refusing everything.
     assert comparable_heldout(before, before) is None
+
+
+def test_a_wide_oov_gap_is_not_comparable(tmp_path):
+    """Two vocabularies, one test set, and an all-targets perplexity that silently favours the smaller
+    vocabulary.
+
+    Every OOV target is charged as a prediction of `<unk>`, and `<unk>` is among the most frequent
+    symbols a closed-vocabulary model holds. So the model that knows fewer words is asked an easier
+    question on a larger share of the same text. This is the confound E6 runs into: a transformer
+    capped at 8,192 types cannot be put next to a 148,353-type n-gram on all targets, even though the
+    fingerprint, the token count and `in_vocabulary_only` all agree.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    wide = evaluate(model, held, Budget.smoke())
+    narrow = replace(wide, oov_rate=wide.oov_rate + 0.09)
+
+    assert wide.fingerprint == narrow.fingerprint
+    assert wide.tokens == narrow.tokens
+    why = comparable_heldout(wide, narrow)
+    assert why is not None
+    assert "out-of-vocabulary" in why, why
+    # Symmetric: the order of the arguments is not a way past it.
+    assert comparable_heldout(narrow, wide) is not None
+
+
+def test_the_min_count_pair_e4_compared_stays_comparable(tmp_path):
+    """The threshold has to let through the comparison the repo already made and stands by.
+
+    E4 ranked `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV and adopted 3 on the
+    strength of it. A refusal calibrated so tightly that it voids E4 retroactively is a worse
+    instrument than no refusal, so that gap is the lower bound this is set above.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    at_mc2 = replace(evaluate(model, held, Budget.smoke()), oov_rate=0.0063)
+    at_mc3 = replace(at_mc2, oov_rate=0.0085, perplexity=at_mc2.perplexity * 0.98)
+    assert comparable_heldout(at_mc2, at_mc3) is None

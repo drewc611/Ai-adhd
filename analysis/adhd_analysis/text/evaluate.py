@@ -379,6 +379,23 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
             "one of these was scored over in-vocabulary targets only and the other over all of them, "
             "so they are different measurements on the same text"
         )
+    # Same text, same question, different share of it replaced by one symbol. An all-targets
+    # perplexity charges every OOV target as a prediction of `<unk>`, and `<unk>` is by construction
+    # among the most frequent symbols the model knows. So a model with a smaller vocabulary is asked an
+    # easier question on a larger fraction of the set, and the discount grows with the gap. The
+    # docstring's warning about an easier set applies within one set as soon as the vocabularies differ.
+    #
+    # A percentage point is a judgement, not a measurement, and it is calibrated on one thing: E4
+    # compared `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV, that comparison was
+    # sound, and this must not refuse it. The sensitivity of perplexity to a point of OOV on this
+    # corpus has never been measured; E6 measures it, and this threshold should be re-derived from
+    # that number rather than left as a round one.
+    if abs(a.oov_rate - b.oov_rate) > 0.01:
+        return (
+            f"these were scored at {a.oov_rate:.2%} and {b.oov_rate:.2%} out-of-vocabulary, so the "
+            "model with the smaller vocabulary was charged for predicting `<unk>` on a larger share "
+            "of the same text and its all-targets perplexity carries a discount the other's does not"
+        )
     return None
 
 

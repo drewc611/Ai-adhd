@@ -117,7 +117,15 @@ test("only the model file is written, and only by the trainer", () => {
     return /\.write_text\(|\.write_bytes\(|gzip\.open\([^)]*"wt"|open\([^)]*["']w/.test(body);
   });
   const names = writers.map((f) => relative(ANALYSIS, f)).sort();
-  assert.deepEqual(names, ["adhd_analysis/ngram.py", "adhd_analysis/text/ngram.py", "adhd_analysis/text/train.py"].filter((n) => names.includes(n)), `unexpected writer: ${names.join(", ")}`);
+  // `text/transformer.py` is on this list for the same reason `text/ngram.py` is: it holds the
+  // `save`/`load` pair for its own model class. The trainers that call it do not open files.
+  const allowed = [
+    "adhd_analysis/ngram.py",
+    "adhd_analysis/text/ngram.py",
+    "adhd_analysis/text/train.py",
+    "adhd_analysis/text/transformer.py",
+  ];
+  assert.deepEqual(names, allowed.filter((n) => names.includes(n)), `unexpected writer: ${names.join(", ")}`);
 });
 
 /**
