@@ -1,0 +1,138 @@
+{
+  "budget_corpus": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 8000,
+      "max_seconds": 5400.0,
+      "max_tokens": 20000000
+    },
+    "checks": 915,
+    "peak_rss_mb": 364,
+    "seconds": 1513.99,
+    "stopped_because": null,
+    "tokens": 18343786
+  },
+  "budget_training": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 8000,
+      "max_seconds": 5400.0,
+      "max_tokens": 20000000
+    },
+    "checks": 977,
+    "peak_rss_mb": 364,
+    "seconds": 1513.99,
+    "stopped_because": null,
+    "tokens": 19996672
+  },
+  "budget_vocabulary": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 8000,
+      "max_seconds": 5400.0,
+      "max_tokens": 20000000
+    },
+    "checks": 997,
+    "peak_rss_mb": 364,
+    "seconds": 1513.99,
+    "stopped_because": "token ceiling: 20,000,029 >= 20,000,000",
+    "tokens": 20000029
+  },
+  "config": {
+    "context": 128,
+    "d_model": 128,
+    "init_std": 0.05,
+    "n_layers": 2,
+    "vocab_size": 8192
+  },
+  "documents": 7345,
+  "epochs_completed": 0.99983340003332,
+  "final_loss": 4.9229502272410475,
+  "loss_curve": [
+    6.7583247257060695,
+    5.929241333828598,
+    5.772782492833059,
+    5.5949547559511466,
+    5.40239697255072,
+    5.1913226520428895,
+    5.135430608860782,
+    5.017194936754273,
+    5.02382342346379,
+    4.9257616913709485,
+    5.047686815261841
+  ],
+  "min_count": 3,
+  "model_path": "models/e7-cellC.lstm.gz",
+  "oov_rate": 0.04441218560233088,
+  "seconds": 1513.9853232940004,
+  "sentences": 899014,
+  "sources": [
+    {
+      "bytes": 309593,
+      "files": 14,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-docs",
+      "path": "docs",
+      "split": "train"
+    },
+    {
+      "bytes": 11940,
+      "files": 7,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-prompts",
+      "path": "prompts",
+      "split": "train"
+    },
+    {
+      "bytes": 35447,
+      "files": 2,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-readme",
+      "path": ".",
+      "split": "train"
+    },
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 11785368,
+      "files": 615,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "pep",
+      "path": "analysis/corpora/pep",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "steps": 4882,
+  "stopped_because": "epochs",
+  "tokens_seen": 19996672,
+  "train_tokens": 20000004,
+  "vocab_size": 8192,
+  "vocab_truncated_tokens": 797901,
+  "vocab_truncated_types": 63730
+}

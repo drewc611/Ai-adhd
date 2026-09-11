@@ -646,3 +646,10 @@ work at 20M tokens and the loss in E6 is not about neural models in general.
   more than being inside it.
 - **No shape, learning rate or token cap moves after a result is seen.** A different `d_model`, a
   second epoch, or a bigger cap is a new registration.
+
+**Result: D24. The prediction was wrong.** C is **159.3**, not 40 to 60 — 2.485x worse than the
+transformer rather than between it and the n-gram. Attention is doing substantial work at 20M tokens,
+so E6's conclusion narrows to the transformer rather than generalising to neural models. The
+state-carrying advantage this registration flagged as flattering cell C closed about 6% of a gap set
+during training, and the follow-up registered to challenge a C win is unnecessary because there is no
+C win.

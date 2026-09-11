@@ -2165,3 +2165,98 @@ security test: rewriting the order check changed the refusal *message* for a neg
 `test_a_negative_order_cannot_write_into_the_top_table` failed on the wording. The attack was still
 refused. The test is now pinned on what the refusal says about the input rather than on which helper
 produced it.
+
+
+---
+
+## D24. E7: the LSTM loses to both, and my registered prediction was wrong
+
+**Asked.** Build our own neural network into this thing.
+
+**Resolved.** There was already one — the transformer of D20. So the question worth answering was the
+one E6 could not ask: **is the transformer's loss about attention, or about neural language models at
+this scale?** An LSTM separates those, and the answer is attention.
+
+### The result
+
+All four cells on the frozen set `8e2d77cbe8901b1e`, 366 documents, 3,443,116 tokens, nothing
+truncated, all at 5.8% held-out OOV.
+
+| cell | model | parameters | training tokens | **perplexity** |
+|---|---|---|---|---|
+| A′ | Kneser-Ney order 4, `min_count` 3 | 12.4M n-grams | 20,000,029 | **30.7** |
+| B | transformer, d128, 2 layers | 1,459,456 | 18,343,512 | **64.1** |
+| C | LSTM, d128, 2 layers | 1,311,744 | 18,343,786 | **159.3** |
+
+A′ against B is **2.086x**, reproduced to the digit from D21. B against C is **2.485x**. A′ against C
+is **5.184x**.
+
+### The prediction was wrong, and wrong in the informative direction
+
+E7 registered **"C between 40 and 60"** — between the transformer and the n-gram — reasoning that
+unbounded scoring context would help on formulaic text while missing attention would hurt, and that I
+did not know which dominated. **C is 159.3**, outside the range by 2.7x, and the side it missed on
+answers the question: attention is doing substantial work at 20M tokens.
+
+The registration named this outcome in advance: "If C is worse than B's 64.1, attention is doing real
+work at 20M tokens and the loss in E6 is not about neural models in general." So **E6's conclusion
+narrows rather than generalises.** "A from-scratch neural LM loses to a well-smoothed 4-gram at this
+scale" was the reading available after E6; what is now measured is that the *transformer* loses by
+2.086x while an LSTM of the same size, on the same text, loses by 5.184x. Being neural is not the
+handicap. Lacking attention is a further one, and a large one.
+
+### What the flattery was worth: nothing
+
+E7 recorded an asymmetry in cell C's favour and promised a follow-up to challenge it. The LSTM is
+scored with its state carried across the whole document, where the transformer got windows of 128
+tokens with at least 64 tokens of left context. That is the architectural difference between the two
+rather than a harness bias, and equalising it would have measured the transformer's limitation instead
+of the LSTM's ability — so it was not equalised, and cell C was flattered.
+
+**The flattery did not save it.** Cell C lost by 2.485x *with* the advantage. The follow-up was
+registered to challenge a C win, and there is no C win to challenge. Recorded rather than quietly
+dropped, because a promised check that becomes unnecessary should say why.
+
+The training loss had already said so, which is the cleanest reading here: **4.923 for C against 3.945
+for B**, which exponentiate to 137.1 and 51.7. Held out, 159.3 against 64.1. The ratio is 2.65x on
+training data and 2.485x held out — so the unbounded scoring context closed about six percent of a
+gap that was set during training, and the architecture's one genuine advantage over the transformer
+bought almost nothing on this corpus.
+
+### The pair is matched about as tightly as two independent runs can be
+
+Worth stating because it is what makes the comparison mean anything: C saw 18,343,786 real training
+tokens against B's 18,343,512, a difference of **274 tokens**. Held-out OOV was 4.4412% against
+4.4387%. Same vocabulary pass, same `min_count`, same optimiser, same schedule, same one epoch, same
+frozen set, and 10% apart on parameter count — the closest pair in the whole table. Both ran a full
+epoch and stopped on the schedule rather than on a ceiling.
+
+### The measurement that surprised me, and is not about either architecture
+
+The LSTM trains at **13,896 tokens/second** against the transformer's 7,671 — **1.8x faster**, despite
+stepping sequentially through time where the transformer parallelises over it. Recorded as a fact about
+numpy at this size rather than about recurrence: the transformer's cost at this shape is dominated by a
+(batch, time, 8192) logits tensor and by attention's quadratic term, and neither is helped by the time
+axis being parallel.
+
+A second one worth keeping: during the run the progress line reported **5,688 tok/s**, not 13,896,
+because two test suites were competing for the same four cores. It recovered to 10,787 once they
+finished. The benchmark measured an idle machine and the run did not have one.
+
+### What the build itself produced
+
+**The gradient check did not work when first written, and only sabotage revealed it.** It sampled seven
+deterministic positions per tensor. Deleting `dh_next` — the recurrent gradient, the entire reason an
+LSTM is not a feedforward net — produced a 1.15e-03 relative error and the test passed, because
+`(k * 7919) % 32` for k in 1..7 never lands on the sensitive index.
+
+Exhaustive now: every one of ~1,100 parameters on a model small enough to afford it, with an assertion
+that the count checked equals `parameter_count()` so coverage cannot silently shrink. Verified against
+five planted bugs — dropping the cell gradient from t+1 (5.46e-03), dropping the recurrent hidden
+gradient (1.15e-03), a wrong forget-gate derivative (5.90e-06), a forget gate reading `c_t` instead of
+`c_{t-1}`, and dropping the tied embedding's output-projection term (4.31e-05). **The sampled version
+missed two of those five**, and three sit between 1e-6 and 1e-4, which is why the threshold stays where
+it is.
+
+`train_lstm.py` passes a model factory to the loop in `train_transformer.py` rather than copying it.
+One line differs between training the two classes, and now one line does.

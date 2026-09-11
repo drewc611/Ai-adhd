@@ -196,6 +196,19 @@ than `min_count`** (63,697 types met the frequency floor and were cut by the cap
 transformer saw **18,343,512 real tokens to the control's 20,000,029**, an 8.3% disadvantage from the
 `<s>`/`</s>` its materialised array carries. Neither covers 2.09x.
 
+**A third model class in D24: an LSTM, and it loses to both.** `text/lstm.py`, from scratch over numpy
+with BPTT written by hand. At d128/2 layers — 1,311,744 parameters against the transformer's 1,459,456,
+and 274 training tokens apart — it scores **159.3**: 2.49x worse than the transformer, 5.18x worse than
+the n-gram. E7 predicted it would land between them and was wrong by 2.7x, which is the informative
+direction: **attention is doing substantial work at 20M tokens**, so E6's result is about transformers
+rather than about neural language models generally.
+
+It is scored with state carried across the whole document, where the transformer got 128-token windows.
+That advantage closed about 6% of a gap already set during training (4.923 against 3.945 in loss), so
+the architecture's one edge over the transformer bought almost nothing here. And it trains **1.8x
+faster** than the transformer despite stepping sequentially through time, which says more about what
+dominates cost in numpy at this shape than about recurrence.
+
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre
 is worth about **2.83x** on that genre, so this is much more an RFC model than a model of technical
