@@ -251,3 +251,87 @@ def cfg_min_count(cfg: TransformerConfig) -> int:
     the config would make it look like something the architecture search may move.
     """
     return 3
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    import sys
+
+    ap = argparse.ArgumentParser(
+        prog="adhd_analysis.text.train_transformer",
+        description="Train a transformer language model from scratch on the document library in "
+        "corpora.yaml. Nothing is downloaded, no pretrained weights are loaded and no model is called: "
+        "every parameter comes from the corpus this manifest names.",
+    )
+    ap.add_argument("--manifest", default="corpora.yaml")
+    ap.add_argument("--out", default="models/background.tf.gz")
+    ap.add_argument("--vocab-size", type=int, default=8192, help="the softmax is d_model x this, and "
+                    "every token's loss touches all of it, so this is a shape constraint and not a rail")
+    ap.add_argument("--d-model", type=int, default=128)
+    ap.add_argument("--n-heads", type=int, default=4)
+    ap.add_argument("--n-layers", type=int, default=2)
+    ap.add_argument("--context", type=int, default=128)
+    ap.add_argument("--d-ff", type=int, default=None, help="default 4 x d_model")
+    ap.add_argument("--epochs", type=float, default=1.0)
+    ap.add_argument("--batch-size", type=int, default=32)
+    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--warmup", type=int, default=100)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max-train-tokens", type=int, default=None,
+                    help="cap the materialised training array. Use it to hold two runs to the same "
+                    "text when one model class reads the corpus far faster than the other")
+    ap.add_argument("--max-tokens", type=int, default=None)
+    ap.add_argument("--max-seconds", type=float, default=None)
+    ap.add_argument("--max-rss-mb", type=int, default=None)
+    ap.add_argument("--held-out-file", default=None, metavar="PATH",
+                    help="train on everything except the documents named in this frozen set")
+    ap.add_argument("--held-out-every", type=int, default=None, metavar="N",
+                    help="train on all but every Nth document")
+    ap.add_argument("--record", default=None, help="write the training record here as JSON")
+    args = ap.parse_args(argv)
+
+    cfg = TransformerConfig(
+        vocab_size=args.vocab_size,
+        d_model=args.d_model,
+        n_heads=args.n_heads,
+        n_layers=args.n_layers,
+        context=args.context,
+        d_ff=args.d_ff if args.d_ff is not None else 4 * args.d_model,
+    )
+    b = Budget.weekly()
+    for attr, val in [("max_tokens", args.max_tokens), ("max_seconds", args.max_seconds), ("max_rss_mb", args.max_rss_mb)]:
+        if val is not None:
+            setattr(b, attr, val)
+
+    library = Library.load(args.manifest)
+    if args.held_out_file is not None:
+        from .evaluate import FrozenSplit
+
+        library = FrozenSplit.load(library, args.held_out_file, side="train")
+    elif args.held_out_every is not None:
+        from .evaluate import SplitLibrary
+
+        library = SplitLibrary(library, every=args.held_out_every, side="train")
+    rec = train_transformer(
+        library,
+        args.out,
+        cfg,
+        b,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        warmup=args.warmup,
+        seed=args.seed,
+        max_train_tokens=args.max_train_tokens,
+    )
+    if args.record:
+        Path(args.record).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.record).write_text(rec.to_json() + "\n")
+    print(rec.to_json())
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())

@@ -1804,3 +1804,93 @@ group, not the 15GiB the container reports.
 `min_count` is on the training record now, found by a crash rather than by review: the record reported
 `oov_rate` and `vocab_size` while the threshold that decides both lived only in the model's meta, so
 reading a record meant opening a 160MB gzip.
+
+
+---
+
+## D20. A second model class, and the choice not to amend D2 to get it
+
+**Asked.** "I need a transformer in this thing." Offered three ways to get one — a provider API, a
+downloaded pretrained checkpoint, or one trained from scratch over numpy — and asked which. Answer:
+"You decide I just need one because it's what the whole purpose of this thing is to make it all
+knowing."
+
+**Resolved.** From scratch, numpy only. `analysis/adhd_analysis/text/transformer.py`.
+
+### Why not the other two
+
+Delegating a choice among three options is not authorisation to overturn a resolved decision, and two
+of the three required exactly that. D2 says no API, no provider SDK, no keys anywhere in the repo, and
+`CLAUDE.md` repeats it as a non-negotiable: "If you find yourself adding an inference client, you have
+misread the design." A provider API is that client. A pretrained checkpoint is the same thing with a
+different delivery mechanism, which is why `test/boundary.test.ts` bans `torch`, `tensorflow` and
+`transformers` by name — and taking that route would have meant deleting a passing test to make room
+for the thing the test exists to refuse.
+
+Neither is impossible. Either would need D2 amended first, in the open, with the reason written down,
+and that is the user's call and not mine to make inside a build step.
+
+### What the third option actually buys
+
+The constraint D9 cares about is that every parameter comes from a corpus the repository can point at.
+A model class does not threaten that; a downloaded weights file does. So the from-scratch route is the
+only one of the three that is a genuine addition rather than a trade, and it needs nothing amended:
+numpy is already a dependency of this package, no download, no key, no new runtime.
+
+It also makes a standing claim falsifiable. `ngram.py` has asserted since it was written that a
+transformer from scratch "needs somewhere north of 10^8 tokens before its perplexity beats a
+well-smoothed 5-gram, and it needs a GPU to get there." That is an assertion with no measurement
+behind it, in a repository whose whole practice is the opposite. E6 measures it.
+
+### The three things building it changed elsewhere
+
+**`comparable_heldout` would have waved through the comparison the experiment exists to make.** A
+transformer's output projection is `d_model x vocab_size` and every token's loss touches all of it, so
+it runs at 8,192 types where the shipped n-gram carries 148,353. Two all-targets perplexities at
+different vocabulary sizes are not comparable: every OOV target is charged as a prediction of `<unk>`,
+`<unk>` is among the most frequent symbols a closed-vocabulary model holds, and the model that knows
+fewer words is therefore asked an easier question on a larger share of the same text. Fingerprint,
+token count and `in_vocabulary_only` all agreed, and the function returned None.
+
+Now refused above one percentage point of OOV difference. **That threshold is a judgement, not a
+measurement,** and it is labelled as one in the code: it is set to keep passing the 0.63%/0.85% pair E4
+compared and stood by. The sensitivity of perplexity to a point of OOV has never been measured on this
+corpus and the threshold should be re-derived once it is.
+
+**Sharing one budget between the corpus read and the optimiser.** The n-gram's second pass *is* its
+training, so `train()` needs one `restart()`. A transformer reads the corpus once and then optimises
+over it many times, and charging 64M tokens of tokenising against the training ceiling leaves the
+ceiling exceeded before the first gradient step. The run then reports zero steps under a reason that
+reads like a training limit. Three ceilings now, with a test.
+
+**A vocabulary larger than `vocab_size`** used to be handled by mapping the overflow to `<unk>` at
+scoring time, which inflates the OOV rate the model reports while `evaluate` computes OOV from the
+vocabulary and disagrees. Refused at construction instead.
+
+### The gradient check is the load-bearing test
+
+A hand-written backward pass that is subtly wrong still trains. The loss falls, the run finishes, and
+the perplexity it reports is a number about nothing — there is no symptom to notice. Central
+differences over every parameter tensor, in float64, at under 1e-6 relative error, plus two checks the
+sampled version can miss: that no tensor receives an all-zero gradient (an unwired parameter passes a
+gradient check, because zero equals zero), and that the tied `tok` matrix collects both its
+input-embedding and its output-projection term.
+
+`logprob_terms` duck-types `KneserNey`, so `evaluate`, `FrozenSplit`, `in_sample_refusal`,
+`HeldOut.truncated` and `comparable_heldout` apply with no special case. A model class the existing
+instruments could not measure would be a model class nobody could compare to anything.
+
+### What it costs on this machine, measured
+
+2,292 tokens/second as first written, which is 4% of the 420 GFLOP/s this box does on 4 cores. Three
+profiler-guided fixes took it to **7,671 tok/s**, a 3.35x:
+
+| | cost, of a 463ms step | why |
+|---|---|---|
+| `np.einsum("btv,btd->vd", ...)` | 227ms | no BLAS path for that contraction; falls to numpy's own C loop, on the largest matrix multiply in the model. One GEMM instead: under 10ms |
+| `_gelu_backward` | 76ms | recomputed the tanh the forward pass already had, and used `x ** 3`, which dispatches to `np.power` |
+| `_softmax` and the `dlogits` copy | 0.5s of a 10.1s profile | four allocations of a 67MB array nothing else refers to. Both in place now |
+
+None of it was guesswork and none of it was where I would have guessed. That is 2.33 hours per epoch
+over the 64.4M-token training side rather than 8.8, which is the difference between E6 being runnable
+here and not.
