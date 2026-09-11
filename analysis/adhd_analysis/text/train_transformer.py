@@ -22,6 +22,7 @@ import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Callable
 
 import numpy as np
 
@@ -105,6 +106,7 @@ def train_transformer(
     config: TransformerConfig | None = None,
     budget: Budget | None = None,
     *,
+    make_model: "Callable[[object, Vocab, int], object] | None" = None,
     epochs: float = 1.0,
     batch_size: int = 16,
     lr: float = 3e-4,
@@ -160,7 +162,11 @@ def train_transformer(
     if ids.size < cfg.context + 2:
         raise ValueError(f"the training side produced {ids.size} ids, too few for a context of {cfg.context}")
 
-    model = Transformer(cfg, vocab, seed=seed)
+    # The one line that differs between a transformer and an LSTM. Both classes implement the same
+    # training contract — `params`, `loss_and_grads`, `save`, a config carrying `context` and
+    # `vocab_size` — so the loop below does not care which it holds, and a third copy of this file
+    # would have been a third place to fix the budget accounting D20 already got wrong once.
+    model = (make_model or Transformer)(cfg, vocab, seed=seed)
     opt = Adam(lr=lr)
     per_step = batch_size * cfg.context
     total_steps = max(1, int(epochs * ids.size / per_step))
@@ -199,7 +205,7 @@ def train_transformer(
     model.meta.update(
         {
             "trained_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "model_class": "transformer",
+            "model_class": type(model).__name__.lower(),
             "config": asdict(cfg),
             "min_count": cfg_min_count(cfg),
             "oov_rate": round(oov, 5),

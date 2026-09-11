@@ -573,3 +573,76 @@ not, because learned positional embeddings make the score depend on window align
 structural. **What the fix is worth was measured on cell B itself: 1.0029x**, 64.29 starved against 64.11
 overlapping. The bias was real and negligible, which is the outcome that makes 2.086x safe to quote
 without an asterisk about which window produced it.
+
+
+---
+
+## E7. An LSTM against a transformer and an n-gram, at one vocabulary on one corpus
+
+**Registered 2026-09-11, before the run.** E6 answered "which of two model classes is better at 8,192
+types on 20M tokens of RFC English" and the n-gram won by 2.086x. That leaves a question E6 could not
+ask: **is the transformer's loss about attention, or about neural language models at this scale?** An
+LSTM separates those. It is neural, it has no attention, and its context at scoring time is the whole
+document rather than a window.
+
+### The cell, and what it inherits
+
+E6's cells A′ and B stand unchanged as the comparison. Cell C is added to them:
+
+| cell | model | parameters | vocabulary from | training tokens | measured |
+|---|---|---|---|---|---|
+| A′ | Kneser-Ney order 4, `min_count` 3 | 12.4M n-grams | 20M tokens | 20,000,029 | **30.7** |
+| B | transformer, d128, 2 layers, ctx 128 | 1,459,456 | 20M tokens | 18,343,512 | **64.1** |
+| C | **LSTM, d128, 2 layers, ctx 128** | **1,311,744** | 20M tokens | ~18.3M | to be measured |
+
+Same vocabulary cap, same `min_count` 3, same first 20M tokens, same frozen held-out set
+(`8e2d77cbe8901b1e`), same trainer, same optimiser, same one epoch. The parameter counts differ by
+10%, which is closer than any other pair in this table and close enough that the comparison is about
+architecture rather than capacity.
+
+Measured before registering, so the budget is arithmetic: **13,896 tokens/second** at this shape,
+which is 24 minutes for one epoch. That is 1.8x *faster* than the transformer's 7,671 tok/s, which was
+not the expected direction — a sequential time loop beating a parallel-over-time architecture — and is
+worth recording as a fact about numpy at this size rather than about either architecture.
+
+### The asymmetry, stated before the result
+
+**The LSTM is scored with its state carried across the whole document. The transformer was scored over
+windows of 128 tokens.** This is not the harness bias D21 had to correct, where the transformer was
+starved of context the architecture could have used. It is the architectural difference between the
+two: a transformer's context is bounded by its position embeddings and an LSTM's is not.
+
+Equalising it would mean resetting the LSTM's state every 128 tokens, which measures the transformer's
+limitation rather than the LSTM's ability. So it is not equalised, and **cell C is therefore flattered
+relative to a windowed evaluation of the same weights.** If C wins, that is the first number to
+challenge, and the way to challenge it is a second scoring of the same model with state reset per
+window — cheap, and registered here as the follow-up rather than left to occur to someone.
+
+A second asymmetry, smaller and in the other direction: the LSTM trains stateless (each window starts
+from zero state, which is what truncated BPTT means) and scores stateful. It is therefore evaluated in
+a regime it never trained in. Standard practice, and it could cut either way.
+
+### The prediction
+
+**C lands between B and A′ — worse than 30.7, better than 64.1.** Stated as a range because two
+effects pull against each other and I do not know which dominates: the LSTM's unbounded scoring
+context should help on formulaic text where a section heading predicts its own boilerplate, while its
+lack of attention should hurt where the transformer could look directly at a specific earlier token.
+
+More precisely: **C between 40 and 60.** If C beats A′'s 30.7, the E6 conclusion narrows sharply from
+"a neural LM loses at this scale" to "a transformer loses at this scale", which would be the more
+interesting result and the one worth a follow-up. If C is worse than B's 64.1, attention is doing real
+work at 20M tokens and the loss in E6 is not about neural models in general.
+
+### Fixed readings
+
+- **C is compared to A′ and B on all targets at a matching OOV rate.** All three share the vocabulary
+  pass, so their held-out OOV should agree to within rounding; if it does not, the token caps did not
+  line up and the cell is invalid rather than close.
+- **A ceiling that binds voids the cell.** `stopped_because` decides. `epochs_completed` below 1.0
+  means C saw less text than registered and the number describes that run.
+- **The state-carrying asymmetry is quoted with every C figure**, not mentioned once and dropped.
+- **A loss is a result.** The prediction is a range and being outside it in either direction is worth
+  more than being inside it.
+- **No shape, learning rate or token cap moves after a result is seen.** A different `d_model`, a
+  second epoch, or a bigger cap is a new registration.

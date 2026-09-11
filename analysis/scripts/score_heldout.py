@@ -29,6 +29,7 @@ from adhd_analysis.text.budget import Budget  # noqa: E402
 from adhd_analysis.text.corpora import Library  # noqa: E402
 from adhd_analysis.text.evaluate import FrozenSplit, comparable_heldout, evaluate  # noqa: E402
 from adhd_analysis.text.ngram import KneserNey  # noqa: E402
+from adhd_analysis.text.lstm import LSTM  # noqa: E402
 from adhd_analysis.text.transformer import Transformer  # noqa: E402
 
 
@@ -38,6 +39,8 @@ def load(path: Path):
         fmt = json.loads(fh.readline()).get("format", "")
     if fmt == "adhd-tf-1":
         return Transformer.load(path), "transformer"
+    if fmt == "adhd-lstm-1":
+        return LSTM.load(path), "lstm"
     return KneserNey.load(path), "kneser-ney"
 
 
