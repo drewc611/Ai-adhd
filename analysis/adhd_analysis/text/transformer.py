@@ -35,7 +35,12 @@ from typing import Iterable, Iterator
 import numpy as np
 
 from .budget import Budget
+from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header
 from .tokenize import BOS, EOS, UNK, Vocab
+
+#: What `load` allows itself when no `Budget` says otherwise. Generous against this machine's
+#: ~14GB cgroup, and finite, which is the part that matters.
+_DEFAULT_LOAD_CEILING_MB = 8192
 
 #: float32 throughout. float64 doubles the memory and the bandwidth for no accuracy that matters to a
 #: perplexity, and this model is bandwidth-bound on a CPU.
@@ -63,11 +68,31 @@ class TransformerConfig:
     #: pre-norm blocks tolerate it, post-norm would not.
     init_std: float = 0.02
 
+    #: Bounds on every dimension, because a config is sometimes read from a file and a file chooses
+    #: its own numbers. Not tuning limits — each is far past anything this machine can train — but the
+    #: difference between refusing a 187-byte file and attempting the 409.6GB allocation it asks for.
+    LIMITS = {
+        "vocab_size": (2, 10_000_000),
+        "d_model": (1, 65_536),
+        "n_heads": (1, 1_024),
+        "n_layers": (1, 1_024),
+        # The floor of 2 is not a bound, it is the old "a context of one token predicts nothing from
+        # anything" check, folded in here so there is one place that decides what a shape may be.
+        "context": (2, 1_000_000),
+        "d_ff": (1, 1_000_000),
+    }
+
     def __post_init__(self) -> None:
+        for name, (low, high) in self.LIMITS.items():
+            v = getattr(self, name)
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise ValueError(f"{name} is {v!r}, expected an integer")
+            if not low <= v <= high:
+                raise ValueError(f"{name} is {v:,}, outside the supported range {low} to {high:,}")
+        if not isinstance(self.init_std, (int, float)) or not 0 < float(self.init_std) <= 1.0:
+            raise ValueError(f"init_std is {self.init_std!r}, expected a positive number no greater than 1")
         if self.d_model % self.n_heads:
             raise ValueError(f"d_model {self.d_model} is not divisible by n_heads {self.n_heads}")
-        if self.context < 2:
-            raise ValueError("a context of one token predicts nothing from anything")
 
     @property
     def d_head(self) -> int:
@@ -395,30 +420,79 @@ class Transformer:
 
     @classmethod
     def load(cls, path: str | Path, budget: Budget | None = None) -> Transformer:
+        """Read a model back, refusing one that asks for more memory than it may have.
+
+        The order of the first three steps is the whole point. Every dimension in the file is a number
+        the file chose, `__init__` allocates from them, and the budget check used to sit in the loop
+        *underneath* the constructor — so a 187-byte file declaring `vocab_size: 200000000` and
+        `d_model: 512` got its 409.6GB allocation attempted before anything consulted the ceiling
+        passed in to prevent exactly that. A `Budget` checked after the allocation is a ceiling that
+        observes the crash.
+        """
         path = Path(path)
         with gzip.open(path, "rt", encoding="utf-8") as fh:
-            head = json.loads(fh.readline())
+            head = read_header(fh, path, "header")
             if head.get("format") != "adhd-tf-1":
-                raise ValueError(f"{path} is not an adhd-tf-1 model")
-            vline = json.loads(fh.readline())
-            itos = vline["itos"]
+                raise ModelFileRefused(f"{path} is not an adhd-tf-1 model")
+            cfg_raw = head.get("config")
+            if not isinstance(cfg_raw, dict):
+                raise ModelFileRefused(f"{path}: the header carries no config object")
+            try:
+                config = TransformerConfig(**cfg_raw)
+            except (TypeError, ValueError) as e:
+                raise ModelFileRefused(f"{path}: unusable config ({e})") from e
+
+            # Priced before it is spent. `parameter_count` is exact and float32 is four bytes, so this
+            # is the allocation the constructor is about to make, not an estimate of it.
+            ceiling_mb = budget.max_rss_mb if budget is not None else _DEFAULT_LOAD_CEILING_MB
+            wants_mb = config.parameter_count() * 4 // (1024 * 1024)
+            if wants_mb > ceiling_mb:
+                raise ModelFileRefused(
+                    f"{path}: its parameters need {wants_mb:,}MB against a ceiling of {ceiling_mb:,}MB"
+                )
+
+            vline = read_header(fh, path, "vocabulary")
+            itos = vline.get("itos")
+            if not isinstance(itos, list) or not all(isinstance(w, str) for w in itos):
+                raise ModelFileRefused(f"{path}: the vocabulary line is not a list of strings")
+            if len(itos) > config.vocab_size:
+                raise ModelFileRefused(
+                    f"{path}: {len(itos):,} types against a declared vocab_size of {config.vocab_size:,}"
+                )
             vocab = Vocab(
                 stoi={w: i for i, w in enumerate(itos)},
                 itos=itos,
                 counts=[0] * len(itos),
-                min_count=vline.get("min_count", 2),
+                min_count=bounded_int(vline.get("min_count", 2), "min_count", 1, 10**6, path),
                 dropped_types=0,
                 dropped_tokens=0,
             )
-            m = cls(TransformerConfig(**head["config"]), vocab, head.get("meta", {}))
-            for line in fh:
-                name, shape, values = line.rstrip("\n").split("\t")
-                dims = tuple(int(d) for d in shape.split(","))
+            meta = head.get("meta", {})
+            m = cls(config, vocab, meta if isinstance(meta, dict) else {})
+            seen: set[str] = set()
+            for line in body_lines(fh, path):
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) != 3:
+                    raise ModelFileRefused(f"{path}: a parameter line has {len(parts)} fields, expected 3")
+                name, shape, values = parts
+                if name not in m.params:
+                    raise ModelFileRefused(f"{path}: unknown parameter {name!r} for this architecture")
+                if name in seen:
+                    raise ModelFileRefused(f"{path}: parameter {name!r} appears twice")
+                seen.add(name)
+                dims = tuple(bounded_int(int(d), "a dimension", 1, 10**9, path) for d in shape.split(","))
+                if dims != m.params[name].shape:
+                    raise ModelFileRefused(
+                        f"{path}: {name} is {dims}, but this architecture needs {m.params[name].shape}"
+                    )
                 m.params[name] = np.fromstring(values, sep=",", dtype=DTYPE).reshape(dims)
                 if budget is not None:
                     budget.touch()
                     if not budget.allows():
                         raise RuntimeError(f"loading {path} refused: {budget.stopped_because}")
+            missing = set(m.params) - seen
+            if missing:
+                raise ModelFileRefused(f"{path}: {len(missing)} parameters missing, including {sorted(missing)[0]!r}")
         return m
 
 

@@ -137,8 +137,26 @@ def test_forward_refuses_a_sequence_longer_than_the_context():
 def test_config_rejects_shapes_that_cannot_work():
     with pytest.raises(ValueError, match="not divisible"):
         TransformerConfig(d_model=10, n_heads=4)
-    with pytest.raises(ValueError, match="predicts nothing"):
+    with pytest.raises(ValueError, match="context is 1"):
         TransformerConfig(context=1)
+
+
+def test_config_rejects_dimensions_a_file_could_choose():
+    """A config is sometimes read from a model file, and a file chooses its own numbers. These are not
+    tuning limits — each is far past what this machine can train — they are the difference between
+    refusing a 187-byte file and attempting the 409.6GB allocation it asks for."""
+    with pytest.raises(ValueError, match="outside the supported range"):
+        TransformerConfig(vocab_size=200_000_000)
+    with pytest.raises(ValueError, match="outside the supported range"):
+        TransformerConfig(n_layers=0)
+    with pytest.raises(ValueError, match="expected an integer"):
+        TransformerConfig(d_model="128")  # type: ignore[arg-type]
+    # `bool` is an `int` subclass in Python, so a config saying `n_heads: true` would otherwise
+    # arrive as 1 and be accepted.
+    with pytest.raises(ValueError, match="expected an integer"):
+        TransformerConfig(n_heads=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="init_std"):
+        TransformerConfig(init_std=0.0)
 
 
 def test_parameter_count_matches_the_arrays():

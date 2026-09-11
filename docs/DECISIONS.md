@@ -1995,3 +1995,86 @@ at this scale it does not come close to paying for the capacity it lacks.
 types, **25.82**. Note that 25.82 is not comparable to any number in the table above: it was measured
 at 148,353 types against these at 8,192, which is the confound `comparable_heldout` now refuses and the
 reason E6 built its own control instead of reusing it.
+
+
+---
+
+## D22. A second security pass, and the shape the four real findings share
+
+**Asked.** Find all security issues and resolve them. Plus a branch-security protocol for automated
+agents, handled at the end of this entry because most of it is not code.
+
+**Resolved.** Four real issues, all four in the two model loaders, all four the same mistake D18
+named: **the check ran next to the operation rather than on it.** Everything D18 fixed still holds —
+zero npm vulnerabilities, no `pickle`, `eval`, `exec`, `yaml.load` or shell anywhere in the Python
+package, no interpolation inside any workflow `run:` body, the sandbox's one `execFileSync` still
+gated by an exact-match allowlist, and the fetcher's bounded read and per-hop URL check intact.
+
+### Why a model file is untrusted input
+
+Nobody expects it to be, which is the problem. The weekly job restores a model from a CI cache,
+`scripts/score_heldout.py` takes a path on the command line, and a CI cache is something anyone who
+can open a pull request can write to. Neither loader bounded anything it read.
+
+### 1. A 187-byte file asks for 409.6GB, and the ceiling watches it happen
+
+`Transformer.load` took every dimension from the file, and `__init__` allocates from them. The
+`Budget` argument — which exists for exactly this — was consulted in the loop *underneath* the
+constructor. So a header declaring `vocab_size: 200000000` and `d_model: 512` got its allocation
+attempted before anything checked a ceiling.
+
+Fixed by pricing it first: `parameter_count() * 4` is exact, and it is compared to the budget's
+resident-set ceiling before the constructor runs. `TransformerConfig` also bounds every dimension in
+`__post_init__`, so the rule lives with the type rather than in one caller.
+
+### 2. `order: 50000000` in a 120-byte file, 111 seconds of list building
+
+`KneserNey.load` read `order` from the header and immediately built `[{} for _ in range(order)]`.
+Measured: 120 bytes in, a fifty-million-entry list and **111 seconds** out. Now bounded to 2–12,
+which is four times the highest order this repository has trained and past what E5 showed fits.
+
+### 3. A negative order index writes into the top table
+
+`counts[int(k)][...]` with `k` from the file. **Python indexes lists from the end on a negative**, so
+a line reading `-1` wrote into `counts[order - 1]` — the top order, the table the model is actually
+read from. It loaded without complaint; there was no error and no symptom.
+
+Now range-checked against the declared order, along with the things nothing checked either: that an
+n-gram has as many ids as its order, that every id is inside the vocabulary, and that a count is
+positive.
+
+### 4. 199KB of gzip becomes 200MB on one `readline()`
+
+Before either loader's format check. `readline()` on the header is the first thing both do and was
+the last thing either bounded. Returned in 1.4 seconds, measured.
+
+Fixed in `text/modelfile.py`: `readline` takes a size limit, so the bound is free — a line longer
+than the limit comes back without its newline, which is the signal to refuse. Body lines are bounded
+per line and in total.
+
+### What the tests pin
+
+`tests/test_modelfile_limits.py`, fourteen tests, **every one of them a working attack before the
+fix**, with the measured numbers in the assertions rather than invented ones. Plus the test that
+matters most in the other direction: the real shipped models still load unchanged, because a bound
+that refuses what the repository actually produces is a denial of service with a security rationale.
+Verified against cell B (0.3s) and cell A′ (47.1s, 12,385,471 grams).
+
+One nice catch along the way: `bounded_int` refuses a `bool` explicitly, because `bool` is an `int`
+subclass in Python and `order: true` would otherwise arrive as 1 and pass a range check starting at 1.
+
+### The branch-security protocol, and what of it I can do
+
+Most of it is GitHub repository settings and local machine configuration, neither of which is
+reachable from a build step. Recorded in `docs/SECURITY-OPS.md` as an owner checklist rather than
+claimed as done.
+
+**The finding worth acting on is one the protocol exposes.** This repository's default branch is
+`claude/adhd-architecture-build-jlyjk2` — the agent branch — and `main` is a stale side branch tens
+of commits behind. So every push in this build went *directly to the default branch*, which is the
+precise arrangement the protocol exists to prevent, and no branch protection can help while the
+arrangement stands. Making `main` the default and protecting it is an owner action and is the first
+item on that checklist.
+
+Commits here are unsigned and signing is not configured on this machine. Also owner setup, also on
+the checklist, and stated plainly rather than quietly skipped.

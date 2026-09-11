@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from .budget import Budget, BudgetExceeded
+from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header
 from .tokenize import BOS, EOS, UNK, Vocab
 
 Gram = tuple[int, ...]
@@ -222,25 +223,49 @@ class KneserNey:
         """
         path = Path(path)
         with gzip.open(path, "rt", encoding="utf-8") as fh:
-            head = json.loads(fh.readline())
+            head = read_header(fh, path, "header")
             if head.get("format") != "adhd-kn-1":
-                raise ValueError(f"{path} is not an adhd-kn-1 model")
-            vocab_line = json.loads(fh.readline())
-            itos = vocab_line["itos"]
+                raise ModelFileRefused(f"{path} is not an adhd-kn-1 model")
+            # Before the list it sizes. A 120-byte file declaring `order: 50000000` built a
+            # fifty-million-entry list in 111 seconds, and the order came straight out of the file.
+            # Twelve is four times the highest order this repository has ever trained, and E5
+            # established that five does not fit on this machine at any `min_count`.
+            order = bounded_int(head.get("order"), "order", 2, 12, path)
+            vocab_line = read_header(fh, path, "vocabulary")
+            itos = vocab_line.get("itos")
+            if not isinstance(itos, list) or not all(isinstance(w, str) for w in itos):
+                raise ModelFileRefused(f"{path}: the vocabulary line is not a list of strings")
             vocab = Vocab(
                 stoi={w: i for i, w in enumerate(itos)},
                 itos=itos,
                 counts=[0] * len(itos),
-                min_count=vocab_line.get("min_count", 2),
+                min_count=bounded_int(vocab_line.get("min_count", 2), "min_count", 1, 10**6, path),
                 dropped_types=0,
                 dropped_tokens=0,
             )
-            order = head["order"]
             counts: list[dict[Gram, int]] = [{} for _ in range(order)]
             loaded = 0
-            for line in fh:
-                k, gram, c = line.rstrip("\n").split("\t")
-                counts[int(k)][tuple(int(x) for x in gram.split(","))] = int(c)
+            for line in body_lines(fh, path):
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) != 3:
+                    raise ModelFileRefused(f"{path}: an n-gram line has {len(parts)} fields, expected 3")
+                k, gram, c = parts
+                # Range-checked, not just parsed. Python indexes lists from the end on a negative, so
+                # a line whose order field reads `-1` used to write silently into the *top* order
+                # table — a count the format cannot address, landing where the model is read from.
+                try:
+                    ki = bounded_int(int(k), "an n-gram order", 0, order - 1, path)
+                    ids = tuple(int(x) for x in gram.split(","))
+                    count = int(c)
+                except ValueError as e:
+                    raise ModelFileRefused(f"{path}: unreadable n-gram line ({e})") from e
+                if len(ids) != ki + 1:
+                    raise ModelFileRefused(f"{path}: a {len(ids)}-gram is filed under order {ki}")
+                if any(i < 0 or i >= len(itos) for i in ids):
+                    raise ModelFileRefused(f"{path}: an n-gram names a token id outside the vocabulary")
+                if count < 1:
+                    raise ModelFileRefused(f"{path}: an n-gram has a count of {count}")
+                counts[ki][ids] = count
                 loaded += 1
                 if budget is not None and loaded % 200_000 == 0:
                     budget.touch()
