@@ -1,0 +1,129 @@
+{
+  "budget": {
+    "counts": {
+      "ceilings": {
+        "max_ngrams": 60000000,
+        "max_rss_mb": 11000,
+        "max_seconds": 2400.0,
+        "max_tokens": 20000000
+      },
+      "checks": 997,
+      "peak_rss_mb": 3057,
+      "seconds": 144.44,
+      "stopped_because": "token ceiling: 20,000,029 >= 20,000,000",
+      "tokens": 20000029
+    },
+    "vocabulary": {
+      "ceilings": {
+        "max_ngrams": 60000000,
+        "max_rss_mb": 11000,
+        "max_seconds": 2400.0,
+        "max_tokens": 20000000
+      },
+      "checks": 997,
+      "peak_rss_mb": 3057,
+      "seconds": 144.45,
+      "stopped_because": "token ceiling: 20,000,002 >= 20,000,000",
+      "tokens": 20000002
+    }
+  },
+  "discounts": [
+    [
+      0.2424,
+      0.1964,
+      1.7019
+    ],
+    [
+      0.6488,
+      1.1043,
+      1.4875
+    ],
+    [
+      0.7833,
+      1.1809,
+      1.4684
+    ],
+    [
+      0.6878,
+      1.3293,
+      1.5169
+    ]
+  ],
+  "documents": 7344,
+  "min_count": 3,
+  "model": "models/e6-cellAprime.kn.gz",
+  "ngrams": 12385471,
+  "oov_rate": 0.04438,
+  "order": 4,
+  "python": "3.11.15",
+  "seconds": 144.44,
+  "sentences": 899123,
+  "sources": [
+    {
+      "bytes": 280473,
+      "files": 13,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-docs",
+      "path": "docs",
+      "split": "train"
+    },
+    {
+      "bytes": 11940,
+      "files": 7,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-prompts",
+      "path": "prompts",
+      "split": "train"
+    },
+    {
+      "bytes": 33581,
+      "files": 2,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-readme",
+      "path": ".",
+      "split": "train"
+    },
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 11785368,
+      "files": 615,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "pep",
+      "path": "analysis/corpora/pep",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "tokens_seen": 20000029,
+  "vocab_size": 8192,
+  "vocab_truncated": {
+    "tokens": 797375,
+    "types": 63691
+  }
+}
