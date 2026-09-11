@@ -188,3 +188,22 @@ def test_the_schedule_warms_up_then_decays():
     # A schedule shorter than its own warmup must not divide by zero or go negative.
     assert cosine_schedule(5, 10, lr, 100) > 0
     assert cosine_schedule(5, 5, lr, 5) == pytest.approx(lr)
+
+
+def test_progress_writes_to_stderr_and_can_be_silenced(tmp_path, capsys):
+    """stderr, not stdout: stdout carries the record's JSON and a caller pipes it."""
+    lib = _library(tmp_path, n=40)
+    kw = dict(
+        out=tmp_path / "m.tf.gz",
+        config=_cfg(),
+        budget=Budget(max_tokens=10_000_000, max_seconds=120.0, max_rss_mb=4096),
+        epochs=0.3,
+        batch_size=4,
+    )
+    train_transformer(SplitLibrary(lib, every=10, side="train"), **kw, progress=2)
+    noisy = capsys.readouterr()
+    assert "step " in noisy.err and "tok/s" in noisy.err
+    assert noisy.out == ""
+
+    train_transformer(SplitLibrary(lib, every=10, side="train"), **kw, progress=0)
+    assert capsys.readouterr().err == ""

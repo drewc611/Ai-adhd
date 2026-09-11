@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -120,7 +121,14 @@ def train_transformer(
     warmup: int = 100,
     seed: int = 0,
     max_train_tokens: int | None = None,
+    progress: int = 0,
 ) -> TransformerRecord:
+    """`progress`, in steps, writes a line to stderr every that many. Zero is silent.
+
+    Worth a parameter rather than a print: an epoch over the training side is hours here, and a run
+    with no output is a run nobody can tell apart from a hung one. The line goes to stderr so that
+    stdout stays the record's JSON and a caller can still pipe it.
+    """
     started = time.monotonic()
     cfg = config or TransformerConfig()
     b1 = budget or Budget.weekly()
@@ -179,6 +187,16 @@ def train_transformer(
             losses.append(loss)
             steps += 1
             b3.spend(x.size)
+            if progress and steps % progress == 0:
+                done = steps * per_step
+                rate = done / max(b3.elapsed, 1e-9)
+                left = (total_steps - steps) * per_step / rate if rate else float("inf")
+                print(
+                    f"step {steps:,}/{total_steps:,}  loss {np.mean(losses[-progress:]):.4f}  "
+                    f"lr {opt.lr:.2e}  {rate:,.0f} tok/s  {left / 60:.0f} min left",
+                    file=sys.stderr,
+                    flush=True,
+                )
             if steps >= total_steps:
                 break
             if not b3.allows():
@@ -255,7 +273,6 @@ def cfg_min_count(cfg: TransformerConfig) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    import sys
 
     ap = argparse.ArgumentParser(
         prog="adhd_analysis.text.train_transformer",
@@ -287,6 +304,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="train on everything except the documents named in this frozen set")
     ap.add_argument("--held-out-every", type=int, default=None, metavar="N",
                     help="train on all but every Nth document")
+    ap.add_argument("--progress", type=int, default=200, metavar="STEPS",
+                    help="write a progress line to stderr every STEPS steps; 0 for silence. An epoch "
+                    "here is hours, and a silent run is indistinguishable from a hung one")
     ap.add_argument("--record", default=None, help="write the training record here as JSON")
     args = ap.parse_args(argv)
 
@@ -323,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         warmup=args.warmup,
         seed=args.seed,
         max_train_tokens=args.max_train_tokens,
+        progress=args.progress,
     )
     if args.record:
         Path(args.record).parent.mkdir(parents=True, exist_ok=True)
@@ -332,6 +353,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    import sys
-
     sys.exit(main())
