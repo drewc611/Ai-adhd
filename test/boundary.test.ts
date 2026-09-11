@@ -121,6 +121,7 @@ test("only the model file is written, and only by the trainer", () => {
   // `save`/`load` pair for its own model class. The trainers that call it do not open files.
   const allowed = [
     "adhd_analysis/ngram.py",
+    "adhd_analysis/text/lstm.py",
     "adhd_analysis/text/ngram.py",
     "adhd_analysis/text/train.py",
     "adhd_analysis/text/train_transformer.py",
