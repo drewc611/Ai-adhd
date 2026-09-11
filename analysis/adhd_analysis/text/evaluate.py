@@ -263,6 +263,23 @@ def evaluate(
         if not b.allows():
             break
 
+    # An empty set is not a hard score, it is no score, and until this raised it came back as
+    # `perplexity inf, OOV 100.0%, over 0 tokens` with `truncated` None — nothing on the record saying
+    # the set was empty rather than the model terrible. Found by dry-running the E6 pipeline on a toy
+    # corpus whose frozen-set names omitted the file extension: every name missed, the held-out side
+    # yielded nothing, and `score_heldout.py` printed a `nanx` ratio and exited 0.
+    #
+    # The live risk is not a typo. `heldout.json` names 366 documents as `rfc/rfc1017.txt`, so any
+    # change to how `identified()` forms an id — a renamed source, a different glob, a normalised
+    # extension — makes all 366 miss at once, and the weekly job would report `inf` every week
+    # without one field saying why.
+    if not docs or not predictions:
+        raise ValueError(
+            f"the held-out side yielded {docs} documents and {predictions} predictions, so there is "
+            "nothing to score. A frozen set whose names no longer match the corpus fails this way: "
+            "check that the names in the split file match what `Library.identified()` produces"
+        )
+
     # `allows()` is what ended the loop early, and its reason is the only thing that distinguishes a
     # score over the set from a score over a prefix of it.
     return HeldOut(

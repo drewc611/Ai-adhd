@@ -564,3 +564,33 @@ def test_the_min_count_pair_e4_compared_stays_comparable(tmp_path):
     at_mc2 = replace(evaluate(model, held, Budget.smoke()), oov_rate=0.0063)
     at_mc3 = replace(at_mc2, oov_rate=0.0085, perplexity=at_mc2.perplexity * 0.98)
     assert comparable_heldout(at_mc2, at_mc3) is None
+
+
+def test_an_empty_held_out_side_is_refused_not_scored(tmp_path):
+    """`perplexity inf, OOV 100.0%, over 0 tokens` is what an empty set used to return, with
+    `truncated` None and nothing saying the set was empty rather than the model terrible.
+
+    Found by dry-running the E6 pipeline on a toy corpus whose frozen-set names omitted the file
+    extension. Every name missed, the held-out side yielded nothing, and the scoring script printed a
+    `nanx` ratio and exited 0.
+
+    The live version of this is not a typo. `heldout.json` names 366 documents as `rfc/rfc1017.txt`, so
+    any change to how `Library.identified()` forms an id makes all 366 miss at once and the weekly job
+    reports `inf` every week with no field explaining it.
+    """
+    lib = _library(tmp_path, n=60)
+    # Names without the `.txt` the loader actually produces, which is the real mistake: ids come back
+    # as `toy/doc000.txt`, so every one of these misses.
+    spec = tmp_path / "nothing-matches.json"
+    spec.write_text(json.dumps({"documents": ["toy/doc000", "toy/doc010"], "fingerprint": "0" * 16}))
+
+    rec = train(FrozenSplit.load(lib, spec, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    empty = FrozenSplit.load(lib, spec, side="heldout")
+    assert [n for n, _d in empty.documents()] == [], "the fixture no longer models a name mismatch"
+
+    # `in_sample_refusal` has no objection: the fingerprints match and the sides are complementary.
+    # Nothing before this checked that the held-out side of that split contained anything.
+    assert in_sample_refusal(model, empty) is None
+    with pytest.raises(ValueError, match="nothing to score"):
+        evaluate(model, empty, Budget.smoke())
