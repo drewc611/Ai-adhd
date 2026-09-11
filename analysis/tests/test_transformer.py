@@ -307,3 +307,77 @@ def test_array_batches_does_not_run_off_the_end():
     assert len(got) == 1
     assert got[0][0].shape == (2, 4)
     assert list(got[0][1][-1]) == [5, 6, 7, 8]
+
+
+def test_no_scored_position_is_starved_of_context():
+    """The property the strided window exists to guarantee, checked by recording what the model was
+    actually shown.
+
+    The non-overlapping version starved one position in every `context`: the token on a window boundary
+    was predicted from the single token before it, when the model could have had the whole window.
+    `KneserNey` slides an order-4 window continuously and never has a starved position, so that bias
+    ran one way in the comparison E6 exists to make.
+
+    Deliberately not a test that overlapping scores better. At toy scale the direction is noise — the
+    same untrained model reverses it between a fixture whose period divides `context` and one whose
+    period does not, because learned positional embeddings make the score depend on window alignment.
+    A test that asserted a direction here would be asserting a hope. The size of the effect belongs to
+    a measurement on a real model, recorded with the E6 result.
+    """
+    vocab = tiny_vocab()
+    cfg = tiny_config(vocab, context=8)
+    model = Transformer(cfg, vocab, seed=9)
+    stride = cfg.context // 2
+
+    seen: list[int] = []
+    real = model.forward
+
+    def spy(idx):
+        seen.append(int(idx.shape[1]))
+        return real(idx)
+
+    model.forward = spy  # type: ignore[method-assign]
+    ids = vocab.encode(["w0", "w1", "w2", "w3", "w4", "w5", "w6", "w7"] * 5)
+    terms = model.logprob_terms(ids)
+
+    assert len(terms) == len(ids) + 1
+    # Every window after the first is full width, so its final stride of targets each sit behind at
+    # least `context - stride` tokens of context.
+    assert seen[0] <= cfg.context
+    assert all(w == cfg.context for w in seen[1:]), seen
+    assert all(w >= stride for w in seen), seen
+    # And the windows overlap rather than tile: tiling 42 targets at width 8 needs 6 passes, striding
+    # needs about twice that.
+    assert len(seen) >= (len(ids) + 1) // stride, seen
+
+
+def test_a_sequence_inside_the_context_is_scored_in_one_pass():
+    """No windowing at all when none is needed. A strided loop that still splits a short sequence is a
+    loop whose first window is computed wrongly."""
+    vocab = tiny_vocab()
+    cfg = tiny_config(vocab, context=32)
+    model = Transformer(cfg, vocab, seed=2)
+    seen: list[int] = []
+    real = model.forward
+    model.forward = lambda idx: (seen.append(int(idx.shape[1])), real(idx))[1]  # type: ignore[method-assign]
+    ids = vocab.encode(["w0", "w1", "w2", "w3"])
+    assert len(model.logprob_terms(ids)) == 5
+    assert len(seen) == 1, seen
+
+
+def test_scoring_emits_one_term_per_target_at_every_length():
+    """Off-by-one in a strided window is silent: it drops or duplicates a position and the perplexity
+    still looks like a perplexity."""
+    vocab = tiny_vocab()
+    cfg = tiny_config(vocab, context=8)
+    model = Transformer(cfg, vocab, seed=1)
+    for n in (1, 2, 3, 7, 8, 9, 12, 16, 17, 31, 40):
+        ids = vocab.encode(["w0"] * n)
+        assert len(model.logprob_terms(ids)) == n + 1, f"length {n}"
+
+
+def test_scoring_is_deterministic():
+    vocab = tiny_vocab()
+    model = Transformer(tiny_config(vocab, context=8), vocab, seed=3)
+    ids = vocab.encode(["w0", "w1", "w2"] * 7)
+    assert model.logprob_terms(ids) == model.logprob_terms(ids)

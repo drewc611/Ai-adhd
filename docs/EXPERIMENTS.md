@@ -548,3 +548,24 @@ wrong, that is why.
   that has never been checked and closes it. Reporting it is not a failure to explain away.
 - **No cell's shape, learning rate, or token cap moves after a result is seen.** A different
   `d_model`, a second epoch, or a larger cap is a new registration, not an adjustment to this one.
+
+### One amendment to the harness, made before any result existed
+
+`Transformer.logprob_terms` originally walked non-overlapping windows of `context`, which starves one
+position in every `context`: the token on a window boundary is predicted from the single token before
+it when the model could have had the whole window. Its docstring claimed that cost applied
+"identically for every model scored this way." **That was wrong.** `KneserNey` slides an order-4 window
+continuously with no boundaries and has no starved position at all, so the bias ran one way — against
+the transformer, in exactly the comparison this experiment makes.
+
+Fixed to windows that advance by `context // 2` and emit only their final stride, so every scored
+position has at least `context // 2` tokens of left context. Recorded here rather than quietly, and
+with the two things that make it not a moved goalpost: it was found and fixed **before cell B finished
+training**, with no E6 number in existence, and it runs **against** the registered prediction, since it
+can only help the model this registration predicts will lose.
+
+It is not justified by a measurement, because a toy cannot honestly produce one: the same untrained
+model reverses the direction between a fixture whose period divides `context` and one whose period does
+not, because learned positional embeddings make the score depend on window alignment. The argument is
+structural. **What the fix is worth will be measured on cell B itself, scored both ways, and both
+numbers reported with the result.**

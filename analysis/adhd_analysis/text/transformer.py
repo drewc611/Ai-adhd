@@ -329,27 +329,39 @@ class Transformer:
         """Per-position natural log probability and whether the target is a real word.
 
         The same contract `KneserNey.logprob_terms` has, so `evaluate` scores this model with no
-        special case. Positions are produced in windows of `context`, each window predicting its own
-        tokens from the ones before them inside that window — a sliding window with no overlap, which
-        is the cheap convention. It underestimates slightly against a fully overlapping window,
-        identically for every model scored this way.
+        special case. Exactly one term per target, in order, for every token after `<s>`.
+
+        Windows overlap, and they have to. The obvious implementation walks non-overlapping windows of
+        `context` and scores each one's own tokens — and that starves one position in every `context`,
+        because the token at a window boundary is predicted from the single token before it when the
+        model could have had the whole window. The original docstring here claimed that cost applied
+        "identically for every model scored this way," and that was wrong: `KneserNey` slides an
+        order-4 window continuously with no boundaries, so it never has a starved position at all. The
+        bias ran one way, against the transformer, in the comparison E6 exists to make.
+
+        So each window advances by `context // 2` and emits only the targets in its final stride,
+        which gives every emitted position at least `context // 2` tokens of left context. The
+        exception is the first stride of a document, which has only what the document provides — the
+        same situation `KneserNey` is in at a document start. Twice the forward passes of the
+        non-overlapping version, on scoring only.
         """
         c = self.config
         unk = self.vocab.stoi[UNK]
         bos, eos = self.vocab.stoi[BOS], self.vocab.stoi[EOS]
         seq = [bos] + list(ids) + [eos]
         out: list[tuple[float, bool]] = []
-        for start in range(0, len(seq) - 1, c.context):
-            window = seq[start : start + c.context + 1]
-            if len(window) < 2:
-                break
-            x = np.array([window[:-1]], dtype=np.int64)
-            y = window[1:]
-            logits, _ = self.forward(x)
+        stride = max(1, c.context // 2)
+        emitted = 1
+        while emitted < len(seq):
+            end = min(emitted + stride, len(seq))
+            start = max(0, end - 1 - c.context)
+            logits, _ = self.forward(np.array([seq[start : end - 1]], dtype=np.int64))
             logp = logits[0] - logits[0].max(axis=-1, keepdims=True)
             logp = logp - np.log(np.exp(logp).sum(axis=-1, keepdims=True))
-            for t, target in enumerate(y):
-                out.append((float(logp[t, target]), target != unk))
+            targets = seq[start + 1 : end]
+            for t in range(emitted - (start + 1), len(targets)):
+                out.append((float(logp[t, targets[t]]), targets[t] != unk))
+            emitted = end
         return out
 
     def logprob(self, ids: Iterable[int]) -> tuple[float, int]:
