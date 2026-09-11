@@ -1902,3 +1902,89 @@ profiler-guided fixes took it to **7,671 tok/s**, a 3.35x:
 None of it was guesswork and none of it was where I would have guessed. That is 2.33 hours per epoch
 over the 64.4M-token training side rather than 8.8, which is the difference between E6 being runnable
 here and not.
+
+
+---
+
+## D21. E6: the transformer loses by 2.09x, which is what was predicted
+
+**Asked.** Make it better, and give it a transformer.
+
+**Resolved.** `ngram.py` had asserted since it was written that a transformer trained from scratch
+"needs somewhere north of 10^8 tokens before its perplexity beats a well-smoothed 5-gram, and it needs
+a GPU to get there." That was an assertion with no measurement behind it. It now has one, and it holds.
+
+### The three cells
+
+All scored on the frozen set `8e2d77cbe8901b1e`: 366 documents, 3,443,116 tokens, fingerprint
+`1446762140db7f1a`, nothing truncated.
+
+| cell | model | vocabulary from | real training tokens | held-out OOV | **perplexity** |
+|---|---|---|---|---|---|
+| A | Kneser-Ney order 4, `min_count` 3 | 64.4M tokens | 64,420,728 | 4.71% | **19.9** |
+| A′ | Kneser-Ney order 4, `min_count` 3 | 20M tokens | 20,000,029 | 5.80% | **30.7** |
+| B | transformer, d128, 2 layers, ctx 128 | 20M tokens | 18,343,512 | 5.80% | **64.1** |
+
+**A′ against B is 2.086x.** The registered prediction was 1.5x to 3x, so it lands inside the band.
+
+Cell B ran 4,882 steps, one full epoch (`epochs_completed` 0.99983), `stopped_because: epochs` with no
+ceiling bound, 2,539 seconds, 526MB peak. Training loss fell 6.143 → 3.945 without a plateau. Cell A
+took 452 seconds and 7,379MB for 32,146,017 4-grams; cell A′ 144 seconds for 12,385,471.
+
+### What makes A′ and B a fair pair, and the one way they are not
+
+Identical vocabularies, not merely identical caps. Both built from the same first 20M tokens at
+`min_count` 3 and `max_size` 8,192: the cap cut 63,691 types for A′ and 63,697 for B, and training OOV
+came out 4.438% against 4.439%. `comparable_heldout` accepts them, and the ratio above is the only one
+this run prints.
+
+The asymmetry, stated because it runs against the loser: **cell B trained on 18,343,512 real tokens to
+cell A′'s 20,000,029, an 8.3% disadvantage.** `--max-train-tokens` caps the materialised array, and the
+array carries a `<s>` and `</s>` per sentence across 899,088 sentences. Nowhere near enough to cover
+2.086x, and worth knowing rather than rounding away.
+
+### A against A′ is refused, and that is the more useful finding
+
+The registration expected A to beat A′ and to price the text handicap. **It cannot, and the reason is
+better than the reading was: a fixed vocabulary cap is not a fixed vocabulary.** The top 8,192 words of
+64.4M tokens and the top 8,192 of 20M share only **82.6%** of their types, and face **4.71% against
+5.80%** held-out OOV. A 1.086-point gap crosses the refusal threshold, so the pair is not comparable on
+all targets — correctly, because one of them is answering 1.09% more of the same text with `<unk>`.
+
+Without that refusal this would have read as "3.2x the text buys 1.54x the perplexity" with a sixth of
+the vocabulary changed underneath it. Pricing the text handicap honestly needs A′ retrained on cell A's
+exact vocabulary, which is a new run and a new registration.
+
+### What the 8,192 cap costs, which is most of the OOV
+
+**90% of cell B's out-of-vocabulary rate is the ceiling, not the frequency floor.** 63,697 types met
+`min_count` 3 and were cut by `max_size` anyway, accounting for 797,459 of 887,600 dropped tokens. That
+is the softmax constraint priced directly: the output projection is `d_model x vocab_size` and every
+token's loss touches all of it, so the vocabulary the n-gram carries for free costs the transformer
+either 19M parameters or those 63,697 words. Backlog 79 is the version of this experiment that pays
+the 19M instead.
+
+### One harness fix, made before any of these numbers existed
+
+`Transformer.logprob_terms` walked non-overlapping windows, starving one position in every `context`:
+the token on a window boundary was predicted from the single token before it. Its docstring claimed
+that cost applied "identically for every model scored this way," which was wrong — `KneserNey` slides
+continuously and starves none, so the bias ran one way, against the transformer, in this exact
+comparison. Fixed to windows advancing by `context // 2`, emitting only their final stride.
+
+Recorded with the two facts that keep it from being a moved goalpost: it was found and fixed **while
+cell B was still training**, with no E6 number in existence, and it can only help the model the
+registration predicted would lose. It rests on the structural argument rather than a measurement,
+because a toy reverses the direction depending on whether its period divides the context.
+
+### What this does and does not settle
+
+It settles that a 1.46M-parameter transformer, one epoch, 18.3M tokens of RFC-and-PEP English, loses
+to a 12.4M-entry 4-gram at the same vocabulary. It does not settle that transformers lose. The
+registration named the reason it might not — an unbounded context should pay on formulaic text — and
+at this scale it does not come close to paying for the capacity it lacks.
+
+**The shipped model does not change.** It stays modified Kneser-Ney, order 4, `min_count` 3, 148,353
+types, **25.82**. Note that 25.82 is not comparable to any number in the table above: it was measured
+at 148,353 types against these at 8,192, which is the confound `comparable_heldout` now refuses and the
+reason E6 built its own control instead of reusing it.

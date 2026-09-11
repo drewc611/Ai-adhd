@@ -549,6 +549,9 @@ wrong, that is why.
 - **No cell's shape, learning rate, or token cap moves after a result is seen.** A different
   `d_model`, a second epoch, or a larger cap is a new registration, not an adjustment to this one.
 
+**Result: D21.** A′ 30.7, B 64.1, **2.086x** — inside the predicted 1.5x to 3x. Cell A scored 19.9 and
+is refused against both, because a fixed vocabulary cap is not a fixed vocabulary.
+
 ### One amendment to the harness, made before any result existed
 
 `Transformer.logprob_terms` originally walked non-overlapping windows of `context`, which starves one

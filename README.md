@@ -15,7 +15,7 @@
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-425-2ea44f" alt="425 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-132-2ea44f" alt="132 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D20%20resolved-0969da" alt="D1 through D20 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D21%20resolved-0969da" alt="D1 through D21 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -420,7 +420,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D20 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D21 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -444,7 +444,12 @@ There is a second model class since D20: a decoder-only transformer over numpy, 
 with a hand-written backward pass that is gradient-checked against central differences. It stays
 inside D2 — no download, no key, no provider SDK — and it exists to make an assertion falsifiable that
 `ngram.py` had carried unmeasured, that a transformer from scratch needs 10^8 tokens and a GPU before
-it beats a well-smoothed n-gram. E6 is the run, registered before it started.
+it beats a well-smoothed n-gram.
+
+E6 measured it and the assertion holds. At a matched 8,192-word vocabulary on the same 20M tokens, the
+transformer scores **64.1** against Kneser-Ney's **30.7** — a **2.09x** loss, inside the 1.5x-to-3x band
+registered before the run. That does not say transformers lose; it says a 1.46M-parameter one, at one
+epoch on 18M tokens of RFC English, loses to a 12.4M-entry 4-gram. The shipped model is unchanged.
 
 Held-out perplexity is what says whether a training run improved anything, because vocabulary size,
 table size and wall clock all rise when a model gets worse. Two numbers from different held-out sets

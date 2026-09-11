@@ -185,6 +185,17 @@ d128/2 layers/context 128 — 2.33 hours per epoch over the training side, after
 fixes took it 3.35x from where it started. `python -m adhd_analysis.text.train_transformer --help`,
 and `scripts/score_heldout.py` scores either class by reading the model file's own format header.
 
+**D21 records what it is worth, which is less than the n-gram.** Held at the same 8,192-word
+vocabulary on the same 20M tokens, one epoch, 1.46M parameters: **64.1** against Kneser-Ney's **30.7**,
+a 2.09x loss inside the band E6 registered before running. The same Kneser-Ney over the full 64.4M
+tokens scores 19.9 and is *refused* against both, because the top 8,192 words of 64.4M tokens and of
+20M share only 82.6% of their types — a fixed vocabulary cap is not a fixed vocabulary.
+
+Two numbers from that run worth carrying: **90% of the transformer's OOV is the 8,192 ceiling rather
+than `min_count`** (63,697 types met the frequency floor and were cut by the cap anyway), and the
+transformer saw **18,343,512 real tokens to the control's 20,000,029**, an 8.3% disadvantage from the
+`<s>`/`</s>` its materialised array carries. Neither covers 2.09x.
+
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre
 is worth about **2.83x** on that genre, so this is much more an RFC model than a model of technical

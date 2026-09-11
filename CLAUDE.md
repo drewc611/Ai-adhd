@@ -3,7 +3,7 @@
 Read in this order: `README.md`, `docs/ARCHITECTURE.md`, `docs/TRAPS.md`, `docs/DECISIONS.md`.
 Then `docs/MANIFEST.md`, which is how code here gets written and binds every change.
 
-D1 through D20 are resolved; the decisions and their evidence are in `docs/DECISIONS.md`. What is
+D1 through D21 are resolved; the decisions and their evidence are in `docs/DECISIONS.md`. What is
 still open is listed in `docs/BACKLOG.md`, and `docs/RETIREMENT.md` holds the bar for taking a
 frame out. Resolve any new decision with the user before writing code, and record it there.
 
