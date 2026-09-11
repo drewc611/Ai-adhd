@@ -594,3 +594,34 @@ def test_an_empty_held_out_side_is_refused_not_scored(tmp_path):
     assert in_sample_refusal(model, empty) is None
     with pytest.raises(ValueError, match="nothing to score"):
         evaluate(model, empty, Budget.smoke())
+
+
+def test_in_vocabulary_only_refuses_any_vocabulary_difference(tmp_path):
+    """Under `in_vocabulary_only` the `<unk>` discount does not exist, and the right refusal is
+    stricter rather than absent.
+
+    Each model sums over *its own* in-vocabulary targets, so two different vocabularies mean two
+    different target sets — two tests, not two scores on one. There is no continuous effect to
+    tolerate, so there is no tolerable gap either, and the percentage-point threshold that is right for
+    all-targets is wrong here.
+
+    Measured on E6's own cells, which is what made the distinction matter: two Kneser-Ney models at the
+    same `max_size` of 8,192 over 20M and 64M tokens share only 82.6% of their types and differ by 1.09
+    points of held-out OOV.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    base = evaluate(model, held, Budget.smoke(), in_vocabulary_only=True)
+    nudged = replace(base, oov_rate=base.oov_rate + 0.001)  # a tenth of the all-targets threshold
+    why = comparable_heldout(base, nudged)
+    assert why is not None
+    assert "different set of targets" in why, why
+    # Identical vocabularies stay comparable, so it is not simply refusing everything.
+    assert comparable_heldout(base, base) is None
+
+    # The same tenth of a point is tolerated on all targets, where the effect is continuous.
+    allt = evaluate(model, held, Budget.smoke())
+    assert comparable_heldout(allt, replace(allt, oov_rate=allt.oov_rate + 0.001)) is None

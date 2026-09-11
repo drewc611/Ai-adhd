@@ -396,18 +396,38 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
             "one of these was scored over in-vocabulary targets only and the other over all of them, "
             "so they are different measurements on the same text"
         )
-    # Same text, same question, different share of it replaced by one symbol. An all-targets
-    # perplexity charges every OOV target as a prediction of `<unk>`, and `<unk>` is by construction
-    # among the most frequent symbols the model knows. So a model with a smaller vocabulary is asked an
-    # easier question on a larger fraction of the set, and the discount grows with the gap. The
-    # docstring's warning about an easier set applies within one set as soon as the vocabularies differ.
+    # Same text, different vocabularies. Two different reasons depending on how they were scored, and
+    # the reason has to be the right one: an inaccurate refusal message sends a reader hunting for the
+    # wrong thing, which is the whole complaint against the truncation bug that reported itself as
+    # "different held-out text".
+    gap = abs(a.oov_rate - b.oov_rate)
+    if a.in_vocabulary_only:
+        # Neither model is charged for `<unk>` here, so the discount below does not exist. The problem
+        # is stronger instead: each model sums over *its own* in-vocabulary targets, so different
+        # vocabularies mean different target sets, and these are two tests rather than two scores. Any
+        # difference beyond rounding is enough — there is no tolerable gap, because there is no
+        # continuous effect to tolerate.
+        if gap > 1e-6:
+            return (
+                f"these were scored over in-vocabulary targets only at {a.oov_rate:.2%} and "
+                f"{b.oov_rate:.2%} out-of-vocabulary, so each summed over a different set of targets "
+                "and the two numbers are two tests rather than two scores on one"
+            )
+        return None
+    # An all-targets perplexity charges every OOV target as a prediction of `<unk>`, and `<unk>` is by
+    # construction among the most frequent symbols the model knows. So a model with a smaller
+    # vocabulary is asked an easier question on a larger fraction of the set, and the discount grows
+    # with the gap. The docstring's warning about an easier set applies within one set as soon as the
+    # vocabularies differ.
     #
     # A percentage point is a judgement, not a measurement, and it is calibrated on one thing: E4
     # compared `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV, that comparison was
     # sound, and this must not refuse it. The sensitivity of perplexity to a point of OOV on this
-    # corpus has never been measured; E6 measures it, and this threshold should be re-derived from
-    # that number rather than left as a round one.
-    if abs(a.oov_rate - b.oov_rate) > 0.01:
+    # corpus has never been measured; backlog 78 is the run that would, and this threshold should be
+    # re-derived from that number rather than left as a round one. E6 has already found how close to
+    # the line real cells land: two Kneser-Ney models at the same `max_size` over 20M and 64M tokens
+    # differ by 1.09 points, which crosses it, and they share only 82.6% of their 8,192 types.
+    if gap > 0.01:
         return (
             f"these were scored at {a.oov_rate:.2%} and {b.oov_rate:.2%} out-of-vocabulary, so the "
             "model with the smaller vocabulary was charged for predicting `<unk>` on a larger share "
