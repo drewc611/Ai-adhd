@@ -570,5 +570,6 @@ can only help the model this registration predicts will lose.
 It is not justified by a measurement, because a toy cannot honestly produce one: the same untrained
 model reverses the direction between a fixture whose period divides `context` and one whose period does
 not, because learned positional embeddings make the score depend on window alignment. The argument is
-structural. **What the fix is worth will be measured on cell B itself, scored both ways, and both
-numbers reported with the result.**
+structural. **What the fix is worth was measured on cell B itself: 1.0029x**, 64.29 starved against 64.11
+overlapping. The bias was real and negligible, which is the outcome that makes 2.086x safe to quote
+without an asterisk about which window produced it.

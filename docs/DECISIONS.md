@@ -1974,8 +1974,15 @@ comparison. Fixed to windows advancing by `context // 2`, emitting only their fi
 
 Recorded with the two facts that keep it from being a moved goalpost: it was found and fixed **while
 cell B was still training**, with no E6 number in existence, and it can only help the model the
-registration predicted would lose. It rests on the structural argument rather than a measurement,
+registration predicted would lose. It rested on the structural argument rather than a measurement,
 because a toy reverses the direction depending on whether its period divides the context.
+
+**Now measured on cell B itself, and it is worth 1.0029x** — 64.29 starved against 64.11 overlapping,
+on the same 3,443,116 tokens. That is 0.29%, a great deal smaller than the effort spent on it implied,
+and the honest reading is not that the fix was wasted but that it was cheap insurance whose premium
+turned out to be low. What it buys is the statement that **2.086x is not a scoring artifact**: had the
+gap been large, every number above would have carried an asterisk about which window produced it.
+Scoring runs at twice the forward passes for it, which is minutes against the 42 the training took.
 
 ### What this does and does not settle
 
