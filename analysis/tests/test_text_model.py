@@ -214,8 +214,52 @@ def test_the_existing_token_shapes_still_hold():
 def test_scripts_without_spaces_are_not_claimed_to_work():
     """Honest limit, pinned so nobody reads the accent fix as multilingual support.
 
-    Chinese, Japanese and Thai are written without spaces, so a Unicode word class matches a whole run
-    as a single token. That is a different wrong answer from the per-character split it replaced, not a
-    right one, and segmenting them is a separate piece of work.
+    Chinese and Japanese are written without spaces, so a Unicode word class matches a whole run as a
+    single token. That is a different wrong answer from the per-character split it replaced, not a
+    right one, and segmenting them needs a model rather than a regex. Backlog 80.
     """
     assert tokens("客户端应该") == ["客户端应该"], "if this changed, the segmentation question was answered"
+    # Thai has no spaces either, and moved between two wrong answers rather than to a right one: it
+    # used to shatter into 15 fragments on its vowel marks, and now merges into one long token.
+    assert tokens("นักวิจารณ์ควรตัดทอน") == ["นักวิจารณ์ควรตัดทอน"]
+
+
+def test_words_written_with_combining_marks_do_not_shatter():
+    r"""`\w` matches none of Unicode's 2,408 combining marks, so every script that writes its vowels as
+    marks was splitting mid-word.
+
+    Worse than the ASCII truncation this followed. A truncated word is at least a consistent wrong
+    token that an n-gram can learn; a shattered one contributes noise to every gram it touches.
+    Measured before the fix: the Hindi sentence below came out as 28 tokens for 7 words, with
+    `समीक्षक` as `सम`, `ी`, `क`, `्`, `षक`.
+    """
+    assert tokens("समीक्षक को कलाकृति") == ["समीक्षक", "को", "कलाकृति"]
+    assert tokens("விமர்சகர் வேண்டும்") == ["விமர்சகர்", "வேண்டும்"]
+    assert tokens("সমালোচকের শিল্পকর্মটি") == ["সমালোচকের", "শিল্পকর্মটি"]
+    assert tokens("क्षेत्र") == ["क्षेत्र"], "a conjunct with a virama is one word"
+    # Hebrew with niqqud and Arabic with harakat are the same shape in a script that also has spaces.
+    assert tokens("הַמְבַקֵר צָרִיך") == ["הַמְבַקֵר", "צָרִיך"]
+    assert tokens("يَجِبُ عَلَى") == ["يَجِبُ", "عَلَى"]
+
+
+def test_a_combining_mark_is_not_punctuation():
+    r"""The punctuation branch is `[^\s\w]`, which matched every combining mark before this. So a mark
+    that escaped the word branch came back as a standalone punctuation token rather than being dropped,
+    which is how seven Hindi words became twenty-eight tokens rather than twenty-one."""
+    assert "्" not in tokens("समीक्षक")
+    assert tokens("।") == ["।"], "a real Devanagari full stop is still punctuation"
+
+
+def test_the_mark_class_is_read_from_unicodedata_not_pasted():
+    """A hardcoded range table is right for one Unicode version and silently wrong for the next, and the
+    failure it produces is the mid-word split this exists to stop."""
+    import unicodedata
+
+    from adhd_analysis.text.tokenize import _mark_ranges
+
+    ranges = _mark_ranges()
+    flat = {c for lo, hi in ranges for c in range(lo, hi + 1)}
+    expected = {c for c in range(0x110000) if unicodedata.category(chr(c)) in ("Mn", "Mc", "Me")}
+    assert flat == expected
+    assert all(lo <= hi for lo, hi in ranges)
+    assert all(ranges[i][1] + 1 < ranges[i + 1][0] for i in range(len(ranges) - 1)), "ranges not merged"
