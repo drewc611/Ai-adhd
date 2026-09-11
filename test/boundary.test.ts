@@ -124,6 +124,7 @@ test("only the model file is written, and only by the trainer", () => {
     "adhd_analysis/text/lstm.py",
     "adhd_analysis/text/ngram.py",
     "adhd_analysis/text/train.py",
+    "adhd_analysis/text/train_lstm.py",
     "adhd_analysis/text/train_transformer.py",
     "adhd_analysis/text/transformer.py",
   ];
