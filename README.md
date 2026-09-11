@@ -280,7 +280,7 @@ evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
 test/       425 tests over all of it
-analysis/   Python: reliability, bootstrap intervals, a language model trained from scratch
+analysis/   Python: reliability, bootstrap intervals, two language models trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 agents/     four run subagents, five mission subagents, the trainer and its governor
 assets/     the mark, the banner, the run explorer shell
@@ -292,11 +292,12 @@ what comes back, and refuses to proceed when a record is missing. Nothing under 
 one either, and nothing under `src/` imports it: it reads the recorded corpus after the fact and
 writes text. Delete the directory and every run behaves identically.
 
-`analysis/` does train a language model, and that is not a contradiction. It is modified
-Kneser-Ney over a document library you point it at, built from counts in the standard library.
-No weights are downloaded and none ship. D9 draws the line and D10 applies it: a model that
-changes what a run outputs is banned, a model that describes what runs already output is a
-measuring instrument.
+`analysis/` does train language models, and that is not a contradiction. Two classes: modified
+Kneser-Ney over a document library you point it at, built from counts in the standard library, and
+since D20 a decoder-only transformer whose only dependency is numpy. No weights are downloaded and
+none ship; every parameter in either comes from a corpus this repository can name. D9 draws the line
+and D10 applies it: a model that changes what a run outputs is banned, a model that describes what
+runs already output is a measuring instrument.
 
 ## Install
 
@@ -428,13 +429,30 @@ fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
 
-`analysis/` also trains a background language model from scratch on a document library — 6,330
-RFCs, 615 PEPs, 323 EIPs and 54 ERCs, 64.5M tokens over the training half, modified Kneser-Ney,
-standard library only, no weights downloaded and none shipped. Held-out perplexity **26.29**, and D16
-records why the 6.06 this file used to quote was a memorisation score. `docs/PROVENANCE.md` records every corpus's licence and why nothing is
-redistributed. Held-out perplexity is what says whether a training run improved anything, because
-vocabulary size, table size and wall clock all rise when a model gets worse. See D13 and
-`analysis/README.md`.
+`analysis/` also trains background language models from scratch on a document library — 6,330
+RFCs, 615 PEPs, 323 EIPs and 54 ERCs, no weights downloaded and none shipped. `docs/PROVENANCE.md`
+records every corpus's licence and why nothing is redistributed.
+
+The shipped one is modified Kneser-Ney, order 4, standard library only: 64,419,427 tokens over the
+training side of a frozen split, 148,353 types, 40,305,629 4-grams, nothing pruned. **Held-out
+perplexity 25.82** on 366 frozen documents at 0.91% OOV, fingerprint `1446762140db7f1a`. Two earlier
+figures this file carried are corrected rather than beaten: 6.06 was a memorisation score (D16), and
+25.65 was measured under an ASCII-only tokenizer that truncated a fifth of the corpus, so a different
+tokenization makes it a different measurement rather than a worse one.
+
+There is a second model class since D20: a decoder-only transformer over numpy, written from scratch,
+with a hand-written backward pass that is gradient-checked against central differences. It stays
+inside D2 — no download, no key, no provider SDK — and it exists to make an assertion falsifiable that
+`ngram.py` had carried unmeasured, that a transformer from scratch needs 10^8 tokens and a GPU before
+it beats a well-smoothed n-gram. E6 is the run, registered before it started.
+
+Held-out perplexity is what says whether a training run improved anything, because vocabulary size,
+table size and wall clock all rise when a model gets worse. Two numbers from different held-out sets
+are two numbers about two tests, and `comparable_heldout` refuses five ways to be fooled by that: a
+truncated score beside a finished one, the same text tokenized differently, a missing or differing
+fingerprint, an in-vocabulary-only score beside an all-targets one, and a vocabulary gap that hands
+the smaller vocabulary a discount on all targets. Every one of those is a mistake this repository
+published or nearly published. See D13, D16, D20 and `analysis/README.md`.
 
 That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
 `foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%

@@ -1707,6 +1707,14 @@ Order 4, `min_count` 3, trained on the training side of a frozen split:
 **Held-out perplexity 25.65** on 366 frozen documents, 3,455,268 tokens, 0.91% OOV, fingerprint
 `1446762140db7f1a`.
 
+> **Superseded, not beaten. The shipped figure is 25.82.** This 25.65 was measured under an ASCII-only
+> tokenizer that stopped at the first accent — `Löwis` learned as `l` and `wis`, across 234 of 1,175
+> sampled files. Fixing the word class re-tokenized the same text (3,455,268 tokens became 3,443,116)
+> and the retrain scores **25.82** at 0.91% OOV on the same fingerprint, `truncated: null`. A different
+> tokenization over the same documents is a different vocabulary, so these are two measurements rather
+> than a regression. `comparable_heldout` refuses the pair now; it waved it through at the time, which
+> is how the two numbers briefly sat side by side as though one were worse.
+
 ### Backlog 76: pruning costs 1.36x, and I predicted "larger than 2.9x"
 
 Two runs, one corpus, one split, differing only in the n-gram ceiling:

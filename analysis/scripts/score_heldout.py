@@ -48,7 +48,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--held-out-file", default="heldout.json")
     ap.add_argument("--max-seconds", type=float, default=3600.0)
     ap.add_argument("--max-tokens", type=int, default=200_000_000)
-    ap.add_argument("--max-rss-mb", type=int, default=12_000)
+    # 13,200MB, not 12,000. The shipped 148,353-type model is 10.6GB resident once loaded, so a 12GB
+    # ceiling leaves 1.4GB for scoring and binds after about 20,000 of 3.4M tokens. It did: the first
+    # run of this script reported 65.8 with `TRUNCATED` beside it. The cgroup on this machine kills at
+    # 13,943MB, so this is close to the largest ceiling that is still a ceiling rather than a crash.
+    ap.add_argument("--max-rss-mb", type=int, default=13_200)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -82,6 +86,14 @@ def main(argv: list[str] | None = None) -> int:
         print("\nnot comparable:")
         for r in refusals:
             print(f"  {r['a']} vs {r['b']}: {r['why']}")
+
+    # Non-zero on a truncated score. The `TRUNCATED` label is enough for a person reading the output
+    # and not enough for a script feeding a document: a truncated perplexity is over a prefix of the
+    # set, and the exit code is the only part of this a pipeline reads.
+    cut = [n for n, _k, o in scored if o.truncated]
+    if cut:
+        print(f"\nrefusing to exit clean: {', '.join(cut)} scored over a prefix, not the set", file=sys.stderr)
+        return 2
     return 0
 
 

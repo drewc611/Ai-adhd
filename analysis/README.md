@@ -159,18 +159,31 @@ artifacts being scored are engineering arguments with a fixed shape, and that is
 almost exactly. A model trained on public-domain novels would faithfully report that a branch
 artifact reads unlike a Victorian novel.
 
-4,901 RFCs, 615 PEPs, 529 EIPs and the repository's own prose: **55.4M tokens, 177,507-word
-vocabulary, 36.5M 4-grams, 622 seconds, 9483MB peak, nothing pruned.** Every discount row is a real
-modified-Kneser-Ney estimate rather than the 0.75 fallback.
+An early run over 4,901 RFCs, 615 PEPs, 529 EIPs and the repository's own prose reported perplexity
+**6.06** on 3,097,500 tokens at 0.15% OOV and called it held-out. **D16 corrects it**: the model
+trained on the whole manifest and was then scored on one document in twenty of that same manifest, so
+6.06 is a memorisation score. The 0.15% OOV was the tell — an unseen set gives about 0.9% — and
+`evaluate` refuses that combination now rather than returning a number.
 
-That run reported perplexity **6.06** on 3,097,500 tokens at 0.15% OOV and called it held-out.
-**D16 corrects it**: the model trained on the whole manifest and was then scored on one document in
-twenty of that same manifest, so 6.06 is a memorisation score. The 0.15% OOV was the tell — an unseen
-set gives about 0.79% — and `evaluate` refuses that combination now rather than returning a number.
+The shipped model trains against a frozen split (`--held-out-file heldout.json`), so the corpus can
+keep growing while the test set stays put and two weeks apart stay comparable: **64,419,427 tokens,
+148,353-word vocabulary, 40,305,629 4-grams, `min_count` 3, 817 seconds, 10,601MB peak, nothing
+pruned, `split` recorded.** Every discount row is a real modified-Kneser-Ney estimate rather than the
+0.75 fallback. **Held-out perplexity 25.82** on 366 frozen documents, 3,443,116 tokens, 0.91% OOV,
+fingerprint `1446762140db7f1a`, `truncated: null`.
 
-The shipped model trains with `--held-out-every 20`: **64.5M tokens, 199,190-word vocabulary, 40.8M
-4-grams, 709 seconds, 10,703MB peak, nothing pruned, `split` recorded.** Held-out perplexity **26.29**
-on 3,464,189 tokens at 0.79% OOV — the first figure here published under that name that is one.
+25.65 appears in D19 and is superseded rather than beaten. It was measured under an ASCII-only
+tokenizer that learned `Löwis` as `l` and `wis`, across a fifth of the corpus; a different
+tokenization is a different vocabulary over the same text, so the two are different measurements.
+`comparable_heldout` now refuses that pair, having once waved it through.
+
+A second model class since **D20**: a decoder-only transformer over numpy, from scratch, with a
+hand-written backward pass gradient-checked against central differences. It duck-types `KneserNey`
+where the scoring machinery touches it, so `evaluate`, `FrozenSplit`, `in_sample_refusal` and
+`comparable_heldout` apply to it unchanged. On this machine it runs at **7,671 tokens/second** at
+d128/2 layers/context 128 — 2.33 hours per epoch over the training side, after three profiler-guided
+fixes took it 3.35x from where it started. `python -m adhd_analysis.text.train_transformer --help`,
+and `scripts/score_heldout.py` scores either class by reading the model file's own format header.
 
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre
