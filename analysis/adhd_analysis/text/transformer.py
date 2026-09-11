@@ -103,23 +103,39 @@ def _layer_norm_backward(dout: np.ndarray, cache):
     return dx, dgamma, dbeta
 
 
-def _gelu(x: np.ndarray) -> np.ndarray:
-    # The tanh approximation. Cheaper than erf on numpy and indistinguishable at this scale.
-    return 0.5 * x * (1.0 + np.tanh(0.7978845608028654 * (x + 0.044715 * x * x * x)))
+_GELU_C = 0.7978845608028654  # sqrt(2/pi)
 
 
-def _gelu_backward(dout: np.ndarray, x: np.ndarray) -> np.ndarray:
-    c = 0.7978845608028654
-    inner = c * (x + 0.044715 * x**3)
-    t = np.tanh(inner)
-    dinner = c * (1.0 + 3 * 0.044715 * x * x)
+def _gelu(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """The tanh approximation, returning the tanh alongside the output.
+
+    Cheaper than erf on numpy and indistinguishable at this scale. The tanh comes back because the
+    backward pass needs exactly it, and recomputing it there cost 76ms of a 463ms step — the second
+    largest line in the profile after the einsum, for a value the forward pass had already produced.
+    """
+    t = np.tanh(_GELU_C * (x + 0.044715 * x * x * x))
+    return 0.5 * x * (1.0 + t), t
+
+
+def _gelu_backward(dout: np.ndarray, x: np.ndarray, t: np.ndarray) -> np.ndarray:
+    # `x * x` rather than `x ** 2`: the power operator dispatches to np.power, which is an order
+    # slower than a multiply on float32 and was doing it over every hidden unit twice per step.
+    dinner = _GELU_C * (1.0 + 3 * 0.044715 * x * x)
     return dout * (0.5 * (1.0 + t) + 0.5 * x * (1.0 - t * t) * dinner)
 
 
 def _softmax(x: np.ndarray) -> np.ndarray:
-    x = x - x.max(axis=-1, keepdims=True)
-    e = np.exp(x)
-    return e / e.sum(axis=-1, keepdims=True)
+    """In place, and returning the same array. `x` must be a private float buffer.
+
+    Every caller here passes a freshly computed contiguous array — the attention scores and the
+    logits, neither of which is read again afterwards — so the out-of-place version was allocating
+    three extra copies of its input per call. At the logits that input is (batch, time, vocab): 16.8M
+    float32, 67MB, and the single largest tensor in the step. Measured at 2.2s of a 10.1s profile.
+    """
+    x -= x.max(axis=-1, keepdims=True)
+    np.exp(x, out=x)
+    x /= x.sum(axis=-1, keepdims=True)
+    return x
 
 
 class Transformer:
@@ -144,6 +160,8 @@ class Transformer:
         def normal(*shape: int) -> np.ndarray:
             return (rng.standard_normal(shape) * s).astype(DTYPE)
 
+        #: Additive causal masks by sequence length. Constants, so they are cached rather than rebuilt.
+        self._masks: dict[int, np.ndarray] = {}
         self.params: dict[str, np.ndarray] = {
             "tok": normal(c.vocab_size, c.d_model),
             "pos": normal(c.context, c.d_model),
@@ -161,6 +179,13 @@ class Transformer:
             self.params[f"b{i}.fc2"] = normal(c.d_ff, c.d_model)
 
     # ---- forward ---------------------------------------------------------------------------------
+
+    def _causal_mask(self, T: int) -> np.ndarray:
+        m = self._masks.get(T)
+        if m is None:
+            m = np.triu(np.full((T, T), -1e9, dtype=DTYPE), k=1)
+            self._masks[T] = m
+        return m
 
     def forward(self, idx: np.ndarray) -> tuple[np.ndarray, dict]:
         """Logits for a batch of id sequences, plus everything the backward pass needs.
@@ -191,8 +216,11 @@ class Transformer:
             k = k.reshape(shape).transpose(0, 2, 1, 3)
             v = v.reshape(shape).transpose(0, 2, 1, 3)
             att = (q @ k.transpose(0, 1, 3, 2)) / math.sqrt(c.d_head)
-            mask = np.triu(np.ones((T, T), dtype=bool), k=1)
-            att = np.where(mask, -1e9, att)
+            # Additive and in place. A fresh `np.triu(np.ones(...))` per layer per step, applied with
+            # `np.where`, allocated a second (batch, heads, T, T) every time for a constant that
+            # depends on nothing but T. The additive form is also why no masked position needs
+            # special handling in the backward pass: its softmax weight is zero, so its gradient is.
+            att += self._causal_mask(T)
             w = _softmax(att)
             o = (w @ v).transpose(0, 2, 1, 3).reshape(B, T, c.d_model)
             bc.update(q=q, k=k, v=v, w=w, o_pre=o)
@@ -205,8 +233,9 @@ class Transformer:
             bc["ln2_out"] = h2
             f1 = h2 @ p[f"b{i}.fc1"]
             bc["f1"] = f1
-            g = _gelu(f1)
+            g, gt = _gelu(f1)
             bc["gelu"] = g
+            bc["gelu_tanh"] = gt
             x = x + g @ p[f"b{i}.fc2"]
             cache["blocks"].append(bc)
 
@@ -226,20 +255,25 @@ class Transformer:
         p = self.params
         logits, cache = self.forward(idx)
         B, T = idx.shape
-        probs = _softmax(logits)
+        # `logits` is turned into probabilities and then into their gradient, all in the one buffer.
+        # A `.copy()` here was 0.5s of a 10.1s profile for a 67MB array nothing else refers to.
         n = B * T
-        flat = probs.reshape(n, c.vocab_size)
+        flat = _softmax(logits).reshape(n, c.vocab_size)
         tgt = targets.reshape(n)
-        loss = float(-np.log(np.maximum(flat[np.arange(n), tgt], 1e-12)).mean())
+        rows = np.arange(n)
+        loss = float(-np.log(np.maximum(flat[rows, tgt], 1e-12)).mean())
 
-        dlogits = flat.copy()
-        dlogits[np.arange(n), tgt] -= 1.0
-        dlogits /= n
-        dlogits = dlogits.reshape(B, T, c.vocab_size)
+        flat[rows, tgt] -= 1.0
+        flat /= n
+        dlogits = flat.reshape(B, T, c.vocab_size)
 
         grads = {k: np.zeros_like(v) for k, v in p.items()}
         xf = cache["xf"]
-        grads["tok"] += np.einsum("btv,btd->vd", dlogits, xf)
+        # A reshape and a matmul, not `np.einsum("btv,btd->vd", ...)`. Measured: einsum took 227ms of
+        # a 463ms step because it has no BLAS path for this contraction and falls to its own C loop.
+        # The same product as a single GEMM is under 10ms. This is the largest matrix multiply in the
+        # model — vocab x d_model — so it was also the worst possible place to lose the fast path.
+        grads["tok"] += dlogits.reshape(-1, c.vocab_size).T @ xf.reshape(-1, c.d_model)
         dxf = dlogits @ p["tok"]
 
         dx, dg, db = _layer_norm_backward(dxf, cache["ln_f"])
@@ -253,7 +287,7 @@ class Transformer:
             dmlp = dx
             grads[f"b{i}.fc2"] += bc["gelu"].reshape(-1, c.d_ff).T @ dmlp.reshape(-1, c.d_model)
             dg_ = dmlp @ p[f"b{i}.fc2"].T
-            df1 = _gelu_backward(dg_, bc["f1"])
+            df1 = _gelu_backward(dg_, bc["f1"], bc["gelu_tanh"])
             grads[f"b{i}.fc1"] += bc["ln2_out"].reshape(-1, c.d_model).T @ df1.reshape(-1, c.d_ff)
             dh2 = df1 @ p[f"b{i}.fc1"].T
             dx2, dg2, db2 = _layer_norm_backward(dh2, bc["ln2"])

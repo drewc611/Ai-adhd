@@ -463,3 +463,88 @@ composition was wrong and that is worth more than the 15 minutes.
   that order 5 is free.
 - **If it loses, 25.65 stands as the best this machine produces** and the remaining levers are a bigger
   machine or a different model class, neither of which is available here.
+
+
+---
+
+## E6. A transformer against Kneser-Ney, at the same vocabulary and the same text
+
+**Registered 2026-09-11, before the run.** The prediction this tests has been sitting in
+`analysis/adhd_analysis/text/ngram.py` unmeasured since the module was written:
+
+> a transformer trained from scratch needs somewhere north of 10^8 tokens before its perplexity beats
+> a well-smoothed 5-gram, and it needs a GPU to get there
+
+E5 closed on the same note, that the only levers left on this machine are a bigger machine or a
+different model class. This is the model class. `analysis/adhd_analysis/text/transformer.py` is a
+decoder-only transformer over numpy with a hand-written backward pass gradient-checked against central
+differences, and `logprob_terms` duck-types `KneserNey`, so `evaluate` scores both with no special case.
+
+### The confound that decides the design
+
+**The shipped 25.82 is not the opponent, and must not be quoted as one.** It was measured at 148,353
+types. The transformer's output projection is `d_model x vocab_size` and every token's loss touches
+all of it; at 148,353 types that one layer is 19M parameters and dominates the model. So the
+transformer runs at 8,192 types, and an all-targets perplexity at 8,192 types is not comparable to one
+at 148,353: every OOV target is charged as a prediction of `<unk>`, `<unk>` is among the most frequent
+symbols a closed-vocabulary model holds, and the model with the smaller vocabulary is therefore asked
+an easier question on a larger share of the same text. `comparable_heldout` now refuses that pair
+outright, which is a defect this registration found and not something it works around.
+
+The control is therefore a Kneser-Ney trained at the transformer's vocabulary, not the shipped model.
+
+### The second confound: how much text each model sees
+
+Measured on this machine before registering, so the grid is arithmetic rather than hope. numpy 2.4.6
+against scipy-openblas 0.3.31 on 4 cores, `d_model` 128, 2 layers, `context` 128, batch 32, 1.46M
+parameters: **7,671 tokens/second**, which is 2.33 hours for one epoch over the 64.4M-token training
+side. Three profiler-guided fixes got it there from 2,292 tok/s, a 3.35x, and the remaining gap to the
+machine's 420 GFLOP/s is structural.
+
+A Kneser-Ney reads the same corpus in 817 seconds. So the two cannot be given both the same vocabulary
+and the same wall clock, and the choice is which to equalise. This registration equalises **text**,
+and adds the full-corpus n-gram beside it to price the handicap:
+
+| | model | vocabulary | training tokens | note |
+|---|---|---|---|---|
+| A | Kneser-Ney, order 4, `min_count` 3 | 8,192 | 64.4M (all) | the strong control |
+| A′ | Kneser-Ney, order 4, `min_count` 3 | 8,192 | 20M (first) | the matched-exposure control |
+| B | transformer, d128, 2 layers, ctx 128 | 8,192 | 20M (first), 1 epoch | |
+
+20M tokens is not an arbitrary cap. At 1.46M parameters it is close to the compute-optimal ratio of
+roughly 20 tokens per parameter, and at 7,671 tok/s it is about 43 minutes, which fits a session.
+
+All three score the frozen held-out set (`8e2d77cbe8901b1e`, 366 documents), so the fingerprints match
+and `comparable_heldout` has no grounds to refuse. **A′ against B is the experiment.** A is context.
+
+### The prediction, which is that the transformer loses
+
+Stated plainly so that being wrong costs something. **B lands 1.5x to 3x worse than A′.**
+
+The reasoning, and the part of it that could be wrong. The corpus is RFCs, PEPs, EIPs and ERCs, which
+is about as formulaic as English gets: "Security Considerations", "MUST NOT", "This document specifies".
+A 4-gram with exact-match memory over 40M contexts is unusually strong on that text, and the genre
+effect is already measured at **2.83x** (E2b), meaning the corpus rewards memorising a register. A
+1.46M-parameter model at one epoch has neither the capacity to memorise it nor the data to generalise
+past it. Against that, the transformer has an unbounded context window where the n-gram has three
+tokens of history, and formulaic text is exactly where a long context should pay. If the prediction is
+wrong, that is why.
+
+### Fixed readings
+
+- **B wins only by beating A′ on all targets, at a matching OOV rate.** `in_vocabulary_only` is not the
+  statistic: E4 established it flatters whichever model's vocabulary excludes the harder words, and
+  here both cells share a vocabulary cap so it adds nothing anyway.
+- **A′ and B must report the same OOV rate to within a percentage point,** or `comparable_heldout`
+  refuses them and the cell pair is void rather than close. Equal `min_count` and equal `max_size` over
+  the same first 20M tokens should make them identical; if they are not, the token caps did not line up
+  and the run is invalid.
+- **A beating A′ is expected and is not a finding about model classes.** It prices the text handicap,
+  and it is the number that says how much of any B loss is architecture and how much is 44M tokens.
+- **A ceiling that binds voids the cell.** `stopped_because` decides, not the perplexity. For B this is
+  the likely case and it is a result: `epochs_completed` below 1.0 means B was scored having seen less
+  text than registered, and the number describes that run and not the architecture.
+- **A loss is the point.** The claim under test predicts a loss; measuring one confirms an assertion
+  that has never been checked and closes it. Reporting it is not a failure to explain away.
+- **No cell's shape, learning rate, or token cap moves after a result is seen.** A different
+  `d_model`, a second epoch, or a larger cap is a new registration, not an adjustment to this one.
