@@ -92,6 +92,12 @@ Two of those are two of the four bullets the README's motivating-failure section
 point of the whole system. Under the reading registered above they were never properties of the
 frame set; they were one sample.
 
+> **Superseded for one of the two by E1b, below.** `retry_cost` missed again under a different frame
+> set, so "one sample" is wrong for it: at seed 1 it was `LEDGER`'s, and `LEDGER` was pruned at seed
+> 2 and never dispatched in E1b. `human_cancel` survived the frame swap, so the reading holds there.
+> Left standing rather than rewritten, per this file's own rule — a registered reading that turned
+> out half right is worth more than a tidy one.
+
 The prune set moved as hard:
 
 | frame | seed 1 | seed 2 |
@@ -258,3 +264,392 @@ registration set; and the registration under-specified one thing, which is that 
 31 held-out PEPs and 16 held-out EIPs — too few to separate its own two readings. E2b at 615
 documents is the well-powered half and is the number to quote.
 
+
+---
+
+## E3. Is `001/retry_cost` a gap in the library or a gap in the pattern?
+
+**Registered 2026-09-09, before the widened pattern was run against anything.** The candidate
+patterns are fixed below and the adoption rule is fixed with them.
+
+`retry_cost` has matched 1 real run in 3, which `adhd eval --audit` now reports as `sometimes`. The
+obvious reading is that nothing in the dispatched frame set reliably asks who pays. Reading the runs
+says otherwise. At seed 2 `LEDGER` produced:
+
+> cap retries with a retry budget of a few percent of traffic
+
+and the critic's own T7 detector output on that position reads:
+
+> Every recommendation is priced in currency and payer
+
+That is the cost of retries, named, with a payer. None of the five existing patterns match it:
+the text says *payer* and not "pays for", *retry budget* and not "cost of the retry". The patterns
+were written against seed 1's wording, which was "the bill … is paid by" and "who pays for it".
+
+**Widening a pattern after seeing which runs failed is the mirror of tightening one after seeing
+which the control cleared**, and this file refuses that under D6. So the widening is registered
+first, and the negative control decides whether it is adopted.
+
+### The candidate patterns
+
+Added to `retry_cost.any_of`, and nothing else changes:
+
+| pattern | what it is meant to catch | risk |
+|---|---|---|
+| `payer` | the noun form of "pays for" | low; the control never asks who absorbs anything |
+| `retry budget` | retries priced as a share of traffic | **highest**, see below |
+| `priced in` | an explicit statement that a cost was assigned | low |
+
+`retry budget` is the one to watch. It is standard SRE vocabulary and **the negative control cites
+the Google SRE Book**, so it is exactly the phrase a fluent consensus answer might reach for without
+ever asking who pays. If it is what makes the control pass, it is recitation and not divergence.
+
+### The adoption rule, fixed now
+
+- **Adopt only if `001-linear-cot` still fails `retry_cost` with the widened set.** The control is
+  the whole point: a pattern the consensus answer satisfies does not measure divergence, and the
+  audit already says so about `003/reframe`.
+- **If the control passes, the widening is refused and reverted**, and which pattern did it is
+  recorded. Per-pattern, not all-or-nothing: if one of the three admits the control and the other two
+  do not, the other two may stand and the offender is dropped.
+- The `must_not` items and every other assertion are untouched. This is one item's vocabulary.
+
+### Predictions, so the result can be wrong
+
+- Seed 2 matches on `payer` and on `retry budget`, taking the rate to at least 2/3.
+- `001-altframes` is unknown to me at the time of writing; I have not searched it for these strings.
+- The control fails all three. Stated as the expected outcome precisely so that the control passing
+  is a result and not a surprise to be explained away.
+- If the rate reaches 3/3 the item stops being `sometimes` and the audit stops flagging it. That is
+  the outcome to be most suspicious of, because a pattern that suddenly matches everything is what a
+  pattern loosened to quiet a report looks like.
+
+### E3 result, 2026-09-09
+
+**The negative control failed all three candidates.** `001-linear-cot` contains none of `payer`,
+`retry budget` or `priced in`, so the registered adoption rule permitted all three.
+
+**Two were adopted and the third was refused anyway.** Adopting all three would have taken
+`retry_cost` to 3/3, which this registration named in advance as the outcome to be most suspicious
+of, so the matches were read rather than counted:
+
+| pattern | control | what it matched in a real run | adopted |
+|---|---|---|---|
+| `payer` | fails | seed 2, T7 detector output: "priced in currency and payer" | yes |
+| `priced in` | fails | seed 2, same line | yes |
+| `retry budget` | fails | altframes: "a retry budget of about 10 percent of traffic" | **no** |
+
+`retry budget` names a currency and no payer, and this item's own description asks for who *and* in
+what currency. **A pattern can clear the control test and still admit text the description excludes**,
+which is the gap the control test cannot see, and it is worth more than the extra passing run.
+
+`retry_cost` goes 1/3 to **2/3** and stays `sometimes`. The prediction that seed 2 would match held;
+the prediction about altframes was unstated and it turned out to hinge on the pattern that was
+refused. The wider reading: **the item was never the frame-library gap E1b took it for.** `LEDGER`
+surfaced the cost question at both seeds. What differed was the wording, and the fixture only knew
+one of them.
+
+Nothing in fixture 001 is at 3/3 except `trap_named`, which asks least.
+
+
+---
+
+## E4. Can held-out perplexity be beaten at order 4, min_count 2?
+
+**Registered 2026-09-09, before any cell was trained.** The grid, the primary statistic and the
+refusal conditions are fixed here.
+
+The shipped model scores **26.30** held out. The instruction was to make that better, and there are
+two honest levers left at this corpus size and two dishonest ones.
+
+**Honest.** Order 5 has better perplexity than order 4 wherever both have been measured — 36.0
+against 38.6 at 22.9M tokens, a 6.8% gain — and it does not fit: 1.7x order 4's 40.8M n-grams is
+about 69M, which the measured 257MB per million puts near 17.7GB against a machine with 15.4GB. The
+lever that might buy the room is `min_count`, which the governor brief already prefers over ceilings:
+3 rather than 2 roughly halves a technical vocabulary's type count and cuts the table with it.
+
+**Dishonest, and named so they are not drifted into.** Scoring in sample, which is D16. Choosing the
+corpus that flatters the number, which is what `comparable_heldout` exists to refuse. Neither is
+available here and neither is being attempted.
+
+### The grid
+
+Three cells, all trained on one frozen corpus with `--held-out-every 20` and scored on the identical
+held-out half:
+
+| cell | order | min_count | why it is in the grid |
+|---|---|---|---|
+| A | 4 | 2 | the baseline, retrained on this snapshot so every fingerprint matches |
+| B | 5 | 3 | the candidate |
+| C | 4 | 3 | **the control that makes B readable** |
+
+Cell C is not optional. Without it, a win for B cannot be attributed: `min_count` 3 changes the
+vocabulary and the order changes the model, and B moves both at once.
+
+### The primary statistic, and a gap in the tooling
+
+`min_count` 3 drops types that `min_count` 2 keeps, so B and C have smaller vocabularies and higher
+OOV than A. All-targets perplexity would then move partly for a vocabulary reason and partly for a
+modelling one, which is the confusion backlog 77 was opened to end.
+
+**The primary statistic is in-vocabulary-only perplexity**, with all-targets and the OOV rate
+reported beside it. Note what this exposes: `comparable_heldout` compares fingerprints and the
+in-vocabulary flag, and it will happily compare two all-targets numbers from models with *different
+vocabularies*. It should not. That is the same shape as every check corrected in D16 and D18 —
+comparing a property next to the one that matters — and it is recorded here rather than fixed
+mid-experiment.
+
+### Fixed readings
+
+- **B wins only if it beats A on in-vocabulary-only perplexity and C does not beat A by as much.**
+  If C matches B, the gain was `min_count` and order 5 bought nothing.
+- **A ceiling that binds voids the cell.** If B stops on the resident-set ceiling its table is
+  truncated and its perplexity describes a prefix; the record's `stopped_because` decides, not the
+  number. This is the most likely single outcome and it is a result, not a failure to explain away.
+- **If nothing beats 26.30, that is the answer** and 26.30 stands as the best this corpus and this
+  machine produce. Reporting a loss is the point of fixing the grid in advance.
+- No cell's `min_count` or order is adjusted after seeing a result. A fourth cell may only be added
+  as a new registration.
+
+
+---
+
+## E5. Order 5 pruned to fit, against order 4 unpruned
+
+**Registered 2026-09-10, before the run.** The last lever available on this machine, and the
+arithmetic says it fails.
+
+E4 established that order 5 does not fit: killed at 13,943MB against a cgroup near 14GB. Raising
+`min_count` does not rescue it, and that is measured rather than assumed — going from 2 to 3 changed
+the n-gram table by **−1.3%** (40,839,021 to 40,316,955). `min_count` drops rare *types*, and the
+n-grams containing them mostly survive with `<unk>` in one slot instead of merging. So the table is
+insensitive to it, order 5 needs about 17.6GB by the measured 257MB per million n-grams at any
+threshold, and no vocabulary setting reaches it.
+
+What makes one more attempt worth 15 minutes is backlog 76. Pruning was thought to cost 2.9x and
+actually costs **1.36x** held out. An order-5 table pruned to the size of the order-4 table is
+therefore a real candidate for the first time: same memory, higher order, a known penalty.
+
+### The comparison
+
+| | order | min_count | max_ngrams | note |
+|---|---|---|---|---|
+| baseline | 4 | 3 | none (40.3M, unpruned) | the shipped model, **25.65** |
+| cell D | 5 | 3 | 42,000,000 | pruned to about the baseline's size |
+
+Both against the frozen set (`8e2d77cbe8901b1e`), so the fingerprints match and
+`comparable_heldout` has no grounds to refuse.
+
+### The prediction, which is that it loses
+
+Order 5 bought **6.8%** over order 4 where both were measured (36.0 against 38.6, at 22.9M tokens).
+Pruning costs **36%** at this corpus. 36% against 6.8% is not close, so cell D should land near 33 to
+35 and lose clearly to 25.65.
+
+**Recorded because it is an extrapolation and not a measurement.** Both inputs come from different
+conditions: the order-5 gain was measured on a corpus a third this size, and the pruning penalty was
+measured at order 4, where the pruned tail is shorter. Either could travel badly. If cell D wins, the
+composition was wrong and that is worth more than the 15 minutes.
+
+### Fixed readings
+
+- **Cell D wins only by beating 25.65 on all targets.** In-vocabulary-only is not the statistic here:
+  E4 established it flatters a model whose vocabulary excludes the hardest words, and both cells share
+  `min_count` 3 so it adds nothing anyway.
+- **A ceiling that binds is still a void, not a number.** If D stops on the resident-set ceiling
+  rather than the n-gram ceiling, its table is a prefix and its perplexity describes one.
+- **`prunes` must be greater than zero.** If the 42M ceiling never binds, D is an unpruned order-5
+  model that somehow fit, which contradicts E4 and means something is wrong with the accounting, not
+  that order 5 is free.
+- **If it loses, 25.65 stands as the best this machine produces** and the remaining levers are a bigger
+  machine or a different model class, neither of which is available here.
+
+
+---
+
+## E6. A transformer against Kneser-Ney, at the same vocabulary and the same text
+
+**Registered 2026-09-11, before the run.** The prediction this tests has been sitting in
+`analysis/adhd_analysis/text/ngram.py` unmeasured since the module was written:
+
+> a transformer trained from scratch needs somewhere north of 10^8 tokens before its perplexity beats
+> a well-smoothed 5-gram, and it needs a GPU to get there
+
+E5 closed on the same note, that the only levers left on this machine are a bigger machine or a
+different model class. This is the model class. `analysis/adhd_analysis/text/transformer.py` is a
+decoder-only transformer over numpy with a hand-written backward pass gradient-checked against central
+differences, and `logprob_terms` duck-types `KneserNey`, so `evaluate` scores both with no special case.
+
+### The confound that decides the design
+
+**The shipped 25.82 is not the opponent, and must not be quoted as one.** It was measured at 148,353
+types. The transformer's output projection is `d_model x vocab_size` and every token's loss touches
+all of it; at 148,353 types that one layer is 19M parameters and dominates the model. So the
+transformer runs at 8,192 types, and an all-targets perplexity at 8,192 types is not comparable to one
+at 148,353: every OOV target is charged as a prediction of `<unk>`, `<unk>` is among the most frequent
+symbols a closed-vocabulary model holds, and the model with the smaller vocabulary is therefore asked
+an easier question on a larger share of the same text. `comparable_heldout` now refuses that pair
+outright, which is a defect this registration found and not something it works around.
+
+The control is therefore a Kneser-Ney trained at the transformer's vocabulary, not the shipped model.
+
+### The second confound: how much text each model sees
+
+Measured on this machine before registering, so the grid is arithmetic rather than hope. numpy 2.4.6
+against scipy-openblas 0.3.31 on 4 cores, `d_model` 128, 2 layers, `context` 128, batch 32, 1.46M
+parameters: **7,671 tokens/second**, which is 2.33 hours for one epoch over the 64.4M-token training
+side. Three profiler-guided fixes got it there from 2,292 tok/s, a 3.35x, and the remaining gap to the
+machine's 420 GFLOP/s is structural.
+
+A Kneser-Ney reads the same corpus in 817 seconds. So the two cannot be given both the same vocabulary
+and the same wall clock, and the choice is which to equalise. This registration equalises **text**,
+and adds the full-corpus n-gram beside it to price the handicap:
+
+| | model | vocabulary | training tokens | note |
+|---|---|---|---|---|
+| A | Kneser-Ney, order 4, `min_count` 3 | 8,192 | 64.4M (all) | the strong control |
+| A′ | Kneser-Ney, order 4, `min_count` 3 | 8,192 | 20M (first) | the matched-exposure control |
+| B | transformer, d128, 2 layers, ctx 128 | 8,192 | 20M (first), 1 epoch | |
+
+20M tokens is not an arbitrary cap. At 1.46M parameters it is close to the compute-optimal ratio of
+roughly 20 tokens per parameter, and at 7,671 tok/s it is about 43 minutes, which fits a session.
+
+All three score the frozen held-out set (`8e2d77cbe8901b1e`, 366 documents), so the fingerprints match
+and `comparable_heldout` has no grounds to refuse. **A′ against B is the experiment.** A is context.
+
+### The prediction, which is that the transformer loses
+
+Stated plainly so that being wrong costs something. **B lands 1.5x to 3x worse than A′.**
+
+The reasoning, and the part of it that could be wrong. The corpus is RFCs, PEPs, EIPs and ERCs, which
+is about as formulaic as English gets: "Security Considerations", "MUST NOT", "This document specifies".
+A 4-gram with exact-match memory over 40M contexts is unusually strong on that text, and the genre
+effect is already measured at **2.83x** (E2b), meaning the corpus rewards memorising a register. A
+1.46M-parameter model at one epoch has neither the capacity to memorise it nor the data to generalise
+past it. Against that, the transformer has an unbounded context window where the n-gram has three
+tokens of history, and formulaic text is exactly where a long context should pay. If the prediction is
+wrong, that is why.
+
+### Fixed readings
+
+- **B wins only by beating A′ on all targets, at a matching OOV rate.** `in_vocabulary_only` is not the
+  statistic: E4 established it flatters whichever model's vocabulary excludes the harder words, and
+  here both cells share a vocabulary cap so it adds nothing anyway.
+- **A′ and B must report the same OOV rate to within a percentage point,** or `comparable_heldout`
+  refuses them and the cell pair is void rather than close. Equal `min_count` and equal `max_size` over
+  the same first 20M tokens should make them identical; if they are not, the token caps did not line up
+  and the run is invalid.
+- **A beating A′ is expected and is not a finding about model classes.** It prices the text handicap,
+  and it is the number that says how much of any B loss is architecture and how much is 44M tokens.
+- **A ceiling that binds voids the cell.** `stopped_because` decides, not the perplexity. For B this is
+  the likely case and it is a result: `epochs_completed` below 1.0 means B was scored having seen less
+  text than registered, and the number describes that run and not the architecture.
+- **A loss is the point.** The claim under test predicts a loss; measuring one confirms an assertion
+  that has never been checked and closes it. Reporting it is not a failure to explain away.
+- **No cell's shape, learning rate, or token cap moves after a result is seen.** A different
+  `d_model`, a second epoch, or a larger cap is a new registration, not an adjustment to this one.
+
+**Result: D21.** A′ 30.7, B 64.1, **2.086x** — inside the predicted 1.5x to 3x. Cell A scored 19.9 and
+is refused against both, because a fixed vocabulary cap is not a fixed vocabulary.
+
+### One amendment to the harness, made before any result existed
+
+`Transformer.logprob_terms` originally walked non-overlapping windows of `context`, which starves one
+position in every `context`: the token on a window boundary is predicted from the single token before
+it when the model could have had the whole window. Its docstring claimed that cost applied
+"identically for every model scored this way." **That was wrong.** `KneserNey` slides an order-4 window
+continuously with no boundaries and has no starved position at all, so the bias ran one way — against
+the transformer, in exactly the comparison this experiment makes.
+
+Fixed to windows that advance by `context // 2` and emit only their final stride, so every scored
+position has at least `context // 2` tokens of left context. Recorded here rather than quietly, and
+with the two things that make it not a moved goalpost: it was found and fixed **before cell B finished
+training**, with no E6 number in existence, and it runs **against** the registered prediction, since it
+can only help the model this registration predicts will lose.
+
+It is not justified by a measurement, because a toy cannot honestly produce one: the same untrained
+model reverses the direction between a fixture whose period divides `context` and one whose period does
+not, because learned positional embeddings make the score depend on window alignment. The argument is
+structural. **What the fix is worth was measured on cell B itself: 1.0029x**, 64.29 starved against 64.11
+overlapping. The bias was real and negligible, which is the outcome that makes 2.086x safe to quote
+without an asterisk about which window produced it.
+
+
+---
+
+## E7. An LSTM against a transformer and an n-gram, at one vocabulary on one corpus
+
+**Registered 2026-09-11, before the run.** E6 answered "which of two model classes is better at 8,192
+types on 20M tokens of RFC English" and the n-gram won by 2.086x. That leaves a question E6 could not
+ask: **is the transformer's loss about attention, or about neural language models at this scale?** An
+LSTM separates those. It is neural, it has no attention, and its context at scoring time is the whole
+document rather than a window.
+
+### The cell, and what it inherits
+
+E6's cells A′ and B stand unchanged as the comparison. Cell C is added to them:
+
+| cell | model | parameters | vocabulary from | training tokens | measured |
+|---|---|---|---|---|---|
+| A′ | Kneser-Ney order 4, `min_count` 3 | 12.4M n-grams | 20M tokens | 20,000,029 | **30.7** |
+| B | transformer, d128, 2 layers, ctx 128 | 1,459,456 | 20M tokens | 18,343,512 | **64.1** |
+| C | **LSTM, d128, 2 layers, ctx 128** | **1,311,744** | 20M tokens | ~18.3M | to be measured |
+
+Same vocabulary cap, same `min_count` 3, same first 20M tokens, same frozen held-out set
+(`8e2d77cbe8901b1e`), same trainer, same optimiser, same one epoch. The parameter counts differ by
+10%, which is closer than any other pair in this table and close enough that the comparison is about
+architecture rather than capacity.
+
+Measured before registering, so the budget is arithmetic: **13,896 tokens/second** at this shape,
+which is 24 minutes for one epoch. That is 1.8x *faster* than the transformer's 7,671 tok/s, which was
+not the expected direction — a sequential time loop beating a parallel-over-time architecture — and is
+worth recording as a fact about numpy at this size rather than about either architecture.
+
+### The asymmetry, stated before the result
+
+**The LSTM is scored with its state carried across the whole document. The transformer was scored over
+windows of 128 tokens.** This is not the harness bias D21 had to correct, where the transformer was
+starved of context the architecture could have used. It is the architectural difference between the
+two: a transformer's context is bounded by its position embeddings and an LSTM's is not.
+
+Equalising it would mean resetting the LSTM's state every 128 tokens, which measures the transformer's
+limitation rather than the LSTM's ability. So it is not equalised, and **cell C is therefore flattered
+relative to a windowed evaluation of the same weights.** If C wins, that is the first number to
+challenge, and the way to challenge it is a second scoring of the same model with state reset per
+window — cheap, and registered here as the follow-up rather than left to occur to someone.
+
+A second asymmetry, smaller and in the other direction: the LSTM trains stateless (each window starts
+from zero state, which is what truncated BPTT means) and scores stateful. It is therefore evaluated in
+a regime it never trained in. Standard practice, and it could cut either way.
+
+### The prediction
+
+**C lands between B and A′ — worse than 30.7, better than 64.1.** Stated as a range because two
+effects pull against each other and I do not know which dominates: the LSTM's unbounded scoring
+context should help on formulaic text where a section heading predicts its own boilerplate, while its
+lack of attention should hurt where the transformer could look directly at a specific earlier token.
+
+More precisely: **C between 40 and 60.** If C beats A′'s 30.7, the E6 conclusion narrows sharply from
+"a neural LM loses at this scale" to "a transformer loses at this scale", which would be the more
+interesting result and the one worth a follow-up. If C is worse than B's 64.1, attention is doing real
+work at 20M tokens and the loss in E6 is not about neural models in general.
+
+### Fixed readings
+
+- **C is compared to A′ and B on all targets at a matching OOV rate.** All three share the vocabulary
+  pass, so their held-out OOV should agree to within rounding; if it does not, the token caps did not
+  line up and the cell is invalid rather than close.
+- **A ceiling that binds voids the cell.** `stopped_because` decides. `epochs_completed` below 1.0
+  means C saw less text than registered and the number describes that run.
+- **The state-carrying asymmetry is quoted with every C figure**, not mentioned once and dropped.
+- **A loss is a result.** The prediction is a range and being outside it in either direction is worth
+  more than being inside it.
+- **No shape, learning rate or token cap moves after a result is seen.** A different `d_model`, a
+  second epoch, or a bigger cap is a new registration.
+
+**Result: D24. The prediction was wrong.** C is **159.3**, not 40 to 60 — 2.485x worse than the
+transformer rather than between it and the n-gram. Attention is doing substantial work at 20M tokens,
+so E6's conclusion narrows to the transformer rather than generalising to neural models. The
+state-carrying advantage this registration flagged as flattering cell C closed about 6% of a gap set
+during training, and the follow-up registered to challenge a C win is unnecessary because there is no
+C win.

@@ -23,8 +23,9 @@ from typing import Iterator
 
 from .budget import Budget
 from .corpora import Library
+from .corpusread import sentence_tokens
 from .ngram import KneserNey, count_ngrams
-from .tokenize import Vocab, sentences, tokens
+from .tokenize import Vocab
 
 
 @dataclass
@@ -32,6 +33,11 @@ class TrainingRecord:
     model_path: Path
     order: int
     vocab_size: int
+    #: The count below which a type is dropped. On the record because it is what decides the
+    #: vocabulary, and therefore the OOV rate printed two fields down: a record that reports 0.39%
+    #: OOV without saying whether the threshold was 2 or 3 cannot explain its own number. It was in
+    #: the model's meta and not here, so reading the record meant opening the model.
+    min_count: int
     documents: int
     sentences: int
     tokens_seen: int
@@ -57,6 +63,7 @@ class TrainingRecord:
             "model": str(self.model_path),
             "order": self.order,
             "vocab_size": self.vocab_size,
+            "min_count": self.min_count,
             "documents": self.documents,
             "sentences": self.sentences,
             "tokens_seen": self.tokens_seen,
@@ -76,16 +83,6 @@ class TrainingRecord:
         }
 
 
-def _sentence_tokens(library: Library, budget: Budget) -> Iterator[list[str]]:
-    for _name, doc in library.documents():
-        for s in sentences(doc):
-            ts = tokens(s)
-            if not ts:
-                continue
-            budget.spend(len(ts))
-            yield ts
-            if not budget.allows():
-                return
 
 
 def train(
@@ -104,7 +101,7 @@ def train(
 
     freq: Counter[str] = Counter()
     n_sentences = 0
-    for ts in _sentence_tokens(library, b1):
+    for ts in sentence_tokens(library, b1):
         freq.update(ts)
         n_sentences += 1
     if not freq:
@@ -112,7 +109,7 @@ def train(
     vocab = Vocab.build(freq, min_count=min_count, max_size=max_vocab)
 
     def ids() -> Iterator[list[int]]:
-        for ts in _sentence_tokens(library, b2):
+        for ts in sentence_tokens(library, b2):
             yield vocab.encode(ts)
 
     top, meta = count_ngrams(ids(), order, b2, vocab)
@@ -135,7 +132,9 @@ def train(
             # path that trained on the whole manifest and scored a slice of it anyway. A rule a
             # document states and no code enforces is a rule that holds until someone is in a hurry.
             "split": (
-                {"every": library.every, "side": library.side}
+                {"frozen": library.fingerprint, "side": library.side}
+                if hasattr(library, "fingerprint") and hasattr(library, "side")
+                else {"every": library.every, "side": library.side}
                 if hasattr(library, "every") and hasattr(library, "side")
                 else None
             ),
@@ -149,6 +148,7 @@ def train(
         model_path=path,
         order=order,
         vocab_size=len(vocab),
+        min_count=min_count,
         documents=sum(s["files"] for s in model.meta["sources"]),
         sentences=n_sentences,
         tokens_seen=b2.tokens,
@@ -182,6 +182,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-ngrams", type=int, default=None)
     ap.add_argument("--max-rss-mb", type=int, default=None)
     ap.add_argument(
+        "--held-out-file",
+        default=None,
+        metavar="PATH",
+        help="train on everything except the documents named in this frozen set. Unlike a stride, the "
+        "names do not move when the corpus grows, so two runs weeks apart are scored on the same text "
+        "and their perplexities can be compared. Everything not named here is training data, "
+        "including everything fetched after the set was cut.",
+    )
+    ap.add_argument(
         "--held-out-every",
         type=int,
         default=None,
@@ -204,7 +213,11 @@ def main(argv: list[str] | None = None) -> int:
             setattr(b, attr, val)
 
     library = Library.load(args.manifest)
-    if args.held_out_every is not None:
+    if args.held_out_file is not None:
+        from .evaluate import FrozenSplit
+
+        library = FrozenSplit.load(library, args.held_out_file, side="train")
+    elif args.held_out_every is not None:
         # Imported here rather than at module scope: evaluate imports train, and the other direction
         # at import time is a cycle.
         from .evaluate import SplitLibrary

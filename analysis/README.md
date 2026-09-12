@@ -159,18 +159,55 @@ artifacts being scored are engineering arguments with a fixed shape, and that is
 almost exactly. A model trained on public-domain novels would faithfully report that a branch
 artifact reads unlike a Victorian novel.
 
-4,901 RFCs, 615 PEPs, 529 EIPs and the repository's own prose: **55.4M tokens, 177,507-word
-vocabulary, 36.5M 4-grams, 622 seconds, 9483MB peak, nothing pruned.** Every discount row is a real
-modified-Kneser-Ney estimate rather than the 0.75 fallback.
+An early run over 4,901 RFCs, 615 PEPs, 529 EIPs and the repository's own prose reported perplexity
+**6.06** on 3,097,500 tokens at 0.15% OOV and called it held-out. **D16 corrects it**: the model
+trained on the whole manifest and was then scored on one document in twenty of that same manifest, so
+6.06 is a memorisation score. The 0.15% OOV was the tell — an unseen set gives about 0.9% — and
+`evaluate` refuses that combination now rather than returning a number.
 
-That run reported perplexity **6.06** on 3,097,500 tokens at 0.15% OOV and called it held-out.
-**D16 corrects it**: the model trained on the whole manifest and was then scored on one document in
-twenty of that same manifest, so 6.06 is a memorisation score. The 0.15% OOV was the tell — an unseen
-set gives about 0.79% — and `evaluate` refuses that combination now rather than returning a number.
+The shipped model trains against a frozen split (`--held-out-file heldout.json`), so the corpus can
+keep growing while the test set stays put and two weeks apart stay comparable: **64,419,427 tokens,
+148,353-word vocabulary, 40,305,629 4-grams, `min_count` 3, 817 seconds, 10,601MB peak, nothing
+pruned, `split` recorded.** Every discount row is a real modified-Kneser-Ney estimate rather than the
+0.75 fallback. **Held-out perplexity 25.82** on 366 frozen documents, 3,443,116 tokens, 0.91% OOV,
+fingerprint `1446762140db7f1a`, `truncated: null`.
 
-The shipped model trains with `--held-out-every 20`: **64.5M tokens, 199,190-word vocabulary, 40.8M
-4-grams, 709 seconds, 10,703MB peak, nothing pruned, `split` recorded.** Held-out perplexity **26.29**
-on 3,464,189 tokens at 0.79% OOV — the first figure here published under that name that is one.
+25.65 appears in D19 and is superseded rather than beaten. It was measured under an ASCII-only
+tokenizer that learned `Löwis` as `l` and `wis`, across a fifth of the corpus; a different
+tokenization is a different vocabulary over the same text, so the two are different measurements.
+`comparable_heldout` now refuses that pair, having once waved it through.
+
+A second model class since **D20**: a decoder-only transformer over numpy, from scratch, with a
+hand-written backward pass gradient-checked against central differences. It duck-types `KneserNey`
+where the scoring machinery touches it, so `evaluate`, `FrozenSplit`, `in_sample_refusal` and
+`comparable_heldout` apply to it unchanged. On this machine it runs at **7,671 tokens/second** at
+d128/2 layers/context 128 — 2.33 hours per epoch over the training side, after three profiler-guided
+fixes took it 3.35x from where it started. `python -m adhd_analysis.text.train_transformer --help`,
+and `scripts/score_heldout.py` scores either class by reading the model file's own format header.
+
+**D21 records what it is worth, which is less than the n-gram.** Held at the same 8,192-word
+vocabulary on the same 20M tokens, one epoch, 1.46M parameters: **64.1** against Kneser-Ney's **30.7**,
+a 2.09x loss inside the band E6 registered before running. The same Kneser-Ney over the full 64.4M
+tokens scores 19.9 and is *refused* against both, because the top 8,192 words of 64.4M tokens and of
+20M share only 82.6% of their types — a fixed vocabulary cap is not a fixed vocabulary.
+
+Two numbers from that run worth carrying: **90% of the transformer's OOV is the 8,192 ceiling rather
+than `min_count`** (63,697 types met the frequency floor and were cut by the cap anyway), and the
+transformer saw **18,343,512 real tokens to the control's 20,000,029**, an 8.3% disadvantage from the
+`<s>`/`</s>` its materialised array carries. Neither covers 2.09x.
+
+**A third model class in D24: an LSTM, and it loses to both.** `text/lstm.py`, from scratch over numpy
+with BPTT written by hand. At d128/2 layers — 1,311,744 parameters against the transformer's 1,459,456,
+and 274 training tokens apart — it scores **159.3**: 2.49x worse than the transformer, 5.18x worse than
+the n-gram. E7 predicted it would land between them and was wrong by 2.7x, which is the informative
+direction: **attention is doing substantial work at 20M tokens**, so E6's result is about transformers
+rather than about neural language models generally.
+
+It is scored with state carried across the whole document, where the transformer got 128-token windows.
+That advantage closed about 6% of a gap already set during training (4.923 against 3.945 in loss), so
+the architecture's one edge over the transformer bought almost nothing here. And it trains **1.8x
+faster** than the transformer despite stepping sequentially through time, which says more about what
+dominates cost in numpy at this shape than about recurrence.
 
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre

@@ -89,18 +89,43 @@ test("a label the problem itself uses is exempt however either side spells it", 
   assert.ok(checkBlind("Door-keeper and Night operator disagree.", LABELS, { problem }).length > 0);
 });
 
+/**
+ * The guard against catastrophic backtracking in the label matcher. Exponential blowup here is
+ * reachable by anyone who can put text in an artifact, so it is worth a test.
+ *
+ * Measured as a *minimum* over repeated trials, on inputs big enough to take milliseconds. The
+ * previous version timed a single sample of a sub-millisecond call, and CI failed it at
+ * `0.18ms -> 5.23ms` on code that had not changed — no `src/` file differed from the last green
+ * run, and it passed twelve times out of twelve locally. A 0.18ms baseline on a shared runner is
+ * not a measurement of anything.
+ *
+ * The minimum is the right statistic rather than the mean or the median: scheduler noise only ever
+ * *adds* time, so the fastest trial is the closest estimate of what the algorithm actually costs,
+ * and a runner under sustained load contaminates a median just as thoroughly as a mean.
+ */
 test("label matching is linear on adversarial input", () => {
   const grow = (n: number) => "Door" + "_".repeat(n) + "x ".repeat(n);
-  const time = (n: number) => {
+  const fastest = (n: number, trials = 5) => {
     const text = grow(n);
-    const t = process.hrtime.bigint();
-    checkBlind(text, LABELS, { problem: PROBLEM });
-    return Number(process.hrtime.bigint() - t) / 1e6;
+    let best = Infinity;
+    for (let i = 0; i < trials; i++) {
+      const t = process.hrtime.bigint();
+      checkBlind(text, LABELS, { problem: PROBLEM });
+      best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6);
+    }
+    return best;
   };
-  time(2000);
-  const small = Math.max(time(2000), 0.01);
-  const large = time(8000);
-  assert.ok(large < small * 20, `4x the input took ${(large / small).toFixed(1)}x the time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`);
+  fastest(8_000, 2); // warm the JIT, so the first measured trial is not compiling
+  const small = fastest(8_000);
+  const large = fastest(32_000);
+  // 4x the input. Linear lands near 4x, quadratic near 16x, and exponential leaves the building.
+  // 20x is the same tolerance this test has always used, kept rather than tightened: the point is
+  // catching blowup, and a threshold that also has to be right about the constant factor is a
+  // threshold that fails for the wrong reason.
+  assert.ok(
+    large < small * 20,
+    `4x the input took ${(large / small).toFixed(1)}x the time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
+  );
 });
 
 test("a text naming no frame is left alone", () => {

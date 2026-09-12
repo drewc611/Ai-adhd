@@ -54,6 +54,15 @@ must_surface:
       - "cost of (the |a )?retry"
       - "bill"
       - "who pays"
+      # Added by E3, after registering the candidates and the adoption rule. `payer` is the noun
+      # form of "pays for" and `priced in` is an explicit assignment of cost; both name who. A third
+      # candidate, `retry budget`, cleared the negative control and was refused anyway: in
+      # `001-altframes` it matches "a retry budget of about 10 percent of traffic", which is a
+      # currency with no payer, and this item asks for who *and* in what currency. A pattern that
+      # passes the control test and still admits text the description excludes is the failure the
+      # control test cannot see.
+      - "payer"
+      - "priced in"
   - id: trap_named
     description: At least one trap id with detector output appears in the pruned block.
     scope: pruned

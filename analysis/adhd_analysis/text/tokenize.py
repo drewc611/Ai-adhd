@@ -9,6 +9,7 @@ answer that without a detokenisation step that reintroduces the ambiguity it rem
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from typing import Iterable, Iterator
@@ -17,15 +18,64 @@ BOS = "<s>"
 EOS = "</s>"
 UNK = "<unk>"
 
+
+def _mark_ranges() -> list[tuple[int, int]]:
+    """Contiguous runs of Unicode combining marks (categories Mn, Mc, Me), from this Python's tables.
+
+    Read rather than pasted. A hardcoded table is a table that is right for one Unicode version and
+    silently wrong for the next, and the failure it produces — a word in one script splitting into
+    pieces — is exactly the one this exists to stop.
+    """
+    marks = [c for c in range(0x110000) if unicodedata.category(chr(c)) in ("Mn", "Mc", "Me")]
+    out: list[tuple[int, int]] = []
+    start = prev = marks[0]
+    for c in marks[1:]:
+        if c == prev + 1:
+            prev = c
+            continue
+        out.append((start, prev))
+        start = prev = c
+    out.append((start, prev))
+    return out
+
 # Words, contractions, decimals and standalone punctuation, in that precedence. Markdown fences,
 # URLs and code identifiers all fall through to the word branch rather than being special-cased:
 # a corpus of technical documents is mostly those, and stripping them would model a language
 # nobody writes.
+# `[^\W\d_]` is "a word character that is neither a digit nor an underscore", which in Python 3 is
+# Unicode-aware and therefore means *letter* in any script. The previous pattern used `[A-Za-z]`, and
+# ASCII-only word classes do not fail loudly on other alphabets — they truncate. Measured on this
+# corpus: 234 of 1,175 sampled files hold non-ASCII characters, and `Löwis` was being learned as `l`
+# and `wis`, `André` as `andr`, `Viagénie` as `viag` and `nie`. Author lines and references are where
+# a technical corpus keeps its accents, so a fifth of the files were feeding the model broken words.
+#
+# `\w` is not enough on its own, which is the same mistake one level deeper. It matches **none** of
+# Unicode's 2,408 combining marks, and every script that writes its vowels as marks therefore
+# shatters rather than truncates: `समीक्षक` came out as `सम`, `ी`, `क`, `्`, `षक` — one Hindi word as
+# five tokens, seven words as twenty-eight. Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam,
+# Thai, Lao, Khmer, and any Arabic or Hebrew carrying diacritics were all affected. Shattering is
+# worse than truncating: a truncated word is at least a consistent wrong token, while a shattered one
+# contributes nothing but noise to every n-gram it touches.
+#
+# `re` has no `\p{M}`, and the `regex` package would be a fourth Python dependency where
+# `docs/MANIFEST.md` says three is a decision. So the class is computed from `unicodedata` at import.
+# It costs about 90ms once per process, which is under half of `import numpy` and invisible against a
+# training run.
+_MARKS = "".join(
+    f"\\U{lo:08x}-\\U{hi:08x}" if lo != hi else f"\\U{lo:08x}"
+    for lo, hi in _mark_ranges()
+)
+
+# Still not multilingual, and the gap is now one specific thing rather than several. Scripts written
+# without spaces — Chinese, Japanese, Thai, Khmer, Lao — match a whole run as one token, because
+# there is no space to break on and word segmentation for them is a model, not a regex. Thai moved
+# between two wrong answers rather than to a right one: 15 shattered fragments before, one merged
+# 30-character token now. Backlog 80 records what closing this would take.
 _TOKEN = re.compile(
-    r"""
-    [A-Za-z][A-Za-z0-9_]*(?:'[A-Za-z]+)?   # words, snake_case, don't
+    rf"""
+    [^\W\d_][\w{_MARKS}]*(?:'[^\W\d_]+)?   # words, snake_case, don't, Löwis, André, समीक्षक
   | \d+(?:[.,]\d+)*%?                       # 3.14  1,000  99%
-  | [^\sA-Za-z0-9]                          # one punctuation mark
+  | [^\s\w{_MARKS}]                          # one punctuation mark
     """,
     re.VERBOSE,
 )

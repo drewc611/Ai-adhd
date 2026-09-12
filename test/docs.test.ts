@@ -252,3 +252,33 @@ test("no badge advertises a registry the package has not been published to", () 
     assert.ok(!/coverage/i.test(b.alt), "a coverage badge, and nothing in this repository measures coverage");
   }
 });
+
+/**
+ * The README's fixture-001 table is a claim with numbers in it, and the numbers come from a report
+ * the repository can run. It drifted once already: the paragraph said the seed-2 misses were
+ * "properties of one sample, not of the frame library", E1b ran afterwards and showed `retry_cost`
+ * missing under a different frame set too, and nothing carried the correction back to the page
+ * anybody reads first.
+ */
+test("the README's fixture 001 rates are the rates the audit computes", async () => {
+  const { auditFixtures } = await import("../src/eval.js");
+  const items = auditFixtures(cfg).items.filter((i) => i.fixture === "001" && i.kind === "must_surface");
+  assert.ok(items.length >= 4, "fixture 001 lost its must_surface items");
+
+  const table = README.split("\n").filter((l) => /^\|/.test(l));
+  for (const i of items) {
+    const rate = `${i.real_matched}/${i.real_total}`;
+    assert.ok(
+      table.some((l) => l.includes(`| ${rate} |`) || l.includes(`| **${rate}** |`)),
+      `the audit rates 001/${i.item} at ${rate} and no README table row states it`,
+    );
+  }
+
+  // The specific sentence that was wrong. `sometimes` means the frame library is implicated, so the
+  // page must not be back to explaining these away as one sample.
+  if (items.some((i) => i.verdict === "sometimes"))
+    assert.ok(
+      !/properties of one sample, not of the frame library/.test(README),
+      "an assertion only some real runs surface is being described as a property of one sample",
+    );
+});

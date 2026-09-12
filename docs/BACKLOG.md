@@ -362,6 +362,54 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     prediction recorded, because either answer is interesting: mostly vocabulary would say the model
     generalises better than 2.83x suggests, and mostly modelling would say worse.
 
+78. **Measure how much a percentage point of OOV is worth, and re-derive the threshold from it**
+    (small, and a code comment currently promises it). `comparable_heldout` refuses two all-targets
+    perplexities whose OOV rates differ by more than one percentage point, because every OOV target is
+    charged as a prediction of `<unk>` and `<unk>` is among the most frequent symbols a
+    closed-vocabulary model holds — so the model that knows fewer words is asked an easier question on
+    a larger share of the same text. E6 needed that refusal: training OOV is 4.83% at 8,192 types
+    against 0.39% at 148,353.
+
+    **One percentage point is a judgement and the code says so.** It is calibrated against one thing:
+    E4 compared `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV, that comparison was
+    sound, and the threshold must keep passing it. Nothing measures what the discount actually is.
+
+    The run is cheap because E6 produces most of it. Score one model on the frozen set at several
+    `max_vocab` values — 8,192 / 32,768 / 148,353 — and read perplexity against OOV rate. That gives a
+    slope, and the threshold becomes the OOV gap worth some stated fraction of a perplexity point
+    rather than a round number. No prediction recorded, because the direction is not obvious: `<unk>`
+    is cheap to predict, but a model that has folded 5% of the corpus into one symbol has also lost
+    the contexts those words provided, and the two effects work against each other.
+
+79. **Price a transformer at the n-gram's vocabulary** (large, and it may not be reachable here).
+    E6 holds the vocabulary at 8,192 because the output projection is `d_model x vocab_size` and every
+    token's loss touches all of it. At the n-gram's 148,353 types that layer alone is 19M parameters,
+    and by the measured 7,671 tok/s at 1.46M parameters the arithmetic puts one epoch over the
+    training side well past a day. So E6 answers "which model class is better at 8,192 types", which
+    is a real question and not the whole one.
+
+    What would make it reachable is an adaptive or sampled softmax, which changes the loss the model
+    optimises and therefore needs its own registration. Recorded rather than attempted because the
+    honest version of it is not a small change.
+
+80. **Segment the scripts that are written without spaces** (large, and it needs a model rather than
+    a regex). Chinese, Japanese, Thai, Khmer and Lao put no spaces between words, so a Unicode word
+    class matches a whole run as one token: `评论者应根据反对意见修剪该工件` is a single type, and a
+    30-character Thai clause is another. That is a wrong answer rather than a missing feature — the
+    vocabulary fills with sentence-length types that never recur, and every one of them is `<unk>` on
+    the next document.
+
+    Two fixes exist and both are real work. A dictionary-and-longest-match segmenter needs a word list
+    per script and gets Thai roughly right and Chinese roughly wrong. A character n-gram model over
+    the target script segments better and is a second model to train, validate and version. Neither is
+    a change to `tokenize.py`.
+
+    **Worth stating plainly: the corpus is RFCs, PEPs, EIPs and ERCs, which are written in English.**
+    Nothing in the current library exercises this, so closing it buys capability for a corpus that
+    does not exist yet rather than accuracy on the one that does. That is the argument for it being
+    backlog rather than a defect, and it stops being the argument the moment a non-English source is
+    added to `corpora.yaml`.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

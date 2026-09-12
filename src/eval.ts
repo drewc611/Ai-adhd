@@ -297,7 +297,42 @@ export interface ItemAudit {
   control_total: number;
   /** The literal text in a control that satisfied the assertion. What makes the finding actionable. */
   control_evidence: string | null;
-  verdict: "discriminating" | "matches a control" | "never matched" | "no evidence yet";
+  verdict: "discriminating" | "sometimes" | "matches a control" | "never matched" | "no evidence yet";
+}
+
+/**
+ * How many real runs an assertion needs before "some of them matched" is a rate rather than an
+ * anecdote. Two is the floor at which `sometimes` can be distinguished from a single sample at all.
+ */
+const RATE_FLOOR = 2;
+
+/**
+ * Which of the five things this assertion is, given how it has behaved.
+ *
+ * `sometimes` is the one that was missing, and its absence is why this was worth changing. The
+ * audit already counted `real_matched` out of `real_total`, and then the verdict threw the rate
+ * away: `001/retry_cost` at 1 in 3 read as `discriminating`, the same word as `001/trap_named` at 3
+ * in 3. An assertion a third of real runs satisfy and one every real run satisfies are not the same
+ * assertion, and calling them the same is how "it does not pass reliably" stayed a sentence in the
+ * README instead of a number in a report.
+ *
+ * It is deliberately not a failure. A `sometimes` item is evidence about the frame library — that
+ * nothing in the dispatched set reliably asks this question — and the answer to that is a decision
+ * about frames, not a looser pattern.
+ *
+ * `controlIsDefect` is false for a `must_not` with `check: must_match`, which is a floor stated
+ * inversely: the run fails when the pattern does *not* match. `004/never_names_it` requires the
+ * recommendation to commit to a name, and a competent linear answer commits to a name — a control
+ * satisfying that floor is the expected result, not a sign the assertion measures nothing. The
+ * first version of this function applied the control rule to both kinds and reported it as a
+ * defect, which is why the parameter is here.
+ */
+function verdictFor(matched: number, real: number, controlMatched: number, controlIsDefect: boolean): ItemAudit["verdict"] {
+  if (controlIsDefect && controlMatched > 0) return "matches a control";
+  if (real === 0) return "no evidence yet";
+  if (matched === 0) return "never matched";
+  if (real >= RATE_FLOOR && matched < real) return "sometimes";
+  return "discriminating";
 }
 
 /**
@@ -339,7 +374,7 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
         real_total: real.length,
         control_matched: cm,
         control_total: controls.length,
-        verdict: cm > 0 ? "matches a control" : real.length === 0 ? "no evidence yet" : rm === 0 ? "never matched" : "discriminating",
+        verdict: verdictFor(rm, real.length, cm, true),
       });
     }
     for (const mn of fx.must_not) {
@@ -356,7 +391,7 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
         real_total: real.length,
         control_matched: cm,
         control_total: controls.length,
-        verdict: real.length === 0 ? "no evidence yet" : rm === 0 ? "never matched" : "discriminating",
+        verdict: verdictFor(rm, real.length, cm, false),
       });
     }
   }
@@ -365,11 +400,12 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
   lines.push(`${"fixture".padEnd(8)} ${"item".padEnd(26)} real  ctrl  verdict`);
   for (const i of items)
     lines.push(
-      `${i.fixture.padEnd(8)} ${i.item.padEnd(26)} ${`${i.real_matched}/${i.real_total}`.padStart(4)}  ${`${i.control_matched}/${i.control_total}`.padStart(4)}  ${i.verdict === "matches a control" ? "!! " : i.verdict === "never matched" ? " ? " : "   "}${i.verdict}`,
+      `${i.fixture.padEnd(8)} ${i.item.padEnd(26)} ${`${i.real_matched}/${i.real_total}`.padStart(4)}  ${`${i.control_matched}/${i.control_total}`.padStart(4)}  ${i.verdict === "matches a control" ? "!! " : i.verdict === "never matched" ? " ? " : i.verdict === "sometimes" ? " ~ " : "   "}${i.verdict}`,
     );
 
   const bad = items.filter((i) => i.verdict === "matches a control");
   const cold = items.filter((i) => i.verdict === "never matched");
+  const flaky = items.filter((i) => i.verdict === "sometimes");
   lines.push("");
   if (bad.length)
     lines.push(
@@ -380,6 +416,14 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
       ...bad.map((i) => `    ${i.fixture}/${i.item} matched on: "${(i.control_evidence ?? "").replace(/\s+/g, " ").slice(0, 90)}"`),
     );
   if (cold.length) lines.push(`${cold.length} assertion(s) no real run has ever matched: ${cold.map((i) => `${i.fixture}/${i.item}`).join(", ")}. A stretch goal and an unreachable pattern look identical here.`);
-  if (!bad.length && !cold.length) lines.push("every assertion is matched by at least one real run and by no control.");
+  if (flaky.length)
+    lines.push(
+      `${flaky.length} assertion(s) only some real runs surface: ${flaky.map((i) => `${i.fixture}/${i.item} ${i.real_matched}/${i.real_total}`).join(", ")}.`,
+      `  Not a failure and not a pattern to loosen. It says nothing in the dispatched frame set`,
+      `  reliably asks this question, which is a fact about the frame library and is answered by a`,
+      `  decision about frames. Read it against how many runs there are: a rate over two runs is`,
+      `  barely a rate, and the honest response to both is more runs.`,
+    );
+  if (!bad.length && !cold.length && !flaky.length) lines.push("every assertion is matched by every real run and by no control.");
   return { items, text: lines.join("\n") };
 }

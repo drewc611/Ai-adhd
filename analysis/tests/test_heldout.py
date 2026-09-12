@@ -11,6 +11,7 @@ in the held-out half is out of vocabulary.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,7 +20,9 @@ import pytest
 from adhd_analysis.text.budget import Budget
 from adhd_analysis.text.corpora import Library, Source
 from adhd_analysis.text.evaluate import (
+    FrozenSplit,
     SplitLibrary,
+    comparable_heldout,
     compare_orders,
     evaluate,
     in_sample_refusal,
@@ -191,8 +194,6 @@ def test_a_heldout_number_carries_the_identity_of_the_text_it_was_scored_on(tmp_
     sample and 17.4 was not. The fingerprint is still the right mechanism and is still carried rather
     than derived at comparison time; only the incident that motivated it was misdiagnosed.
     """
-    from adhd_analysis.text.evaluate import comparable_heldout
-
     lib = _library(tmp_path, n=60)
     rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
     model = KneserNey.load(rec.model_path)
@@ -309,3 +310,318 @@ def test_sharing_one_source_is_enough_to_be_refused(tmp_path):
     assert names, "the model records no sources, so nothing can be checked"
     why = in_sample_refusal(model, Library(lib.sources))
     assert why is not None and "every subset of that manifest is training text" in why
+
+
+def test_in_vocabulary_only_scoring_drops_exactly_the_oov_targets(tmp_path):
+    """Backlog 77's instrument: separate "words it does not have" from "words it predicts badly".
+
+    `genericity.py` has used this definition for surprisal since it was written — drop OOV targets,
+    leave contexts alone — and `evaluate.py` did not, so the perplexity figures added the two
+    together. The direction is not obvious either: `<unk>` is common in training by construction, so
+    an OOV target can be less surprising than a real word and dropping those can push perplexity up.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=3, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    everything = evaluate(model, held, Budget.smoke())
+    known_only = evaluate(model, held, Budget.smoke(), in_vocabulary_only=True)
+
+    assert everything.oov_rate > 0, "this corpus has no out-of-vocabulary tokens, so nothing is being tested"
+    assert known_only.oov_rate == everything.oov_rate, "the OOV rate is the other half of the answer and must not move"
+    assert known_only.tokens == everything.tokens
+    assert known_only.perplexity != everything.perplexity
+    assert everything.in_vocabulary_only is False and known_only.in_vocabulary_only is True
+
+
+def test_two_scorings_of_one_set_are_not_comparable_when_they_asked_different_questions(tmp_path):
+    """A fingerprint says the text is the same. It does not say the measurement is."""
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=3, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    everything = evaluate(model, held, Budget.smoke())
+    known_only = evaluate(model, held, Budget.smoke(), in_vocabulary_only=True)
+
+    assert everything.fingerprint == known_only.fingerprint, "the text differed, so this tests nothing"
+    why = comparable_heldout(everything, known_only)
+    assert why is not None and "in-vocabulary targets only" in why
+
+
+def _frozen(dirpath: Path, lib: Library, every: int = 10) -> Path:
+    """Cut a frozen set the way `scripts/cut_heldout.py` does, without shelling out to it."""
+    import hashlib
+
+    names = [f"{s}/{i}" for n, (s, i, _) in enumerate(lib.identified()) if n % every == 0]
+    dirpath.mkdir(parents=True, exist_ok=True)
+    p = dirpath / f"heldout-{every}.json"
+    p.write_text(json.dumps({"fingerprint": hashlib.sha256("\n".join(names).encode()).hexdigest()[:16], "documents": names}))
+    return p
+
+
+def test_a_frozen_set_does_not_move_when_the_corpus_grows(tmp_path):
+    """The property the whole thing exists for, and the one a stride cannot have.
+
+    `SplitLibrary` picks every Nth document by position, so adding anything reshuffles which
+    documents are held out: the fingerprint changes and this week's perplexity stops being comparable
+    to last week's. That is why the weekly job trained every week and learned nothing from its own
+    number. Names do not move, so the corpus can keep growing — and everything new lands in the
+    training half, which is the other half of the point.
+    """
+    lib = _library(tmp_path, n=40)
+    spec = _frozen(tmp_path / "sets", lib)
+    before = {d for _, d in FrozenSplit.load(lib, spec, side="heldout").documents()}
+    stride_before = {d for _, d in SplitLibrary(lib, every=10, side="heldout").documents()}
+
+    for i in range(40, 60):
+        (tmp_path / "docs" / f"doc{i}.txt").write_text(" ".join(f"a later document {i} arrives ." for _ in range(20)))
+    grown = Library(lib.sources)
+
+    after = {d for _, d in FrozenSplit.load(grown, spec, side="heldout").documents()}
+    stride_after = {d for _, d in SplitLibrary(grown, every=10, side="heldout").documents()}
+
+    assert after == before, "the frozen set moved when the corpus grew"
+    assert stride_after != stride_before, "the stride did not move, so this test is not testing anything"
+
+    train_after = {d for _, d in FrozenSplit.load(grown, spec, side="train").documents()}
+    assert any("a later document" in d for d in train_after), "new documents did not reach the training half"
+    assert not any("a later document" in d for d in after), "a new document leaked into the frozen test set"
+
+
+def test_the_two_frozen_sides_are_disjoint_and_complete(tmp_path):
+    lib = _library(tmp_path, n=40)
+    spec = _frozen(tmp_path / "sets", lib)
+    held = [d for _, d in FrozenSplit.load(lib, spec, side="heldout").documents()]
+    train = [d for _, d in FrozenSplit.load(lib, spec, side="train").documents()]
+
+    assert held and train
+    assert set(held).isdisjoint(train)
+    assert len(held) + len(train) == len(list(lib.documents()))
+
+
+def test_a_frozen_model_may_be_scored_on_its_complement_and_nothing_else(tmp_path):
+    lib = _library(tmp_path, n=40)
+    spec = _frozen(tmp_path / "sets", lib)
+    rec = train(FrozenSplit.load(lib, spec, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    assert rec.to_dict()["split"] == {"frozen": json.loads(spec.read_text())["fingerprint"], "side": "train"}
+    assert in_sample_refusal(model, FrozenSplit.load(lib, spec, side="heldout")) is None
+    assert "the train side and this is the train side" in (
+        in_sample_refusal(model, FrozenSplit.load(lib, spec, side="train")) or ""
+    )
+    # A stride split is not this model's complement whatever its size: the record names no stride.
+    assert in_sample_refusal(model, SplitLibrary(lib, every=10, side="heldout")) is not None
+
+
+def test_a_model_trained_against_a_different_frozen_set_is_refused(tmp_path):
+    """Re-cutting the set invalidates every model measured against the old one, and says so."""
+    lib = _library(tmp_path, n=40)
+    mine = _frozen(tmp_path / "sets", lib, every=10)
+    other = _frozen(tmp_path / "sets", lib, every=7)
+
+    rec = train(FrozenSplit.load(lib, mine, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    why = in_sample_refusal(model, FrozenSplit.load(lib, other, side="heldout"))
+    assert why is not None and "was not trained against frozen set" in why
+
+def test_the_shipped_frozen_set_holds_out_no_document_a_commit_can_rewrite():
+    """A frozen set fixes which documents are scored. It cannot fix what they say.
+
+    The first cut of `analysis/heldout.json` put `docs/ARCHITECTURE.md` and `README.md` in the set,
+    and those are rewritten whenever a decision is recorded — so writing one would have moved the
+    next perplexity for a reason that has nothing to do with the model, silently, because the
+    fingerprint is over names. Repository prose stays in the training half, where mutating text is
+    harmless.
+    """
+    spec = json.loads((ROOT / "analysis" / "heldout.json").read_text())
+    assert spec["documents"], "the shipped frozen set is empty"
+    mutable = {"repo-docs", "repo-prompts", "repo-readme"}
+    offenders = [n for n in spec["documents"] if n.split("/")[0] in mutable]
+    assert not offenders, f"the frozen set holds documents this repository rewrites: {offenders}"
+    assert len(spec["fingerprint"]) == 16
+
+
+def test_a_truncated_score_says_so_rather_than_looking_finished(tmp_path):
+    """A perplexity over a prefix is not a perplexity over the set, and it used to look identical.
+
+    Measured on the real corpus: the shipped model scores 25.65 over 366 documents, and under a
+    resident-set ceiling it already exceeds it returns **97.19 over one document**, with every other
+    field ordinary. `compare_orders` learned this once — `OrderResult.truncated` exists because a
+    shared wall-clock ceiling cut order 5's evaluation short and produced a table naming the wrong
+    winner — and the fix went on the wrapper rather than on `HeldOut`, leaving every other caller
+    exposed.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    whole = evaluate(model, held, Budget.smoke())
+    assert whole.truncated is None
+    assert "TRUNCATED" not in str(whole)
+
+    # A token ceiling that stops the loop after the first document.
+    tight = Budget(max_tokens=1, max_seconds=10**6, max_ngrams=10**12, max_rss_mb=10**6, check_every=1)
+    cut = evaluate(model, held, tight)
+    assert cut.truncated, "a scoring run the budget stopped reported itself as complete"
+    assert cut.documents < whole.documents
+    assert "TRUNCATED" in str(cut)
+
+
+def test_a_truncated_score_is_refused_before_the_fingerprint_is_blamed(tmp_path):
+    """The reason has to be the real one.
+
+    A truncated run has a different fingerprint *because* it was truncated, so a fingerprint-first
+    check reports "different held-out text" and sends the reader hunting for a corpus change. That
+    happened, and it cost real time.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    whole = evaluate(model, held, Budget.smoke())
+    cut = evaluate(model, held, Budget(max_tokens=1, max_seconds=10**6, max_ngrams=10**12, max_rss_mb=10**6, check_every=1))
+
+    why = comparable_heldout(whole, cut)
+    assert why is not None
+    assert "truncated" in why, why
+    assert "different held-out text" not in why, "the fingerprint got blamed for a truncation"
+    # Either way round.
+    assert "truncated" in (comparable_heldout(cut, whole) or "")
+
+
+def test_the_same_text_counted_differently_is_refused(tmp_path):
+    """The fingerprint hashes document content and cannot see how that content was tokenized.
+
+    Demonstrated on the real corpus: fixing the ASCII word class re-based the baseline from 25.65 to
+    25.82 on fingerprint `1446762140db7f1a`, with the token count moving 3,455,268 to 3,443,116 — the
+    accented words that used to split in two now counting as one. Every other field agreed and this
+    function called the pair comparable.
+
+    Identical fingerprints with unequal token counts cannot happen unless the tokenizer moved, so the
+    counts already sitting on the record are enough to catch it.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    before = evaluate(model, held, Budget.smoke())
+    after = replace(before, tokens=before.tokens - 1234, perplexity=before.perplexity * 1.01)
+
+    assert before.fingerprint == after.fingerprint, "the fixture no longer models a tokenizer change"
+    why = comparable_heldout(before, after)
+    assert why is not None
+    assert "the tokenizer changed" in why, why
+    # Unchanged pairs stay comparable, so the check is not simply refusing everything.
+    assert comparable_heldout(before, before) is None
+
+
+def test_a_wide_oov_gap_is_not_comparable(tmp_path):
+    """Two vocabularies, one test set, and an all-targets perplexity that silently favours the smaller
+    vocabulary.
+
+    Every OOV target is charged as a prediction of `<unk>`, and `<unk>` is among the most frequent
+    symbols a closed-vocabulary model holds. So the model that knows fewer words is asked an easier
+    question on a larger share of the same text. This is the confound E6 runs into: a transformer
+    capped at 8,192 types cannot be put next to a 148,353-type n-gram on all targets, even though the
+    fingerprint, the token count and `in_vocabulary_only` all agree.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    wide = evaluate(model, held, Budget.smoke())
+    narrow = replace(wide, oov_rate=wide.oov_rate + 0.09)
+
+    assert wide.fingerprint == narrow.fingerprint
+    assert wide.tokens == narrow.tokens
+    why = comparable_heldout(wide, narrow)
+    assert why is not None
+    assert "out-of-vocabulary" in why, why
+    # Symmetric: the order of the arguments is not a way past it.
+    assert comparable_heldout(narrow, wide) is not None
+
+
+def test_the_min_count_pair_e4_compared_stays_comparable(tmp_path):
+    """The threshold has to let through the comparison the repo already made and stands by.
+
+    E4 ranked `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV and adopted 3 on the
+    strength of it. A refusal calibrated so tightly that it voids E4 retroactively is a worse
+    instrument than no refusal, so that gap is the lower bound this is set above.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    at_mc2 = replace(evaluate(model, held, Budget.smoke()), oov_rate=0.0063)
+    at_mc3 = replace(at_mc2, oov_rate=0.0085, perplexity=at_mc2.perplexity * 0.98)
+    assert comparable_heldout(at_mc2, at_mc3) is None
+
+
+def test_an_empty_held_out_side_is_refused_not_scored(tmp_path):
+    """`perplexity inf, OOV 100.0%, over 0 tokens` is what an empty set used to return, with
+    `truncated` None and nothing saying the set was empty rather than the model terrible.
+
+    Found by dry-running the E6 pipeline on a toy corpus whose frozen-set names omitted the file
+    extension. Every name missed, the held-out side yielded nothing, and the scoring script printed a
+    `nanx` ratio and exited 0.
+
+    The live version of this is not a typo. `heldout.json` names 366 documents as `rfc/rfc1017.txt`, so
+    any change to how `Library.identified()` forms an id makes all 366 miss at once and the weekly job
+    reports `inf` every week with no field explaining it.
+    """
+    lib = _library(tmp_path, n=60)
+    # Names without the `.txt` the loader actually produces, which is the real mistake: ids come back
+    # as `toy/doc000.txt`, so every one of these misses.
+    spec = tmp_path / "nothing-matches.json"
+    spec.write_text(json.dumps({"documents": ["toy/doc000", "toy/doc010"], "fingerprint": "0" * 16}))
+
+    rec = train(FrozenSplit.load(lib, spec, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    empty = FrozenSplit.load(lib, spec, side="heldout")
+    assert [n for n, _d in empty.documents()] == [], "the fixture no longer models a name mismatch"
+
+    # `in_sample_refusal` has no objection: the fingerprints match and the sides are complementary.
+    # Nothing before this checked that the held-out side of that split contained anything.
+    assert in_sample_refusal(model, empty) is None
+    with pytest.raises(ValueError, match="nothing to score"):
+        evaluate(model, empty, Budget.smoke())
+
+
+def test_in_vocabulary_only_refuses_any_vocabulary_difference(tmp_path):
+    """Under `in_vocabulary_only` the `<unk>` discount does not exist, and the right refusal is
+    stricter rather than absent.
+
+    Each model sums over *its own* in-vocabulary targets, so two different vocabularies mean two
+    different target sets — two tests, not two scores on one. There is no continuous effect to
+    tolerate, so there is no tolerable gap either, and the percentage-point threshold that is right for
+    all-targets is wrong here.
+
+    Measured on E6's own cells, which is what made the distinction matter: two Kneser-Ney models at the
+    same `max_size` of 8,192 over 20M and 64M tokens share only 82.6% of their types and differ by 1.09
+    points of held-out OOV.
+    """
+    lib = _library(tmp_path, n=60)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    held = SplitLibrary(lib, every=10, side="heldout")
+
+    base = evaluate(model, held, Budget.smoke(), in_vocabulary_only=True)
+    nudged = replace(base, oov_rate=base.oov_rate + 0.001)  # a tenth of the all-targets threshold
+    why = comparable_heldout(base, nudged)
+    assert why is not None
+    assert "different set of targets" in why, why
+    # Identical vocabularies stay comparable, so it is not simply refusing everything.
+    assert comparable_heldout(base, base) is None
+
+    # The same tenth of a point is tolerated on all targets, where the effect is continuous.
+    allt = evaluate(model, held, Budget.smoke())
+    assert comparable_heldout(allt, replace(allt, oov_rate=allt.oov_rate + 0.001)) is None

@@ -113,6 +113,10 @@ def test_the_shipped_manifest_trains_on_a_clean_checkout(tmp_path):
     # A capped vocabulary raises OOV for a reason that makes perplexity incomparable with a run whose
     # vocabulary was not capped, and the two causes are indistinguishable in the rate alone.
     assert "vocab_truncated" in rec.to_dict()
+    # `min_count` decides the vocabulary and therefore the OOV rate beside it. It lived in the
+    # model's meta and not on the record, so reading a record meant opening a 160MB model to learn
+    # whether 0.39% OOV came from a threshold of 2 or of 3.
+    assert rec.to_dict()["min_count"] == 2
     assert rec.vocab_truncated_types == 0, "the default ceiling should not bind on repository prose"
 
     m = KneserNey.load(rec.model_path)

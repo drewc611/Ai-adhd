@@ -116,8 +116,14 @@ test("assertion history reports which runs held each item, matching the recorded
   assert.deepEqual(row("001", "human_cancel").failing, ["001-seed2"]);
   // E1b: retry_target_questioned survived a reseed but not the frame swap.
   assert.deepEqual(row("001", "retry_target_questioned").failing, ["001-altframes"]);
-  // retry_cost was LEDGER's, and LEDGER was pruned at seed 2 and not dispatched in E1b.
-  assert.deepEqual(row("001", "retry_cost").passing, ["001-first-run"]);
+  // E3: retry_cost was LEDGER's at seed 1, and the item read as needing that frame alive. Reading
+  // seed 2 showed LEDGER had produced it there too — retries priced as a share of traffic, with the
+  // critic's detector output naming the payer — and the patterns only recognised seed 1's wording.
+  // `payer` and `priced in` were registered first and adopted after the negative control failed
+  // both. `retry budget` cleared the control and was refused anyway: a currency with no payer, and
+  // this item asks for both, which is why altframes is still failing.
+  assert.deepEqual(row("001", "retry_cost").passing.sort(), ["001-first-run", "001-seed2"]);
+  assert.deepEqual(row("001", "retry_cost").failing, ["001-altframes"]);
   // The frame-set gap that 004 is recorded as failing on.
   assert.deepEqual(row("004", "false_means").passing, []);
 

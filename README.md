@@ -13,9 +13,9 @@
 <p align="center">
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-423-2ea44f" alt="423 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-73-2ea44f" alt="73 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D18%20resolved-0969da" alt="D1 through D18 resolved"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-425-2ea44f" alt="425 TypeScript tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-181-2ea44f" alt="181 Python tests"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D24%20resolved-0969da" alt="D1 through D24 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -77,12 +77,33 @@ What it never surfaces:
 That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
 the whole system. If a run only returns the timeout triple, the run failed.
 
-**It does not pass reliably.** The same problem run at seed 2, with the same five frames, misses
-two of the four bullets above: the human who can cancel, and who pays for the retry. Both are
-recorded in `evals/recorded/001-seed2`, which is kept as failing. Those two findings were
-properties of one sample, not of the frame library, and no claim in this repo rests on a single
-run without saying so. `docs/EXPERIMENTS.md` registers what that experiment was testing, before
-it ran.
+**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the three real
+recorded runs of this fixture it has passed once — in the run it was written against.
+
+| assertion | seed 1 | seed 2 | alt frames | rate |
+|---|---|---|---|---|
+| the human who can cancel | ok | **miss** | ok | 2/3 |
+| the retry target questioned | ok | ok | **miss** | 2/3 |
+| who pays for the retry | ok | ok | **miss** | 2/3 |
+| a trap named | ok | ok | ok | 3/3 |
+
+**The four assertions have different dependencies, and that is the finding.** An earlier version of
+this paragraph explained the seed-2 misses away as a quirk of one sample rather than anything to do
+with the frame library, and E1b contradicted it. E3 then found that one of the two was neither: *who
+pays for the retry* had missed at seed 2 because the assertion's patterns only recognised seed 1's
+wording. `LEDGER` priced retries as a share of traffic and the critic's own detector output named the
+payer; the regexes wanted "pays for" and got "payer". Widening a pattern after seeing which runs
+failed is the move this repo refuses, so E3 registered the candidates and the adoption rule first and
+let the negative control decide. Two of three were adopted. The third, `retry budget`, cleared the
+control and was refused anyway: it matches a currency with no payer, and this item asks for both.
+
+*The human who can cancel* survived the frame swap and not the reseed, so for that one the sample
+reading holds. Nothing here is at 3/3 except the assertion that asks least.
+
+The audit reports these rates rather than leaving them to prose, and a `sometimes` verdict is not a
+pattern to loosen: it says nothing in the dispatched set reliably asks that question. The only
+assertion that holds everywhere is `trap_named`, which asks almost nothing — any `T[1-8]` anywhere in
+the pruned block. `docs/EXPERIMENTS.md` registered both experiments before they ran.
 
 ## When to reach for it
 
@@ -258,8 +279,8 @@ docs/       architecture, traps, decisions, superagent, manifest, provenance, di
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       423 tests over all of it
-analysis/   Python: reliability, bootstrap intervals, a language model trained from scratch
+test/       425 tests over all of it
+analysis/   Python: reliability, bootstrap intervals, two language models trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 agents/     four run subagents, five mission subagents, the trainer and its governor
 assets/     the mark, the banner, the run explorer shell
@@ -271,11 +292,12 @@ what comes back, and refuses to proceed when a record is missing. Nothing under 
 one either, and nothing under `src/` imports it: it reads the recorded corpus after the fact and
 writes text. Delete the directory and every run behaves identically.
 
-`analysis/` does train a language model, and that is not a contradiction. It is modified
-Kneser-Ney over a document library you point it at, built from counts in the standard library.
-No weights are downloaded and none ship. D9 draws the line and D10 applies it: a model that
-changes what a run outputs is banned, a model that describes what runs already output is a
-measuring instrument.
+`analysis/` does train language models, and that is not a contradiction. Two classes: modified
+Kneser-Ney over a document library you point it at, built from counts in the standard library, and
+since D20 a decoder-only transformer whose only dependency is numpy. No weights are downloaded and
+none ship; every parameter in either comes from a corpus this repository can name. D9 draws the line
+and D10 applies it: a model that changes what a run outputs is banned, a model that describes what
+runs already output is a measuring instrument.
 
 ## Install
 
@@ -398,7 +420,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D18 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D24 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -407,13 +429,41 @@ fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run
 recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
 contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
 
-`analysis/` also trains a background language model from scratch on a document library — 6,330
-RFCs, 615 PEPs, 323 EIPs and 54 ERCs, 64.5M tokens over the training half, modified Kneser-Ney,
-standard library only, no weights downloaded and none shipped. Held-out perplexity **26.29**, and D16
-records why the 6.06 this file used to quote was a memorisation score. `docs/PROVENANCE.md` records every corpus's licence and why nothing is
-redistributed. Held-out perplexity is what says whether a training run improved anything, because
-vocabulary size, table size and wall clock all rise when a model gets worse. See D13 and
-`analysis/README.md`.
+`analysis/` also trains background language models from scratch on a document library — 6,330
+RFCs, 615 PEPs, 323 EIPs and 54 ERCs, no weights downloaded and none shipped. `docs/PROVENANCE.md`
+records every corpus's licence and why nothing is redistributed.
+
+The shipped one is modified Kneser-Ney, order 4, standard library only: 64,419,427 tokens over the
+training side of a frozen split, 148,353 types, 40,305,629 4-grams, nothing pruned. **Held-out
+perplexity 25.82** on 366 frozen documents at 0.91% OOV, fingerprint `1446762140db7f1a`. Two earlier
+figures this file carried are corrected rather than beaten: 6.06 was a memorisation score (D16), and
+25.65 was measured under an ASCII-only tokenizer that truncated a fifth of the corpus, so a different
+tokenization makes it a different measurement rather than a worse one.
+
+There is a second model class since D20: a decoder-only transformer over numpy, written from scratch,
+with a hand-written backward pass that is gradient-checked against central differences. It stays
+inside D2 — no download, no key, no provider SDK — and it exists to make an assertion falsifiable that
+`ngram.py` had carried unmeasured, that a transformer from scratch needs 10^8 tokens and a GPU before
+it beats a well-smoothed n-gram.
+
+E6 measured it and the assertion holds. At a matched 8,192-word vocabulary on the same 20M tokens, the
+transformer scores **64.1** against Kneser-Ney's **30.7** — a **2.09x** loss, inside the 1.5x-to-3x band
+registered before the run.
+
+E7 then added an LSTM, to ask whether that loss was about attention or about neural language models at
+this scale. The answer is attention: the LSTM scores **159.3**, losing to the transformer by 2.49x and
+to the n-gram by 5.18x, and **the registered prediction put it between the two** — wrong by 2.7x, in
+the direction that narrows E6's conclusion rather than generalising it. Being neural is not the
+handicap; lacking attention is a further and larger one. D24 has the arithmetic. The shipped model is
+unchanged.
+
+Held-out perplexity is what says whether a training run improved anything, because vocabulary size,
+table size and wall clock all rise when a model gets worse. Two numbers from different held-out sets
+are two numbers about two tests, and `comparable_heldout` refuses five ways to be fooled by that: a
+truncated score beside a finished one, the same text tokenized differently, a missing or differing
+fingerprint, an in-vocabulary-only score beside an all-targets one, and a vocabulary gap that hands
+the smaller vocabulary a discount on all targets. Every one of those is a mistake this repository
+published or nearly published. See D13, D16, D20 and `analysis/README.md`.
 
 That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
 `foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%

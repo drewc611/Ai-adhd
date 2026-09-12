@@ -23,6 +23,7 @@ model can lower its perplexity by knowing fewer words.
 
 from __future__ import annotations
 
+import json
 import hashlib
 import math
 import sys
@@ -64,6 +65,46 @@ class SplitLibrary:
         return [{**d, "split": self.side, "every": self.every} for d in self.base.describe()]
 
 
+class FrozenSplit:
+    """One side of a split defined by a checked-in list of document names.
+
+    The stride split moves. `SplitLibrary` picks every Nth document by position, so adding anything
+    to the corpus reshuffles which documents are held out, the fingerprint changes, and this week's
+    perplexity is not comparable to last week's — `comparable_heldout` says so, correctly. The weekly
+    job therefore trained every week and learned nothing from the number it produced.
+
+    Names do not move. `analysis/heldout.json` lists `source/document-id` pairs; a document in that
+    list is never trained on and is always scored, and **everything else, including everything
+    fetched from now on, is training data.** That is the point: the corpus keeps growing and the test
+    set stays put, which is what makes two weeks comparable at all.
+
+    What it costs, stated because it is real: the frozen set ages. It is a fixed sample of the corpus
+    as it stood when it was cut, and the further the corpus grows the less of it that sample
+    represents. The answer is a new registration cutting a new set, not quietly adding to this one —
+    a test set that grows when results disappoint is not a test set.
+    """
+
+    def __init__(self, base: Library, names: set[str], fingerprint: str, *, side: str) -> None:
+        if side not in ("train", "heldout"):
+            raise ValueError(f"side must be train or heldout, not {side}")
+        self.base, self.names, self.fingerprint, self.side = base, names, fingerprint, side
+        self.every = None
+
+    @classmethod
+    def load(cls, base: Library, path: str | Path, *, side: str) -> FrozenSplit:
+        spec = json.loads(Path(path).read_text())
+        return cls(base, set(spec["documents"]), spec["fingerprint"], side=side)
+
+    def documents(self) -> Iterator[tuple[str, str]]:
+        for source, ident, doc in self.base.identified():
+            held = f"{source}/{ident}" in self.names
+            if held == (self.side == "heldout"):
+                yield source, doc
+
+    def describe(self) -> list[dict]:
+        return [{**d, "split": self.side, "frozen": self.fingerprint} for d in self.base.describe()]
+
+
 @dataclass
 class HeldOut:
     documents: int
@@ -72,6 +113,20 @@ class HeldOut:
     in_vocabulary: int
     oov_rate: float
     perplexity: float
+    #: True when OOV targets were left out of the sum. See `evaluate(in_vocabulary_only=...)`.
+    in_vocabulary_only: bool = False
+    #: Why the budget stopped the scoring, or None if it read the whole set.
+    #:
+    #: A perplexity over a prefix is not a perplexity over the set, and until this field existed
+    #: nothing on a `HeldOut` said which one you were holding. Measured: the shipped model scores
+    #: 25.65 over 366 documents, and under a ceiling it already exceeds it returns **97.19 over one
+    #: document** with every other field looking ordinary.
+    #:
+    #: `compare_orders` learned this once — `OrderResult.truncated` exists because a shared wall-clock
+    #: ceiling cut order 5's evaluation short and produced a table naming the wrong winner. The fix
+    #: went on the wrapper and not on `HeldOut`, so every other caller stayed exposed, and one of them
+    #: reported a truncated 37.55 next to a complete 25.65 as though they were the same kind of thing.
+    truncated: str | None = None
     #: Identity of the text this was scored on: a digest over each held-out document's own content.
     #:
     #: Carried because a perplexity without it is a number nobody can compare safely, and the
@@ -85,7 +140,8 @@ class HeldOut:
     fingerprint: str = ""
 
     def __str__(self) -> str:
-        return f"perplexity {self.perplexity:8.1f}  OOV {self.oov_rate:5.1%}  over {self.tokens:,} tokens"
+        cut = f"  TRUNCATED ({self.truncated})" if self.truncated else ""
+        return f"perplexity {self.perplexity:8.1f}  OOV {self.oov_rate:5.1%}  over {self.tokens:,} tokens{cut}"
 
 
 def in_sample_refusal(model: KneserNey, held) -> str | None:
@@ -111,6 +167,19 @@ def in_sample_refusal(model: KneserNey, held) -> str | None:
     trained_on = {s["name"] for s in model.meta.get("sources", [])}
     scoring = {d["name"] for d in held.describe()}
     if scoring and not (scoring & trained_on):
+        return None
+
+    # A frozen split names its documents rather than striding, so the stride rules below cannot
+    # read it. Complementary sides of the *same* frozen set are what may be compared.
+    frozen = getattr(held, "fingerprint", None) if isinstance(held, FrozenSplit) else None
+    if frozen is not None:
+        split = model.meta.get("split", "absent")
+        if split == "absent":
+            return "this model was trained before the training split was recorded"
+        if not isinstance(split, dict) or split.get("frozen") != frozen:
+            return f"the model was not trained against frozen set {frozen}; it records {split}"
+        if split.get("side") == held.side:
+            return f"the model trained on the {held.side} side and this is the {held.side} side"
         return None
 
     split = model.meta.get("split", "absent")
@@ -141,6 +210,7 @@ def evaluate(
     budget: Budget | None = None,
     *,
     allow_in_sample: bool = False,
+    in_vocabulary_only: bool = False,
 ) -> HeldOut:
     """Perplexity of a trained model on documents it never saw.
 
@@ -152,6 +222,13 @@ def evaluate(
     Refuses outright when the model trained on the text being scored — see `in_sample_refusal`.
     `allow_in_sample=True` is for deliberately measuring the gap between seen and unseen text, which
     is a real measurement and reads as one in a diff. It is not a way past a failing check.
+
+    `in_vocabulary_only=True` drops OOV targets from the sum, leaving contexts alone, which is the
+    definition `genericity.py` already uses for surprisal. It separates two things the ordinary
+    figure adds together: how many words the model does not have, and how well it predicts the ones
+    it does. Note the direction is not obvious — `<unk>` is common in training by construction, so an
+    OOV target can be *less* surprising than a real word, and dropping those can push perplexity up.
+    The OOV rate is reported unchanged either way, because it is the other half of the answer.
     """
     if not allow_in_sample:
         why = in_sample_refusal(model, held)
@@ -176,21 +253,44 @@ def evaluate(
             n_tokens += len(ts)
             in_vocab += sum(1 for t in ts if t in model.vocab.stoi)
             b.spend(len(ts))
-            lp, n = model.logprob(model.vocab.encode(ts))
-            total_logprob += lp
-            predictions += n
+            terms = model.logprob_terms(model.vocab.encode(ts))
+            if in_vocabulary_only:
+                terms = [t for t in terms if t[1]]
+            total_logprob += sum(lp for lp, _ in terms)
+            predictions += len(terms)
             if not b.allows():
                 break
         if not b.allows():
             break
 
+    # An empty set is not a hard score, it is no score, and until this raised it came back as
+    # `perplexity inf, OOV 100.0%, over 0 tokens` with `truncated` None — nothing on the record saying
+    # the set was empty rather than the model terrible. Found by dry-running the E6 pipeline on a toy
+    # corpus whose frozen-set names omitted the file extension: every name missed, the held-out side
+    # yielded nothing, and `score_heldout.py` printed a `nanx` ratio and exited 0.
+    #
+    # The live risk is not a typo. `heldout.json` names 366 documents as `rfc/rfc1017.txt`, so any
+    # change to how `identified()` forms an id — a renamed source, a different glob, a normalised
+    # extension — makes all 366 miss at once, and the weekly job would report `inf` every week
+    # without one field saying why.
+    if not docs or not predictions:
+        raise ValueError(
+            f"the held-out side yielded {docs} documents and {predictions} predictions, so there is "
+            "nothing to score. A frozen set whose names no longer match the corpus fails this way: "
+            "check that the names in the split file match what `Library.identified()` produces"
+        )
+
+    # `allows()` is what ended the loop early, and its reason is the only thing that distinguishes a
+    # score over the set from a score over a prefix of it.
     return HeldOut(
+        truncated=b.stopped_because,
         documents=docs,
         sentences=n_sentences,
         tokens=n_tokens,
         in_vocabulary=in_vocab,
         oov_rate=1.0 - (in_vocab / n_tokens if n_tokens else 0.0),
         perplexity=math.exp(-total_logprob / predictions) if predictions else float("inf"),
+        in_vocabulary_only=in_vocabulary_only,
         fingerprint=identity.hexdigest()[:16],
     )
 
@@ -240,7 +340,9 @@ def compare_orders(
         scoring = base.restart()
         scoring.max_seconds = base.max_seconds * 4
         held = evaluate(model, held_half, scoring)
-        out.append(OrderResult(order=order, record=rec, held=held, truncated=scoring.stopped_because))
+        # Off the HeldOut rather than off the budget. Two sources for one fact is how they drift, and
+        # the budget object is reused while the HeldOut is the record of that one measurement.
+        out.append(OrderResult(order=order, record=rec, held=held, truncated=held.truncated))
         del model
     return out
 
@@ -257,12 +359,79 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     `comparable()` does the same job across orders. This is the same rule across corpora, which is
     the axis it was missing.
     """
+    # Before the fingerprint check, because a truncated run has a different fingerprint *as a
+    # consequence* of being truncated, and reporting that as "different held-out text" sends the
+    # reader looking for a corpus change. That is not a hypothetical: it cost real time once.
+    for label, side in (("the first", a), ("the second", b)):
+        if side.truncated:
+            return (
+                f"{label} of these was truncated ({side.truncated}), so its perplexity is over "
+                f"{side.documents} document(s) and not over the set"
+            )
+    # Same text, counted differently. The fingerprint hashes document *content*, so it cannot see a
+    # change to how that content is tokenized — and a tokenizer change is exactly what makes two
+    # perplexities incomparable while every other field agrees. Demonstrated: fixing the ASCII word
+    # class re-based the shipped baseline from 25.65 to 25.82 on fingerprint `1446762140db7f1a` with
+    # the token count moving 3,455,268 to 3,443,116, and this function called the pair comparable.
+    #
+    # Identical fingerprints with unequal token counts is impossible unless the tokenizer moved, so no
+    # new field is needed to catch it. The counts were already here.
+    if a.fingerprint and a.fingerprint == b.fingerprint and a.tokens != b.tokens:
+        return (
+            f"the same held-out text tokenized to {a.tokens:,} tokens and then to {b.tokens:,}, so the "
+            "tokenizer changed between these measurements and their perplexities are not comparable"
+        )
     if not a.fingerprint or not b.fingerprint:
         return "one of these was measured before held-out sets carried a fingerprint"
     if a.fingerprint != b.fingerprint:
         return (
             f"different held-out text ({a.documents} documents / {a.tokens:,} tokens, fingerprint "
             f"{a.fingerprint} against {b.documents} / {b.tokens:,}, fingerprint {b.fingerprint})"
+        )
+    # Same text, different question. One of these sums every position and the other skips the OOV
+    # targets, so they are two measurements that happen to share a fingerprint — which is exactly
+    # the case a fingerprint check alone waves through.
+    if a.in_vocabulary_only != b.in_vocabulary_only:
+        return (
+            "one of these was scored over in-vocabulary targets only and the other over all of them, "
+            "so they are different measurements on the same text"
+        )
+    # Same text, different vocabularies. Two different reasons depending on how they were scored, and
+    # the reason has to be the right one: an inaccurate refusal message sends a reader hunting for the
+    # wrong thing, which is the whole complaint against the truncation bug that reported itself as
+    # "different held-out text".
+    gap = abs(a.oov_rate - b.oov_rate)
+    if a.in_vocabulary_only:
+        # Neither model is charged for `<unk>` here, so the discount below does not exist. The problem
+        # is stronger instead: each model sums over *its own* in-vocabulary targets, so different
+        # vocabularies mean different target sets, and these are two tests rather than two scores. Any
+        # difference beyond rounding is enough — there is no tolerable gap, because there is no
+        # continuous effect to tolerate.
+        if gap > 1e-6:
+            return (
+                f"these were scored over in-vocabulary targets only at {a.oov_rate:.2%} and "
+                f"{b.oov_rate:.2%} out-of-vocabulary, so each summed over a different set of targets "
+                "and the two numbers are two tests rather than two scores on one"
+            )
+        return None
+    # An all-targets perplexity charges every OOV target as a prediction of `<unk>`, and `<unk>` is by
+    # construction among the most frequent symbols the model knows. So a model with a smaller
+    # vocabulary is asked an easier question on a larger fraction of the set, and the discount grows
+    # with the gap. The docstring's warning about an easier set applies within one set as soon as the
+    # vocabularies differ.
+    #
+    # A percentage point is a judgement, not a measurement, and it is calibrated on one thing: E4
+    # compared `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV, that comparison was
+    # sound, and this must not refuse it. The sensitivity of perplexity to a point of OOV on this
+    # corpus has never been measured; backlog 78 is the run that would, and this threshold should be
+    # re-derived from that number rather than left as a round one. E6 has already found how close to
+    # the line real cells land: two Kneser-Ney models at the same `max_size` over 20M and 64M tokens
+    # differ by 1.09 points, which crosses it, and they share only 82.6% of their 8,192 types.
+    if gap > 0.01:
+        return (
+            f"these were scored at {a.oov_rate:.2%} and {b.oov_rate:.2%} out-of-vocabulary, so the "
+            "model with the smaller vocabulary was charged for predicting `<unk>` on a larger share "
+            "of the same text and its all-targets perplexity carries a discount the other's does not"
         )
     return None
 

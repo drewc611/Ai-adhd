@@ -1681,3 +1681,582 @@ is `Sandbox.run`, whose allowlist matches the whole command string rather than a
 built from frame labels escape their metacharacters. Workflow permissions are least-privilege
 (`contents: read` everywhere, with `issues: write` on maintenance and `id-token`/`packages` on
 release). The `github-script` step interpolates only `context.*`.
+
+
+## D19. Four measurements, two of them against my own predictions
+
+**Asked.** Keep training; make the scores better.
+
+**Resolved.** Held-out perplexity is **25.65** on a frozen set that will still mean something next
+week. Two backlog items closed and one of them contradicted the prediction recorded when it opened.
+
+### The shipped model
+
+Order 4, `min_count` 3, trained on the training side of a frozen split:
+
+| | |
+|---|---|
+| tokens | 64,564,080 |
+| vocabulary | 148,394 |
+| 4-grams | 40,316,955 |
+| prunes | 0 |
+| peak RSS | 10,604MB |
+| seconds | 578 |
+| split | `{frozen: 8e2d77cbe8901b1e, side: train}` |
+
+**Held-out perplexity 25.65** on 366 frozen documents, 3,455,268 tokens, 0.91% OOV, fingerprint
+`1446762140db7f1a`.
+
+> **Superseded, not beaten. The shipped figure is 25.82.** This 25.65 was measured under an ASCII-only
+> tokenizer that stopped at the first accent — `Löwis` learned as `l` and `wis`, across 234 of 1,175
+> sampled files. Fixing the word class re-tokenized the same text (3,455,268 tokens became 3,443,116)
+> and the retrain scores **25.82** at 0.91% OOV on the same fingerprint, `truncated: null`. A different
+> tokenization over the same documents is a different vocabulary, so these are two measurements rather
+> than a regression. `comparable_heldout` refuses the pair now; it waved it through at the time, which
+> is how the two numbers briefly sat side by side as though one were worse.
+
+### Backlog 76: pruning costs 1.36x, and I predicted "larger than 2.9x"
+
+Two runs, one corpus, one split, differing only in the n-gram ceiling:
+
+| | n-grams | peak RSS | held-out perplexity |
+|---|---|---|---|
+| unpruned | 40.8M | 10.7GB | **26.30** |
+| pruned (12M ceiling) | 16.8M | 5.4GB | **35.79** |
+
+Same set, fingerprint `d49eed554e253ec3`, no refusal from `comparable_heldout`.
+
+The backlog entry predicted the real cost would be **larger** than the published 2.9x, reasoning that a
+pruned model has less tail to memorise *and* less to generalise from. **Wrong.** The 2.9x came from
+comparing two memorisation scores (D16), and memorisation is exactly where pruning hurts most, because
+dropping singletons drops the memorised tail. Held out, the penalty is less than half that.
+
+**This reverses a shipped recommendation.** `agents/adhd-governor.md` calls pruning "a last resort" on
+the strength of 2.9x. The measured trade is **59% less memory for 36% worse perplexity**, which is a
+reasonable thing to spend. The brief said not to quote 2.9x as measured; now there is a number to
+quote instead.
+
+### Backlog 77: the generalisation gap is modelling, not vocabulary
+
+D17 measured 2.83x between a model that had read 584 PEPs and one that had read none, on the same 31
+documents, and could not say how much of it was the never-seen model simply lacking PEP words.
+
+Over in-vocabulary targets only: **2.82x**. 54.30 → 53.88 and 153.53 → 152.14. The OOV rate doubles
+across the pair and accounts for essentially none of the gap. That is the worse of the two answers the
+backlog registered: the model generalises across the genre family less well than the raw figure
+allowed for, not better.
+
+### E4: `min_count` 3, and my registered primary statistic was the wrong one
+
+Three cells, one frozen corpus, identical held-out text (fingerprint `cccc1976b359cc09`):
+
+| cell | order | min_count | vocab | n-grams | OOV | all targets | in-vocab only |
+|---|---|---|---|---|---|---|---|
+| A | 4 | 2 | 199,214 | 40.84M | 0.79% | 26.29 | 25.89 |
+| B | 5 | 3 | — | — | — | **OOM at 13.94GB** | — |
+| C | 4 | 3 | 148,374 | 40.31M | 0.91% | **25.80** | 25.51 |
+
+**26.29 → 25.80, and it came from `min_count`, not from order.**
+
+The registration fixed in-vocabulary-only perplexity as primary, on the grounds that `min_count` 3
+raises OOV and all-targets would move partly for a vocabulary reason. **That has a mirror flaw the
+result exposed:** in-vocabulary-only scores each model over *its own* in-vocab tokens, and C's set is a
+strict subset of A's — it excludes exactly the count-2 words, which are the hardest to predict. C is
+scored on an easier subset and the statistic flatters it. All-targets is the fair comparison here:
+both models predict the identical 3,464,571 tokens and must assign probability to every position,
+`<unk>` included. In-vocabulary-only was the right instrument for backlog 77, where the model is held
+constant, and the wrong one across models whose vocabularies differ.
+
+Cell B is the registered outcome: order 5 does not fit. It was killed at 13,943MB anon-rss under a
+`--max-rss-mb 14000` that never got to refuse.
+
+**Adopted, with the cost stated.** Artifact OOV over the 35 recorded artifacts rises 0.63% to 0.85%,
+about one token in 450, and the T1 difference is unmoved: +0.206 under A against +0.209 under C. The
+memory saving I expected did not appear — n-grams and peak RSS are within 1.5%. So `min_count` 3 buys
+one thing, 1.9% on held-out text, and costs one small thing.
+
+### A frozen evaluation set, because growth was breaking comparability
+
+The weekly job trained every week and learned nothing from the number it produced, and could not: the
+stride split selects by position, so any corpus addition reshuffles the held-out set, the fingerprint
+changes, and `comparable_heldout` refuses. Names do not move. `analysis/heldout.json` lists 366
+`source/document-id` pairs that are never trained on and always scored; **everything else is training
+data, including everything fetched from now on.** The corpus keeps growing and the test set stays put.
+
+**The first cut was wrong in a way worth keeping.** It included `docs/ARCHITECTURE.md` and `README.md`
+— documents this repository rewrites whenever a decision is recorded. A frozen set fixes which
+documents are scored and cannot fix what they say, and the fingerprint is over names, so recording a
+decision would have moved the next perplexity silently. Repository prose is excluded from the set and
+stays in training, where mutating text is harmless.
+
+### The instrument, in three corrections
+
+**`doctor` said "Nothing disagrees" while its own audit reported five broken assertions.** Eight
+checks, none of which looked at a fixture. Nine now, reporting six warnings: `003/reframe` satisfied
+by a negative control, `004/false_means` never matched, and four assertions holding in only some real
+runs. Warnings rather than errors, because every one is recorded and open and a `sometimes` verdict is
+explicitly not a failure. Silence was the defect; a red light is not the fix.
+
+**The audit counted the reliability rate and threw it away.** `real_matched / real_total` was already
+computed, and the verdict collapsed it: `retry_cost` at 1 in 3 read as `discriminating`, the same word
+as `trap_named` at 3 in 3. A `sometimes` verdict distinguishes them. E3 then found `retry_cost` was the
+pattern rather than the library, and refused one widened candidate that cleared the negative control
+because it admitted text the assertion's own description excludes.
+
+**`Budget.max_rss_mb` is advisory and per-process.** It is polled between batches, so a fast allocation
+crosses the line and the kernel arbitrates — which is how cell B died 57MB under its own ceiling. And
+it cannot see a second job: two runs each honouring 14GB on a 14GB cgroup is 28GB, which is how an
+earlier rescore was killed. The real limit is a cgroup at about 14GB scoped to the shell's process
+group, not the 15GiB the container reports.
+
+`min_count` is on the training record now, found by a crash rather than by review: the record reported
+`oov_rate` and `vocab_size` while the threshold that decides both lived only in the model's meta, so
+reading a record meant opening a 160MB gzip.
+
+
+---
+
+## D20. A second model class, and the choice not to amend D2 to get it
+
+**Asked.** "I need a transformer in this thing." Offered three ways to get one — a provider API, a
+downloaded pretrained checkpoint, or one trained from scratch over numpy — and asked which. Answer:
+"You decide I just need one because it's what the whole purpose of this thing is to make it all
+knowing."
+
+**Resolved.** From scratch, numpy only. `analysis/adhd_analysis/text/transformer.py`.
+
+### Why not the other two
+
+Delegating a choice among three options is not authorisation to overturn a resolved decision, and two
+of the three required exactly that. D2 says no API, no provider SDK, no keys anywhere in the repo, and
+`CLAUDE.md` repeats it as a non-negotiable: "If you find yourself adding an inference client, you have
+misread the design." A provider API is that client. A pretrained checkpoint is the same thing with a
+different delivery mechanism, which is why `test/boundary.test.ts` bans `torch`, `tensorflow` and
+`transformers` by name — and taking that route would have meant deleting a passing test to make room
+for the thing the test exists to refuse.
+
+Neither is impossible. Either would need D2 amended first, in the open, with the reason written down,
+and that is the user's call and not mine to make inside a build step.
+
+### What the third option actually buys
+
+The constraint D9 cares about is that every parameter comes from a corpus the repository can point at.
+A model class does not threaten that; a downloaded weights file does. So the from-scratch route is the
+only one of the three that is a genuine addition rather than a trade, and it needs nothing amended:
+numpy is already a dependency of this package, no download, no key, no new runtime.
+
+It also makes a standing claim falsifiable. `ngram.py` has asserted since it was written that a
+transformer from scratch "needs somewhere north of 10^8 tokens before its perplexity beats a
+well-smoothed 5-gram, and it needs a GPU to get there." That is an assertion with no measurement
+behind it, in a repository whose whole practice is the opposite. E6 measures it.
+
+### The three things building it changed elsewhere
+
+**`comparable_heldout` would have waved through the comparison the experiment exists to make.** A
+transformer's output projection is `d_model x vocab_size` and every token's loss touches all of it, so
+it runs at 8,192 types where the shipped n-gram carries 148,353. Two all-targets perplexities at
+different vocabulary sizes are not comparable: every OOV target is charged as a prediction of `<unk>`,
+`<unk>` is among the most frequent symbols a closed-vocabulary model holds, and the model that knows
+fewer words is therefore asked an easier question on a larger share of the same text. Fingerprint,
+token count and `in_vocabulary_only` all agreed, and the function returned None.
+
+Now refused above one percentage point of OOV difference. **That threshold is a judgement, not a
+measurement,** and it is labelled as one in the code: it is set to keep passing the 0.63%/0.85% pair E4
+compared and stood by. The sensitivity of perplexity to a point of OOV has never been measured on this
+corpus and the threshold should be re-derived once it is.
+
+**Sharing one budget between the corpus read and the optimiser.** The n-gram's second pass *is* its
+training, so `train()` needs one `restart()`. A transformer reads the corpus once and then optimises
+over it many times, and charging 64M tokens of tokenising against the training ceiling leaves the
+ceiling exceeded before the first gradient step. The run then reports zero steps under a reason that
+reads like a training limit. Three ceilings now, with a test.
+
+**A vocabulary larger than `vocab_size`** used to be handled by mapping the overflow to `<unk>` at
+scoring time, which inflates the OOV rate the model reports while `evaluate` computes OOV from the
+vocabulary and disagrees. Refused at construction instead.
+
+### The gradient check is the load-bearing test
+
+A hand-written backward pass that is subtly wrong still trains. The loss falls, the run finishes, and
+the perplexity it reports is a number about nothing — there is no symptom to notice. Central
+differences over every parameter tensor, in float64, at under 1e-6 relative error, plus two checks the
+sampled version can miss: that no tensor receives an all-zero gradient (an unwired parameter passes a
+gradient check, because zero equals zero), and that the tied `tok` matrix collects both its
+input-embedding and its output-projection term.
+
+`logprob_terms` duck-types `KneserNey`, so `evaluate`, `FrozenSplit`, `in_sample_refusal`,
+`HeldOut.truncated` and `comparable_heldout` apply with no special case. A model class the existing
+instruments could not measure would be a model class nobody could compare to anything.
+
+### What it costs on this machine, measured
+
+2,292 tokens/second as first written, which is 4% of the 420 GFLOP/s this box does on 4 cores. Three
+profiler-guided fixes took it to **7,671 tok/s**, a 3.35x:
+
+| | cost, of a 463ms step | why |
+|---|---|---|
+| `np.einsum("btv,btd->vd", ...)` | 227ms | no BLAS path for that contraction; falls to numpy's own C loop, on the largest matrix multiply in the model. One GEMM instead: under 10ms |
+| `_gelu_backward` | 76ms | recomputed the tanh the forward pass already had, and used `x ** 3`, which dispatches to `np.power` |
+| `_softmax` and the `dlogits` copy | 0.5s of a 10.1s profile | four allocations of a 67MB array nothing else refers to. Both in place now |
+
+None of it was guesswork and none of it was where I would have guessed. That is 2.33 hours per epoch
+over the 64.4M-token training side rather than 8.8, which is the difference between E6 being runnable
+here and not.
+
+
+---
+
+## D21. E6: the transformer loses by 2.09x, which is what was predicted
+
+**Asked.** Make it better, and give it a transformer.
+
+**Resolved.** `ngram.py` had asserted since it was written that a transformer trained from scratch
+"needs somewhere north of 10^8 tokens before its perplexity beats a well-smoothed 5-gram, and it needs
+a GPU to get there." That was an assertion with no measurement behind it. It now has one, and it holds.
+
+### The three cells
+
+All scored on the frozen set `8e2d77cbe8901b1e`: 366 documents, 3,443,116 tokens, fingerprint
+`1446762140db7f1a`, nothing truncated.
+
+| cell | model | vocabulary from | real training tokens | held-out OOV | **perplexity** |
+|---|---|---|---|---|---|
+| A | Kneser-Ney order 4, `min_count` 3 | 64.4M tokens | 64,420,728 | 4.71% | **19.9** |
+| A′ | Kneser-Ney order 4, `min_count` 3 | 20M tokens | 20,000,029 | 5.80% | **30.7** |
+| B | transformer, d128, 2 layers, ctx 128 | 20M tokens | 18,343,512 | 5.80% | **64.1** |
+
+**A′ against B is 2.086x.** The registered prediction was 1.5x to 3x, so it lands inside the band.
+
+Cell B ran 4,882 steps, one full epoch (`epochs_completed` 0.99983), `stopped_because: epochs` with no
+ceiling bound, 2,539 seconds, 526MB peak. Training loss fell 6.143 → 3.945 without a plateau. Cell A
+took 452 seconds and 7,379MB for 32,146,017 4-grams; cell A′ 144 seconds for 12,385,471.
+
+### What makes A′ and B a fair pair, and the one way they are not
+
+Identical vocabularies, not merely identical caps. Both built from the same first 20M tokens at
+`min_count` 3 and `max_size` 8,192: the cap cut 63,691 types for A′ and 63,697 for B, and training OOV
+came out 4.438% against 4.439%. `comparable_heldout` accepts them, and the ratio above is the only one
+this run prints.
+
+The asymmetry, stated because it runs against the loser: **cell B trained on 18,343,512 real tokens to
+cell A′'s 20,000,029, an 8.3% disadvantage.** `--max-train-tokens` caps the materialised array, and the
+array carries a `<s>` and `</s>` per sentence across 899,088 sentences. Nowhere near enough to cover
+2.086x, and worth knowing rather than rounding away.
+
+### A against A′ is refused, and that is the more useful finding
+
+The registration expected A to beat A′ and to price the text handicap. **It cannot, and the reason is
+better than the reading was: a fixed vocabulary cap is not a fixed vocabulary.** The top 8,192 words of
+64.4M tokens and the top 8,192 of 20M share only **82.6%** of their types, and face **4.71% against
+5.80%** held-out OOV. A 1.086-point gap crosses the refusal threshold, so the pair is not comparable on
+all targets — correctly, because one of them is answering 1.09% more of the same text with `<unk>`.
+
+Without that refusal this would have read as "3.2x the text buys 1.54x the perplexity" with a sixth of
+the vocabulary changed underneath it. Pricing the text handicap honestly needs A′ retrained on cell A's
+exact vocabulary, which is a new run and a new registration.
+
+### What the 8,192 cap costs, which is most of the OOV
+
+**90% of cell B's out-of-vocabulary rate is the ceiling, not the frequency floor.** 63,697 types met
+`min_count` 3 and were cut by `max_size` anyway, accounting for 797,459 of 887,600 dropped tokens. That
+is the softmax constraint priced directly: the output projection is `d_model x vocab_size` and every
+token's loss touches all of it, so the vocabulary the n-gram carries for free costs the transformer
+either 19M parameters or those 63,697 words. Backlog 79 is the version of this experiment that pays
+the 19M instead.
+
+### One harness fix, made before any of these numbers existed
+
+`Transformer.logprob_terms` walked non-overlapping windows, starving one position in every `context`:
+the token on a window boundary was predicted from the single token before it. Its docstring claimed
+that cost applied "identically for every model scored this way," which was wrong — `KneserNey` slides
+continuously and starves none, so the bias ran one way, against the transformer, in this exact
+comparison. Fixed to windows advancing by `context // 2`, emitting only their final stride.
+
+Recorded with the two facts that keep it from being a moved goalpost: it was found and fixed **while
+cell B was still training**, with no E6 number in existence, and it can only help the model the
+registration predicted would lose. It rested on the structural argument rather than a measurement,
+because a toy reverses the direction depending on whether its period divides the context.
+
+**Now measured on cell B itself, and it is worth 1.0029x** — 64.29 starved against 64.11 overlapping,
+on the same 3,443,116 tokens. That is 0.29%, a great deal smaller than the effort spent on it implied,
+and the honest reading is not that the fix was wasted but that it was cheap insurance whose premium
+turned out to be low. What it buys is the statement that **2.086x is not a scoring artifact**: had the
+gap been large, every number above would have carried an asterisk about which window produced it.
+Scoring runs at twice the forward passes for it, which is minutes against the 42 the training took.
+
+### What this does and does not settle
+
+It settles that a 1.46M-parameter transformer, one epoch, 18.3M tokens of RFC-and-PEP English, loses
+to a 12.4M-entry 4-gram at the same vocabulary. It does not settle that transformers lose. The
+registration named the reason it might not — an unbounded context should pay on formulaic text — and
+at this scale it does not come close to paying for the capacity it lacks.
+
+**The shipped model does not change.** It stays modified Kneser-Ney, order 4, `min_count` 3, 148,353
+types, **25.82**. Note that 25.82 is not comparable to any number in the table above: it was measured
+at 148,353 types against these at 8,192, which is the confound `comparable_heldout` now refuses and the
+reason E6 built its own control instead of reusing it.
+
+
+---
+
+## D22. A second security pass, and the shape the four real findings share
+
+**Asked.** Find all security issues and resolve them. Plus a branch-security protocol for automated
+agents, handled at the end of this entry because most of it is not code.
+
+**Resolved.** Four real issues, all four in the two model loaders, all four the same mistake D18
+named: **the check ran next to the operation rather than on it.** Everything D18 fixed still holds —
+zero npm vulnerabilities, no `pickle`, `eval`, `exec`, `yaml.load` or shell anywhere in the Python
+package, no interpolation inside any workflow `run:` body, the sandbox's one `execFileSync` still
+gated by an exact-match allowlist, and the fetcher's bounded read and per-hop URL check intact.
+
+### Why a model file is untrusted input
+
+Nobody expects it to be, which is the problem. The weekly job restores a model from a CI cache,
+`scripts/score_heldout.py` takes a path on the command line, and a CI cache is something anyone who
+can open a pull request can write to. Neither loader bounded anything it read.
+
+### 1. A 187-byte file asks for 409.6GB, and the ceiling watches it happen
+
+`Transformer.load` took every dimension from the file, and `__init__` allocates from them. The
+`Budget` argument — which exists for exactly this — was consulted in the loop *underneath* the
+constructor. So a header declaring `vocab_size: 200000000` and `d_model: 512` got its allocation
+attempted before anything checked a ceiling.
+
+Fixed by pricing it first: `parameter_count() * 4` is exact, and it is compared to the budget's
+resident-set ceiling before the constructor runs. `TransformerConfig` also bounds every dimension in
+`__post_init__`, so the rule lives with the type rather than in one caller.
+
+### 2. `order: 50000000` in a 120-byte file, 111 seconds of list building
+
+`KneserNey.load` read `order` from the header and immediately built `[{} for _ in range(order)]`.
+Measured: 120 bytes in, a fifty-million-entry list and **111 seconds** out. Now bounded to 2–12,
+which is four times the highest order this repository has trained and past what E5 showed fits.
+
+### 3. A negative order index writes into the top table
+
+`counts[int(k)][...]` with `k` from the file. **Python indexes lists from the end on a negative**, so
+a line reading `-1` wrote into `counts[order - 1]` — the top order, the table the model is actually
+read from. It loaded without complaint; there was no error and no symptom.
+
+Now range-checked against the declared order, along with the things nothing checked either: that an
+n-gram has as many ids as its order, that every id is inside the vocabulary, and that a count is
+positive.
+
+### 4. 199KB of gzip becomes 200MB on one `readline()`
+
+Before either loader's format check. `readline()` on the header is the first thing both do and was
+the last thing either bounded. Returned in 1.4 seconds, measured.
+
+Fixed in `text/modelfile.py`: `readline` takes a size limit, so the bound is free — a line longer
+than the limit comes back without its newline, which is the signal to refuse. Body lines are bounded
+per line and in total.
+
+### What the tests pin
+
+`tests/test_modelfile_limits.py`, fourteen tests, **every one of them a working attack before the
+fix**, with the measured numbers in the assertions rather than invented ones. Plus the test that
+matters most in the other direction: the real shipped models still load unchanged, because a bound
+that refuses what the repository actually produces is a denial of service with a security rationale.
+Verified against cell B (0.3s) and cell A′ (47.1s, 12,385,471 grams).
+
+One nice catch along the way: `bounded_int` refuses a `bool` explicitly, because `bool` is an `int`
+subclass in Python and `order: true` would otherwise arrive as 1 and pass a range check starting at 1.
+
+### The branch-security protocol, and what of it I can do
+
+Most of it is GitHub repository settings and local machine configuration, neither of which is
+reachable from a build step. Recorded in `docs/SECURITY-OPS.md` as an owner checklist rather than
+claimed as done.
+
+**The finding worth acting on is one the protocol exposes.** This repository's default branch is
+`claude/adhd-architecture-build-jlyjk2` — the agent branch — and `main` is a stale side branch tens
+of commits behind. So every push in this build went *directly to the default branch*, which is the
+precise arrangement the protocol exists to prevent, and no branch protection can help while the
+arrangement stands. Making `main` the default and protecting it is an owner action and is the first
+item on that checklist.
+
+Commits here are unsigned and signing is not configured on this machine. Also owner setup, also on
+the checklist, and stated plainly rather than quietly skipped.
+
+
+---
+
+## D23. Regression evidence, a modest performance win, and two duplications extracted early
+
+**Asked.** Do regression testing, performance testing, and refactoring.
+
+### Regression: every published figure had no checked-in evidence
+
+`analysis/models/` and `runs/` are gitignored for good reasons — a model is 160MB and the corpus is
+licence-encumbered — and the consequence nobody had noticed is that **25.82, E6's 30.7 and 64.1, and
+the 64,419,427 tokens the README quotes all lived in JSON that existed only on the machine that
+produced it.** From a clean checkout none of it could be verified, and a figure drifting from its run
+was invisible. That is precisely how 6.06 survived, then 26.29, then 25.65.
+
+`analysis/records/` is now tracked and holds four records at about 2.6KB each: metadata about a
+corpus rather than any of the corpus, so no licence question and no size question.
+`scripts/publish_record.py` rewrites absolute paths relative to the repository root and drops the
+producing machine's identity, because an artifact that diffs on every machine is one people stop
+reading.
+
+Fifteen tests read those records and fail when the prose stops agreeing with them. The two worth
+naming: **A′ and B still share a vocabulary rather than merely a cap**, which is E6's entire claim,
+and **no cell reports a ceiling it did not declare**.
+
+**The central test did not work when first written, and finding that out required attacking it.**
+It concatenated both READMEs and asked whether the record's value appeared anywhere in the result.
+Corrupting `64,419,427` to `64,419,999` in one README left the other carrying the right value, the
+combined string still contained it, and the test passed. It was checking that *some* document quoted
+the record, not that the documents agreed with it — which is the drift it exists to catch. Now
+checked per file, with a companion test that refuses near misses, because a figure one digit from the
+record is drift rather than a different measurement and it reads as authoritative.
+
+### Performance: 1.15x on the n-gram loader, and the profiler pointed at the wrong thing
+
+`KneserNey.load` took **47.2 seconds** for 12,385,471 grams. Under cProfile the validation added by
+D22 looked like the culprit: `any(i < 0 or i >= len(itos) for i in ids)` showed 55.8 million
+generator calls, and `bounded_int` another 12.4 million with two isinstance checks each.
+
+It was not. Phase timing on the real file, without the profiler:
+
+| phase | seconds | share |
+|---|---|---|
+| decompress and bounded line iteration | 4.3 | 11% |
+| parsing and dictionary inserts | 25.2 | 62% |
+| history-stat building after the loop | 11.1 | 27% |
+
+Four changes, none of which alters a single refusal: hoist `len(itos)` out of the bounds check (it
+was being evaluated once per token id rather than once per load), replace the generator with
+`min`/`max` over the tuple, write the order check out rather than routing twelve million lines
+through `bounded_int`'s isinstance checks when `int()` has already guaranteed the type, use `map`
+instead of a generator expression, and drop the per-line `rstrip` because `int()` already tolerates a
+trailing newline.
+
+**Result: 47.2s to 38.8s, which is 1.22x.** Modest, and reported as modest. The profiler inflates
+per-call overhead, so the work that looked like validation was mostly twelve million CPython
+dictionary inserts with tuple keys, and that is near the floor without changing the file format.
+
+The measurement carries a caveat worth stating rather than burying: the baseline is the best of two
+runs and the result is the best of three, and more samples find a lower minimum. The after-spread was
+38.8s to 44.3s across those three, so the honest claim is "about 1.2x" and not a third significant
+figure. Run-to-run variance on this box is several seconds either way.
+
+Verified rather than assumed: cell A′ re-scored after the change at **30.7**, identical to the
+recorded figure.
+
+### Refactoring: two duplications extracted at two copies rather than three
+
+`docs/MANIFEST.md` says to abstract on the third concrete duplication. Both of these are at two, and
+extracting them anyway is a deliberate departure with a reason.
+
+**The vocabulary line** was validated and turned into a `Vocab` identically in both model loaders.
+The rule of three guards against guessing a shape from too few examples; this shape is fixed by the
+file format and there is nothing to guess. What two copies buy instead is two places for a
+*validation* fix to be applied to one of, which is how D18 and D22 both began.
+
+**`sentence_tokens`** was byte-identical in both trainers. It belongs to neither, so it is now in
+`text/corpusread.py` rather than in whichever trainer happened to be written first — and not in
+`corpora.py`, which would make the corpus loader depend on the tokenizer and the budget for the first
+time.
+
+Net 62 lines removed against 62 added, four dead imports dropped, and one refactor caught by a
+security test: rewriting the order check changed the refusal *message* for a negative index, and
+`test_a_negative_order_cannot_write_into_the_top_table` failed on the wording. The attack was still
+refused. The test is now pinned on what the refusal says about the input rather than on which helper
+produced it.
+
+
+---
+
+## D24. E7: the LSTM loses to both, and my registered prediction was wrong
+
+**Asked.** Build our own neural network into this thing.
+
+**Resolved.** There was already one — the transformer of D20. So the question worth answering was the
+one E6 could not ask: **is the transformer's loss about attention, or about neural language models at
+this scale?** An LSTM separates those, and the answer is attention.
+
+### The result
+
+All four cells on the frozen set `8e2d77cbe8901b1e`, 366 documents, 3,443,116 tokens, nothing
+truncated, all at 5.8% held-out OOV.
+
+| cell | model | parameters | training tokens | **perplexity** |
+|---|---|---|---|---|
+| A′ | Kneser-Ney order 4, `min_count` 3 | 12.4M n-grams | 20,000,029 | **30.7** |
+| B | transformer, d128, 2 layers | 1,459,456 | 18,343,512 | **64.1** |
+| C | LSTM, d128, 2 layers | 1,311,744 | 18,343,786 | **159.3** |
+
+A′ against B is **2.086x**, reproduced to the digit from D21. B against C is **2.485x**. A′ against C
+is **5.184x**.
+
+### The prediction was wrong, and wrong in the informative direction
+
+E7 registered **"C between 40 and 60"** — between the transformer and the n-gram — reasoning that
+unbounded scoring context would help on formulaic text while missing attention would hurt, and that I
+did not know which dominated. **C is 159.3**, outside the range by 2.7x, and the side it missed on
+answers the question: attention is doing substantial work at 20M tokens.
+
+The registration named this outcome in advance: "If C is worse than B's 64.1, attention is doing real
+work at 20M tokens and the loss in E6 is not about neural models in general." So **E6's conclusion
+narrows rather than generalises.** "A from-scratch neural LM loses to a well-smoothed 4-gram at this
+scale" was the reading available after E6; what is now measured is that the *transformer* loses by
+2.086x while an LSTM of the same size, on the same text, loses by 5.184x. Being neural is not the
+handicap. Lacking attention is a further one, and a large one.
+
+### What the flattery was worth: nothing
+
+E7 recorded an asymmetry in cell C's favour and promised a follow-up to challenge it. The LSTM is
+scored with its state carried across the whole document, where the transformer got windows of 128
+tokens with at least 64 tokens of left context. That is the architectural difference between the two
+rather than a harness bias, and equalising it would have measured the transformer's limitation instead
+of the LSTM's ability — so it was not equalised, and cell C was flattered.
+
+**The flattery did not save it.** Cell C lost by 2.485x *with* the advantage. The follow-up was
+registered to challenge a C win, and there is no C win to challenge. Recorded rather than quietly
+dropped, because a promised check that becomes unnecessary should say why.
+
+The training loss had already said so, which is the cleanest reading here: **4.923 for C against 3.945
+for B**, which exponentiate to 137.1 and 51.7. Held out, 159.3 against 64.1. The ratio is 2.65x on
+training data and 2.485x held out — so the unbounded scoring context closed about six percent of a
+gap that was set during training, and the architecture's one genuine advantage over the transformer
+bought almost nothing on this corpus.
+
+### The pair is matched about as tightly as two independent runs can be
+
+Worth stating because it is what makes the comparison mean anything: C saw 18,343,786 real training
+tokens against B's 18,343,512, a difference of **274 tokens**. Held-out OOV was 4.4412% against
+4.4387%. Same vocabulary pass, same `min_count`, same optimiser, same schedule, same one epoch, same
+frozen set, and 10% apart on parameter count — the closest pair in the whole table. Both ran a full
+epoch and stopped on the schedule rather than on a ceiling.
+
+### The measurement that surprised me, and is not about either architecture
+
+The LSTM trains at **13,896 tokens/second** against the transformer's 7,671 — **1.8x faster**, despite
+stepping sequentially through time where the transformer parallelises over it. Recorded as a fact about
+numpy at this size rather than about recurrence: the transformer's cost at this shape is dominated by a
+(batch, time, 8192) logits tensor and by attention's quadratic term, and neither is helped by the time
+axis being parallel.
+
+A second one worth keeping: during the run the progress line reported **5,688 tok/s**, not 13,896,
+because two test suites were competing for the same four cores. It recovered to 10,787 once they
+finished. The benchmark measured an idle machine and the run did not have one.
+
+### What the build itself produced
+
+**The gradient check did not work when first written, and only sabotage revealed it.** It sampled seven
+deterministic positions per tensor. Deleting `dh_next` — the recurrent gradient, the entire reason an
+LSTM is not a feedforward net — produced a 1.15e-03 relative error and the test passed, because
+`(k * 7919) % 32` for k in 1..7 never lands on the sensitive index.
+
+Exhaustive now: every one of ~1,100 parameters on a model small enough to afford it, with an assertion
+that the count checked equals `parameter_count()` so coverage cannot silently shrink. Verified against
+five planted bugs — dropping the cell gradient from t+1 (5.46e-03), dropping the recurrent hidden
+gradient (1.15e-03), a wrong forget-gate derivative (5.90e-06), a forget gate reading `c_t` instead of
+`c_{t-1}`, and dropping the tied embedding's output-projection term (4.31e-05). **The sampled version
+missed two of those five**, and three sit between 1e-6 and 1e-4, which is why the threshold stays where
+it is.
+
+`train_lstm.py` passes a model factory to the loop in `train_transformer.py` rather than copying it.
+One line differs between training the two classes, and now one line does.

@@ -14,6 +14,7 @@ import { STAGE_AGENT, STAGE_TOOLS } from "./super/index.js";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
 import { TRAP_IDS } from "./schema.js";
+import { auditFixtures } from "./eval.js";
 
 export type Severity = "error" | "warn";
 
@@ -282,6 +283,39 @@ function checkConfigFiles(cfg: Config): Finding[] {
   return out;
 }
 
+/**
+ * What the fixture audit already knows, said by the command people run to ask if anything is wrong.
+ *
+ * `adhd doctor` had eight checks and not one of them looked at a fixture assertion, so it printed
+ * "Nothing disagrees" while `adhd eval --audit` was reporting that one assertion the consensus answer
+ * also satisfies, one no real run has ever matched, and four that only some real runs surface. The
+ * repository's regression suite is the thing it exists to defend, and the honest-status command was
+ * the one place that never mentioned it.
+ *
+ * Warnings, not errors, and deliberately so. Every one of these is recorded and open — `003/reframe`
+ * in the audit's own output, `retry_cost` in E3 — and a `sometimes` verdict is explicitly not a
+ * failure. Turning a known state red would make the gate say "broken" about something the repository
+ * has already written down and decided about. Silence was the defect; a red light is not the fix.
+ */
+function checkFixtureAssertions(cfg: Config): Finding[] {
+  const { items } = auditFixtures(cfg);
+  const out: Finding[] = [];
+  for (const i of items) {
+    const where = `${i.fixture}/${i.item}`;
+    if (i.verdict === "matches a control")
+      out.push({
+        severity: "warn",
+        check: "fixtures",
+        message: `${where} is satisfied by a negative control, so it does not measure divergence (matched on "${(i.control_evidence ?? "").replace(/\s+/g, " ").slice(0, 60)}")`,
+      });
+    else if (i.verdict === "never matched")
+      out.push({ severity: "warn", check: "fixtures", message: `${where} has never been matched by a real run; a stretch goal and an unreachable pattern look identical` });
+    else if (i.verdict === "sometimes")
+      out.push({ severity: "warn", check: "fixtures", message: `${where} holds in ${i.real_matched} of ${i.real_total} real runs; nothing in the dispatched frame set reliably asks it` });
+  }
+  return out;
+}
+
 const CHECKS: { name: string; run: (cfg: Config) => Finding[] }[] = [
   { name: "config files parse", run: checkConfigFiles },
   { name: "rubric arithmetic and shape", run: lintRubric },
@@ -291,6 +325,7 @@ const CHECKS: { name: string; run: (cfg: Config) => Finding[] }[] = [
   { name: "prompts, traps and dimensions", run: checkPrompts },
   { name: "routing against the library", run: checkRouting },
   { name: "recorded corpus shape", run: checkCorpus },
+  { name: "fixture assertions", run: checkFixtureAssertions },
 ];
 
 export function doctor(cfg: Config): DoctorReport {

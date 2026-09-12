@@ -40,7 +40,21 @@ function editYaml(root: string, file: string, from: string, to: string): void {
 test("the repository passes its own doctor", () => {
   const r = doctor(cfg);
   assert.deepEqual(r.errors, [], r.errors.map((e) => `[${e.check}] ${e.message}`).join("\n"));
-  assert.equal(r.checked.length, 8);
+  assert.equal(r.checked.length, 9);
+});
+
+test("doctor says what the fixture audit knows, because it used to say nothing", () => {
+  // Eight checks and not one looked at a fixture assertion, so doctor printed "Nothing disagrees"
+  // while `adhd eval --audit` reported an assertion the consensus answer satisfies, one no real run
+  // has ever matched, and four that only some real runs surface. The regression suite is the thing
+  // this repository exists to defend and the honest-status command never mentioned it.
+  const r = doctor(cfg);
+  const fixtures = r.findings.filter((f) => f.check === "fixtures");
+  assert.ok(fixtures.length > 0, "doctor is silent about the fixture audit again");
+  assert.ok(fixtures.every((f) => f.severity === "warn"), "a recorded, open finding is being reported as an error");
+  // The two the audit calls defects, as opposed to the rate reports.
+  assert.ok(fixtures.some((f) => /does not measure divergence/.test(f.message)));
+  assert.ok(fixtures.some((f) => /never been matched/.test(f.message)));
 });
 
 test("an unbuilt entry point is an error, and so is one no files entry publishes", () => {

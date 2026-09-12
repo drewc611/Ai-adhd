@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from .budget import Budget, BudgetExceeded
+from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header, read_vocabulary
 from .tokenize import BOS, EOS, UNK, Vocab
 
 Gram = tuple[int, ...]
@@ -144,20 +145,33 @@ class KneserNey:
         disc = self._discount_for(k, c) if c else 0.0
         return max(c - disc, 0.0) / stats.total + gamma * backoff
 
+    def logprob_terms(self, ids: Iterable[int]) -> list[tuple[float, bool]]:
+        """Per-position natural-log probability, and whether that position's target is a real word.
+
+        One loop rather than two conventions. `logprob` sums all of it; a caller asking how the model
+        does on words it *knows* sums only the positions whose second element is true. Contexts are
+        untouched either way, so an `<unk>` in a history still conditions the next prediction — the
+        question being separated is which targets count, not what the model was allowed to read.
+
+        `<unk>` is the marker. `Vocab.encode` maps every out-of-vocabulary token to it and it never
+        occurs as a real token in a corpus, so an id equal to it is exactly an OOV position.
+        """
+        bos, eos, unk = self.vocab.stoi[BOS], self.vocab.stoi[EOS], self.vocab.stoi[UNK]
+        seq = [bos] * (self.order - 1) + list(ids) + [eos]
+        out: list[tuple[float, bool]] = []
+        for i in range(self.order - 1, len(seq)):
+            p = self.prob(tuple(seq[i - self.order + 1 : i]), seq[i])
+            out.append((math.log(p) if p > 0 else -50.0, seq[i] != unk))
+        return out
+
     def logprob(self, ids: Iterable[int]) -> tuple[float, int]:
         """Natural-log probability of a token sequence and the number of predictions made.
 
         The sequence is padded with `order-1` BOS and one EOS, so a one-word artifact and a
         thousand-word one are scored under the same convention and their perplexities compare.
         """
-        bos, eos = self.vocab.stoi[BOS], self.vocab.stoi[EOS]
-        seq = [bos] * (self.order - 1) + list(ids) + [eos]
-        total, n = 0.0, 0
-        for i in range(self.order - 1, len(seq)):
-            p = self.prob(tuple(seq[i - self.order + 1 : i]), seq[i])
-            total += math.log(p) if p > 0 else -50.0
-            n += 1
-        return total, n
+        terms = self.logprob_terms(ids)
+        return sum(lp for lp, _ in terms), len(terms)
 
     def perplexity(self, ids: Iterable[int]) -> float:
         lp, n = self.logprob(ids)
@@ -209,25 +223,53 @@ class KneserNey:
         """
         path = Path(path)
         with gzip.open(path, "rt", encoding="utf-8") as fh:
-            head = json.loads(fh.readline())
+            head = read_header(fh, path, "header")
             if head.get("format") != "adhd-kn-1":
-                raise ValueError(f"{path} is not an adhd-kn-1 model")
-            vocab_line = json.loads(fh.readline())
-            itos = vocab_line["itos"]
-            vocab = Vocab(
-                stoi={w: i for i, w in enumerate(itos)},
-                itos=itos,
-                counts=[0] * len(itos),
-                min_count=vocab_line.get("min_count", 2),
-                dropped_types=0,
-                dropped_tokens=0,
-            )
-            order = head["order"]
+                raise ModelFileRefused(f"{path} is not an adhd-kn-1 model")
+            # Before the list it sizes. A 120-byte file declaring `order: 50000000` built a
+            # fifty-million-entry list in 111 seconds, and the order came straight out of the file.
+            # Twelve is four times the highest order this repository has ever trained, and E5
+            # established that five does not fit on this machine at any `min_count`.
+            order = bounded_int(head.get("order"), "order", 2, 12, path)
+            vocab = read_vocabulary(fh, path)
+            itos = vocab.itos
             counts: list[dict[Gram, int]] = [{} for _ in range(order)]
+            # Hoisted: this was `len(itos)` inside the bounds generator, evaluated once per token id
+            # rather than once per load. Profiled at 55.8 million calls on a 12.4M-gram model.
+            n_types = len(itos)
             loaded = 0
-            for line in fh:
-                k, gram, c = line.rstrip("\n").split("\t")
-                counts[int(k)][tuple(int(x) for x in gram.split(","))] = int(c)
+            for line in body_lines(fh, path):
+                # No `rstrip` — `int()` already tolerates the trailing newline on the count, and this
+                # runs twelve million times, so a whole-string pass per line to remove one character
+                # is a whole-string pass per line too many.
+                parts = line.split("\t")
+                if len(parts) != 3:
+                    raise ModelFileRefused(f"{path}: an n-gram line has {len(parts)} fields, expected 3")
+                k, gram, c = parts
+                # Range-checked, not just parsed. Python indexes lists from the end on a negative, so
+                # a line whose order field reads `-1` used to write silently into the *top* order
+                # table — a count the format cannot address, landing where the model is read from.
+                #
+                # Written out rather than routed through `bounded_int` because this runs twelve
+                # million times. `int()` already returns an `int` or raises, so the isinstance checks
+                # that make `bounded_int` right for a JSON header are dead weight here, and `min`/`max`
+                # over a tuple is a C loop where `any(... for i in ids)` is a Python generator with a
+                # frame per element. The refusals are identical; only their cost is not.
+                try:
+                    ki = int(k)
+                    ids = tuple(map(int, gram.split(",")))
+                    count = int(c)
+                except ValueError as e:
+                    raise ModelFileRefused(f"{path}: unreadable n-gram line ({e})") from e
+                if not 0 <= ki < order:
+                    raise ModelFileRefused(f"{path}: an n-gram order is {ki:,}, outside 0 to {order - 1}")
+                if len(ids) != ki + 1:
+                    raise ModelFileRefused(f"{path}: a {len(ids)}-gram is filed under order {ki}")
+                if min(ids) < 0 or max(ids) >= n_types:
+                    raise ModelFileRefused(f"{path}: an n-gram names a token id outside the vocabulary")
+                if count < 1:
+                    raise ModelFileRefused(f"{path}: an n-gram has a count of {count}")
+                counts[ki][ids] = count
                 loaded += 1
                 if budget is not None and loaded % 200_000 == 0:
                     budget.touch()
