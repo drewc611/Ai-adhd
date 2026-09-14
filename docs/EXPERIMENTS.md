@@ -653,3 +653,97 @@ so E6's conclusion narrows to the transformer rather than generalising to neural
 state-carrying advantage this registration flagged as flattering cell C closed about 6% of a gap set
 during training, and the follow-up registered to challenge a C win is unnecessary because there is no
 C win.
+
+## E8. What is a percentage point of out-of-vocabulary worth?
+
+**Registered 2026-09-14, before any cell ran.** `comparable_heldout` refuses two all-targets
+perplexities whose held-out OOV rates differ by more than **one percentage point**. That number is a
+judgement and the code says so in the comment beside it, which also names this run as the one that
+should replace it. Backlog 78 is the item; this is the registration.
+
+The reason a refusal is needed at all: an all-targets perplexity charges every OOV target as a
+prediction of `<unk>`, and `<unk>` is by construction among the most frequent symbols a
+closed-vocabulary model holds. A model that knows fewer words is therefore asked an easier question on
+a larger share of the same text. E6 needed the refusal — two Kneser-Ney models at the same
+`max_size` over 20M and 64M tokens land 1.09 points apart on held-out OOV and share only 82.6% of
+their 8,192 types.
+
+What nothing has measured is how large that discount actually is. Until it is measured, the threshold
+is a round number defending a real effect of unknown size, which is the same epistemic position as
+D14's 2.9x before D16 took it apart.
+
+### The cells
+
+One model class, one corpus, one training budget, one held-out set. **The vocabulary cap is the only
+thing that moves.**
+
+| cell | `max_vocab` | expected types | measured |
+|---|---|---|---|
+| A′ | 8,192 | 8,192 | **30.7** (E6, reused unchanged) |
+| V1 | 16,384 | 16,384 | to be measured |
+| V2 | 32,768 | 32,768 | to be measured |
+| V3 | none | ~71,883 | to be measured |
+
+Every cell is Kneser-Ney order 4, `min_count` 3, trained on the **train side of frozen set
+`8e2d77cbe8901b1e`** under a 20,000,000-token ceiling, and scored on that set's 366 held-out
+documents. A′ is E6's cell A′ at exactly this configuration, so it is reused rather than retrained —
+and because it is reused, a disagreement between V1/V2/V3 and A′ on anything other than vocabulary is
+a defect in this run rather than a finding.
+
+V3's expected size is arithmetic from A′'s record, not a guess: 8,192 kept types plus 63,691 types the
+cap discarded is **71,883 types that clear `min_count` 3 in the first 20M tokens**. If V3 reports a
+different number, the corpus read moved and the sweep is invalid.
+
+This sweep deliberately does **not** reach the shipped model's 148,353 types. That vocabulary comes
+from 64M tokens, and adding a cell that changes both the cap and the training size would reproduce
+exactly the confound E6 found in the cap-versus-vocabulary distinction. 148,353 types at 20M tokens
+does not exist to be measured.
+
+### Two readings, because one of them is confounded and the other is not
+
+**All targets** is the measurement the threshold governs, and it mixes two effects that pull against
+each other: raising the cap removes the cheap `<unk>` predictions, and it also gives the model real
+histories where it previously had `<unk> <unk>`. The net slope is the confounded quantity, and it is
+the *right* quantity for the threshold, because `comparable_heldout` is guarding against precisely
+that confounded difference.
+
+**In-vocabulary only** drops every OOV target from the sum. It isolates modelling ability from the
+`<unk>` discount, at the cost of each cell summing over a different target set — which is why
+`comparable_heldout` refuses those comparisons outright rather than tolerating a gap. Reported here as
+a decomposition of the net slope, never as a ranking.
+
+### The prediction
+
+Backlog 78 recorded no prediction on the grounds that the direction is not obvious. I disagree that it
+is unpredictable, so here is one that can be wrong.
+
+**All-targets perplexity rises as the cap rises.** The slope of perplexity against held-out OOV rate is
+**negative**: more OOV means a lower, flattered number. The reason is that the 63,691 types the cap
+discards are the tail — each is rare, each is expensive to predict, and the context they return to the
+model is worth less than the `<unk>` discount they cost.
+
+**Magnitude: between 3 and 10 perplexity points per percentage point of OOV**, read at A′'s base of
+30.7. Concretely, V3 lands between **45 and 70** at roughly 2% held-out OOV.
+
+If that holds, the current threshold is far too loose rather than too tight: one percentage point
+would be worth 10% to 30% of the score, and two models the function currently calls comparable could
+differ by more than E6's entire 2.086x effect. If the slope comes out under 1 point per point, the
+round number was generous and the refusal is close to decoration.
+
+### Fixed readings
+
+- **The threshold is re-derived from the fitted slope, and E4 must still pass.** E4 compared
+  `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV. That comparison was sound. A
+  threshold that refuses it is wrong however it was derived, so the derived value is floored at the
+  gap E4 needs and the floor is reported if it binds.
+- **The slope is fitted on all four points and also read pairwise.** A single pair is a difference,
+  not a slope. If the pairwise slopes disagree by more than 2x the relationship is not linear in OOV
+  and the threshold is stated as a curve or as the worst case, not as one number.
+- **A ceiling that binds voids the cell.** `stopped_because` decides, on both passes. A cell whose
+  token ceiling did not bind at 20,000,0xx read a different amount of text than A′ did.
+- **V3's type count is checked against 71,883 before its perplexity is read.** The arithmetic above is
+  a pre-registered prediction about the corpus, and it is cheaper to be wrong about it early.
+- **A truncated score voids the cell.** V3 is the largest model here and the one most likely to hit the
+  resident-set ceiling; `scripts/score_heldout.py` already exits 2 on truncation.
+- **Being outside the predicted range is the more useful outcome.** E7's registered range was wrong by
+  2.7x and that was worth more than a hit.
