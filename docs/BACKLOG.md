@@ -608,13 +608,31 @@ anything counting. The guard is in `test/docs.test.ts`: **a section whose headin
 not be the one holding the file's highest-numbered item.** New items are appended at the end, so if
 the end is a record section they have been mis-filed — which is the whole of what went wrong here.
 
-70. **Two fixture assertions that `adhd lint` flags** (owner's call). `002/or_so_noticed` matches
+70. ~~**Two fixture assertions that `adhd lint` flags** (owner's call). `002/or_so_noticed` matches
     `or so`, which is in 002's prompt verbatim, so any branch quoting the question satisfies an
     assertion meant to check the imprecision is *treated as evidence* — and the negative control
     holds it too. `003/one_way_door` lists `reversib` alongside `irreversib`, so the second can
     never be the alternative that matches. Neither is changed here. Tightening an assertion after
     seeing what it does is the mirror image of the loosening D6 refuses, and both would move a
-    recorded outcome: 002 currently holds `or_so_noticed` on both its runs.
+    recorded outcome: 002 currently holds `or_so_noticed` on both its runs.~~
+    **Both fixed, and the cost this item warned about did not exist.**
+
+    `002/or_so_noticed` drops `or so`. `003/one_way_door` changes `reversib` to `\breversib`, which
+    is the sharper reading of what `adhd lint` was pointing at: the bare form matches inside
+    *ir*reversible, so one pattern covered a two-way door and a one-way one — words that mean
+    opposite things in an assertion about which is which. The boundary separates them because
+    "irreversible" has a word character before `reversib` and "reversible" does not.
+
+    **No recorded outcome moved.** The item predicted one would, and it was wrong twice over. First,
+    `002-first-run` matched `or so` *and* `drift`, and `002-kernel-enduser` matched `jitter`, so the
+    four patterns that remain were already carrying both runs. Second, the item says the negative
+    control holds the assertion too; `adhd eval --audit` had it **discriminating at 2/2 against 0/1**
+    before the change and after it. The control never reached for the imprecision at all.
+
+    `adhd lint` is clean on all fourteen fixtures, `eval --gate` passes unchanged, and the test in
+    `test/fixtures.test.ts` that pinned these two warnings as deliberate now pins their absence —
+    including that 002's *prompt* still says "or so", because a prompt is evidence and is never
+    edited to suit an assertion.
 
 71. **Config overlays** (owner's call). `adhd init` copies the shipped library, which forks it: a
     team that scaffolds has no way to pull later improvements. An overlay would fix that and its

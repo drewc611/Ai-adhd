@@ -75,20 +75,31 @@ test("two items sharing an id is an error, because a baseline cannot tell them a
   assert.ok(lintFixture(dup).some((i) => i.severity === "error" && /share the id/.test(i.message)));
 });
 
-test("the shipped fixtures have no lint errors, and their two warnings are real", () => {
+test("the shipped fixtures lint clean, and the two findings that were pinned here are fixed", () => {
   const r = lintFixtures(cfg);
   assert.deepEqual(r.errors, [], r.errors.map((e) => `${e.fixture}/${e.item}: ${e.message}`).join("\n"));
 
-  // Both warnings are findings, not noise, and this pins them so a fix has to be deliberate.
-  const ids = r.warnings.map((w) => `${w.fixture}/${w.item}`).sort();
-  assert.deepEqual(ids, ["002/must_surface.or_so_noticed", "003/must_surface.one_way_door"]);
+  // This test used to pin two warnings as deliberate — `002/or_so_noticed` and `003/one_way_door`
+  // — so that fixing them had to be a decision rather than a drift. Backlog 70 was that decision,
+  // and both are fixed, so the pin becomes its inverse: they must not come back.
+  assert.deepEqual(r.warnings.map((w) => `${w.fixture}/${w.item}`).sort(), []);
 
-  // 002's prompt literally contains "or so", so any branch quoting the question satisfies an
-  // assertion meant to check the imprecision is treated as evidence.
+  // 002's prompt still contains "or so" — the prompt is evidence and is never edited to suit an
+  // assertion. What changed is that the assertion no longer lists it, so quoting the question no
+  // longer satisfies a check about whether the imprecision was *treated as evidence*.
   assert.match(fx("002").prompt, /or so/);
-  // 003 lists "reversib" and "irreversib" as alternatives; the first matches inside the second.
+  const orSo = fx("002").must_surface.find((m) => m.id === "or_so_noticed")!;
+  assert.ok(!orSo.any_of.includes("or so"), "the prompt's own phrase is back in the assertion");
+  assert.ok(orSo.any_of.length >= 4, "the four patterns that were doing the work should remain");
+
+  // 003 keeps both alternatives and the looser one is now bounded, so it cannot match inside
+  // "irreversible" — two words that mean opposite things in an assertion about which door is which.
   const oneWay = fx("003").must_surface.find((m) => m.id === "one_way_door")!;
-  assert.ok(oneWay.any_of.some((p) => p.includes("reversib")));
+  assert.ok(oneWay.any_of.includes("\\breversib"), "the bounded form is missing");
+  assert.ok(!oneWay.any_of.includes("reversib"), "the unbounded form matches irreversible too");
+  assert.ok(oneWay.any_of.includes("irreversib"), "the specific alternative was dropped rather than unshadowed");
+  assert.ok(!new RegExp(oneWay.any_of.find((p) => p.includes("breversib"))!, "i").test("an irreversible door"));
+  assert.ok(new RegExp(oneWay.any_of.find((p) => p.includes("breversib"))!, "i").test("a reversible door"));
 });
 
 test("the prompt check applies to must_surface only, where its meaning holds", () => {
