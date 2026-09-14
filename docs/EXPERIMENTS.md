@@ -864,3 +864,40 @@ before its perplexity beats a well-smoothed 5-gram" is wrong at 6.4 x 10^7. I do
   code on the one part of the model that carries 93% of its parameters.
 - **A loss is a result.** Being outside 55-to-110 in either direction is worth more than being inside.
 - **No shape, learning rate, sample count or token cap moves after a result is seen.**
+
+### E9 amended 2026-09-14, before any result was seen: a training cap, and why
+
+The cell as registered is **not reachable in this environment**. Measured rather than estimated: at
+148,114 types the step is ~1.0s — 684ms in `loss_and_grads_sampled` and 307ms in the optimiser — which
+puts one epoch over 64,347,232 tokens at about **4.7 hours**, in a container that has already restarted
+once mid-run and killed it.
+
+I looked for a faithful speedup first and did not find one. `np.add.at` on the tied embedding table was
+the obvious suspect and is 4.9ms; replacing it with a sort-and-`add.reduceat` scatter is **slower** at
+7.1ms. The real cost is the transformer body — 127ms for a forward pass of roughly 1.5 GFLOP, about 12
+GFLOP/s on a machine measured at 420 — and that is E6 cell B's cost too, not something this cell
+introduced. Making Adam sparse over the embedding table would help and is **not** faithful: dense Adam
+decays `m` and `v` for untouched rows, so a sparse version optimises a different objective and would be
+a different cell.
+
+**So the amendment is a token cap and nothing else.** `--max-train-tokens 20000000`, giving cell D
+about 18.3M real training tokens.
+
+The vocabulary is untouched, which is the point: the vocabulary pass still reads all 64,347,232 tokens
+and still produces exactly **148,114 types**, because that is what `min_count` 3 over the full training
+side yields. E9's claim was never about training size — it was that a transformer at the n-gram's
+vocabulary can be compared to the shipped model on all targets at last, and that still holds.
+
+**The new asymmetry, stated before the result and running against cell D.** The shipped model read
+64,347,232 tokens; cell D now reads about 18.3M. That is 3.5x less text, it is quoted with every cell D
+figure, and it means a loss is *weaker* evidence than it looks while a win would be *stronger*.
+
+It also buys a comparison the original could not make. Cell D and E6's cell B now train on the same
+~18.3M tokens and differ only in vocabulary — 8,192 against 148,114 — which is E8's question asked of a
+transformer instead of an n-gram.
+
+**The prediction moves with the training size, and this is the honest place to say so.** The registered
+55-to-110 assumed 3.2x more text than any transformer cell had seen. At 18.3M tokens I expect cell D
+between **90 and 200**, against cell B's 64.29 at the same text and one eighteenth of the vocabulary.
+The original 55-to-110 is recorded as superseded rather than deleted, and if cell D lands there anyway
+that is a result about how little the extra text was worth.

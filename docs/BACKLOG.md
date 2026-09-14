@@ -452,7 +452,26 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
 
     `evaluate(shared_vocabulary=...)` is the method that works: hand both models one set of words and
     both sum over the same targets, so a difference in their own OOV rates no longer means they were
-    asked different questions. Built, tested, and the re-score is what closes this item.
+    asked different questions. Built and tested.
+
+    **And then reading the two models' headers found the real problem: the pair was never controlled.**
+
+    | | `nopep.kn.gz` | `background.kn.gz` |
+    |---|---|---|
+    | read PEPs | no | yes, 584 |
+    | `min_count` | **2** | **3** |
+    | split | **None — the whole manifest** | frozen `8e2d77cbe8901b1e`, train side |
+
+    `min_count` is a second independent variable and it moves the thing the comparison is about: a
+    model at 2 keeps every type seen twice, so `nopep` carries *more* rare words than `background`
+    does, which partly offsets the PEP words it lacks. The 1.36%-against-2.96% OOV gap is that
+    difference and the PEP difference added together, and D17 attributes all of it to PEPs.
+
+    So the re-score cannot close this item on its own. `nopep` has to be retrained at `min_count` 3 on
+    the frozen split — matching `background` in everything except the source under test — and both are
+    pre-D26 anyway, so they read the repository's own prose. About 15 minutes of compute, queued behind
+    E9's cell D because an order-4 Kneser-Ney peaks near 10.6GB and would take the transformer down
+    with it.
 
 78. ~~**Measure how much a percentage point of OOV is worth, and re-derive the threshold from it**
     (small, and a code comment currently promises it). `comparable_heldout` refuses two all-targets
