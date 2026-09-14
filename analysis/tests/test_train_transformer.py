@@ -207,3 +207,32 @@ def test_progress_writes_to_stderr_and_can_be_silenced(tmp_path, capsys):
 
     train_transformer(SplitLibrary(lib, every=10, side="train"), **kw, progress=0)
     assert capsys.readouterr().err == ""
+
+
+def test_the_record_says_what_the_optimiser_was_told_to_do(tmp_path):
+    """A figure is re-derivable only if everything that decided it is written down.
+
+    The record carried `config` — the model's shape — and nothing about the run, so two cells with
+    identical shapes on an identical corpus could differ in learning rate, batch size, warmup, seed or
+    epoch count with nothing on either record to show it. That is the same defect `corpus_fingerprint`
+    fixes on the data side, found while re-measuring E6 and E7 for backlog 82: both cells had been run on
+    the CLI defaults, which is why they are comparable, and neither record said so.
+    """
+    import json
+
+    root = tmp_path / "c"
+    root.mkdir()
+    (root / "a.txt").write_text(
+        "\n".join(f"Clause {i} holds and the actor waits for the reviewer." for i in range(200)) + "\n"
+    )
+    lib = Library([Source(name="t", path=root, include=["*.txt"])])
+    cfg = TransformerConfig(vocab_size=256, d_model=16, n_heads=2, n_layers=1, context=16, d_ff=32)
+    rec = train_transformer(
+        lib, tmp_path / "m.tf.gz", cfg,
+        Budget(max_tokens=10**7, max_seconds=120, max_ngrams=10**9, max_rss_mb=10**6),
+        epochs=0.02, batch_size=2, lr=1e-3, warmup=1, seed=7, max_train_tokens=4000,
+    )
+    o = rec.optimiser
+    assert o["lr"] == 1e-3 and o["batch_size"] == 2 and o["warmup"] == 1 and o["seed"] == 7
+    assert o["epochs_requested"] == 0.02 and o["max_train_tokens"] == 4000
+    assert json.loads(rec.to_json())["optimiser"] == o

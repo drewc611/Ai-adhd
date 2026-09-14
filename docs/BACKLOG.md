@@ -462,9 +462,15 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     would, and the frozen held-out set they were scored on never contained that prose — but they cannot
     be re-derived exactly, and a figure that cannot be re-derived is a figure nobody can check.
 
-    The n-gram cells are cheap: the shipped model is about 14 minutes of training plus scoring, A is the
-    same, A′ is 200 seconds. The neural cells are not: the transformer is **2.33 hours per epoch** and
-    the LSTM about 1.3, so cells B and C are roughly 3.6 hours of compute before either is scored.
+The cost, read off the records rather than estimated: **A 452s, the shipped model 817s, cell B 2,539s
+    and cell C 1,514s** — about 90 minutes of training in total, plus scoring. An earlier version of this
+    item said cells B and C were 3.6 hours between them, on the grounds that the transformer runs at 2.33
+    hours per epoch. That figure is per epoch over the *whole* training side; these cells train under a
+    20M-token cap, which is 42 minutes and 25 minutes. Wrong by 3x in the direction that makes work look
+    unaffordable, which is the expensive kind of estimate to get wrong.
+
+    A′ needs no run at all: `e8-v0` is order 4, `min_count` 3, cap 8,192 on the train side of the same
+    frozen set, which is A′'s configuration exactly, so **A′ post-D26 is 30.95** already.
 
     Order matters if this is done piecemeal. E6's claim is A′ **against** B, so re-measuring one and not
     the other produces a ratio between a stable-corpus number and a mutable-corpus one, which is the

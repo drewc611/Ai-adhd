@@ -72,6 +72,13 @@ class TransformerRecord:
     #: here; the two digests are recorded to identify the two reads, not to compare them.
     vocabulary_fingerprint: str
     corpus_fingerprint: str
+    #: What the optimiser was told to do. The record carried `config` — the model's shape — and nothing
+    #: about the run, so two cells with identical shapes and identical corpora could differ in learning
+    #: rate, batch size, warmup, seed or epoch count with nothing on either record to show it. The same
+    #: defect `corpus_fingerprint` fixes on the data side: a figure is only re-derivable if everything
+    #: that decided it is written down. E6's cell B and E7's cell C were both run on the CLI defaults,
+    #: which is why they are comparable, and neither record says so.
+    optimiser: dict
     #: Why training stopped: a budget ceiling, or "epochs" when it ran the schedule out.
     stopped_because: str
     budget_vocabulary: dict
@@ -238,6 +245,14 @@ def train_transformer(
             "sources": library.describe(),
             "vocabulary_fingerprint": d1.hexdigest()[:16],
             "corpus_fingerprint": d2.hexdigest()[:16],
+            "optimiser": {
+                "lr": lr,
+                "batch_size": batch_size,
+                "warmup": warmup,
+                "seed": seed,
+                "epochs_requested": epochs,
+                "max_train_tokens": max_train_tokens,
+            },
             "steps": steps,
             "tokens_seen": steps * per_step,
             "stopped_because": stopped,
@@ -267,6 +282,7 @@ def train_transformer(
         split=model.meta["split"],
         vocabulary_fingerprint=model.meta["vocabulary_fingerprint"],
         corpus_fingerprint=model.meta["corpus_fingerprint"],
+        optimiser=model.meta["optimiser"],
         stopped_because=stopped,
         budget_vocabulary=b1.report(),
         budget_corpus=b2.report(),
