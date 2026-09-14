@@ -96,6 +96,10 @@
     ],
     "004/who_reads": [
       "004-kernel-naming"
-    ]
+    ],
+    "011/call_site_reader": [],
+    "011/extensibility_alone": [],
+    "011/what_it_forecloses": [],
+    "011/whose_property": []
   }
 }

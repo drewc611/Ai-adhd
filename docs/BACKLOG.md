@@ -55,15 +55,26 @@ yet enough to know whether they work.
 
 8. **006, `enumerate_options`** (n=7). The wide path has never run. Seven branches, seven
    briefs, a critic pack twice the size of any yet, and the frame-selection logic above five.
-9. **007, `api_surface`.** The last run class with no fixture.
+9. ~~**007, `api_surface`.** The last run class with no fixture.~~
+    **Built as fixture 011, retry-api-surface: whether `send()` takes a `retries: number`, a
+    `RetryPolicy`, or neither. The linear answer to any API question is "take an options object, it is
+    more extensible", which is available without reading the question — so the assertions are the three
+    things a run must surface to have read this one: who holds the call site, whether retrying is a
+    property of the service or of the request, and what each shape forecloses. It lints clean and the
+    harness reports it as awaiting a run rather than as a pass, because no run exists yet.**
 10. ~~**008 through 010, the decline classes.** `factual_lookup`, `mechanical_refactor`,
     `single_correct_answer`. A decline is a first-class outcome and no recorded run declines.~~
    **Built as fixtures 005, 006 and 007. A decline has no run to record, so `expect.decline` asserts the routing decision and its reason directly.**
 11. **A fixture designed to produce a monoculture.** The detector has only ever fired in unit
     tests. Pick a problem where every frame lands on the same action and record it.
 12. **A fixture designed to produce scatter.** Same reasoning, opposite failure.
-13. **A cancel fixture** (D5). Confirm, return two branches, cancel, and assert the partial
-    synthesis ships unscored with the pruned block absent and said to be absent.
+13. ~~**A cancel fixture** (D5). Confirm, return two branches, cancel, and assert the partial
+    synthesis ships unscored with the pruned block absent and said to be absent.~~
+    **Already built and found open by the audit in item 83, as three kernel tests rather than a fixture
+    — "cancel mid-diverge renders the returned branches unscored (D5)", "a cancelled run ships no pruned
+    block and says why, rather than omitting it quietly", and "cancel before confirm spends nothing and
+    renders nothing". That is the right home for it: a fixture asserts what a recorded run *said*, and
+    this is a claim about what the kernel *does*, which needs no model and runs on every commit.**
 14. ~~**A fixture whose problem contains an injection attempt** ("ignore the frame above").
     Asserts the branch contract holds against adversarial problem text.~~
    **Built as fixture 008, asserting the D5 gate rather than a run. Building it found the detector caught only injections phrased in this repo's own vocabulary.**
@@ -256,10 +267,25 @@ yet enough to know whether they work.
 ## 7. Documentation
 
 46. **A worked example**, end to end, with the actual commands and the actual output.
-47. **FAQ**, starting with "why not just prompt the model to consider multiple perspectives".
-48. **A frame-authoring guide** with the orthogonality check as a checklist.
+47. ~~**FAQ**, starting with "why not just prompt the model to consider multiple perspectives".~~
+    **Built as `docs/FAQ.md`, opening with exactly that question. Seven answers, each with the evidence
+    attached and every number checked by an existing test — including the ones that are least flattering:
+    a run costs about 460,000 tokens against a gate that quotes a third of it, `foreclosure` scores an
+    alpha whose interval spans zero, and eleven recorded runs is thin.**
+48. ~~**A frame-authoring guide** with the orthogonality check as a checklist.~~
+    **Built as `docs/AUTHORING-FRAMES.md`. Six steps with the orthogonality check as step five, and the
+    bar stated before any of them: the question is not whether a stance is good but whether its axis is
+    empty, because seven of the ten axes carry one frame and a fourteenth on a shared axis makes the
+    library worse rather than larger. Also what the check cannot tell you — it flags one pair today and
+    lists six more at 100% that it refuses to flag on one or two shared runs.**
 49. **A short paper-style writeup** of what five runs have shown, honest about the sample size.
-50. **Failure gallery**: every recorded failure, why it failed, and what it taught.
+50. ~~**Failure gallery**: every recorded failure, why it failed, and what it taught.~~
+    **Built as `docs/FAILURES.md`. Six of eleven recorded runs fail and four of those are supposed to —
+    linear-CoT controls, where a pass would mean the fixture is broken. The two real failures are
+    `001-seed2`, which loses two assertions the same fixture passes at seed 1 and is the strongest
+    evidence here that five runs is not a sample, and `002-first-run`, which names a hole in the frame
+    library that `002-kernel-enduser` then closes. Also what has never failed: no run has ever missed on
+    `problem_hash` or shipped without a pruned block.**
 
 ## 8. Distribution
 

@@ -275,7 +275,8 @@ carrying it.
 ```
 config/     frames, routing, critic rubric      <- the actual IP
 prompts/    orchestrator, branch, critic, deepen, synthesis
-docs/       architecture, traps, decisions, superagent, manifest, provenance, distribution, backlog
+docs/       architecture, traps, decisions, experiments, superagent, manifest, provenance,
+            distribution, backlog, FAQ, frame authoring, failure gallery
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
