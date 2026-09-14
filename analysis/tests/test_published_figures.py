@@ -702,3 +702,60 @@ def test_the_governor_quotes_the_measured_cost_rather_than_the_memorisation_one(
     assert f"{D29_PRUNED / D29_UNPRUNED:.3f}x" in gov, "the governor does not quote the measured cost"
     assert "Do not quote" not in gov or "superseded" in gov, "the superseded caution is still standing alone"
     assert "D29" in gov, "the governor does not say where its figure comes from"
+
+
+# --- D31 / backlog 77: what reading a genre is worth, with the vocabulary controlled --------------
+
+D31_SHIPPED_ALL, D31_NOPEP_ALL = 53.422, 147.467
+D31_SHIPPED_SHARED, D31_NOPEP_SHARED = 49.066, 148.983
+
+
+def test_d31_the_pair_is_controlled_where_d17s_was_not():
+    """D17's pair had min_count 2 against 3 and no split, so the OOV gap was the rare-word difference
+    and the PEP difference added together. This pair differs in the `pep` source and nothing else the
+    command line controls."""
+    nopep, shipped = record("b77-nopep"), record("b82-shipped")
+    assert nopep["min_count"] == shipped["min_count"] == 3, "min_count is the confound D17 had"
+    assert nopep["split"] == shipped["split"], "the two models trained on different splits"
+    assert nopep["order"] == shipped["order"]
+    sources = {s["name"] for s in nopep["sources"]}
+    assert "pep" not in sources, "the nopep model read PEPs"
+    assert {"rfc", "eip", "erc"} <= sources, "the nopep model is missing more than the pep source"
+    # And it read less text, which is the confound this pair cannot remove. Recorded, not hidden.
+    assert nopep["tokens_seen"] < shipped["tokens_seen"]
+    shortfall = 1 - nopep["tokens_seen"] / shipped["tokens_seen"]
+    assert f"{shortfall:.1%}" in docs("docs/DECISIONS.md"), f"D31 does not state the {shortfall:.1%} text shortfall"
+
+
+def test_d31_restriction_widens_the_gap_rather_than_shrinking_it():
+    """The opposite of E9's decomposition, and the reason this decision exists. If the direction ever
+    flips, the finding is different and the prose is wrong."""
+    naive = D31_NOPEP_ALL / D31_SHIPPED_ALL
+    restricted = D31_NOPEP_SHARED / D31_SHIPPED_SHARED
+    assert restricted > naive, "the gap no longer widens under restriction; D31's finding is inverted"
+    decisions = docs("docs/DECISIONS.md")
+    for figure in (f"{naive:.3f}x", f"{restricted:.3f}x", f"{D31_SHIPPED_SHARED:.3f}", f"{D31_NOPEP_SHARED:.3f}"):
+        assert figure in decisions, f"D31 no longer quotes {figure}"
+    # Both halves move, in opposite directions, and each says something different.
+    assert D31_SHIPPED_SHARED < D31_SHIPPED_ALL, "shipped should improve when its PEP-only types are dropped"
+    assert D31_NOPEP_SHARED > D31_NOPEP_ALL, "nopep should worsen when its cheap <unk> targets are dropped"
+    assert "2.83x" in decisions, "D31 does not name the figure it supersedes"
+
+
+def test_d31_only_the_restricted_pair_is_comparable():
+    """The all-targets pair is refused at 1.57% against 3.14% OOV, which is why the restriction is the
+    measurement rather than a robustness check."""
+    from adhd_analysis.text.evaluate import HeldOut, comparable_heldout
+
+    def held(ppl, oov, restricted=None):
+        return HeldOut(truncated=None, documents=31, sentences=0, tokens=128_856,
+                       in_vocabulary=int(128_856 * (1 - oov)), oov_rate=oov, perplexity=ppl,
+                       in_vocabulary_only=False, restricted_to_types=restricted,
+                       fingerprint="8e2d77cbe8901b1e")
+
+    oov_s, oov_n = 0.0157, 0.031392
+    assert comparable_heldout(held(D31_SHIPPED_ALL, oov_s), held(D31_NOPEP_ALL, oov_n)) is not None, \
+        "the all-targets pair is comparable now, so D31's restriction is unnecessary"
+    assert comparable_heldout(held(D31_SHIPPED_SHARED, oov_s, 141_899),
+                              held(D31_NOPEP_SHARED, oov_n, 141_899)) is None, \
+        "the restricted pair is refused, so the 3.036x is not a measurement of anything"

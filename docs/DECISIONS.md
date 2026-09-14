@@ -2803,3 +2803,67 @@ than for whatever subset came back parseable.
 Three tests in `test/malformed.test.ts` pinned the old behaviour and now pin the new, with the reason
 for the change in place. That file is the record of both: item 37 established what the kernel did,
 this decision establishes what it should do, and the diff between them is the argument.
+
+---
+
+## D31. Backlog 77: reading the genre is worth 3.04x, more than D17's 2.83x, and the vocabulary was hiding it
+
+**Asked.** D17 measured **2.83x** between a model that read 584 PEPs and one that read none, on the
+same 31 held-out PEPs, and attributed all of it to reading the genre. Three things were wrong with
+that pair. `min_count` was **2 against 3**, so the never-seen model carried *more* rare words and the
+out-of-vocabulary gap was that difference plus the PEP difference added together. One model trained on
+the whole manifest and the other on no split at all. And D25 retroactively **refuses** the comparison:
+1.60 percentage points of OOV is three times what those perplexities can carry.
+
+Backlog 77 is the controlled re-measurement.
+
+**Resolved. 3.036x, and the correction runs the other way from the one I expected.**
+
+| | shipped, read 584 PEPs | nopep, read none | ratio |
+|---|---|---|---|
+| all targets | 53.422 | 147.467 | 2.760x — **refused** |
+| **restricted to the shared vocabulary** | **49.066** | **148.983** | **3.036x — comparable** |
+
+Both on the 31 held-out PEPs of frozen set `8e2d77cbe8901b1e`, 128,856 tokens, neither truncated, both
+at `min_count` 3, both on the train side of the same split. `nopep` is `corpora.yaml` with the `pep`
+source removed and nothing else changed.
+
+### The gap widens under restriction, which is the finding
+
+E9's analogous decomposition shrank a 2.215x to 1.291x, because most of that gap was the vocabulary.
+Here it goes **2.760x to 3.036x**. Restricting both models to the words they share does not excuse the
+never-seen model; it convicts it further.
+
+The two figures move in opposite directions and each says something:
+
+- **`shipped` falls 53.422 → 49.066.** The targets dropped are words in its vocabulary and not in
+  `nopep`'s — the 6,215 PEP-specific types. Its perplexity *improves* when those are removed, so those
+  words were harder than its average even though it had read them. Knowing a rare word is not the same
+  as predicting it.
+- **`nopep` rises 147.467 → 148.983.** The shared set is its entire vocabulary, so the only targets
+  dropped are ones it would have scored as `<unk>`, and losing them costs it. `<unk>` was cheap, which
+  is the same behaviour E8 measured and E9's cell B showed.
+
+So the answer to the question backlog 77 asked — is the gap vocabulary or modelling — is **mostly
+modelling, and the vocabulary was flattering the weaker model.** D17's 2.83x understated its own
+finding. The claim survives and gets stronger.
+
+### The confound that remains, stated because it is real
+
+`nopep` read **61,708,634** tokens against shipped's 64,347,232 — **4.1% less** text, because removing
+a source removes its words. Part of 3.036x is less text rather than the missing genre, and this pair
+cannot separate those. It is a much smaller asymmetry than E9's 3.5x and it is not zero.
+
+(4.1%, not 4.3%. I wrote 4.3% first, which is how much *more* shipped read than `nopep` — a different
+quantity with the same two numbers in it. The test below this decision recomputes the figure from the
+records and caught it.)
+
+The honest scope: this measures what a model loses by never seeing a genre *and* reading 4.1% less
+text. Holding the token count fixed would mean padding from another source, which changes the mixture
+and introduces a different confound.
+
+### What this does not rescue
+
+`nopep.kn.gz` and `background.kn.gz`, the original D17 pair, stay refused and are superseded rather
+than reinterpreted. Their OOV gap is real and `comparable_heldout` is right to refuse them; this
+decision replaces the measurement instead of arguing with the refusal.

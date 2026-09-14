@@ -1,0 +1,101 @@
+{
+  "budget": {
+    "counts": {
+      "ceilings": {
+        "max_ngrams": 90000000,
+        "max_rss_mb": 13500,
+        "max_seconds": 4500.0,
+        "max_tokens": 90000000
+      },
+      "checks": 3077,
+      "peak_rss_mb": 9644,
+      "seconds": 872.21,
+      "stopped_because": null,
+      "tokens": 61708634
+    },
+    "vocabulary": {
+      "ceilings": {
+        "max_ngrams": 90000000,
+        "max_rss_mb": 13500,
+        "max_seconds": 4500.0,
+        "max_tokens": 90000000
+      },
+      "checks": 3077,
+      "peak_rss_mb": 9644,
+      "seconds": 872.44,
+      "stopped_because": null,
+      "tokens": 61708634
+    }
+  },
+  "corpus_fingerprint": "3119f4fb034a3ce4",
+  "discounts": [
+    [
+      0.2491,
+      1.4238,
+      2.3843
+    ],
+    [
+      0.6916,
+      1.1504,
+      1.4808
+    ],
+    [
+      0.8003,
+      1.1757,
+      1.4286
+    ],
+    [
+      0.7062,
+      1.3216,
+      1.4515
+    ]
+  ],
+  "documents": 6707,
+  "min_count": 3,
+  "model": "models/b77-nopep.kn.gz",
+  "ngrams": 38002017,
+  "oov_rate": 0.00385,
+  "order": 4,
+  "prunes": 0,
+  "python": "3.11.15",
+  "seconds": 872.21,
+  "sentences": 2684079,
+  "sources": [
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "tokens_seen": 61708634,
+  "vocab_size": 141899,
+  "vocab_truncated": {
+    "tokens": 0,
+    "types": 0
+  },
+  "vocabulary_covers_counts": true,
+  "vocabulary_fingerprint": "3119f4fb034a3ce4"
+}

@@ -678,7 +678,7 @@ the end is a record section they have been mis-filed — which is the whole of w
     models on disk are superseded rather than scored: they predate the corpus fingerprint and read
     text differing by 846 tokens and one type, which `comparable_training` would refuse.
 
-77. **Separate the vocabulary half of the generalisation gap** (small). D17 measures 2.83x between a
+77. ~~**Separate the vocabulary half of the generalisation gap** (small). D17 measures 2.83x between a
     model that read 584 PEPs and one that read none, on the same 31 documents, and OOV goes 1.36% to
     2.96% across that pair. Part of the gap is that the never-seen model lacks PEP-specific words and
     part is that it models PEP prose worse, and this run does not say which is which.
@@ -718,7 +718,19 @@ the end is a record section they have been mis-filed — which is the whole of w
     does, which partly offsets the PEP words it lacks. The 1.36%-against-2.96% OOV gap is that
     difference and the PEP difference added together, and D17 attributes all of it to PEPs.
 
-    So the re-score cannot close this item on its own. `nopep` has to be retrained at `min_count` 3 on
+    **Closed as D31: 3.036x, and the gap widens under restriction rather than shrinking.** All
+    targets 53.422 against 147.467 (refused, 1.57% OOV against 3.14%); restricted to the 141,899 types
+    both models share, **49.066 against 148.983**, comparable. `shipped` *falls* when the 6,215
+    PEP-only types are dropped, so those words were harder than its average even though it had read
+    them; `nopep` *rises*, losing the `<unk>` targets that were cheap for it. Mostly modelling, and
+    the vocabulary was flattering the weaker model — D17 understated its own finding.
+
+    Remaining confound, recorded: `nopep` read 4.1% less text, because removing a source removes its
+    words. Smaller than E9's 3.5x asymmetry and not zero.
+
+    What follows below is the analysis that led here, kept because the diagnosis is the work.
+
+    So the re-score could not close this item on its own. `nopep` had to be retrained at `min_count` 3 on
     the frozen split — matching `background` in everything except the source under test — and both are
     pre-D26 anyway, so they read the repository's own prose. About 15 minutes of compute, queued behind
     E9's cell D because an order-4 Kneser-Ney peaks near 10.6GB and would take the transformer down
