@@ -30,6 +30,15 @@ So the one experiment splits into two, and they answer different questions.
 Fixture 001 at seed 2. Same problem, same five frames, different dispatch order and a fresh
 sample from every branch and critic.
 
+**The frames being the same is forced, not chosen, and that was established after the fact.**
+`design_decision` lists exactly five primary frames and resolves `n` to five, so the seeded
+shuffle can only permute dispatch order: no seed selects a different set, and the reading below
+about "one sample" is therefore about branch and critic sampling at a fixed frame set. Seed 3,
+compiled on 2026-09-14, drew the same five a third time. Of the six run classes only
+`enumerate_options` can vary a frame set by seed — nine primaries at `n=7`, so the shuffle drops
+two and which two is the seed's — so a reseed experiment that varies *which frames appear* has to
+be run there and cannot be run on 001 at any seed. Backlog 89 and 91.
+
 **What it measures.** How much of a finding is the machinery and how much is noise. Every
 number quoted anywhere in this repo about one run is uninterpretable without this.
 
