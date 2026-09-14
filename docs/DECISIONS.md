@@ -2689,3 +2689,65 @@ the breach is serious is not a discipline.
 ### The shipped model
 
 Unchanged, and now for a better-supported reason than D21 had. The background model stays Kneser-Ney.
+
+---
+
+## D29. Backlog 76: pruning costs 1.355x on held-out text, not the 2.9x D14 recorded, and my prediction was wrong
+
+**Asked.** D14 priced count-pruning at **2.9x** perplexity — 17.4 against 6.06 — and D16 then
+established that both of those are memorisation scores: each model trained on the whole manifest and
+was scored on a stride of it. A ratio between two numbers that measure nothing about unseen text is
+not a measurement of anything, so `agents/adhd-governor.md` has said since then not to quote 2.9x as
+measured. Backlog 76 is the re-measurement.
+
+**Resolved. 1.355x.**
+
+| | unpruned | pruned |
+|---|---|---|
+| n-grams | 40,206,913 | **16,412,030** (40.8% kept, `prunes` 2) |
+| types | 148,114 | 148,114 |
+| training tokens | 64,347,232 | 64,347,232 |
+| corpus digest | `de7c24b2218ad055` | `de7c24b2218ad055` |
+| held-out OOV | 0.915101% | 0.915101% |
+| **held-out perplexity** | **25.815** | **34.973** |
+
+Both on frozen set `8e2d77cbe8901b1e`, fingerprint `1446762140db7f1a`, 3,443,116 tokens, neither
+truncated. `comparable_heldout` accepts the pair and the OOV gap is exactly zero, because pruning
+removes n-grams and not types — the vocabulary is untouched, so the two models are asked the identical
+question. The unpruned cell is `b82-shipped` unchanged, which is why only one run was needed.
+
+### The prediction was wrong, and the direction is the interesting part
+
+Backlog 76 recorded, before running: *"the real cost is **larger** than 2.9x, because a pruned model
+has less of the tail to memorise and also less to generalise from."* It is **less than half** of it.
+
+The reason is the one D16 already gave and I did not follow through. Pruning deletes the count-1
+n-grams — the ones seen exactly once in training. On a memorisation test those are precisely what the
+score asks about, because the test text *is* the training text, so deleting them looks catastrophic
+and 2.9x is what that looks like. On text the model has never seen, an n-gram seen once in training
+was mostly not going to recur anyway. **2.9x measured how much memorisation the pruning destroyed**,
+which is exactly the quantity D16 said those two numbers were made of.
+
+So the correction is larger than a re-measurement: the old figure was not merely unverified, it was
+measuring a different thing, and the argument for why the true cost would be *higher* was reasoning
+about the memorisation case without noticing it.
+
+**What stays true.** Pruning is still not free — a third more perplexity for 59% fewer n-grams is a
+real trade and the governor should still present it as one. What changes is the size, and that the
+number is now about unseen text.
+
+### A gap the run found in the record
+
+`--max-ngrams` does not truncate the corpus read, as its name suggests and as I assumed until I read
+the counting loop: it triggers **count-1 pruning**, dropping every singleton n-gram, up to three
+times. Both b76 cells read all 64.5M tokens with `stopped_because: null`.
+
+Nothing on the training record said whether a model had been pruned. `ngrams` alone cannot tell a
+small model from a pruned one, and the two original b76 cells differ by 24M n-grams with nothing on
+either record explaining why. `TrainingRecord.prunes` now carries it — the same gap `min_count` had,
+fixed the same way, and this decision is the one that needed it.
+
+The original b76 pair is superseded rather than used: those models predate the corpus fingerprint, and
+their token counts differ by 846 and their vocabularies by one type, so `comparable_training` would
+refuse them. They read different text, which is the D26 hazard, and it is why this decision retrained
+rather than scored what was on disk.

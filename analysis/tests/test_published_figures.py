@@ -647,3 +647,58 @@ def test_the_restricted_result_does_not_touch_the_headline():
     assert "5.516x" in decisions
     tail = decisions[decisions.index("Restricted, the answer is 1.291x"):]
     assert "None of this touches the 5.516x" in tail, "D28 does not say the headline is unaffected"
+
+
+# --- D29 / backlog 76: what count-pruning actually costs on held-out text --------------------------
+
+D29_UNPRUNED, D29_PRUNED = 25.815, 34.973
+D29_UNPRUNED_NGRAMS, D29_PRUNED_NGRAMS = 40_206_913, 16_412_030
+
+
+def test_d29_the_pruned_cell_differs_from_the_unpruned_one_only_in_pruning():
+    """The whole value of 1.355x is that nothing else moved. D14's 2.9x came from a pair that shared
+    no split; the original b76 pair read text differing by 846 tokens and one type."""
+    pruned, unpruned = record("b76-pruned-heldout"), record("b82-shipped")
+    assert pruned["prunes"] > 0, "the pruned cell did not prune, so there is nothing to price"
+    assert unpruned.get("prunes", 0) == 0 or "prunes" not in unpruned, "the unpruned cell pruned"
+    for field in ("order", "min_count", "vocab_size", "tokens_seen", "corpus_fingerprint"):
+        assert pruned[field] == unpruned[field], f"{field} differs, so pruning is not the only variable"
+    assert pruned["split"] == unpruned["split"], "the two cells used different splits"
+    assert pruned["ngrams"] == D29_PRUNED_NGRAMS and unpruned["ngrams"] == D29_UNPRUNED_NGRAMS
+
+
+def test_d29_quotes_its_result_and_says_the_prediction_was_wrong():
+    """Backlog 76 recorded a prediction — larger than 2.9x — so that it could be wrong. It was wrong
+    in the opposite direction, and a decision that quietly drops a failed prediction is worth less
+    than the prediction was."""
+    decisions = docs("docs/DECISIONS.md")
+    assert "## D29." in decisions
+    ratio = D29_PRUNED / D29_UNPRUNED
+    for figure in (f"{D29_UNPRUNED:.3f}", f"{D29_PRUNED:.3f}", f"{ratio:.3f}x", f"{D29_PRUNED_NGRAMS:,}"):
+        assert figure in decisions, f"D29 no longer quotes {figure}"
+    assert "2.9x" in decisions, "D29 does not name the figure it supersedes"
+    assert "wrong" in decisions.split("## D29.")[1].split("---")[0], "D29 does not say the prediction failed"
+
+
+def test_d29_pruning_leaves_the_vocabulary_alone_so_the_pair_is_comparable():
+    """Pruning drops n-grams and not types, which is why the two OOV rates are identical to every
+    digit and why this comparison needs no shared-vocabulary restriction — unlike E9's."""
+    from adhd_analysis.text.evaluate import HeldOut, comparable_heldout
+
+    def held(ppl):
+        return HeldOut(truncated=None, documents=366, sentences=148_153, tokens=3_443_116,
+                       in_vocabulary=3_411_608, oov_rate=0.009151013210127124, perplexity=ppl,
+                       in_vocabulary_only=False, restricted_to_types=None, fingerprint="1446762140db7f1a")
+
+    assert comparable_heldout(held(D29_UNPRUNED), held(D29_PRUNED)) is None, \
+        "the pair D29 rests on is no longer comparable"
+    assert record("b76-pruned-heldout")["vocab_size"] == record("b82-shipped")["vocab_size"]
+
+
+def test_the_governor_quotes_the_measured_cost_rather_than_the_memorisation_one():
+    """`agents/adhd-governor.md` told a reader not to quote 2.9x as measured. It now has a measured
+    figure, and a caution that outlives its cause is noise."""
+    gov = (ROOT / "agents" / "adhd-governor.md").read_text()
+    assert f"{D29_PRUNED / D29_UNPRUNED:.3f}x" in gov, "the governor does not quote the measured cost"
+    assert "Do not quote" not in gov or "superseded" in gov, "the superseded caution is still standing alone"
+    assert "D29" in gov, "the governor does not say where its figure comes from"

@@ -635,7 +635,7 @@ the end is a record section they have been mis-filed — which is the whole of w
     call rather than a table entry. What it would buy: roughly 600 more documents under freer
     licences than the largest source currently in the corpus.
 
-76. **Re-measure what pruning costs, on one split** (small, and it invalidates a published figure
+76. ~~**Re-measure what pruning costs, on one split** (small, and it invalidates a published figure
     until it is done). D14 priced count-pruning at 2.9x perplexity — 17.4 against 6.06 — and D16
     establishes that both of those are memorisation scores, because each model trained on the whole
     manifest and was scored on a stride of it. The ratio between two numbers that measure nothing
@@ -645,7 +645,28 @@ the end is a record section they have been mis-filed — which is the whole of w
     ceiling low enough to force pruning and once without, scored on the same held-out half. About 25
     minutes. The prediction, recorded here so it can be wrong: the real cost is **larger** than 2.9x,
     because a pruned model has less of the tail to memorise and also less to generalise from. Until
-    this runs, `agents/adhd-governor.md` says not to quote 2.9x as measured.
+    this runs, `agents/adhd-governor.md` says not to quote 2.9x as measured.~~
+    **Done, as D29. The cost is 1.355x and the prediction above is wrong — not by a little, and not in
+    the direction it guessed.**
+
+    Unpruned **25.815**, pruned **34.973**, at 40.8% of the n-grams (`prunes` 2). The pair differs in
+    nothing else: same corpus digest `de7c24b2218ad055`, same 64,347,232 tokens, same 148,114 types,
+    same frozen set, and out-of-vocabulary rates identical to every digit — pruning removes n-grams,
+    not types, so both models are asked the identical question and `comparable_heldout` accepts them.
+
+    **Why the prediction failed is the result.** Pruning deletes the n-grams seen exactly once. On a
+    memorisation test those are precisely what the score asks about, so deleting them looks
+    catastrophic and 2.9x is what that looks like; on unseen text a singleton was mostly not going to
+    recur anyway. D14's 2.9x measured how much memorisation the pruning destroyed, which is what D16
+    had already said those two numbers were made of. I reasoned about the memorisation case without
+    noticing, and predicted the cost would be *higher*.
+
+    **Two things the run needed on the way.** `--max-ngrams` does not truncate the corpus read as its
+    name suggests — it triggers count-1 pruning, which took reading the counting loop to establish.
+    And nothing on the training record said whether a model had been pruned, so `ngrams` alone could
+    not tell a small model from a pruned one; `TrainingRecord.prunes` carries it now. The original b76
+    models on disk are superseded rather than scored: they predate the corpus fingerprint and read
+    text differing by 846 tokens and one type, which `comparable_training` would refuse.
 
 77. **Separate the vocabulary half of the generalisation gap** (small). D17 measures 2.83x between a
     model that read 584 PEPs and one that read none, on the same 31 documents, and OOV goes 1.36% to
