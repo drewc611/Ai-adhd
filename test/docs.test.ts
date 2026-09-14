@@ -188,6 +188,45 @@ test("every backlog item marked built names something that exists", () => {
   }
 });
 
+/**
+ * The other direction, which had no check and cost real work.
+ *
+ * The test above asks whether an item *claimed* built names something real. Nothing asked whether an
+ * item still open names something that already exists — so `adhd why`, `adhd diff`, `adhd lint`, the
+ * kernel's token budget, run priority, journal compaction and the TTY progress line all sat open in
+ * this file after they were built. Picking twenty items to do and finding seven of them already done
+ * is the cheap version of that mistake; building one of them again is the expensive version.
+ *
+ * Scoped to `adhd <command>` in an item's own title, which is the claim strong enough to check
+ * mechanically. An item whose title names a command the CLI has is either done or badly titled, and
+ * both want editing.
+ */
+test("no open backlog item names a command the CLI already has", () => {
+  const backlog = readFileSync(join(cfg.root, "docs", "BACKLOG.md"), "utf8");
+  const cli = readFileSync(join(cfg.root, "src", "cli.ts"), "utf8");
+  const commands = new Set([...cli.matchAll(/\.command\("([\w-]+)/g)].map((m) => m[1]!));
+
+  const stale: string[] = [];
+  for (const line of backlog.split("\n")) {
+    const item = line.match(/^(\d+)\. (.*)$/);
+    if (!item || item[2]!.startsWith("~~")) continue;
+    // An item *proposes* a command when its bolded title **is** that command — "**`adhd why <run>
+    // <frame>`.**" — which is how every built one in this file was written. A title that merely names
+    // a command is reasoning from it, not asking for it.
+    //
+    // I got this wrong twice before settling here, both times in the direction the check exists to
+    // catch: a rule firing on something it was not about. Taking the whole line flagged item 68, whose
+    // title is "Recalibrate `tokens_per_branch_estimate`" and which cites `adhd cost` as evidence on
+    // the same line. Taking the bolded title flagged item 70, "Two fixture assertions that `adhd lint`
+    // flags", which is about two assertions and not about the linter.
+    const proposed = item[2]!.match(/^\*\*`adhd ([a-z][\w-]*)/)?.[1];
+    if (proposed && commands.has(proposed)) {
+      stale.push(`item ${item[1]} proposes \`adhd ${proposed}\`, which exists`);
+    }
+  }
+  assert.deepEqual(stale, [], `the backlog is stale:\n  ${stale.join("\n  ")}`);
+});
+
 // ---- badges --------------------------------------------------------------------------------
 // A badge is a claim with a number in it, rendered where it is read first and rechecked never.
 // The workflow ones keep themselves honest because GitHub renders live status; the static ones

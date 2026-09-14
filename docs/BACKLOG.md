@@ -157,23 +157,36 @@ yet enough to know whether they work.
    disk by design, so this changed no code — it is the test that makes the design worth
    something. `save` is still `tmp` + `rename` without an fsync: atomic against a concurrent
    reader, not durable against power loss, and nothing yet shows that it matters.**
-33. **Token budget enforcement.** Halt a run that exceeds N tokens and render partial.
+33. ~~**Token budget enforcement.** Halt a run that exceeds N tokens and render partial.~~
+    **Already built and found open by the audit below. `submit --budget-tokens` sets it, `budget_tokens`
+    is on the run record, `overBudget` sums what the tasks reported and `cancelLocked` ends the run with
+    "token budget exceeded: N reported against a ceiling of M". Tested in `test/os.test.ts`.**
 34. ~~**`adhd os stats`.** Throughput, mean phase duration, expiry rate across the journal.~~
     **Built. Over five kernel runs the longest task the journal has seen is 280s (`critique_b`),
     against a 900s default lease — so the default is roughly 3x the worst observed task, which is
     a defensible margin and is now a measured one rather than a guess. No lease has ever expired
     in a real run; the reclaim path is exercised only by `test/concurrency.test.ts`.**
-35. **Run priority.** Two queued runs, one urgent.
-36. **Journal compaction** for long-lived kernels.
+35. ~~**Run priority.** Two queued runs, one urgent.~~
+    **Already built and found open by the audit below. `priority` is on the run record and `claim` sorts
+    `b.priority - a.priority || a.created_at.localeCompare(b.created_at)`, so an urgent run jumps the
+    queue and ties still go to the older run. Tested in `test/os.test.ts`.**
+36. ~~**Journal compaction** for long-lived kernels.~~
+    **Already built and found open by the audit below: `adhd os compact` moves journal lines belonging
+    to finished runs into a dated archive beside the journal. Tested in `test/os.test.ts`.**
 37. **A worker that returns malformed YAML on purpose**, asserting the contract failure is
     more useful than a silent repair.
 
 ## 6. CLI and reporting
 
-38. **`adhd why <run> <frame>`.** Print exactly why a frame was pruned, with the detector
-    output and the pass A row.
-39. **`adhd diff <runA> <runB>`.** Two runs of the same fixture, side by side: which frames
-    survived in both, which findings are shared, which are seed artifacts.
+38. ~~**`adhd why <run> <frame>`.** Print exactly why a frame was pruned, with the detector
+    output and the pass A row.~~
+    **Already built and found open by the audit below. It also answers the case this item did not think
+    of: a frame that was never dispatched reads "A frame that was never asked cannot have been
+    rejected", with the set routing chose instead. `src/why.ts`, `test/why.test.ts`.**
+39. ~~**`adhd diff <runA> <runB>`.** Two runs of the same fixture, side by side: which frames
+    survived in both, which findings are shared, which are seed artifacts.~~
+    **Already built and found open by the audit below. `src/cli.ts` declares it, and the description it
+    ships with is the item's own sentence: "what survived, what moved, what was the seed".**
 40. ~~**`adhd replay <run>`.** Re-render the synthesis from artifacts without re-running phases.~~
     **Built, and as a drift check rather than a re-render. `run --phase synth` already re-rendered;
     what did not exist was any check that a recorded synthesis still follows from its artifacts. Four
@@ -199,15 +212,23 @@ yet enough to know whether they work.
     estimate at the mean, a point estimate at the observed maximum, or a range in the preview
     text. All three change what the gate promises a user, which is why this is not a number to
     pick while nobody is looking.
-42. **TTY colour and progress** for `adhd os` while a run advances.
+42. ~~**TTY colour and progress** for `adhd os` while a run advances.~~
+    **Already built and found open by the audit below. `src/tty.ts` carries the colour table, a
+    `Progress` line that redraws in place and one line per change when piped, and `stateColour` so a
+    terminal state is the one worth spotting; `adhd os watch` uses all three. `NO_COLOR` is honoured
+    because it is the convention every other tool honours. `test/tty.test.ts`.**
 43. ~~**`--json` on every command** that lacks it, for scripting.~~
     **Built. `run`, `traps`, `viewer` and `validate` gained it; `wizard` is interactive and is
     excluded on purpose. `run --phase compile --json` returns `run_dir` and the briefs to spawn,
     which meant widening `PhaseResult`: the run directory was only ever in the prose, so a driver
     had to match a path out of a sentence. `traps --json` carries the exit code rather than
     replacing it. A test asserts no non-interactive command is missing the flag.**
-44. **`adhd lint <fixture>`.** Check a fixture's regexes compile, and warn on patterns that
-    match the fixture's own `why` text (a common way to write an assertion that cannot fail).
+44. ~~**`adhd lint <fixture>`.** Check a fixture's regexes compile, and warn on patterns that
+    match the fixture's own `why` text (a common way to write an assertion that cannot fail).~~
+    **Already built and found open by the audit below, and it checks more than this item asked: every
+    pattern compiles, none matches everything, none uses a bare dot as a separator, and none is lifted
+    from the fixture's own prose. Naming a file rather than a fixture id prints the eight it knows.**
+
 45. ~~**Exit codes** that distinguish contract failure, hash mismatch, and eval failure.~~ Built, documented in the README, tested against the built binary.
 
 ## 7. Documentation
