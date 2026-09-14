@@ -137,7 +137,47 @@ yet enough to know whether they work.
     appeared to name no actor.~~
    **Done. `SUPPLICANT` and `SUCCESSOR`, picked mechanically: every candidate was matched against all 39 recorded artifacts, all synthesis files and all fixtures, and only names appearing nowhere in the corpus were eligible. `config/frames.yaml` carries `former_ids` so the five runs that wrote the old ids still resolve; the runs themselves are not rewritten. D6 has the reasoning.**
 19. **Per-frame fixtures.** One fixture per frame that the frame should obviously win, as a
-    unit test for the frame's own stance.
+    unit test for the frame's own stance. **Still open, and the scope is now known: twelve
+    fixtures, and one frame that cannot have one.**
+
+    **Built first, because it had to be: `adhd frames --reach`.** `--stats` and `--axes` count what
+    recorded runs did, and a frame missing from both is either unlucky or unreachable. They cannot
+    tell you which, and the difference decides everything — an unlucky frame needs a fixture, an
+    unreachable one can never appear in a run anyone starts. So `--reach` asks routing instead of
+    the corpus: every run class at its own default `n` plus the floor and the hard cap, 400 seeded
+    shuffles each, through `selectFrames` itself rather than a re-implementation that could agree
+    with a bug in it.
+
+    **`FIRST_PRINCIPLES` is unreachable at every class's default n.** It is an alternate in six
+    classes and primary in none, and its axis (`mechanism`) is held in primary lists by `MECHANIC`
+    — a primary is drawn before any alternate, so the axis is taken every time. It appears only at
+    `n=9`, the hard cap, which needs an explicit `n` in the decision. A fixture states a class and
+    lets routing choose, so this frame cannot have one. `--stats` had reported it as never
+    dispatched and there was no way to tell that from bad luck across eleven runs.
+
+    Three tests pin it: that the report obeys D6 because it runs the real selector, that every frame
+    primary for a class is reachable at that class's default n unless a same-axis frame sits earlier
+    in the same list, and the FIRST_PRINCIPLES finding itself — which fails when routing gains a
+    class where it is primary or `MECHANIC` moves off `mechanism`, both of which make this record
+    stale. A fourth checks every fixture names a class that can dispatch something.
+
+    Left open as item 85, because it is a decision.
+85. **What to do about `FIRST_PRINCIPLES`** (owner's call). `adhd frames --reach` establishes that
+    no class dispatches it at its default `n`. Three ways out and they are not equivalent.
+
+    Make it primary somewhere — but the only class whose primary list has room on the `mechanism`
+    axis is one where `MECHANIC` is not primary, and putting a from-scratch derivation frame into
+    `design_decision` or `strategy` displaces something already earning its place.
+
+    Give `mechanism` to one of them and move the other — the stances are genuinely different
+    (`MECHANIC` asks how the thing works, `FIRST_PRINCIPLES` refuses to look at how anything works)
+    and sharing an axis may simply be wrong. That is a D6 question and wants the orthogonality
+    check, which currently has no data on the pair because they have never co-occurred.
+
+    Retire it, per `docs/RETIREMENT.md`. The exemption there is real and may apply: a frame that
+    produces the question nobody else asks is doing its job even when pruned. But this one has
+    never run, so there is no evidence either way — which is itself the argument for one of the
+    first two before the third.
 20. **Probe ordering experiment.** Do the numbered probes change the answer if reordered?
 21. ~~**Forbidden-list audit.** Which `forbidden` entries have ever been violated in a real run?~~
     **Built as `adhd frames --forbidden`, and the answer to the question asked is one: MECHANIC forbids

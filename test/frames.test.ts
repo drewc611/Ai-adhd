@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameStats, labelCollisions, orthogonality, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
+import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, orthogonality, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
 import { frameHash } from "../src/hash.js";
-import { compile } from "../src/compile.js";
+import { compile, selectFrames } from "../src/compile.js";
+import { loadFixtures } from "../src/eval.js";
 
 /** A recorded run is a directory with score.json and, optionally, deepen/<frame>.yaml. */
 function recordRun(
@@ -501,4 +502,78 @@ test("a forbidden entry binds its own frame and no other", () => {
   const fired = r.entries.filter((e) => e.fired > 0);
   assert.ok(fired.length >= 1, "no checkable entry has ever fired, so this test proves nothing");
   for (const e of fired) for (const ex of e.examples) assert.match(ex, new RegExp(`/${e.frame}:`), `${e.frame}'s entry fired on another frame's artifact`);
+});
+
+/**
+ * Backlog 19 asked for one fixture per frame, as a unit test for the frame's own stance. Building
+ * it turned up the reason one frame cannot have one, so the check came before the fixtures.
+ *
+ * `--stats` and `--axes` count what recorded runs did, and a frame absent from both is either
+ * unlucky or unreachable. These tests pin the distinction, because it decides what to do about it:
+ * an unlucky frame needs a fixture; an unreachable one is holding an axis in the library and can
+ * never appear in a run anyone starts.
+ */
+test("frame reach asks the real selector, so it cannot agree with a bug in it", () => {
+  const r = frameReach(cfg, 60);
+  assert.equal(r.frames.length, cfg.frames.frames.length, "every frame is reported on");
+  // Whatever the selector picks, it must obey D6: one frame per axis. A reach report built from a
+  // re-implementation could miss that; this one runs selectFrames itself, and this asserts it.
+  for (let seed = 1; seed <= 20; seed++) {
+    const picked = selectFrames(cfg, { problem_class: "design_decision" }, seed);
+    const axes = picked.frames.map((f) => f.axis);
+    assert.equal(new Set(axes).size, axes.length, `seed ${seed} dispatched two frames on one axis`);
+  }
+});
+
+test("a frame in a class's primary list is reachable at that class's default n", () => {
+  const r = frameReach(cfg, 200);
+  const byFrame = new Map(r.frames.map((f) => [f.frame, f]));
+  for (const [pc, cls] of Object.entries(cfg.routing.classes)) {
+    if (cls.action !== "run") continue;
+    for (const id of cls.frames) {
+      // Unless a same-axis frame sits earlier in the same primary list, in which case the axis
+      // rule takes it and the frame is unreachable there on purpose.
+      const f = cfg.frameById.get(id)!;
+      const sameAxisEarlier = cls.frames.slice(0, cls.frames.indexOf(id)).some((o) => cfg.frameById.get(o)?.axis === f.axis);
+      if (sameAxisEarlier) continue;
+      assert.ok(byFrame.get(id)!.at_default.some((c) => c.startsWith(`${pc}@`)), `${id} is primary for ${pc} and never dispatched there`);
+    }
+  }
+});
+
+/**
+ * The finding, pinned. FIRST_PRINCIPLES is an alternate in six classes and primary in none, and
+ * its axis is held in a primary list by MECHANIC — a primary is drawn before any alternate, so the
+ * axis is taken every time. It appears only at n=9, which needs an explicit n in the decision.
+ *
+ * This test fails when that changes, which is the point: routing gaining a class where it is
+ * primary, or MECHANIC moving off `mechanism`, both make it reachable and both mean this record is
+ * stale. It asserts the state, not that the state is right — whether to fix routing or retire the
+ * frame is a decision, per docs/RETIREMENT.md and D6.
+ */
+test("FIRST_PRINCIPLES cannot be dispatched at any class's default n, and nothing else is in that position", () => {
+  const r = frameReach(cfg, 400);
+  assert.deepEqual(r.unreachable_at_default, ["FIRST_PRINCIPLES"]);
+  const fp = r.frames.find((f) => f.frame === "FIRST_PRINCIPLES")!;
+  assert.deepEqual(fp.blocked_by, ["MECHANIC"]);
+  assert.ok(fp.at_any_n.length > 0, "it is reachable at some n");
+  assert.ok(fp.at_any_n.every((c) => c.endsWith("@9")), `only at the hard cap, got ${fp.at_any_n.join(",")}`);
+  // And it really is absent from every class's primary list, which is why.
+  for (const cls of Object.values(cfg.routing.classes))
+    if (cls.action === "run") assert.ok(!cls.frames.includes("FIRST_PRINCIPLES"));
+});
+
+test("every fixture names a class routing can actually run, or one it declines on purpose", () => {
+  const reach = frameReach(cfg, 60);
+  const reachable = new Set(reach.frames.filter((f) => f.at_default.length).map((f) => f.frame));
+  for (const fx of loadFixtures(join(cfg.root, "evals", "fixtures"))) {
+    const cls = cfg.routing.classes[fx.problem_class];
+    assert.ok(cls, `fixture ${fx.id} names class ${fx.problem_class}, which routing does not have`);
+    if (cls.action === "decline") {
+      assert.ok(fx.expect.decline, `fixture ${fx.id} names a declined class and does not expect a decline`);
+      continue;
+    }
+    // A run fixture's class must be able to dispatch at least one frame, or it can never record.
+    assert.ok(cls.frames.some((f) => reachable.has(f)), `fixture ${fx.id}'s class ${fx.problem_class} dispatches no reachable frame`);
+  }
 });

@@ -6,6 +6,7 @@ import { currentFrameId, type Config } from "./config.js";
 import { DeepenArtifactSchema, PassBSchema, TRAP_IDS, type TrapId } from "./schema.js";
 import { forwardFrameIds, type ScoreResult } from "./score.js";
 import { frameHash } from "./hash.js";
+import { selectFrames } from "./compile.js";
 
 export function listFrames(cfg: Config, json = false): string {
   if (json) return JSON.stringify(cfg.frames.frames.map(({ id, name, axis, attacks, tools }) => ({ id, name, axis, attacks, tools })), null, 2);
@@ -811,4 +812,124 @@ export function forbiddenAudit(cfg: Config, recordedDir = join(cfg.root, "evals"
   lines.push("entries with no mechanical form, which are guidance and not rules:", "");
   for (const e of entries.filter((x) => !x.probes.length)) lines.push(`  ${e.frame}: ${e.text}`);
   return { entries, artifacts, checkable, violated, text: lines.join("\n") };
+}
+
+export interface ReachStat {
+  frame: string;
+  axis: string;
+  /** `class@n` combinations that dispatched it, over the sampled seeds. */
+  at_default: string[];
+  at_any_n: string[];
+  /** Frames on this frame's axis that sit in a class's primary list, blocking it there. */
+  blocked_by: string[];
+}
+
+export interface ReachReport {
+  frames: ReachStat[];
+  unreachable_at_default: string[];
+  unreachable_at_all: string[];
+  seeds: number;
+  text: string;
+}
+
+/**
+ * Can routing dispatch this frame at all? (Backlog 19.)
+ *
+ * `--stats` and `--axes` count what recorded runs did, and a frame absent from both is either
+ * unlucky or unreachable. They cannot tell you which, and the difference decides everything: an
+ * unlucky frame needs a fixture, an unreachable one is carrying its axis in the library and
+ * contributing nothing to any run anyone will start.
+ *
+ * So this asks routing rather than the corpus. Every run class at its own default `n`, plus the
+ * floor and the hard cap, over `seeds` seeded shuffles, using `selectFrames` itself — the real
+ * selector with the real D6 axis rule, not a re-implementation of it that could agree with a bug.
+ *
+ * A frame is reachable at default `n` if some class dispatches it without anyone passing an
+ * explicit `n` or an explicit frame list. That is the only bar that matters for a fixture, because
+ * a fixture states a class and lets routing choose.
+ *
+ * Sampling, not proof: a frame reachable on one seed in ten thousand would be reported reachable
+ * here and is not reachable in any useful sense. The seed count is in the output so the claim can
+ * be read for what it is.
+ */
+export function frameReach(cfg: Config, seeds = 400): ReachReport {
+  const d = cfg.routing.defaults;
+  type RunClass = Extract<Config["routing"]["classes"][string], { action: "run" }>;
+  const runClasses = Object.entries(cfg.routing.classes)
+    .filter(([, c]) => c.action === "run")
+    .map(([id, c]) => ({ id, cls: c as RunClass }));
+
+  const defaultN = (c: RunClass) => c.n ?? Math.min(d.max_branches, c.frames.length);
+  const hit = new Map<string, { dflt: Set<string>; any: Set<string> }>();
+  for (const f of cfg.frames.frames) hit.set(f.id, { dflt: new Set(), any: new Set() });
+
+  for (const { id: pc, cls } of runClasses) {
+    const dn = defaultN(cls);
+    for (const n of new Set([dn, d.min_branches, d.hard_cap])) {
+      for (let seed = 1; seed <= seeds; seed++) {
+        let picked;
+        try {
+          picked = selectFrames(cfg, { problem_class: pc, n }, seed);
+        } catch {
+          continue; // n outside this class's reach; not a reachability fact about any frame
+        }
+        for (const f of picked.frames) {
+          const h = hit.get(f.id)!;
+          h.any.add(`${pc}@${n}`);
+          if (n === dn) h.dflt.add(`${pc}@${n}`);
+        }
+      }
+    }
+  }
+
+  // What stands in a frame's way: a same-axis frame in a class's primary list is drawn before any
+  // alternate can be, so it takes the axis every time.
+  const primaryAxisHolders = (frame: { id: string; axis: string }) => {
+    const blockers = new Set<string>();
+    for (const { cls } of runClasses)
+      for (const id of cls.frames) {
+        const other = cfg.frameById.get(id);
+        if (other && other.id !== frame.id && other.axis === frame.axis) blockers.add(other.id);
+      }
+    return [...blockers].sort();
+  };
+
+  const frames: ReachStat[] = cfg.frames.frames.map((f) => ({
+    frame: f.id,
+    axis: f.axis,
+    at_default: [...hit.get(f.id)!.dflt].sort(),
+    at_any_n: [...hit.get(f.id)!.any].sort(),
+    blocked_by: primaryAxisHolders(f),
+  }));
+
+  const unreachable_at_default = frames.filter((f) => f.at_default.length === 0).map((f) => f.frame);
+  const unreachable_at_all = frames.filter((f) => f.at_any_n.length === 0).map((f) => f.frame);
+
+  const lines = [
+    `frame reach over ${runClasses.length} run class(es) and ${seeds} seeds each, asking routing rather than the corpus`,
+    "",
+    `${"frame".padEnd(18)} ${"axis".padEnd(15)} at that class's default n`,
+  ];
+  for (const f of frames)
+    lines.push(`${f.frame.padEnd(18)} ${f.axis.padEnd(15)} ${f.at_default.length ? f.at_default.join(", ") : "UNREACHABLE"}`);
+  lines.push("");
+  if (!unreachable_at_default.length) lines.push("Every frame is reachable at some class's default n. A frame missing from --stats is unlucky, not unreachable.");
+  for (const id of unreachable_at_default) {
+    const f = frames.find((x) => x.frame === id)!;
+    lines.push(
+      `${id} is never dispatched at any class's default n. ` +
+        (f.at_any_n.length
+          ? `It appears only at ${f.at_any_n.join(", ")}, which needs an explicit n in the decision.`
+          : "No n reaches it at all.") +
+        (f.blocked_by.length ? ` Its axis (${f.axis}) is held in a primary list by ${f.blocked_by.join(", ")}, and a primary is drawn before any alternate.` : ""),
+    );
+  }
+  if (unreachable_at_default.length)
+    lines.push(
+      "A fixture states a class and lets routing choose, so a frame unreachable at default n cannot have one. " +
+        "Whether that is a routing fix or a retirement is a decision, not a count: see docs/RETIREMENT.md and D6.",
+    );
+  lines.push(`Sampled, not proved. ${seeds} seeds per combination; a frame reachable on one seed in ten thousand would read as reachable here.`);
+
+  return { frames, unreachable_at_default, unreachable_at_all, seeds, text: lines.join("\n") };
 }
