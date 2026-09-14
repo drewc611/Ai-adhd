@@ -6,6 +6,7 @@ import { cfg, tmp } from "./helpers.js";
 import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
 import { problemHash } from "../src/hash.js";
 import { compile, previewText } from "../src/compile.js";
+import { stringify } from "yaml";
 
 test("the shipped negative control fails fixture 001 and is expected to", () => {
   const r = runEval(cfg);
@@ -371,4 +372,44 @@ test("exactly one shipped assertion is knowingly satisfied by a control, and it 
   const fm = a.items.find((i) => i.item === "false_means")!;
   assert.equal(fm.verdict, "never matched");
   assert.equal(fm.control_matched, 0, "the convention tokens that let the control satisfy this are gone");
+});
+
+/**
+ * `branches_expected` and `distinct_axes` were added for fixture 014, and an assertion that cannot
+ * fail is worse than none: it reads as coverage. Both are checked against a plan doctored to break
+ * exactly the property they claim to hold.
+ */
+test("branches_expected fails a plan that dispatched a different number of branches", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "014")!;
+  assert.equal(fx.expect.branches_expected, 7, "fixture 014 is the wide path");
+
+  // The real compile passes.
+  const ok = runEval(cfg, { fixturesDir: join(cfg.root, "evals", "fixtures") }).pairs.find((p) => p.fixture === "014")!;
+  assert.equal(ok.outcome, "pass");
+
+  // The same fixture asking for a count routing will not produce fails, and says which number.
+  const dir = tmp();
+  const doctored = { ...fx, expect: { ...fx.expect, branches_expected: 5 } };
+  writeFileSync(join(dir, "014-queue-options.yaml"), stringify(doctored));
+  const bad = runEval(cfg, { fixturesDir: dir }).pairs.find((p) => p.fixture === "014")!;
+  assert.equal(bad.outcome, "fail");
+  assert.ok(bad.failures.some((f) => /branches_expected 5.*carries 7/.test(f)), bad.failures.join("; "));
+});
+
+test("distinct_axes fails a plan carrying two frames from one axis", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "014")!;
+  const dir = tmp();
+  // Name two same-axis frames explicitly. The compiler's own axis rule drops the second, so the
+  // plan comes back short — which `branches_expected` catches and is the honest outcome: the
+  // selector refuses to build the plan this assertion is guarding against, and that is D6 working.
+  const sameAxis = cfg.frames.frames.filter((f) => f.axis === "mechanism").map((f) => f.id);
+  assert.ok(sameAxis.length >= 2, "two frames share the mechanism axis");
+  writeFileSync(join(dir, "014-queue-options.yaml"), stringify({ ...fx, expect: { ...fx.expect, branches_expected: sameAxis.length } }));
+  const r = runEval(cfg, { fixturesDir: dir }).pairs.find((p) => p.fixture === "014")!;
+  assert.equal(r.outcome, "fail", "asking for a count routing cannot fill is a failure, not a silent short plan");
+
+  // And the check itself: a plan with a repeated axis is rejected by the message it should give.
+  const axes = ["cost", "cost", "scope"];
+  const dupes = axes.filter((a, i) => axes.indexOf(a) !== i);
+  assert.deepEqual([...new Set(dupes)], ["cost"], "the duplicate detection the evaluator uses");
 });

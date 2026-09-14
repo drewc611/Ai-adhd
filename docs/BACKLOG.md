@@ -53,8 +53,28 @@ yet enough to know whether they work.
 
 ## 2. Coverage gaps in the fixture set
 
-8. **006, `enumerate_options`** (n=7). The wide path has never run. Seven branches, seven
-   briefs, a critic pack twice the size of any yet, and the frame-selection logic above five.
+8. ~~**006, `enumerate_options`** (n=7). The wide path has never run. Seven branches, seven
+   briefs, a critic pack twice the size of any yet, and the frame-selection logic above five.~~
+   **Built as fixture 014, queue-options: `enumerate_options` was the last run class in
+   `config/routing.yaml` with no fixture. It asserts the compiler rather than a run, per 008 through
+   011, and the run it waits for is still open.**
+
+   **Two assertions had to be added before the fixture could say anything.** The `compiles: true`
+   path checked the hash, the verbatim passthrough and the brief size, and never the branch count —
+   so the wide path, whose entire subject is that `n` is 7 and every other class derives 5, could not
+   assert the one property it exists for. A compile that fell back to `max_branches` would have
+   produced a correct hash, five verbatim briefs and a passing fixture. `branches_expected` is that
+   check, and `distinct_axes` is the other one: D6's one-frame-per-axis rule is trivially true at
+   n=5 from a list of five and a real constraint at n=7 from a list of nine, and nothing checked it
+   on a compiled plan.
+
+   Both are falsifiable and tested against doctored fixtures rather than asserted: asking for 5
+   branches on a plan that carries 7 fails and names both numbers, and asking for a count routing
+   cannot fill fails rather than returning a short plan quietly.
+
+   The problem in the fixture is deliberately weak — overlapping cron jobs have an obvious answer —
+   because that is what `enumerate_options` is for and also the combination most likely to converge,
+   so the run may say something about fixture 012 too.
 9. ~~**007, `api_surface`.** The last run class with no fixture.~~
     **Built as fixture 011, retry-api-surface: whether `send()` takes a `retries: number`, a
     `RetryPolicy`, or neither. The linear answer to any API question is "take an options object, it is

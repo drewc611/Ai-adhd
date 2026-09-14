@@ -273,7 +273,14 @@ function evaluateCompiles(cfg: Config, fixture: Fixture): PairResult {
     const largest = Math.max(...sizes);
     if (fixture.expect.brief_bytes_max !== undefined && largest > fixture.expect.brief_bytes_max)
       failures.push(`largest brief is ${largest} bytes, over the ${fixture.expect.brief_bytes_max} this fixture allows`);
-    notes.push(`compiled ${briefs.length} brief(s), largest ${largest} bytes, hash ${r.plan.problem_hash.slice(0, 14)}...`);
+    if (fixture.expect.branches_expected !== undefined && r.plan.branches.length !== fixture.expect.branches_expected)
+      failures.push(`expect branches_expected ${fixture.expect.branches_expected}: the plan carries ${r.plan.branches.length}`);
+    if (fixture.expect.distinct_axes) {
+      const axes = r.plan.branches.map((b) => b.axis);
+      const dupes = axes.filter((a, i) => axes.indexOf(a) !== i);
+      if (dupes.length) failures.push(`expect distinct_axes: ${[...new Set(dupes)].join(", ")} dispatched more than once (D6)`);
+    }
+    notes.push(`compiled ${briefs.length} brief(s) on ${new Set(r.plan.branches.map((b) => b.axis)).size} axes, largest ${largest} bytes, hash ${r.plan.problem_hash.slice(0, 14)}...`);
   }
   const outcome = failures.length ? "fail" : "pass";
   return { fixture: fixture.id, recorded: "(no run: compile only)", outcome, expected: "pass", ok: outcome === "pass", failures, notes };

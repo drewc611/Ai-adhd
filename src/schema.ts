@@ -322,6 +322,15 @@ export const FixtureSchema = z
         // being dispatchable at all.
         compiles: z.boolean().optional(),
         brief_bytes_max: z.number().int().positive().optional(),
+        /**
+         * How many branches the plan must carry. Routing decides `n` from the class, and a
+         * `compiles: true` fixture could not check it — so the wide path, whose whole subject is
+         * that `n` is 7 and not 5, had no way to assert the one thing it is for. A compile that
+         * quietly fell back to five branches would have passed.
+         */
+        branches_expected: z.number().int().min(1).optional(),
+        /** Every dispatched frame sits on its own axis (D6). Free to check and never checked. */
+        distinct_axes: z.boolean().optional(),
       })
       .strict()
       .default({ decline: false, reason_includes: [] }),
