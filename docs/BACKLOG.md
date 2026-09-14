@@ -334,7 +334,7 @@ yet enough to know whether they work.
     surface area with no claim behind it.
 
     Left open as item 84, because it is a decision rather than a defect.
-84. **Should an unparseable branch artifact abort the run** (owner's call). Item 37 found the
+84. ~~**Should an unparseable branch artifact abort the run** (owner's call). Item 37 found the
     severity inverted and did not change it. A branch that returns *valid* YAML with no
     `problem_hash` aborts the whole run; a branch whose YAML will not parse at all costs one
     branch and the run continues with four. Both are "the worker returned garbage", and the
@@ -347,7 +347,17 @@ yet enough to know whether they work.
     of four is a monoculture where four of five is exactly at the threshold, and the arithmetic
     changed without anyone deciding it should. Whichever way it goes it wants a D-number, because
     the current split reads like an accident and `test/malformed.test.ts` currently pins it as
-    intent.
+    intent.~~
+    **Decided as D30: both abort.** The lenient case was the one where less is known — an artifact
+    that will not parse shows strictly less than one carrying no hash, which is not a wrong answer to
+    the right problem but no answer at all. And pruning moved the monoculture denominator silently: a
+    cluster of four is a monoculture at n=4 and sits exactly on the 0.8 threshold at n=5, so a run
+    that lost a branch to a parse error was scored under a rule its plan never declared.
+
+    `UNPARSEABLE` is a separate code from `HASH_MISMATCH` because the fixes differ, the parser's
+    message still reaches the reader down to the column, and the abort reason states why it is an
+    abort rather than a prune. The cost is accepted and recorded: one flaky subagent now ends a run
+    that has already paid for four branches.
 
 ## 6. CLI and reporting
 

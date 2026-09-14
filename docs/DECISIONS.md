@@ -2751,3 +2751,55 @@ The original b76 pair is superseded rather than used: those models predate the c
 their token counts differ by 846 and their vocabularies by one type, so `comparable_training` would
 refuse them. They read different text, which is the D26 hazard, and it is why this decision retrained
 rather than scored what was on disk.
+
+---
+
+## D30. Backlog 84: an unparseable branch artifact aborts the run, like every other artifact that shows nothing
+
+**Asked.** Item 37 found the kernel treating four shapes of malformed artifact two different ways. An
+artifact carrying no `problem_hash` — prose, an empty file, a document of the wrong shape — aborts the
+run. An artifact that will not parse at all was *pruned*: it cost one branch and the run continued on
+four. Item 37 recorded the split as intentional rather than deciding it, and backlog 84 is the
+decision.
+
+**Resolved. Both abort.** `validateBranchArtifact` throws `RunAbort("UNPARSEABLE")` on a parse
+failure, alongside the `HASH_MISMATCH` the other three already raised.
+
+### Why the split had no defence
+
+**The lenient case was the one where less is known.** A missing hash aborts because nothing shows the
+branch addressed *this* problem. An artifact that will not parse shows strictly less than that: not a
+wrong answer to the right problem, not an answer at all. Treating it more gently inverted the
+severity of the two.
+
+**And it moved an arithmetic nobody chose to move.** `monoculture_fraction` is 0.8. One cluster of
+four branches is a monoculture at n=4 and sits exactly *on* the threshold at n=5, so pruning a branch
+silently changed the denominator of a run-level verdict. A run that lost a branch to a parse error was
+scored under a different rule from the one its plan was written for, and nothing said so.
+
+### What is kept
+
+**The parser's own message, down to the column.** It travels on the abort reason now rather than in
+the pruned block — `branch DOOR_KEEPER returned text that is not valid YAML: ... at line 1, column 12`
+— and the reason states why this is an abort and not a prune, because a reader who knew the old
+behaviour needs the argument and not only the new verdict.
+
+**Two distinct codes**, because the fixes differ. `HASH_MISMATCH` means a branch answered without
+echoing what it was asked. `UNPARSEABLE` means there is nothing there to check. Same outcome,
+different thing to go and look at.
+
+**`ALL_INVALID` stays reachable** from a pack whose artifacts parse and fail the schema, which is a
+third failure and not this one.
+
+### What this costs, stated plainly
+
+One flaky subagent now ends a run that has already paid for four branches. That is a real cost and it
+is the argument the other way. It is accepted because the alternative is a run scored under a rule its
+plan did not declare, and because D5 means the spend was consented to for a five-branch run rather
+than for whatever subset came back parseable.
+
+### The tests that changed
+
+Three tests in `test/malformed.test.ts` pinned the old behaviour and now pin the new, with the reason
+for the change in place. That file is the record of both: item 37 established what the kernel did,
+this decision establishes what it should do, and the diff between them is the argument.

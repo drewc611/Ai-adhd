@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { artifact, cfg, passA, passB, tmp, yaml } from "./helpers.js";
+import { artifact, cfg, tmp, yaml } from "./helpers.js";
 import { Kernel } from "../src/os.js";
 
 /**
@@ -14,19 +14,23 @@ import { Kernel } from "../src/os.js";
  * no position, and inventing one, or quietly scoring four branches while the plan says five,
  * hands the reader a run that looks clean and is not.
  *
- * Four shapes of garbage, because they take four different paths through `validateBranchArtifact`
- * and only one of them is the parse failure the item names:
+ * Four shapes of garbage, and since D30 all four abort:
  *
- *   unparseable      the YAML parser throws                  -> pruned, run continues
- *   valid, no hash   parses, `problem_hash` absent           -> aborts
- *   prose            parses as a scalar, no hash             -> aborts
- *   empty            parses as null, no hash                 -> aborts
+ *   unparseable      the YAML parser throws         -> aborts, UNPARSEABLE
+ *   valid, no hash   `problem_hash` absent          -> aborts, HASH_MISMATCH
+ *   prose            parses as a scalar, no hash    -> aborts, HASH_MISMATCH
+ *   empty            parses as null, no hash        -> aborts, HASH_MISMATCH
  *
- * The asymmetry is real and deliberate on the abort side: a document that carries no hash
- * cannot be shown to have addressed this problem, and D2's isolation is worth nothing if a
- * branch that saw something else can contribute. It is recorded here rather than argued for,
- * because the tests below pin what happens and `docs/BACKLOG.md` carries the open question of
- * whether the parse failure should abort too.
+ * **These tests used to pin the opposite for the first case, and that is the point of them.**
+ * Item 37 found the unparseable artifact being *pruned* while the three that carry no hash abort,
+ * and recorded the split as intentional rather than deciding it. Backlog 84 is the argument that it
+ * had no defence: a document with no hash aborts because nothing shows it addressed *this* problem,
+ * and an unparseable document shows strictly less than that. The lenient case was the one where less
+ * is known.
+ *
+ * It also moved an arithmetic nobody chose to move. `monoculture_fraction` is 0.8, so one cluster of
+ * four is a monoculture at n=4 and sits exactly on the threshold at n=5 — pruning a branch silently
+ * changed the denominator of a run-level verdict.
  */
 
 const PROBLEM = "What timeouts should I set on this HTTP client?";
@@ -37,7 +41,7 @@ function kernel() {
   return { k, root };
 }
 
-function start(k: Kernel) {
+function start_(k: Kernel) {
   k.submit(PROBLEM, { problem_class: "design_decision" }, { seed: 1, runId: "r1", confirmed: true });
   return k.status("r1").problem_hash;
 }
@@ -55,59 +59,47 @@ function diverge(k: Kernel, hash: string, body: string): string {
   return replaced;
 }
 
-test("a branch whose YAML will not parse is pruned, and the run continues with four", () => {
-  const { k, root } = kernel();
-  const hash = start(k);
+test("a branch whose YAML will not parse aborts the run, and names the parser's own error", () => {
+  const { k } = kernel();
+  const hash = start_(k);
   const dropped = diverge(k, hash, "position: [unclosed\n  frame: :::\n");
 
   const st = k.status("r1");
-  assert.equal(st.state, "critique_a", "one unparseable branch does not end the run");
-
-  // The scored set is four, and the map says which four. A silent repair would have kept five
-  // letters and scored something no branch wrote.
-  const blind = JSON.parse(readFileSync(join(root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
-  assert.equal(Object.keys(blind).length, 4);
-  assert.ok(!Object.values(blind).includes(dropped), "the malformed branch is not scored under a letter");
-
-  // And the reason is on disk in machine-readable form, not only in prose.
-  const violations = JSON.parse(readFileSync(join(root, "r1", "critic", "violations.json"), "utf8")) as { frame: string; violations: string[] }[];
-  assert.deepEqual(violations.map((v) => v.frame), [dropped]);
-  assert.match(violations[0]!.violations[0]!, /not valid YAML/);
+  assert.equal(st.state, "aborted", "an unparseable artifact no longer costs one branch");
+  assert.match(st.reason!, /UNPARSEABLE/);
+  assert.match(st.reason!, new RegExp(`branch ${dropped} returned text that is not valid YAML`));
+  // The parser's own message still reaches the reader, down to the column. It travels on the abort
+  // now rather than in the pruned block, and losing it would be the real regression here.
+  assert.match(st.reason!, /line 1, column 12/);
+  // And the reason says why this is an abort rather than a prune, because a reader who expected the
+  // old behaviour needs the argument and not just the new verdict.
+  assert.match(st.reason!, /same reason a missing problem_hash aborts/);
 });
 
-test("the pruned block hands the user the parser's own error, not a summary of it", () => {
+test("the abort is distinguishable from a hash mismatch, because the fixes differ", () => {
+  // A missing hash means a branch answered without echoing what it was asked; an unparseable
+  // artifact means nothing about the problem at all. Same outcome, different thing to go and look
+  // at, so the codes stay separate.
+  const a = kernel();
+  diverge(a.k, start_(a.k), "position: [unclosed\n");
+  assert.match(a.k.status("r1").reason!, /UNPARSEABLE/);
+  assert.ok(!/HASH_MISMATCH/.test(a.k.status("r1").reason!));
+
+  const b = kernel();
+  diverge(b.k, start_(b.k), "colour: blue\ncount: 7\n");
+  assert.match(b.k.status("r1").reason!, /HASH_MISMATCH/);
+  assert.ok(!/UNPARSEABLE/.test(b.k.status("r1").reason!));
+});
+
+test("one malformed branch is enough; the other four are not scored on their own", () => {
+  // The old behaviour scored four of five and moved the monoculture denominator with it. Now no
+  // partial pack is scored at all, so `blind-map.json` is never written.
   const { k, root } = kernel();
-  const hash = start(k);
-  const dropped = diverge(k, hash, "position: [unclosed\n  frame: :::\n");
-
-  const blind = JSON.parse(readFileSync(join(root, "r1", "critic", "blind-map.json"), "utf8")) as Record<string, string>;
-  const letters = Object.keys(blind);
-  const frames = Object.values(blind);
-  const ta = k.claim("w1")!;
-  k.return_(ta.id, yaml(passA(hash, letters)), "w1");
-  const tb = k.claim("w1")!;
-  k.return_(tb.id, yaml(passB(hash, [
-    { id: "cancel", members: frames.slice(0, 2), action: "Expose cancel first." },
-    ...frames.slice(2).map((f) => ({ id: `lone_${f}`, members: [f] })),
-  ])), "w1");
-  for (let i = 0; i < 10; i++) {
-    const td = k.claim("w1");
-    if (!td) break;
-    k.return_(td.id, yaml({ problem_hash: hash, frame: td.label, verdict: "defend", response: "Users cancel rather than wait.", revised_position: `Do the ${td.label} thing.`, revised_falsifier: null, confidence: "high" }), "w1");
-  }
-  assert.equal(k.status("r1").state, "done");
-
-  const synth = k.result("r1").synthesis!;
-  const pruned = synth.slice(synth.indexOf("## Pruned, with reason"));
-  assert.ok(pruned.includes(`**${dropped}**`), "the pruned frame is named");
-  assert.match(pruned, /no valid artifact/);
-  assert.match(pruned, /contract: not valid YAML/);
-  // The parser's line and column reach the user. This is the difference between a report that
-  // can be acted on and one that says "a branch failed": the reader can open the artifact and
-  // look at that character.
-  assert.match(pruned, /line 1, column 12/);
-  // And the run still reports what it forecloses, from the four that survived.
-  assert.match(synth, /## What this forecloses/);
+  const hash = start_(k);
+  diverge(k, hash, "position: [unclosed\n");
+  assert.equal(k.status("r1").state, "aborted");
+  assert.ok(!existsSync(join(root, "r1", "critic", "blind-map.json")), "a blind map was written for an aborted run");
+  assert.equal(k.claim("w1"), null, "an aborted run still had claimable work");
 });
 
 test("an artifact carrying no problem_hash aborts, and says contract failure rather than drift", () => {
@@ -117,7 +109,7 @@ test("an artifact carrying no problem_hash aborts, and says contract failure rat
     ["nothing at all", ""],
   ] as const) {
     const { k } = kernel();
-    const hash = start(k);
+    const hash = start_(k);
     diverge(k, hash, body);
     const st = k.status("r1");
     assert.equal(st.state, "aborted", name);
@@ -133,7 +125,7 @@ test("an artifact carrying no problem_hash aborts, and says contract failure rat
 
 test("a branch that echoes a different hash still reports paraphrase drift", () => {
   const { k } = kernel();
-  const hash = start(k);
+  const hash = start_(k);
   // The frame has to be the one the task asked for — the misdirection guard in `return_` rejects
   // an artifact declaring another frame before any of this is reached, which is its job — so the
   // only thing wrong with this artifact is the hash it echoed.
@@ -147,12 +139,15 @@ test("a branch that echoes a different hash still reports paraphrase drift", () 
   assert.ok(!/problem_hash missing/.test(st.reason!));
 });
 
-test("every branch malformed is an abort, not an empty run that reports nothing pruned", () => {
+test("every branch malformed aborts on the first one, without waiting for the fifth", () => {
   const { k } = kernel();
-  start(k);
+  start_(k);
+  // The run ends when the phase advances, so the fifth return is what triggers it — but the reason
+  // now names one branch rather than reporting that all of them failed. ALL_INVALID is still
+  // reachable, from a pack whose artifacts parse and fail the schema, which is a different failure.
   for (let i = 0; i < 5; i++) k.return_(k.claim("w1")!.id, "position: [unclosed\n", "w1");
   const st = k.status("r1");
   assert.equal(st.state, "aborted");
-  assert.match(st.reason!, /ALL_INVALID/);
-  assert.match(st.reason!, /Every branch violated the contract/);
+  assert.match(st.reason!, /UNPARSEABLE/);
+  assert.ok(!/ALL_INVALID/.test(st.reason!), "the first unparseable artifact should decide it");
 });

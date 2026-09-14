@@ -23,7 +23,7 @@ in-context divergence technique is built on exactly that (D2).
 
 Eleven recorded runs over four fixtures, each fixture carrying `must_surface` assertions written
 before the run and a linear chain-of-thought control. The mechanics — verbatim passthrough,
-`problem_hash`, blind pass A, the pruned block — are enforced by 456 tests rather than by
+`problem_hash`, blind pass A, the pruned block — are enforced by 457 tests rather than by
 inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
 before the commit that runs it.
 
