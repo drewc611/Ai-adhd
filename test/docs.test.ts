@@ -407,3 +407,51 @@ test("the writeup's numbers are the numbers the corpus has now", () => {
     .reduce((n, f) => n + (readFileSync(join(cfg.root, "test", f), "utf8").match(/^test\(/gm) ?? []).length, 0);
   assert.ok(doc.includes(`${tests} tests`), `the writeup's test count has drifted: suite has ${tests}`);
 });
+
+/**
+ * A heading is a claim about its contents, and this one was false for a month.
+ *
+ * `docs/BACKLOG.md` section 9 is titled "Hygiene, done" and opens "Findings from a full sweep, all
+ * fixed". Items 70 onward were appended after it with no heading of their own, so sixteen open items
+ * — six of them decisions waiting on the owner — sat under a heading asserting they were finished.
+ * Nothing read them as open because nothing had to: a reader trusts the heading.
+ *
+ * The mechanical shape of the bug is that new items are appended at the end of the file, so the
+ * section holding the highest-numbered item is the one they land in. If that section claims to be
+ * done, the next item appended is mis-filed by construction.
+ */
+test("the backlog section holding its highest-numbered item does not claim to be finished", () => {
+  const lines = readFileSync(join(cfg.root, "docs", "BACKLOG.md"), "utf8").split("\n");
+  let section = "";
+  let highest = { n: 0, section: "" };
+  const items: { n: number; section: string; struck: boolean }[] = [];
+  for (const line of lines) {
+    if (line.startsWith("## ")) section = line.slice(3).trim();
+    const m = /^(\d+)\. (.*)$/.exec(line);
+    if (!m) continue;
+    const n = Number(m[1]);
+    items.push({ n, section, struck: m[2]!.startsWith("~~") });
+    if (n > highest.n) highest = { n, section };
+  }
+  assert.ok(items.length > 50, "the backlog should have items to check");
+  assert.ok(
+    !/\bdone\b/i.test(highest.section),
+    `item ${highest.n} is the highest in the file and sits under "${highest.section}", which claims to be finished — so the next item appended lands there too`,
+  );
+});
+
+test("every open backlog item sits under a section that does not claim to be done", () => {
+  const lines = readFileSync(join(cfg.root, "docs", "BACKLOG.md"), "utf8").split("\n");
+  let section = "";
+  const misfiled: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("## ")) section = line.slice(3).trim();
+    const m = /^(\d+)\. (.*)$/.exec(line);
+    // Section 9's entries are records of fixes rather than asks, so they carry no `~~` — there was
+    // no original ask to strike. That is why they are exempted by name rather than by shape: the
+    // shape is indistinguishable from an open item, which is precisely the hole this pair closes.
+    if (!m || section.startsWith("9. Hygiene")) continue;
+    if (/\bdone\b/i.test(section) && !m[2]!.startsWith("~~")) misfiled.push(`${m[1]} under "${section}"`);
+  }
+  assert.deepEqual(misfiled, [], "open items are filed under a heading claiming they are done");
+});

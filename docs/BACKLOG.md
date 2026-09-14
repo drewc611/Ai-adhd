@@ -404,6 +404,33 @@ yet enough to know whether they work.
 
 45. ~~**Exit codes** that distinguish contract failure, hash mismatch, and eval failure.~~ Built, documented in the README, tested against the built binary.
 
+86. ~~**The MCP server had stopped offering what the CLI offers.**~~
+    **Found while wiring `--reach` in item 19. `adhd frames` has seven report modes on the CLI and
+    `adhd_frames` accepted five: `--drift` and `--forbidden` had been added to one surface and not
+    the other, so a host could see five of the seven reports this repository can produce with no way
+    to learn that two were missing. CLAUDE.md ships the MCP server as "the same four as stdio tools",
+    and "the same" had quietly stopped being true.**
+
+    All three are wired now, each with its description, and a test reads the modes out of
+    `src/cli.ts` itself rather than from a list kept beside it, a hand-kept list being a third thing
+    to forget. A second calls all seven through MCP and asserts they return seven *different*
+    reports, because a wiring bug that fell through to the default listing would pass every other
+    check.
+
+    **Generalising that test found the same gap on `adhd_eval`, which was worse.** It accepted three
+    directory arguments and none of `--audit`, `--history` or `--gate` — so a host driving evals over
+    MCP could replay fixtures and could not gate on a regression, which is the one thing a host would
+    want the command for, and could not run the audit that says whether an assertion discriminates a
+    real run from its control at all. All three wired.
+
+    `--update`, which rewrites the gate's baseline, is deliberately withheld: a gate whose baseline
+    the caller can move is not a gate, and a host is exactly the caller who would move it by
+    accident. The CLI keeps it, where a person types it on purpose. The test names the withholding
+    rather than skipping it, because a deliberate omission and a forgotten one look identical from
+    outside, and it asserts the tool description explains it where a host actually reads.
+
+    Verified by deleting each in turn from the MCP schema: the test fails and names the mode.
+
 ## 7. Documentation
 
 46. ~~**A worked example**, end to end, with the actual commands and the actual output.~~
@@ -480,33 +507,6 @@ yet enough to know whether they work.
 54. **Plugin agents exercised as plugin agents.** Every recorded run so far used
     general-purpose subagents; the shipped agent definitions are untested in their real role.
 
-86. ~~**The MCP server had stopped offering what the CLI offers.**~~
-    **Found while wiring `--reach` in item 19. `adhd frames` has seven report modes on the CLI and
-    `adhd_frames` accepted five: `--drift` and `--forbidden` had been added to one surface and not
-    the other, so a host could see five of the seven reports this repository can produce with no way
-    to learn that two were missing. CLAUDE.md ships the MCP server as "the same four as stdio tools",
-    and "the same" had quietly stopped being true.**
-
-    All three are wired now, each with its description, and a test reads the modes out of
-    `src/cli.ts` itself rather than from a list kept beside it, a hand-kept list being a third thing
-    to forget. A second calls all seven through MCP and asserts they return seven *different*
-    reports, because a wiring bug that fell through to the default listing would pass every other
-    check.
-
-    **Generalising that test found the same gap on `adhd_eval`, which was worse.** It accepted three
-    directory arguments and none of `--audit`, `--history` or `--gate` — so a host driving evals over
-    MCP could replay fixtures and could not gate on a regression, which is the one thing a host would
-    want the command for, and could not run the audit that says whether an assertion discriminates a
-    real run from its control at all. All three wired.
-
-    `--update`, which rewrites the gate's baseline, is deliberately withheld: a gate whose baseline
-    the caller can move is not a gate, and a host is exactly the caller who would move it by
-    accident. The CLI keeps it, where a person types it on purpose. The test names the withholding
-    rather than skipping it, because a deliberate omission and a forgotten one look identical from
-    outside, and it asserts the tool description explains it where a host actually reads.
-
-    Verified by deleting each in turn from the MCP schema: the test fails and names the mode.
-
 ## 9. Hygiene, done
 
 Findings from a full sweep, all fixed. Recorded because the first one would have shipped.
@@ -567,6 +567,21 @@ Left alone deliberately: `actions/checkout` is v4 here and v7 in the CodeQL work
 green and there is no evidence of a problem, so bumping a working action on cosmetic
 inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 requires Node
 22.12 and this package supports Node 20.
+
+## 10. Raised after the first pass
+
+Everything below was added once the numbered sections above were written, and until now it sat
+under section 9 with no heading of its own. That section is titled **Hygiene, done** and opens
+"Findings from a full sweep, all fixed", so sixteen open items — six of them decisions waiting on
+the owner — were filed under a heading asserting they were finished. Nothing read them as open
+because nothing had to: a reader trusts the heading, and so did every count of what was left.
+
+Section 9 is a record of fixes rather than a list of work, which is why its entries are not struck
+through: there is no original ask to strike, they were written as findings. That is fine and it is
+also exactly what let this happen, because an unstruck entry there looks like an open item to
+anything counting. The guard is in `test/docs.test.ts`: **a section whose heading claims *done* may
+not be the one holding the file's highest-numbered item.** New items are appended at the end, so if
+the end is a record section they have been mis-filed — which is the whole of what went wrong here.
 
 70. **Two fixture assertions that `adhd lint` flags** (owner's call). `002/or_so_noticed` matches
     `or so`, which is in 002's prompt verbatim, so any branch quoting the question satisfies an

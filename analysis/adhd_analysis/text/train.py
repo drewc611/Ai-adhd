@@ -51,6 +51,14 @@ class TrainingRecord:
     #: previously invisible because both causes landed in one number.
     vocab_truncated_types: int
     vocab_truncated_tokens: int
+    #: How many times the counting pass dropped every count-1 n-gram to stay under `max_ngrams`.
+    #:
+    #: Zero means the table is every n-gram the corpus produced; nonzero means the tail was cut, and
+    #: the tail is most of the table. Backlog 76 exists to price that, and the record could not
+    #: answer its own question: `ngrams` alone cannot distinguish a small model from a pruned one,
+    #: and the two b76 cells differ by 24M n-grams with nothing on either record saying why. It was
+    #: in the model's meta and not here, the same gap `min_count` had.
+    prunes: int
     #: Which side of which split this trained on, or None for the whole manifest. On the record as
     #: well as in the model's meta, because the record is what a person reads.
     split: dict | None
@@ -93,6 +101,7 @@ class TrainingRecord:
                 "types": self.vocab_truncated_types,
                 "tokens": self.vocab_truncated_tokens,
             },
+            "prunes": self.prunes,
             "split": self.split,
             "corpus_fingerprint": self.corpus_fingerprint,
             "vocabulary_fingerprint": self.vocabulary_fingerprint,
@@ -187,6 +196,7 @@ def train(
         oov_rate=oov,
         vocab_truncated_types=vocab.truncated_types,
         vocab_truncated_tokens=vocab.truncated_tokens,
+        prunes=int(model.meta.get("prunes", 0)),
         split=model.meta["split"],
         corpus_fingerprint=model.meta["corpus_fingerprint"],
         vocabulary_fingerprint=model.meta["vocabulary_fingerprint"],
