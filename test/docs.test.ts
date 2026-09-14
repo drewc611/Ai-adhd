@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { cfg } from "./helpers.js";
+import { interRaterCorpus, weightSensitivity } from "../src/learn.js";
 
 const README = readFileSync(join(cfg.root, "README.md"), "utf8");
 
@@ -366,4 +367,43 @@ test("the brief the worked example quotes really does name no sibling", () => {
   }
   assert.ok(!/so far/i.test(brief));
   assert.ok(!/\b(five|5) branches\b/i.test(brief), "the brief states the branch count");
+});
+
+/**
+ * `docs/WRITEUP.md` states what the evidence supports, and the whole value of it is that its
+ * unflattering numbers are as current as its flattering ones. A writeup whose negative results
+ * have quietly gone stale is worse than none: it reads as honesty and is not.
+ *
+ * The numbers are recomputed from the same functions the CLI calls, so this fails when the corpus
+ * grows or a scoring changes, which is exactly when the document needs rereading.
+ */
+test("the writeup's numbers are the numbers the corpus has now", () => {
+  const doc = readFileSync(join(cfg.root, "docs", "WRITEUP.md"), "utf8");
+
+  const agree = interRaterCorpus(cfg);
+  assert.ok(doc.includes(`${agree.runs.length} runs and ${agree.cells} scored cells`) || doc.includes(`pooled over ${agree.runs.length} runs and ${agree.cells} scored cells`),
+    `the writeup should say ${agree.runs.length} runs and ${agree.cells} scored cells`);
+  assert.ok(doc.includes(`${Math.round(agree.exact * 100)}% exact agreement`), `pooled exact agreement is ${Math.round(agree.exact * 100)}%`);
+  // The claim that rankings moved in every run is the load-bearing one.
+  assert.equal(agree.runs.filter((r) => r.report.ranking_changed).length, agree.runs.length, "the writeup says the ranking changed in all of them");
+
+  const sens = weightSensitivity(cfg);
+  assert.ok(doc.includes(`All ${sens.margins.length} contested decisions`), `there are ${sens.margins.length} contested decisions`);
+  // The load-bearing claim is the margin, not the count: a decision settled by one anchor point
+  // was not settled by the rubric. `adhd learn` prints the anchor step; the writeup quotes it.
+  const step = Math.max(...sens.margins.map((m) => m.margin));
+  assert.ok(step <= 2 / 48 + 1e-9, `the writeup says two anchor points or fewer; the widest margin is now ${step.toFixed(4)}`);
+  assert.equal(sens.flips.length, 0, "the writeup says no representative changed under a +/-1 move");
+
+  // Recorded runs, and the subset carrying a score.
+  const recorded = readdirSync(join(cfg.root, "evals", "recorded")).filter((d) => statSync(join(cfg.root, "evals", "recorded", d)).isDirectory());
+  const scored = recorded.filter((d) => existsSync(join(cfg.root, "evals", "recorded", d, "score.json")));
+  assert.match(doc, new RegExp(`# What ${["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][recorded.length] ?? recorded.length} runs show`),
+    `the title should say ${recorded.length}`);
+  assert.ok(doc.includes(`${["", "one", "two", "three", "four", "five", "six", "seven"][scored.length] ?? scored.length} with a \`score.json\``), `${scored.length} runs carry a score.json`);
+
+  // The test count it quotes for the mechanics claim.
+  const tests = readdirSync(join(cfg.root, "test")).filter((f) => f.endsWith(".test.ts"))
+    .reduce((n, f) => n + (readFileSync(join(cfg.root, "test", f), "utf8").match(/^test\(/gm) ?? []).length, 0);
+  assert.ok(doc.includes(`${tests} tests`), `the writeup's test count has drifted: suite has ${tests}`);
 });

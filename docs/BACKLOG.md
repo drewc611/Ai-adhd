@@ -335,7 +335,24 @@ yet enough to know whether they work.
     empty, because seven of the ten axes carry one frame and a fourteenth on a shared axis makes the
     library worse rather than larger. Also what the check cannot tell you — it flags one pair today and
     lists six more at 100% that it refuses to flag on one or two shared runs.**
-49. **A short paper-style writeup** of what five runs have shown, honest about the sample size.
+49. ~~**A short paper-style writeup** of what five runs have shown, honest about the sample size.~~
+    **Built as `docs/WRITEUP.md`. Written at eleven runs rather than five; the extra six did not change
+    the shape of the answer. Claim, method, what holds, what does not, and what would change it.**
+
+    **The "what does not hold" section is longer than the other one and that is the finding.** Fixture
+    001 has passed once, in the run it was written against. Two critics on the same pack agree on 79%
+    of cells and change the ranking in all five runs, once changing the shipped representative. All
+    four contested decisions were settled by two anchor points or fewer out of 48, and two by exactly
+    one — so `--sensitivity`'s "no representative changed under ±1" reads as stability and is the
+    opposite. Two dimensions sit at 91% and 94% ceiling with two distinct values ever used, carrying
+    weight and separating nothing. A run costs 2.6x to 3.3x its estimate, and the D5 gate quotes the
+    estimate.
+
+    **Guarded rather than reread.** `test/docs.test.ts` recomputes the agreement, the cell count, the
+    contested-decision count, the widest margin, the run counts and the test count from the same
+    functions the CLI calls, and fails when any of them drifts. Verified against a doctored copy: a
+    79 changed to 82 and a 225 changed to 200 both fail. A writeup whose unflattering numbers have
+    gone stale reads as honesty and is not, which is the failure mode worth a test.
 50. ~~**Failure gallery**: every recorded failure, why it failed, and what it taught.~~
     **Built as `docs/FAILURES.md`. Six of eleven recorded runs fail and four of those are supposed to —
     linear-CoT controls, where a pass would mean the fixture is broken. The two real failures are
