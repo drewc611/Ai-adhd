@@ -65,9 +65,43 @@ yet enough to know whether they work.
 10. ~~**008 through 010, the decline classes.** `factual_lookup`, `mechanical_refactor`,
     `single_correct_answer`. A decline is a first-class outcome and no recorded run declines.~~
    **Built as fixtures 005, 006 and 007. A decline has no run to record, so `expect.decline` asserts the routing decision and its reason directly.**
-11. **A fixture designed to produce a monoculture.** The detector has only ever fired in unit
-    tests. Pick a problem where every frame lands on the same action and record it.
-12. **A fixture designed to produce scatter.** Same reasoning, opposite failure.
+11. ~~**A fixture designed to produce a monoculture.** The detector has only ever fired in unit
+    tests. Pick a problem where every frame lands on the same action and record it.~~
+    **Built as fixture 012, one-obvious-answer: a fourteen-month on-call rotation of one person, and
+    budget for a better paging tool. Every stance should land on the same action from a different
+    direction — cost prices the sleep, actors finds the tool routes between people who do not exist,
+    scope finds the smallest change is a second person, adversary finds she leaves.**
+
+    **The constraint that shapes it: a monoculture fixture cannot be a problem with a right answer.**
+    Those route to `single_correct_answer` and are declined before a branch spawns (fixture 007), so
+    it has to be a genuine design decision where the stances happen to converge, which is rarer.
+
+    The monoculture here is the system working and the answer is not wrong. What would be wrong is
+    reporting five-way agreement as corroboration across five axes when the problem admitted one
+    action and divergence bought nothing — which is T1 at run level, and the thing the repository is
+    named for. `pruned_min` is deliberately unset: run-level monoculture and per-frame T1 are two
+    findings and a critic can record the first without the second, so asserting both would let the
+    fixture fail for a reason unrelated to what it tests.
+
+    Recorded as awaiting a run, per fixture 011's precedent. If it produces an ordinary run instead,
+    that failure is worth more than the pass — it would mean five stances are harder to converge than
+    this reasoning assumes, which nothing has tested.
+12. ~~**A fixture designed to produce scatter.** Same reasoning, opposite failure.~~
+    **Built as fixture 013, several-problems: six months of runway, the only backend engineer
+    interviewing elsewhere, 40% of revenue renewing in four months, and onboarding that costs three
+    weeks per customer. Four problems wearing one question, sharing no constraint, so each stance
+    should answer a different one and no cluster should reach two.**
+
+    The dangerous outcome is not scatter, it is a confident recommendation. Without the rule the
+    highest pass A total ships as the answer and the other four read as also-rans rather than as the
+    evidence that the question was never one question.
+
+    Also awaiting a run, and also more interesting if it fails: two frames converging on the engineer
+    would mean a problem built to have no shared constraint has one anyway.
+
+    Both fixtures were caught by `adhd lint` on the first draft — three patterns were satisfiable by
+    quoting the prompt, including the negative control — and rewritten onto the inference rather than
+    the restatement.
 13. ~~**A cancel fixture** (D5). Confirm, return two branches, cancel, and assert the partial
     synthesis ships unscored with the pruned block absent and said to be absent.~~
     **Already built and found open by the audit in item 83, as three kernel tests rather than a fixture
