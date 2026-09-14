@@ -470,6 +470,20 @@ yet enough to know whether they work.
 54. **Plugin agents exercised as plugin agents.** Every recorded run so far used
     general-purpose subagents; the shipped agent definitions are untested in their real role.
 
+86. ~~**The MCP server had stopped offering what the CLI offers.**~~
+    **Found while wiring `--reach` in item 19. `adhd frames` has seven report modes on the CLI and
+    `adhd_frames` accepted five: `--drift` and `--forbidden` had been added to one surface and not
+    the other, so a host could see five of the seven reports this repository can produce with no way
+    to learn that two were missing. CLAUDE.md ships the MCP server as "the same four as stdio tools",
+    and "the same" had quietly stopped being true.**
+
+    All three are wired now, each with its description, and two tests hold the surfaces together: one
+    reads the modes out of `src/cli.ts` itself rather than from a list kept beside it — a hand-kept
+    list being a third thing to forget — and one calls all seven through MCP and asserts they return
+    seven *different* reports, because a wiring bug that fell through to the default listing would
+    pass every other check. Verified by deleting `reach` from the MCP schema: the first test fails
+    and names the mode.
+
 ## 9. Hygiene, done
 
 Findings from a full sweep, all fixed. Recorded because the first one would have shipped.

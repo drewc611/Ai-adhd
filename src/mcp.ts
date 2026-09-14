@@ -9,7 +9,7 @@ import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { formatEvalReport, runEval } from "./eval.js";
-import { axisCoverage, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
+import { axisCoverage, forbiddenAudit, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { openKernel, recordRun } from "./os.js";
 
 const text = (s: string, isError = false) => ({ content: [{ type: "text" as const, text: s }], isError });
@@ -69,13 +69,16 @@ export function buildServer(): McpServer {
     "adhd_frames",
     {
       description:
-        "List the frame library, or report how it has behaved across recorded runs. Exactly one report at a time: stats=true for per-frame prune, fold and recommendation rates with detector fire counts; orthogonality=true for pairwise co-clustering (D6); health=true for docs/RETIREMENT.md's five criteria counted, which reports and never concludes; axes=true for frames per axis and the axes no run has exercised; collisions=true for frame labels that are also ordinary prose, which the pass A redactor removes from artifacts that did not write them.",
+        "List the frame library, or report how it has behaved across recorded runs. Exactly one report at a time: stats=true for per-frame prune, fold and recommendation rates with detector fire counts; orthogonality=true for pairwise co-clustering (D6); health=true for docs/RETIREMENT.md's five criteria counted, which reports and never concludes; axes=true for frames per axis and the axes no run has exercised; collisions=true for frame labels that are also ordinary prose, which the pass A redactor removes from artifacts that did not write them; drift=true for recorded runs that used a frame whose definition has changed since; forbidden=true for which `forbidden` entries a recorded run has violated and how many have no mechanical form at all; reach=true for whether routing can dispatch each frame at its class's default n, which asks the selector rather than the corpus.",
       inputSchema: {
         orthogonality: z.boolean().optional(),
         stats: z.boolean().optional(),
         health: z.boolean().optional(),
         axes: z.boolean().optional(),
         collisions: z.boolean().optional(),
+        drift: z.boolean().optional(),
+        forbidden: z.boolean().optional(),
+        reach: z.boolean().optional(),
         recorded_dir: z.string().optional(),
         root: z.string().optional(),
       },
@@ -87,6 +90,9 @@ export function buildServer(): McpServer {
         if (a.health) return frameHealth(cfg, a.recorded_dir).text;
         if (a.axes) return axisCoverage(cfg, a.recorded_dir).text;
         if (a.collisions) return labelCollisions(cfg, a.recorded_dir).text;
+        if (a.drift) return frameDrift(cfg, a.recorded_dir).text;
+        if (a.forbidden) return forbiddenAudit(cfg, a.recorded_dir).text;
+        if (a.reach) return frameReach(cfg).text;
         return a.orthogonality ? orthogonality(cfg, a.recorded_dir).text : listFrames(cfg);
       }),
   );

@@ -209,3 +209,45 @@ test("adhd_frames exposes every report the CLI has, and picks one at a time", as
   assert.match(body(await call(client, "adhd_frames", { collisions: true })), /collision/i);
   assert.match(body(await call(client, "adhd_frames")), /frames, \d+ axes/);
 });
+
+/**
+ * CLAUDE.md ships the MCP server as "the same four as stdio tools, so any MCP host can drive it".
+ * "The same" is the claim, and it had quietly stopped being true: `adhd frames` grew `--drift` and
+ * `--forbidden`, and neither reached the MCP tool, so a host could see five of the seven reports
+ * this repository can produce and had no way to know two were missing.
+ *
+ * Read from the CLI source rather than from a list maintained beside it, because a hand-kept list
+ * is a third thing to forget.
+ */
+test("every report mode adhd frames offers on the CLI is an input the MCP tool accepts", async () => {
+  const cli = readFileSync(join(cfg.root, "src", "cli.ts"), "utf8");
+  const block = cli.slice(cli.indexOf('.command("frames")'), cli.indexOf(".action", cli.indexOf('.command("frames")')));
+  const modes = [...block.matchAll(/\.option\("--([a-z-]+)"/g)].map((m) => m[1]!).filter((m) => m !== "recorded" && m !== "json");
+  assert.ok(modes.length >= 7, `expected the CLI's report modes, found ${modes.join(",")}`);
+
+  const client = await connect();
+  const tools = await client.listTools();
+  const frames = tools.tools.find((t) => t.name === "adhd_frames")!;
+  const props = Object.keys((frames.inputSchema as { properties: Record<string, unknown> }).properties);
+  for (const m of modes) assert.ok(props.includes(m), `adhd frames --${m} has no MCP equivalent; the two surfaces have drifted`);
+  // And the description names each one, since that is all a host has to choose from.
+  for (const m of modes) assert.ok(new RegExp(`\\b${m}=true`).test(frames.description ?? ""), `the MCP description never mentions ${m}=true`);
+});
+
+test("each frames report mode returns its own report through MCP, not the default listing", async () => {
+  const client = await connect();
+  const seen = new Map<string, string>();
+  for (const mode of ["stats", "health", "axes", "collisions", "drift", "forbidden", "reach"]) {
+    const r = (await client.callTool({ name: "adhd_frames", arguments: { [mode]: true } })) as { content: { text: string }[]; isError?: boolean };
+    const text = r.content[0]!.text;
+    assert.ok(!r.isError, `${mode} errored: ${text}`);
+    assert.ok(text.length > 40, `${mode} returned almost nothing`);
+    seen.set(mode, text);
+  }
+  // Distinct reports, not the same one seven times: a wiring bug that fell through to the default
+  // listing would pass every check above.
+  assert.equal(new Set(seen.values()).size, seen.size, "two modes returned identical text");
+  assert.match(seen.get("reach")!, /at that class's default n/);
+  assert.match(seen.get("forbidden")!, /forbidden-list audit/);
+  assert.match(seen.get("drift")!, /frame|drift/i);
+});
