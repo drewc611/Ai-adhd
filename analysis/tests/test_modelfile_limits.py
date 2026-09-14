@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from adhd_analysis.text.budget import Budget
-from adhd_analysis.text.modelfile import MAX_HEADER_BYTES, ModelFileRefused, bounded_int
+from adhd_analysis.text.modelfile import MAX_HEADER_BYTES, MAX_LINE_BYTES, ModelFileRefused, bounded_int, line_bound_for
 from adhd_analysis.text.ngram import KneserNey
 from adhd_analysis.text.transformer import Transformer, TransformerConfig
 from adhd_analysis.text.tokenize import Vocab
@@ -193,3 +193,55 @@ def test_real_models_still_round_trip(tmp_path):
     back = Transformer.load(model.save(tmp_path / "rt.tf.gz"))
     assert back.perplexity(ids) == pytest.approx(before, rel=1e-4)
     assert back.meta == {"corpus": "toy"}
+
+
+def test_the_line_bound_is_derived_from_the_declared_shape_not_a_constant():
+    """E9's cell D trained for two hours and then could not be loaded by its own loader.
+
+    `MAX_LINE_BYTES` was 64MB with a comment reading "a `tok` matrix of 8,192 x 128 at six
+    significant figures is about 10MB, so this bounds a line without bounding a legitimate model".
+    That was true of every model that existed when it was written. Cell D is 148,114 x 128 and its
+    `tok` line is **204,355,608 bytes** — measured, not estimated — so the constant refused a model
+    this repository had just produced.
+
+    A constant that happens to exceed the largest model so far bounds nothing; it records what had
+    been trained by then. The bound is derived from the shape the file's own header declares, which
+    is already validated and already checked against a memory ceiling before any body line is read.
+    """
+    assert line_bound_for(148_114 * 128) > 204_355_608, "the bound must admit cell D's real tok line"
+    # And it is *tighter* than the constant for every model that existed before E9, which is the
+    # property that makes this a fix rather than a weakening.
+    assert line_bound_for(8_192 * 128) < MAX_LINE_BYTES
+    assert line_bound_for(1) < 2048
+
+
+def test_a_parameter_line_longer_than_its_declared_shape_allows_is_still_refused(tmp_path):
+    """The bound still has to bite. A file declaring a small model and then writing a huge line is
+    the attack the constant existed for, and deriving the bound must not lose it."""
+    cfg = {"vocab_size": 32, "d_model": 8, "n_heads": 2, "n_layers": 1, "context": 8,
+           "d_ff": 16, "init_std": 0.02}
+    # 32 x 8 = 256 values, so the derived bound is about 7KB. Write a megabyte on the tok line.
+    bloat = ",".join("0.1" for _ in range(400_000))
+    p = write(
+        tmp_path / "bloated.tf.gz",
+        json.dumps({"format": "adhd-tf-1", "meta": {}, "config": cfg}),
+        json.dumps({"itos": [f"w{i}" for i in range(32)], "min_count": 2}),
+        f"tok\t32,8\t{bloat}",
+    )
+    with pytest.raises(ModelFileRefused, match="exceeds .* bytes decompressed"):
+        Transformer.load(p)
+
+
+def test_the_refusal_says_the_bound_came_from_the_file_s_own_shape(tmp_path):
+    """A reader who hits this needs to know whether to widen a constant or fix their file. The two
+    cases say different things, because they have different fixes."""
+    cfg = {"vocab_size": 16, "d_model": 4, "n_heads": 2, "n_layers": 1, "context": 4,
+           "d_ff": 8, "init_std": 0.02}
+    p = write(
+        tmp_path / "b.tf.gz",
+        json.dumps({"format": "adhd-tf-1", "meta": {}, "config": cfg}),
+        json.dumps({"itos": [f"w{i}" for i in range(16)], "min_count": 2}),
+        "tok\t16,4\t" + ",".join("0.1" for _ in range(200_000)),
+    )
+    with pytest.raises(ModelFileRefused, match="its own declared shape allows"):
+        Transformer.load(p)

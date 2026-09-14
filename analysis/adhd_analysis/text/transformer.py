@@ -35,7 +35,7 @@ from typing import Iterable, Iterator
 import numpy as np
 
 from .budget import Budget
-from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header, read_vocabulary
+from .modelfile import ModelFileRefused, body_lines, bounded_int, line_bound_for, read_header, read_vocabulary
 from .tokenize import BOS, EOS, UNK, Vocab
 
 #: What `load` allows itself when no `Budget` says otherwise. Generous against this machine's
@@ -579,7 +579,7 @@ class Transformer:
             meta = head.get("meta", {})
             m = cls(config, vocab, meta if isinstance(meta, dict) else {})
             seen: set[str] = set()
-            for line in body_lines(fh, path):
+            for line in body_lines(fh, path, line_bound_for(max(p.size for p in m.params.values()))):
                 parts = line.rstrip("\n").split("\t")
                 if len(parts) != 3:
                     raise ModelFileRefused(f"{path}: a parameter line has {len(parts)} fields, expected 3")
