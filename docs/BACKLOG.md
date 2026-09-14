@@ -710,7 +710,7 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     in it and 1.972x without, straddling the line on a 0.105% change, so the threshold takes the worst
     case unconditionally as the conservative side of a coin toss. D25 has all of it.**
 
-79. **Price a transformer at the n-gram's vocabulary** (large, and it may not be reachable here).
+79. ~~**Price a transformer at the n-gram's vocabulary** (large, and it may not be reachable here).
     E6 holds the vocabulary at 8,192 because the output projection is `d_model x vocab_size` and every
     token's loss touches all of it. At the n-gram's 148,353 types that layer alone is 19M parameters,
     and by the measured 7,671 tok/s at 1.46M parameters the arithmetic puts one epoch over the
@@ -718,8 +718,32 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     is a real question and not the whole one.
 
     What would make it reachable is an adaptive or sampled softmax, which changes the loss the model
-    optimises and therefore needs its own registration. Recorded rather than attempted because the
-    honest version of it is not a small change.
+    optimises and therefore needs its own registration.~~
+    **Done, as E9 and D28. It was reachable: sampled softmax at training time, the full normalised
+    distribution at scoring time, because a sampled softmax when scoring is a different measurement
+    wearing the same name. Cell D scores 142.408 against the shipped model's 25.815 — a 5.516x loss
+    at 148,114 types — and `comparable_heldout` accepts the pair, which is the reading the cell
+    existed for: both sit at 0.915101% out-of-vocabulary, identical to every digit.**
+
+    **E6's open question is closed in the direction that strengthens it.** The 8,192 cap was not
+    flattering the n-gram; at its own vocabulary the transformer loses by more, not less. Quoted with
+    the figure everywhere: cell D read 3.51x less text, under a cap set before any result existed.
+
+    **The `− log S` term was missing from the importance weight and no gradient check could have found
+    it** — constant in the parameters, cancels from every derivative. The convergence test caught it:
+    the estimator ran *away* from the full loss by exactly log S.
+
+    Four defects surfaced only because the cell ran. A model this repository trained that it could not
+    load (a 64MB per-line constant against a 204,355,608-byte `tok` line). A scoring default that
+    would have reported 60 minutes of a 122-minute score as a perplexity. `shared_vocabulary`, built
+    under item 77 for exactly this comparison, with no route from a shell. And `publish_record.py
+    --name` silently writing an extensionless file that no test would ever read.
+
+    One thing E9 registered was wrong and the machinery said so: the amendment claimed the cap bought
+    a comparison against cell B at the same text and different vocabularies. Differing only in
+    vocabulary is what makes two all-targets perplexities incomparable, and `comparable_heldout`
+    refuses the pair. The shared-vocabulary rescue is exact, because cell B's 8,192 types are a strict
+    subset of cell D's 148,114.
 
 80. **Segment the scripts that are written without spaces** (large, and it needs a model rather than
     a regex). Chinese, Japanese, Thai, Khmer and Lao put no spaces between words, so a Unicode word
