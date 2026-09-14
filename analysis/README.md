@@ -225,19 +225,25 @@ anyone knowing what a percentage point was worth. E8 measures it: four Kneser-Ne
 
 | cap | types | held-out OOV | **all targets** | in-vocabulary only |
 |---|---|---|---|---|
-| 8,192 | 8,192 | 5.798% | **30.73** | 32.29 |
-| 16,384 | 16,384 | 4.033% | **35.29** | 35.99 |
-| 32,768 | 32,768 | 3.011% | **39.17** | 39.11 |
-| none | 71,934 | 2.368% | **42.50** | 41.50 |
+| 8,192 | 8,192 | 5.797% | **30.95** | 32.51 |
+| 16,384 | 16,384 | 4.044% | **35.52** | 36.22 |
+| 32,768 | 32,768 | 3.063% | **39.31** | 39.22 |
+| none | 71,603 | 2.391% | **42.77** | 41.76 |
 
-**-3.352 perplexity points per percentage point of OOV** at an r-squared of 0.977 — but the six
-pairwise slopes span -2.583 to -5.179, a spread of 2.005x against the 2x line E8 drew in advance, so
-the worst case governs and the round threshold was **3.4x too loose**. `allowed_oov_gap` now sizes the
-refusal from the perplexities in hand, floored at E4's sound 0.22-point comparison and capped at the
-old 0.01 so E8 tightens the guard everywhere and loosens it nowhere.
+**-3.391 perplexity points per percentage point of OOV** at an r-squared of 0.977, and the round
+threshold was **3.3x too loose**. `allowed_oov_gap` sizes the refusal from the perplexities in hand —
+0.30 points at this sweep's own base — floored just above E4's sound 0.22-point comparison and capped at
+the old 0.01 so E8 tightens the guard everywhere and loosens it nowhere.
+
+The threshold takes the worst of the six pairwise slopes rather than the fit, and **not because the
+pre-registered test chose it.** That test was a 2x pairwise spread: these cells measure **1.972x** here
+and measured **2.005x** on the corpus that still had this repository's prose in it, straddling the line
+on a 0.105% change. A rule whose verdict flips on a change three orders of magnitude smaller than the
+effect it rules about is a coin toss, so the worst case is taken unconditionally as its conservative
+side. `oov_slope.py` records `slope_used: "worst_pairwise"` and reports `linear` wired to nothing.
 
 The in-vocabulary column corrects the reason. `<unk>` is **cheaper** than the average real token at
-8,192 types and **dearer** at 71,934, crossing over near 3% OOV, while all-targets perplexity rises
+8,192 types and **dearer** at 71,603, crossing over near 3% OOV, while all-targets perplexity rises
 throughout — so the discount the comment blamed is real, small, and sign-changing, and the dominant
 term is the rare words a cap used to hide.
 
@@ -246,12 +252,16 @@ the pairwise slopes, and derives the threshold — and `scripts/score_heldout.py
 does the second reading on its own.
 
 E8 also caught the corpus moving underneath it. Its registered arithmetic predicted 71,883 uncapped
-types and the run said 71,934, because `docs/` is a corpus source and the commit carrying the
-registration edited `docs/EXPERIMENTS.md`. **Writing the registration changed the corpus it was
-about**, which invalidated the plan to reuse E6's cell A′ and cost a retrain — it reproduces to 0.03
-perplexity points. Models now carry a `corpus_fingerprint` over the token stream they read, the n-gram
-trainer records `vocabulary_covers_counts`, and `comparable_training` refuses two models that did not
-read the same text. Equal token counts are not equal tokens.
+types and the first run said 71,934, because `docs/` **was** a corpus source and the commit carrying the
+registration edited `docs/EXPERIMENTS.md`. **Writing the registration changed the corpus it was about**,
+which invalidated the plan to reuse E6's cell A′ and cost a retrain. Writing up the result did it again
+and worse, landing each cell of a retrain on a different corpus digest, so **D26 took that prose out of
+every measurement** and the table above is the re-measurement — one digest, `080865e040e7b88d`, across
+all four cells. `analysis/records/e8-v*-pre-d26.json` hold the first measurement and agree closely.
+
+Models carry a `corpus_fingerprint` over the token stream they read now, the n-gram trainer records
+`vocabulary_covers_counts`, and `comparable_training` refuses two models that did not read the same text.
+Equal token counts are not equal tokens.
 
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre

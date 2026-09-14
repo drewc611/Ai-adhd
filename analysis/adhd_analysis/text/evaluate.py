@@ -350,20 +350,27 @@ def compare_orders(
 #: What a percentage point of held-out out-of-vocabulary is worth, in perplexity points, measured by
 #: E8 and used to size the refusal below.
 #:
-#: Four Kneser-Ney models, order 4, `min_count` 3, the same 20,000,139-token read of the train side of
-#: frozen set `8e2d77cbe8901b1e`, differing in nothing but the vocabulary cap:
+#: Four Kneser-Ney models, order 4, `min_count` 3, the same 20,000,007-token read of the train side of
+#: frozen set `8e2d77cbe8901b1e` (corpus digest `080865e040e7b88d`), differing in nothing but the
+#: vocabulary cap:
 #:
-#:      8,192 types   5.798% OOV   perplexity 30.73
-#:     16,384 types   4.033% OOV   perplexity 35.29
-#:     32,768 types   3.011% OOV   perplexity 39.17
-#:     71,934 types   2.368% OOV   perplexity 42.50
+#:      8,192 types   5.797% OOV   perplexity 30.95
+#:     16,384 types   4.044% OOV   perplexity 35.52
+#:     32,768 types   3.063% OOV   perplexity 39.31
+#:     71,603 types   2.391% OOV   perplexity 42.77
 #:
-#: A least-squares fit gives -3.352 points per percentage point at an r-squared of 0.977, but the six
-#: pairwise slopes run -2.583 to -5.179 and that spread is 2.005x. E8 registered 2x as the line at
-#: which the relationship stops being linear in OOV and the threshold has to be taken at the worst
-#: case, so the worst case is what this is. It is the highest-vocabulary pair, which is also the regime
-#: the shipped 148,353-type model sits in.
-OOV_PERPLEXITY_SLOPE = 5.179
+#: A least-squares fit gives -3.391 points per percentage point at an r-squared of 0.977. This is the
+#: worst of the six pairwise slopes instead, which run -2.610 to -5.148, and it is the highest-vocabulary
+#: pair — the regime the shipped 148,353-type model sits in, where the marginal cost of a point of OOV
+#: is largest.
+#:
+#: The worst case rather than the fit, unconditionally, and **not** because E8's pre-registered test
+#: selected it. That test was a 2x pairwise spread, and it does not discriminate: these same four cells
+#: measured 2.005x on the corpus that still included this repository's own prose and 1.972x after D26
+#: removed it, straddling the line on a 0.105% change in the corpus. A rule whose verdict flips on a
+#: change three orders of magnitude smaller than the effect it rules about is a coin toss, and the worst
+#: case is the conservative side of one. D26 records it.
+OOV_PERPLEXITY_SLOPE = 5.148
 #: The share of a perplexity a vocabulary gap alone may account for before two all-targets scores are
 #: two different questions. A judgement, unavoidably — but a judgement about one quantity now, rather
 #: than about a gap whose consequences nobody had measured.
@@ -379,7 +386,7 @@ E4_GAP = 0.0085 - 0.0063
 #: stays_comparable` caught on the first run after E8 changed this. A threshold calibrated so tightly
 #: that it voids its own calibrating comparison is a worse instrument than no threshold.
 #:
-#: The derived gap clears this at any perplexity above about 23.8, so today the floor does not bind. It
+#: The derived gap clears this at any perplexity above about 23.7, so today the floor does not bind. It
 #: is here so a future recalibration cannot silently invalidate E4.
 OOV_FLOOR_GAP = 0.0023
 #: The gap this refusal will never allow more than, whatever the arithmetic says.
@@ -483,8 +490,8 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     #
     # E8 also corrected the reason. The paragraph above says the smaller vocabulary gets a discount
     # because `<unk>` is cheap, and that is true at 5.8% OOV and false at 2.4%: scoring the same four
-    # models over in-vocabulary targets only puts 8,192 types at 32.29 against an all-targets 30.73 —
-    # `<unk>` cheaper than the average real token — and 71,934 types at 41.50 against 42.50, `<unk>`
+    # models over in-vocabulary targets only puts 8,192 types at 32.51 against an all-targets 30.95 —
+    # `<unk>` cheaper than the average real token — and 71,603 types at 41.76 against 42.77, `<unk>`
     # dearer. The crossover is near 3% OOV. So the `<unk>` discount is real, small, and changes sign,
     # while all-targets perplexity rises monotonically with the vocabulary throughout. The dominant
     # term is not the discount at all: it is that a larger vocabulary has more rare words left to

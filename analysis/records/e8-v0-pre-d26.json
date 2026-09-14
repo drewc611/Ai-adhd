@@ -8,10 +8,10 @@
         "max_tokens": 20000000
       },
       "checks": 997,
-      "peak_rss_mb": 3634,
-      "seconds": 195.71,
-      "stopped_because": "token ceiling: 20,000,007 >= 20,000,000",
-      "tokens": 20000007
+      "peak_rss_mb": 3058,
+      "seconds": 177.29,
+      "stopped_because": "token ceiling: 20,000,139 >= 20,000,000",
+      "tokens": 20000139
     },
     "vocabulary": {
       "ceilings": {
@@ -21,45 +21,68 @@
         "max_tokens": 20000000
       },
       "checks": 997,
-      "peak_rss_mb": 3634,
-      "seconds": 195.84,
-      "stopped_because": "token ceiling: 20,000,007 >= 20,000,000",
-      "tokens": 20000007
+      "peak_rss_mb": 3058,
+      "seconds": 177.31,
+      "stopped_because": "token ceiling: 20,000,139 >= 20,000,000",
+      "tokens": 20000139
     }
   },
-  "corpus_fingerprint": "080865e040e7b88d",
   "discounts": [
     [
-      0.2633,
-      1.3551,
-      2.3225
+      0.2424,
+      0.1964,
+      1.6862
     ],
     [
-      0.697,
-      1.1561,
-      1.5002
+      0.6489,
+      1.1039,
+      1.4868
     ],
     [
-      0.8115,
-      1.2054,
-      1.4579
+      0.7833,
+      1.1808,
+      1.4683
     ],
     [
-      0.6944,
-      1.3196,
-      1.5382
+      0.6882,
+      1.3285,
+      1.5158
     ]
   ],
-  "documents": 7322,
+  "documents": 7345,
   "min_count": 3,
-  "model": "models/e8c-v3.kn.gz",
-  "ngrams": 14755925,
-  "oov_rate": 0.00448,
+  "model": "models/e8-v0.kn.gz",
+  "ngrams": 12392246,
+  "oov_rate": 0.04443,
   "order": 4,
   "python": "3.11.15",
-  "seconds": 195.71,
-  "sentences": 899889,
+  "seconds": 177.29,
+  "sentences": 898976,
   "sources": [
+    {
+      "bytes": 321773,
+      "files": 14,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-docs",
+      "path": "docs",
+      "split": "train"
+    },
+    {
+      "bytes": 11940,
+      "files": 7,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-prompts",
+      "path": "prompts",
+      "split": "train"
+    },
+    {
+      "bytes": 35792,
+      "files": 2,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-readme",
+      "path": ".",
+      "split": "train"
+    },
     {
       "bytes": 335047210,
       "files": 6330,
@@ -97,12 +120,10 @@
     "frozen": "8e2d77cbe8901b1e",
     "side": "train"
   },
-  "tokens_seen": 20000007,
-  "vocab_size": 71603,
+  "tokens_seen": 20000139,
+  "vocab_size": 8192,
   "vocab_truncated": {
-    "tokens": 0,
-    "types": 0
-  },
-  "vocabulary_covers_counts": true,
-  "vocabulary_fingerprint": "080865e040e7b88d"
+    "tokens": 798175,
+    "types": 63742
+  }
 }

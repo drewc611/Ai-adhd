@@ -14,7 +14,7 @@
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-425-2ea44f" alt="425 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-206-2ea44f" alt="206 Python tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-207-2ea44f" alt="207 Python tests"></a>
   <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D26%20resolved-0969da" alt="D1 through D26 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
@@ -470,13 +470,18 @@ fingerprint, an in-vocabulary-only score beside an all-targets one, and a vocabu
 the scores to carry. Every one of those is a mistake this repository published or nearly published.
 
 That last threshold was a round percentage point until **E8 measured what a percentage point is worth**:
-four Kneser-Ney models differing only in vocabulary cap score **30.73 / 35.29 / 39.17 / 42.50** at
-**5.798% / 4.033% / 3.011% / 2.368%** held-out OOV, which is up to **5.2 perplexity points per point of
-OOV** and makes the old threshold 3.4x too loose. D25 also found that half the reason written beside it
-was wrong — `<unk>` is cheaper than a real token at 5.8% OOV and dearer at 2.4% — and that **writing the
-registration changed the corpus the registration was about**, because `docs/` is a corpus source. Models
-carry a `corpus_fingerprint` over their token stream now, and `comparable_training` refuses two models
-that did not read the same text. See D13, D16, D20, D25 and `analysis/README.md`.
+four Kneser-Ney models differing only in vocabulary cap score **30.95 / 35.52 / 39.31 / 42.77** at
+**5.797% / 4.044% / 3.063% / 2.391%** held-out OOV, which is up to **5.1 perplexity points per point of
+OOV** and makes the old threshold 3.3x too loose.
+
+Three corrections came with it. Half the reason written beside the threshold was wrong — `<unk>` is
+cheaper than a real token at 5.8% OOV and dearer at 2.4%. **Writing the registration changed the corpus
+the registration was about**, because `docs/` was a corpus source, so **D26 took the repository's own
+prose out of every measurement**; models carry a `corpus_fingerprint` over their token stream and
+`comparable_training` refuses two models that did not read the same text. And the experiment's own
+pre-registered linearity test **does not discriminate** — its verdict flips across that 0.105% corpus
+change — so the threshold takes the worst measured slope as the conservative side of a coin toss. See
+D13, D16, D20, D25, D26 and `analysis/README.md`.
 
 That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
 `foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%

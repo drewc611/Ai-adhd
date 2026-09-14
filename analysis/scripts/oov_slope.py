@@ -104,6 +104,10 @@ def main(argv: list[str] | None = None) -> int:
             if out.truncated:
                 print(f"{path.name} {label}: TRUNCATED ({out.truncated})", file=sys.stderr)
                 return 2
+            # Rounded once, here, and everything downstream reads these. The progress line below used to
+            # format `out.oov_rate` directly while the record stored `round(..., 6)`, and the two
+            # disagreed in the last digit — 2.392% on stderr against 2.391% in the record, which is how
+            # a document ends up quoting a figure its own evidence does not carry.
             row[label] = {
                 "perplexity": round(out.perplexity, 4),
                 "oov_rate": round(out.oov_rate, 6),
@@ -114,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             print(
                 f"{path.name:20} {len(model.vocab):>7,} types  {label:<19} "
-                f"ppl {out.perplexity:>8.2f}  oov {out.oov_rate:>7.3%}",
+                f"ppl {row[label]['perplexity']:>8.2f}  oov {row[label]['oov_rate']:>7.3%}",
                 file=sys.stderr,
             )
         points.append(row)
@@ -148,8 +152,20 @@ def main(argv: list[str] | None = None) -> int:
     mags = sorted(abs(p["slope"]) for p in pairwise)
     spread = mags[-1] / mags[0] if mags and mags[0] > 0 else float("inf")
 
-    # The threshold. Read at the *best-scoring* cell's perplexity, which is the conservative end: the
-    # same absolute slope is a larger share of a smaller number, so this asks the gap to be worth less.
+    # The threshold, and it takes the worst pairwise slope rather than the fitted one **always**.
+    #
+    # E8 registered a 2x pairwise spread as the line past which the fit cannot be used. That line turned
+    # out not to discriminate: the same four cells measured 2.005x on the corpus that included this
+    # repository's own prose and 1.972x without it, and that prose is 0.105% of the manifest. A rule
+    # whose verdict flips on a corpus change three orders of magnitude smaller than the effect it is
+    # ruling about is not choosing between the two numbers, so `linear` below is reported as a reading
+    # and is deliberately not wired to anything.
+    #
+    # Taking the worst case unconditionally is the conservative side — a tighter refusal — and it is the
+    # side to be on when the alternative is a coin flip. D26 has the reasoning.
+    #
+    # Read at the *best-scoring* cell's perplexity, also the conservative end: the same absolute slope is
+    # a larger share of a smaller number, so this asks the gap to be worth less.
     base_ppl = min(ys)
     worst = max(mags) if mags else abs(slope)
     derived = args.relative_budget * base_ppl / worst / 100 if worst else None
@@ -164,9 +180,12 @@ def main(argv: list[str] | None = None) -> int:
             "r_squared": round(r2, 5),
             "pairwise": pairwise,
             "pairwise_spread": round(spread, 3) if mags else None,
+            # A reading, not a switch. See the comment above `base_ppl`: this flipped across a 0.105%
+            # corpus change, so it decides nothing.
             "linear": spread <= 2.0 if mags else None,
         },
         "threshold": {
+            "slope_used": "worst_pairwise",
             "relative_budget": args.relative_budget,
             "read_at_perplexity": round(base_ppl, 4),
             "worst_pairwise_slope": round(worst, 3),

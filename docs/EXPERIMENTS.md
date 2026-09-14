@@ -748,31 +748,40 @@ round number was generous and the refusal is close to decoration.
 - **Being outside the predicted range is the more useful outcome.** E7's registered range was wrong by
   2.7x and that was worth more than a hit.
 
-**Result: D25. Half right, and the half that was wrong is the specific one.** The slope is negative as
-predicted and the fit of **-3.352 points per percentage point** (r-squared 0.977) is inside the
-registered 3-to-10 band, but V3 came in at **42.50**, below the registered 45-to-70 range. The four
-cells are 30.73 / 35.29 / 39.17 / 42.50 at 5.798% / 4.033% / 3.011% / 2.368% held-out OOV.
+**Result: D25 and D26. Half right, and the half that was wrong is the specific one.** The slope is
+negative as predicted and the fit of **-3.391 points per percentage point** (r-squared 0.977) is inside
+the registered 3-to-10 band, but V3 came in at **42.77**, below the registered 45-to-70 range. The four
+cells are 30.95 / 35.52 / 39.31 / 42.77 at 5.797% / 4.044% / 3.063% / 2.391% held-out OOV.
 
-Three of the fixed readings fired.
+The sweep was measured twice, and every fixed reading fired.
 
-**"V3's type count is checked against 71,883 before its perplexity is read."** It came out **71,934**,
-and the cause is that `docs/` is a corpus source: the commit carrying this registration added 94 lines
-to this file, and `docs/SECURITY-OPS.md` had arrived since A′ was trained. **Writing the registration
-changed the corpus the registration was about.** So the reading's verdict stands — the sweep as
-registered was invalid — and the repair was to retrain the 8,192 cell rather than reuse A′. It
-reproduces A′ to 0.03 perplexity points.
+**"V3's type count is checked against 71,883 before its perplexity is read."** The first measurement
+said **71,934**, and the cause is that `docs/` was a corpus source: the commit carrying this
+registration added 94 lines to this file, and `docs/SECURITY-OPS.md` had arrived since A′ was trained.
+**Writing the registration changed the corpus the registration was about.** The reading's verdict stood,
+the 8,192 cell was retrained rather than reused, and it reproduced A′ to 0.03 perplexity points.
 
-**"The slope is fitted on all four points and also read pairwise."** The six pairwise slopes run -2.583
-to -5.179, a spread of **2.005x** against the 2x line this registration drew. Over by a quarter of a
-percent, so the worst case governs rather than the fitted number — and the steepest pair is the
-highest-vocabulary one, which is the regime the shipped model sits in.
+Writing up the *result* did it again and worse — each cell of a retrain landed on a different corpus
+digest — so **D26 took the repository's own prose out of every measurement** and the sweep above is the
+re-measurement on the stable corpus, one digest across all four cells. The pre-D26 figures are in
+`analysis/records/e8-v*-pre-d26.json` and agree closely: 30.73 against 30.95, 42.50 against 42.77.
 
-**"E4 must still pass."** It does, with room: the derived gap is 0.2967 points at A′'s perplexity
-against E4's 0.22-point gap, so the floor does not bind.
+**"The slope is fitted on all four points and also read pairwise."** This is the reading that paid for
+itself. The stable corpus gives six pairwise slopes of -2.610 to -5.148, a spread of **1.972x** — under
+the 2x line, so the rule says use the fit. The pre-D26 corpus gave -2.583 to -5.179, a spread of
+**2.005x** — over it, so the rule said use the worst case. **The two corpora differ by 0.105% and the
+verdict flips.** So the registered test does not discriminate, the threshold takes the worst pairwise
+slope unconditionally as the conservative side of a coin toss, and `oov_slope.py` records
+`slope_used: "worst_pairwise"` with `linear` reported as a reading wired to nothing.
+
+**"E4 must still pass."** It does, and the floor needed correcting to make it: set to E4's gap exactly it
+refused E4 by six parts in 10^19, because `0.0085 - 0.0063` is `0.0022000000000000006` and the refusal is
+a strict `>`. The floor is 0.0023 and the derived gap is 0.3006 points at the 8,192 cell's perplexity, so
+the floor does not bind.
 
 The decomposition also corrected the reason written beside the threshold. Scoring every cell over
-in-vocabulary targets only puts `<unk>` **cheaper** than the average real token at 8,192 types (32.29
-against 30.73) and **dearer** at 71,934 (41.50 against 42.50), crossing over near 3% OOV, while
+in-vocabulary targets only puts `<unk>` **cheaper** than the average real token at 8,192 types (32.51
+against 30.95) and **dearer** at 71,603 (41.76 against 42.77), crossing over near 3% OOV, while
 all-targets perplexity rises monotonically throughout. The `<unk>` discount the comment named is real,
 small, and changes sign; the dominant term is rare words the cap used to hide.
 

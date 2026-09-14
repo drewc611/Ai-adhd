@@ -2267,50 +2267,68 @@ One line differs between training the two classes, and now one line does.
 `comparable_heldout` refuses two all-targets perplexities whose held-out OOV rates differ by more than
 one percentage point, and nobody had ever measured what a percentage point was worth.
 
-**Resolved.** It is worth between 2.6 and 5.2 perplexity points on this corpus. The threshold is now
-derived from that rather than chosen, and the derivation makes it **3.4x tighter**.
+**Resolved.** It is worth between 2.6 and 5.1 perplexity points on this corpus. The threshold is now
+derived from that rather than chosen, and the derivation makes it **3.3x tighter**.
 
 ### The result
 
-Four Kneser-Ney models, order 4, `min_count` 3, one 20,000,139-token read of the train side of frozen
-set `8e2d77cbe8901b1e`, scored on its 366 held-out documents. The vocabulary cap is the only thing
-that moves.
+Four Kneser-Ney models, order 4, `min_count` 3, one 20,000,007-token read of the train side of frozen
+set `8e2d77cbe8901b1e` — corpus digest `080865e040e7b88d`, no repository prose, D26 — scored on its 366
+held-out documents. The vocabulary cap is the only thing that moves.
 
 | cap | types | held-out OOV | **all targets** | in-vocabulary only |
 |---|---|---|---|---|
-| 8,192 | 8,192 | 5.798% | **30.73** | 32.29 |
-| 16,384 | 16,384 | 4.033% | **35.29** | 35.99 |
-| 32,768 | 32,768 | 3.011% | **39.17** | 39.11 |
-| none | 71,934 | 2.368% | **42.50** | 41.50 |
+| 8,192 | 8,192 | 5.797% | **30.95** | 32.51 |
+| 16,384 | 16,384 | 4.044% | **35.52** | 36.22 |
+| 32,768 | 32,768 | 3.063% | **39.31** | 39.22 |
+| none | 71,603 | 2.391% | **42.77** | 41.76 |
 
-Least squares over the four all-targets points: **-3.352 perplexity points per percentage point of
+Least squares over the four all-targets points: **-3.391 perplexity points per percentage point of
 OOV**, r-squared 0.977. Monotone, and steep: the whole range of this repository's vocabulary choices
 moves perplexity by 38%.
+
+These are the post-D26 figures. The sweep was measured twice — once on the corpus that still contained
+this repository's own prose and once without it, after that prose turned out to be why the run could not
+be repeated. The two agree closely, which is the reassuring part: 30.73 against 30.95 at the 8,192 cap,
+42.50 against 42.77 uncapped, on 0.105% less text. `analysis/records/e8-v*-pre-d26.json` hold the first
+measurement, and the section at the end of this entry is what happened in between.
 
 ### The prediction was half right, which is the half that matters least
 
 E8 predicted the sign and the magnitude and one cell. The sign is right and the fitted magnitude is
 inside the registered 3-to-10 band. **The cell prediction is wrong**: V3 was registered at "between 45
-and 70 at roughly 2% held-out OOV" and came in at **42.50** at 2.368%, outside by 2.5 points.
+and 70 at roughly 2% held-out OOV" and came in at **42.77** at 2.391%, outside by 2.2 points.
 
 So the direction I argued for against backlog 78's "not obvious" was correct — more vocabulary is
-worse on all targets, reliably — and my sense of how much was 6% optimistic at the one point I was
+worse on all targets, reliably — and my sense of how much was 5% optimistic at the one point I was
 specific about. Worth saying plainly because the registration's whole purpose is that the specific
-claim is the falsifiable one.
+claim is the falsifiable one. Both measurements of the sweep miss that range in the same direction, so
+it is not a corpus artefact.
 
-### The relationship is not linear, by 0.005
+### The registered linearity test does not discriminate, and that is the more useful finding
 
 E8 registered a rule: "If the pairwise slopes disagree by more than 2x the relationship is not linear
 in OOV and the threshold is stated as a curve or as the worst case, not as one number."
 
-The six pairwise slopes are -2.583, -3.030, -3.433, -3.801, -4.333 and **-5.179**. The spread is
-**2.005x**. That is over the line by a quarter of a percent, and the temptation to call it 2.0 and use
-the tidy fitted number is exactly what a pre-registered rule is for. **The worst case governs.**
+The six pairwise slopes are -2.610, -3.059, -3.471, -3.861, -4.384 and **-5.148**, a spread of
+**1.972x** — under the line, so the rule says use the fit. On the pre-D26 corpus the same four cells
+gave -2.583 to -5.179, a spread of **2.005x** — over the line, so the rule said use the worst case.
+
+**The two corpora differ by 0.105% and the rule's verdict flips between them.** A test whose answer
+turns on a change three orders of magnitude smaller than the effect it is ruling about is not selecting
+between the two numbers; it is a coin toss with a threshold painted on it. I registered it in good faith
+and it did not survive being run twice.
+
+So the threshold takes **the worst pairwise slope unconditionally**, and the reason is that it is the
+conservative side of a coin toss rather than that a rule chose it. `oov_slope.py` records
+`slope_used: "worst_pairwise"` and reports `linear` as a reading wired to nothing, with the comment
+saying why. Had the first sweep come in at 1.99x I would have used the fit and never learned this, which
+is the strongest argument available for measuring the same thing twice.
 
 It is also the right worst case rather than an arbitrary one. The steepest pair is 32,768 against
-71,934 — the *highest*-vocabulary pair. The marginal cost of a point of OOV is largest where OOV is
-smallest, which is the regime the shipped 148,353-type model sits in and the regime where a refusal
-matters most.
+71,603 — the *highest*-vocabulary pair, in both measurements. The marginal cost of a point of OOV is
+largest where OOV is smallest, which is the regime the shipped 148,353-type model sits in and the regime
+where a refusal matters most.
 
 ### Half of the reason written beside the threshold was wrong
 
@@ -2319,9 +2337,9 @@ prediction of `<unk>` and `<unk>` is among the most frequent symbols a closed-vo
 Scoring all four models over in-vocabulary targets only tests that directly, and it does not hold
 throughout:
 
-- At 8,192 types, dropping the OOV targets moves perplexity **up**, 30.73 to 32.29. `<unk>` was
+- At 8,192 types, dropping the OOV targets moves perplexity **up**, 30.95 to 32.51. `<unk>` was
   cheaper than the average real token by 1.56 points. The discount is real.
-- At 71,934 types, dropping them moves perplexity **down**, 42.50 to 41.50. `<unk>` is now *dearer*
+- At 71,603 types, dropping them moves perplexity **down**, 42.77 to 41.76. `<unk>` is now *dearer*
   than the average real token.
 
 The crossover is near 3% OOV, and it is where it should be: `<unk>`'s training frequency *is* the OOV
@@ -2337,20 +2355,22 @@ actually ships it was the wrong one.
 
 `allowed_oov_gap(a, b)` in `evaluate.py`, clamped at both ends:
 
-    0.05 * min(perplexity_a, perplexity_b) / 5.179 / 100,  floored at 0.0022,  capped at 0.01
+    0.05 * min(perplexity_a, perplexity_b) / 5.148 / 100,  floored at 0.0023,  capped at 0.01
 
 Perplexity-relative because the measured slope is in absolute points and the question is what share of
 *this* comparison a vocabulary gap could account for. 5% of the smaller score is the judgement that
 remains, and it is now a judgement about one measured quantity rather than about an effect of unknown
-size.
+size. At E8's own base of 30.95 the gap comes out at **0.30 percentage points**, against the one
+percentage point it replaces.
 
 Both clamps earn their place:
 
-- **Floored at E4's 0.22 points.** E4 compared `min_count` 2 against 3 at 0.63% and 0.85% OOV and that
-  comparison was sound. The derived gap clears 0.22 at any perplexity above about 22.8, so the floor
-  does not bind today — it is there so a future recalibration cannot silently invalidate E4.
+- **Floored just above E4's 0.22 points.** E4 compared `min_count` 2 against 3 at 0.63% and 0.85% OOV
+  and that comparison was sound. The derived gap clears the floor at any perplexity above about 23.7,
+  so it does not bind today — it is there so a future recalibration cannot silently invalidate E4. It is
+  0.23 rather than 0.22 for a reason recorded at the end of D26: set to E4's gap exactly, it refused E4.
 - **Capped at the old 0.01.** The derived gap grows with perplexity, and E8 measured the slope near
-  perplexity 30 on one model class. Letting it scale to E7's LSTM at 159.3 would grant a 1.5-point gap
+  perplexity 31 on one model class. Letting it scale to E7's LSTM at 159.3 would grant a 1.5-point gap
   on the strength of an experiment that never went near there. Capping at the previous unconditional
   value makes E8 **a strict tightening at every perplexity and a loosening at none**, which is the
   only honest direction for one experiment to move a guard.
@@ -2362,7 +2382,8 @@ now. A′ against B, and both against E7's C, all sit at 5.798% and pass. E4 pas
 
 E8 planned to reuse E6's cell A′ for the 8,192 point, and registered the expected uncapped type count
 as arithmetic from A′'s record: 8,192 kept plus 63,691 discarded is 71,883. The run reported
-**71,934**, fifty-one too many.
+**71,934**, fifty-one too many. (On the stable corpus of D26 it is 71,603, because the prose that caused
+the discrepancy contributed 331 types of its own.)
 
 The cause is that `docs/`, `prompts/` and `README.md` are sources in `corpora.yaml`. The commit
 carrying the E8 registration added 94 lines to `docs/EXPERIMENTS.md`, and D22 had added
@@ -2370,9 +2391,8 @@ carrying the E8 registration added 94 lines to `docs/EXPERIMENTS.md`, and D22 ha
 the training read from 20,000,029 tokens to 20,000,139.
 
 **So the sweep as registered was invalid, and its own fixed reading said so.** The repair was to
-retrain the 8,192 cell on the current corpus rather than reuse A′, which is why the table above says
-30.73 where E6 says 30.7. That reproduction is the reassuring part: 110 tokens and a whole extra
-document moved the figure by 0.03 perplexity points, 0.1%, against an effect of 38%.
+retrain the 8,192 cell rather than reuse A′, and it reproduced A′'s 30.7 to 0.03 perplexity points on a
+corpus 110 tokens and one whole document different — 0.1% against an effect of 38%.
 
 The part that is not reassuring is that **nothing in the code would have said a word.** The only
 reason it was caught is that a number had been registered in advance, and registering a number in

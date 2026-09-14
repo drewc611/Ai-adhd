@@ -380,15 +380,19 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     rather than a round number. No prediction recorded, because the direction is not obvious: `<unk>`
     is cheap to predict, but a model that has folded 5% of the corpus into one symbol has also lost
     the contexts those words provided, and the two effects work against each other.~~
-    **Done as E8, and it is worth up to 5.2 perplexity points, so the round number was 3.4x too loose.
-    Four caps on one corpus read: 30.73 / 35.29 / 39.17 / 42.50 at 5.798% / 4.033% / 3.011% / 2.368%
-    held-out OOV. The fit is -3.352 points per point at r-squared 0.977, but the pairwise spread is
-    2.005x against the 2x line E8 drew in advance, so the worst case (-5.179, the highest-vocabulary
-    pair) governs. `allowed_oov_gap` scales with the perplexities in hand, floored at E4's 0.22-point
-    gap and capped at the old 0.01 so the change tightens everywhere and loosens nowhere. Two
-    corrections fell out: the `<unk>` discount the comment blamed is real but changes sign near 3% OOV
-    and is not the dominant term, and this registration's own commit moved the corpus it was about,
-    which is why models now carry a `corpus_fingerprint`. D25 has all of it.**
+    **Done as E8, and it is worth up to 5.1 perplexity points, so the round number was 3.3x too loose.
+    Four caps on one corpus read: 30.95 / 35.52 / 39.31 / 42.77 at 5.797% / 4.044% / 3.063% / 2.391%
+    held-out OOV, fit -3.391 points per point at r-squared 0.977. `allowed_oov_gap` scales with the
+    perplexities in hand — 0.30 points at E8's own base — floored just above E4's 0.22-point gap and
+    capped at the old 0.01 so the change tightens everywhere and loosens nowhere.
+
+    Three corrections fell out, and two of them are about this repository rather than about OOV. The
+    `<unk>` discount the comment blamed is real but changes sign near 3% OOV and is not the dominant
+    term. This registration's own commit moved the corpus it was about, which is why models carry a
+    `corpus_fingerprint` and why D26 exists. And **the pre-registered 2x linearity test does not
+    discriminate**: the same four cells measure 2.005x of pairwise spread on the corpus with the prose
+    in it and 1.972x without, straddling the line on a 0.105% change, so the threshold takes the worst
+    case unconditionally as the conservative side of a coin toss. D25 has all of it.**
 
 79. **Price a transformer at the n-gram's vocabulary** (large, and it may not be reachable here).
     E6 holds the vocabulary at 8,192 because the output projection is `d_model x vocab_size` and every

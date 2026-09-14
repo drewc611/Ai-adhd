@@ -202,82 +202,89 @@ def test_the_e8_cells_differ_in_the_cap_and_in_nothing_else(slope):
     """E8's whole claim is that the vocabulary cap is the only independent variable. If any other
     field moves, the slope is measuring two things and the threshold derived from it is wrong."""
     cells = [record(c) for c in E8_CELLS]
-    assert [c["vocab_size"] for c in cells] == [8192, 16384, 32768, 71934]
+    assert [c["vocab_size"] for c in cells] == [8192, 16384, 32768, 71603]
     for c in cells:
         assert c["order"] == 4 and c["min_count"] == 3
-        assert c["tokens_seen"] == 20_000_139, "the cells read different amounts of text"
+        assert c["tokens_seen"] == 20_000_007, "the cells read different amounts of text"
         assert c["split"] == {"frozen": "8e2d77cbe8901b1e", "side": "train"}
         stopped = c["budget"]["counts"]["stopped_because"]
         assert stopped and "token ceiling" in stopped, "a cell that stopped elsewhere is void"
     # The arithmetic E8 registered in advance, now as a standing check: every type the cap discards
     # plus every type it keeps is the same number of types clearing `min_count` 3.
     totals = {c["vocab_size"] + c["vocab_truncated"]["types"] for c in cells}
-    assert totals == {71_934}, f"the cells disagree on how many types clear min_count 3: {totals}"
+    assert totals == {71_603}, f"the cells disagree on how many types clear min_count 3: {totals}"
 
 
-def test_the_e8_cells_have_only_indirect_evidence_of_one_corpus_and_say_so(slope):
-    """The four scored cells predate the fingerprint they motivated, and this test refuses to pretend
-    otherwise.
+def test_every_e8_cell_read_one_corpus_and_none_of_it_was_repository_prose(slope):
+    """What D26 bought, asserted rather than described.
 
-    E8's registration planned to reuse E6's cell A′ and could not, because the commit carrying the
-    registration edited `docs/EXPERIMENTS.md`, which is a corpus source. The mechanism that came out of
-    that — `corpus_fingerprint` — was written after these four models were trained, so the evidence
-    that they read one corpus is the fields below rather than a digest. Four cells sharing a token count
-    is weaker than four cells sharing a fingerprint, and D25 says which one E8 has.
-
-    The assertion strengthens by itself: any cell regenerated with the mechanism in place must agree
-    with its siblings on the digest too.
+    The pre-D26 sweep could only offer indirect evidence that its four cells read one corpus — equal
+    token counts and equal per-source byte counts — because the digest did not exist yet and the prose
+    that made the question urgent was still in the read. Both halves are direct now.
     """
+    from adhd_analysis.text.corpora import Library
     from adhd_analysis.text.evaluate import comparable_training
 
     cells = [record(c) for c in E8_CELLS]
-    assert {c["tokens_seen"] for c in cells} == {20_000_139}
-    assert {c["sentences"] for c in cells} == {cells[0]["sentences"]}
-    assert {c["documents"] for c in cells} == {cells[0]["documents"]}
-    assert {tuple(sorted((s["name"], s["files"], s["bytes"]) for s in c["sources"])) for c in cells} == {
-        tuple(sorted((s["name"], s["files"], s["bytes"]) for s in cells[0]["sources"]))
-    }, "the cells disagree on the corpus they read, byte for byte, per source"
+    prints = {c["corpus_fingerprint"] for c in cells}
+    assert prints == {"080865e040e7b88d"}, f"the cells trained on different text: {prints}"
+    for other in cells[1:]:
+        assert comparable_training(cells[0], other) is None
+        assert other["vocabulary_covers_counts"] is True
 
-    fingerprinted = [c for c in cells if c.get("corpus_fingerprint")]
-    if fingerprinted:
-        assert len(fingerprinted) == len(cells), "some cells carry a digest and some do not"
-        for other in fingerprinted[1:]:
-            assert comparable_training(fingerprinted[0], other) is None
-            assert other["vocabulary_covers_counts"] is True
+    mutable = Library.load(ROOT / "analysis" / "corpora.yaml").mutable_names()
+    for c in cells:
+        names = {s["name"] for s in c["sources"]}
+        assert names.isdisjoint(mutable), f"{c['model']} read text a commit can rewrite: {sorted(names)}"
+
+
+def test_the_pre_d26_sweep_agrees_with_the_one_that_replaced_it(slope):
+    """Two measurements of the same four cells, on corpora 0.105% apart. If they ever diverge by more
+    than a rounding difference, D26 re-based something and the claim that it did not is wrong."""
+    for cell in E8_CELLS:
+        old, new = record(f"{cell}-pre-d26"), record(cell)
+        assert old["min_count"] == new["min_count"] and old["order"] == new["order"]
+        assert old["vocab_size"] == new["vocab_size"] or cell == "e8-v3", cell
+        # The prose contributed 331 types of its own, which only the uncapped cell can show.
+        if cell == "e8-v3":
+            assert old["vocab_size"] - new["vocab_size"] == 331, cell
+    # And the perplexities, which is what anyone actually quotes.
+    post = [p["all_targets"]["perplexity"] for p in slope["points"]]
+    pre = [30.7312, 35.2888, 39.1747, 42.5024]
+    for a, b in zip(pre, post):
+        assert abs(b - a) / a < 0.01, f"D26 moved a published figure by more than 1%: {a} -> {b}"
 
 
 def test_the_drift_records_show_four_different_corpora_which_is_why_d26_exists():
     """The evidence D26 rests on, kept as a test rather than quoted once and forgotten.
 
     Retraining E8's four cells *while E8's result was being written up* gave each cell a different
-    corpus, because `docs/` was a corpus source. This is the record of that, and the assertions are the
-    three things it shows: four distinct digests, `comparable_training` refusing every pair, and the
-    drift growing monotonically with write-up order.
+    corpus, because `docs/` was a corpus source. This is the record of that, measured against the
+    pre-D26 cells it was a retrain of, and the assertions are the three things it shows: four distinct
+    digests, `comparable_training` refusing every pair, and the drift growing with write-up order.
     """
     from adhd_analysis.text.evaluate import comparable_training
 
-    drift = [RECORDS / f"{c}-drift.json" for c in E8_CELLS]
-    assert all(p.exists() for p in drift), "the D25 drift records are missing"
-    loaded = [json.loads(p.read_text()) for p in drift]
-    for r in loaded:
+    drift = [record(f"{c}-drift") for c in E8_CELLS]
+    for r in drift:
         assert r["corpus_fingerprint"], "a drift record with no digest shows nothing"
         assert r["vocabulary_covers_counts"] is True
 
-    prints = {r["corpus_fingerprint"] for r in loaded}
+    prints = {r["corpus_fingerprint"] for r in drift}
     assert len(prints) == 4, (
         "the drift records now agree on a corpus, so they no longer demonstrate what D25 says they do"
     )
-    for i in range(len(loaded)):
-        for j in range(i + 1, len(loaded)):
-            assert comparable_training(loaded[i], loaded[j]) is not None, (
+    for i in range(len(drift)):
+        for j in range(i + 1, len(drift)):
+            assert comparable_training(drift[i], drift[j]) is not None, (
                 f"comparable_training accepts {E8_CELLS[i]} against {E8_CELLS[j]}, which had different "
                 "corpus digests. The refusal D26 rests on has stopped working."
             )
 
     # Monotone in the order they were retrained, which is the order the write-up was committed in. The
     # cell trained first drifted by one n-gram and the cell trained last by 4,807 — the number D25 and
-    # D26 both quote.
-    moved = [abs(json.loads(p.read_text())["ngrams"] - record(c)["ngrams"]) for c, p in zip(E8_CELLS, drift)]
+    # D26 both quote. Measured against the pre-D26 cells, which is what the retrain was a retrain of.
+    moved = [abs(d["ngrams"] - record(f"{c}-pre-d26")["ngrams"]) for c, d in zip(E8_CELLS, drift)]
     assert moved == sorted(moved), f"the drift is no longer monotone in write-up order: {moved}"
     assert moved[0] == 1 and moved[-1] == 4807, moved
     assert commas(moved[-1]) in docs("docs/DECISIONS.md"), "the decisions log no longer quotes the drift"
@@ -288,8 +295,16 @@ def test_the_e8_perplexities_are_scored_on_the_shipped_held_out_set(slope):
     assert {r["fingerprint"] for r in reading} == {"1446762140db7f1a"}
     assert {r["documents"] for r in reading} == {366}
     assert {r["tokens"] for r in reading} == {3_443_116}
-    assert [round(r["perplexity"], 2) for r in reading] == [30.73, 35.29, 39.17, 42.50]
-    assert [round(r["oov_rate"] * 100, 3) for r in reading] == [5.798, 4.033, 3.011, 2.368]
+    assert [round(r["perplexity"], 2) for r in reading] == [30.95, 35.52, 39.31, 42.77]
+    # Formatted the way the documents format it, not rounded a second way. The first version of this
+    # test compared `round(rate * 100, 3)` against figures copied off the script's progress output, and
+    # the two disagreed on the last cell: 2.391 against 2.392, because the progress line formatted the
+    # unrounded rate and the record stored the rounded one.
+    assert [f"{r['oov_rate']:.3%}" for r in reading] == ["5.797%", "4.044%", "3.063%", "2.391%"]
+    for r in reading:
+        assert f"{r['oov_rate']:.3%}" in docs("docs/DECISIONS.md"), (
+            f"the decisions log does not quote {r['oov_rate']:.3%}, which its own record carries"
+        )
 
 
 def test_the_docs_quote_the_slope_they_recorded(slope):
@@ -300,18 +315,37 @@ def test_the_docs_quote_the_slope_they_recorded(slope):
         assert f"{p['all_targets']['perplexity']:.2f}" in d, p["model"]
 
 
-def test_the_worst_case_was_forced_by_the_registration_not_chosen(slope):
-    """E8 registered 2x of pairwise spread as the line past which the fitted slope cannot be used.
-    The measured spread is 2.005x — over by a quarter of a percent — so the worst case governs. This
-    test exists because rounding 2.005 down to 2.0 is exactly the temptation a pre-registered rule is
-    written to remove."""
-    assert slope["fit"]["pairwise_spread"] > 2.0
-    assert slope["fit"]["linear"] is False
+def test_the_worst_case_is_taken_unconditionally_because_the_registered_test_did_not_discriminate(slope):
+    """The reading that paid for itself, and the one place a stale assumption could creep back.
+
+    E8 registered a 2x pairwise spread as the line past which the fit cannot be used. The stable corpus
+    measures **1.972x** — under the line, where the rule says use the fit — and the pre-D26 corpus
+    measured **2.005x**, over it. The two corpora differ by 0.105%. So the rule decides nothing, the
+    threshold takes the worst pairwise slope unconditionally as the conservative side of a coin toss,
+    and `linear` is a reading wired to nothing.
+
+    An earlier version of this test asserted the spread was *over* 2.0 and that the registration had
+    therefore selected the worst case. That was true of one measurement and false of the next.
+    """
+    assert slope["threshold"]["slope_used"] == "worst_pairwise"
     worst = max(abs(p["slope"]) for p in slope["fit"]["pairwise"])
     assert slope["threshold"]["worst_pairwise_slope"] == pytest.approx(worst)
+    # The fit is *not* what sizes the threshold, whichever side of 2.0 the spread lands on.
+    assert abs(slope["fit"]["slope_perplexity_per_oov_point"]) < worst
+
+    # The straddle itself, so nobody has to take the paragraph on trust. The pre-D26 cells carry no
+    # digest — they predate the mechanism they motivated — which is the other half of why the sweep had
+    # to be measured again rather than compared across.
+    assert not record("e8-v0-pre-d26").get("corpus_fingerprint"), (
+        "the pre-D26 cells predate the digest; if one has appeared, this test's premise changed"
+    )
+    assert slope["fit"]["pairwise_spread"] < 2.0, "the stable corpus should read under the line"
+    for figure in ("1.972", "2.005"):
+        assert figure in docs("docs/DECISIONS.md"), f"D25 no longer quotes the {figure} straddle"
+
     # And it is the highest-vocabulary pair, which is the regime the shipped model sits in.
     steepest = max(slope["fit"]["pairwise"], key=lambda p: abs(p["slope"]))
-    assert (steepest["a"], steepest["b"]) == ("e8-v2.kn.gz", "e8-v3.kn.gz")
+    assert (steepest["a"], steepest["b"]) == ("e8c-v2.kn.gz", "e8c-v3.kn.gz")
 
 
 def test_the_threshold_in_the_code_is_the_one_the_record_measured(slope):
