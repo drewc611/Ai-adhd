@@ -151,14 +151,23 @@ test("ordinary problem statements do not trip the injection warning", () => {
 });
 
 /**
- * Measured as a *minimum* over repeated trials, on inputs big enough to take milliseconds — the same
- * shape `blind-fuzz.test.ts` uses, and for the same reason it was changed to.
+ * Measured as a *minimum over trials of CPU time*, not wall clock.
  *
- * The first version took one sample of each size at n=500, where the work is sub-millisecond and a
- * `Math.max(..., 0.01)` floor was doing the arithmetic. It failed at "4x the input took 20.6x the
- * time" on a machine training an LSTM in another process — load average 5.3 on 4 vCPUs. Nothing about
- * the linter had changed. Contention can only make a measurement slower, never faster, so a minimum
- * over trials removes it from both sides; a single sample cannot tell inflation from blowup.
+ * Wall clock was the first two attempts and both were wrong in the same way. The original took one
+ * sample at n=500 where the work is sub-millisecond; it failed at "4x the input took 20.6x the time"
+ * on a machine training an LSTM in another process. The fix was a minimum over trials, reasoning
+ * that "contention can only make a measurement slower, never faster, so a minimum removes it from
+ * both sides".
+ *
+ * **That reasoning is wrong when the two measurements have different durations, and this test proved
+ * it.** Reproduced under four CPU hogs on four vCPUs: the short measurement (~2ms) finds an
+ * uncontended window within five trials and the long one (~20ms) almost never does, so the minimum
+ * cleans up the denominator far more than the numerator and the *ratio inflates*. Measured under
+ * identical load: wall clock 28.6x against CPU time 7.7x, where the idle figure is 9.93x. It failed
+ * a real run at 41.2x.
+ *
+ * CPU time is the right instrument anyway. A ReDoS test is a claim about how much *work* an input
+ * causes, and `process.cpuUsage()` measures exactly that — being descheduled does not add to it.
  */
 test("the injection check stays linear on adversarial input", () => {
   const grow = (n: number) => "All " + "approach ".repeat(n) + " should " + "x ".repeat(n) + " agree";
@@ -166,9 +175,10 @@ test("the injection check stays linear on adversarial input", () => {
     const text = grow(n);
     let best = Infinity;
     for (let i = 0; i < trials; i++) {
-      const t = process.hrtime.bigint();
+      const before = process.cpuUsage();
       lintProblemInjection(text);
-      best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6);
+      const d = process.cpuUsage(before);
+      best = Math.min(best, (d.user + d.system) / 1000);
     }
     return best;
   };
@@ -182,9 +192,15 @@ test("the injection check stays linear on adversarial input", () => {
   //
   // At 8x the two separate cleanly: the linter runs 9.93x and the quadratic probe 68.41x. 30x sits
   // between them with about 3x of headroom on each side, so it fails on real blowup and not on a
-  // constant factor.
+  // constant factor. In CPU time the linter holds that figure under heavy contention (7.7x measured
+  // with four hogs on four vCPUs), which is what makes the bound mean something on a shared machine.
+  //
+  // Re-verified in CPU time, which is what these now measure: a true O(n^2) scan over the same text
+  // at an 8x size step runs **62.4x**, the check itself runs 7.7x under four CPU hogs on four vCPUs,
+  // and 30x sits between them with about 3x of headroom on each side. Switching instrument did not
+  // cost the bound its teeth, which was the thing to check before trusting it.
   assert.ok(
     large < small * 30,
-    `8x the input took ${(large / small).toFixed(1)}x the time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
+    `8x the input took ${(large / small).toFixed(1)}x the CPU time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
   );
 });
