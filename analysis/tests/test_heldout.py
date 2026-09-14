@@ -631,3 +631,46 @@ def test_in_vocabulary_only_refuses_any_vocabulary_difference(tmp_path):
     # The same tenth of a point is tolerated on all targets, where the effect is continuous.
     allt = evaluate(model, held, Budget.smoke())
     assert comparable_heldout(allt, replace(allt, oov_rate=allt.oov_rate + 0.001)) is None
+
+
+def test_the_scoring_script_releases_each_model_before_loading_the_next(tmp_path, monkeypatch):
+    """Scoring several large models in one invocation used to hold two at once.
+
+    Rebinding the loop variable frees the previous model only *after* the next one is built, so the peak
+    is the sum of two. Backlog 82's re-measurement asked for four models in one call — cell A at 32.1M
+    n-grams beside the shipped model at 40.2M — and the cgroup killed it at 13.9GB mid-load, with no
+    traceback and an empty JSON file. That reads like a scoring failure rather than an allocation one,
+    which is the expensive part.
+
+    Asserted with a weak reference rather than by measuring memory: a test that needs 14GB is a test
+    nobody runs.
+    """
+    import weakref
+
+    import scripts.score_heldout as ss
+
+    lib = _library(tmp_path, n=20)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3,
+                min_count=1, budget=Budget.smoke())
+
+    alive: list[weakref.ref] = []
+    real_load = ss.load
+
+    def tracking_load(path):
+        model, kind = real_load(path)
+        # Every previously loaded model must already be gone by the time the next one is built.
+        still = [r for r in alive if r() is not None]
+        assert not still, f"{len(still)} model(s) still held while loading {path.name}"
+        alive.append(weakref.ref(model))
+        return model, kind
+
+    monkeypatch.setattr(ss, "load", tracking_load)
+    monkeypatch.setattr(ss.Library, "load", staticmethod(lambda _m: lib))
+    monkeypatch.setattr(ss.FrozenSplit, "load", classmethod(
+        lambda cls, base, path, *, side: SplitLibrary(lib, every=10, side=side)
+    ))
+
+    code = ss.main([str(rec.model_path), str(rec.model_path), "--json"])
+    assert code == 0
+    assert len(alive) == 2, "both models should have been loaded"
+    assert all(r() is None for r in alive), "a model outlived the loop"

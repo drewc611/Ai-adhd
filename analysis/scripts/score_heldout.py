@@ -79,6 +79,19 @@ def main(argv: list[str] | None = None) -> int:
         scored.append((path.name, kind, out))
         if not args.json:
             print(f"{path.name:28} {kind:11} {out}")
+        # Released before the next `load()`, and this line is load-bearing. Rebinding `model` on the
+        # next iteration frees the old one only *after* the new one is built, so scoring several large
+        # models in one invocation holds two at once at the moment of peak. It does not survive that:
+        # cell A at 32.1M n-grams beside the shipped model at 40.2M was killed by the cgroup at 13.9GB
+        # mid-load, with no traceback and an empty JSON file, which reads like a scoring failure rather
+        # than an allocation one.
+        #
+        # The resident-set ceiling cannot help here. It is advisory and polled inside `evaluate`, so it
+        # governs scoring and not loading, and the process dies before the first check.
+        #
+        # `oov_slope.py` already did this. This script did not, and four models is the first time anyone
+        # asked it to hold two large ones.
+        del model
 
     refusals = []
     for (na, _ka, a), (nb, _kb, bb) in combinations(scored, 2):
