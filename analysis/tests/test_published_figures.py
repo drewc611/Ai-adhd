@@ -597,3 +597,53 @@ def test_d28_records_that_comparable_heldout_accepted_the_pair():
     why = comparable_heldout(held(64.285, 0.05797277814630697), held(D28_CELL_D, oov))
     assert why is not None, "cell B against cell D is comparable now, so D28's correction is stale"
     assert "out-of-vocabulary" in why
+
+
+#: The shared-vocabulary decomposition: both cells re-scored over the same 8,192 targets.
+D28_RESTRICTED_B, D28_RESTRICTED_D = 69.120, 89.229
+D28_NAIVE_B, D28_NAIVE_D = 64.285, 142.408
+
+
+def test_d28_restricted_pair_is_comparable_and_the_naive_one_is_not():
+    """The whole decomposition rests on `comparable_heldout` accepting the restricted pair while
+    refusing the unrestricted one. If either verdict flips, the 1.291x is not a measurement of
+    anything and D28's correction is wrong rather than merely reworded."""
+    from adhd_analysis.text.evaluate import HeldOut, comparable_heldout
+
+    def held(ppl, oov, restricted=None, in_vocab=3_411_608):
+        return HeldOut(truncated=None, documents=366, sentences=148_153, tokens=3_443_116,
+                       in_vocabulary=in_vocab, oov_rate=oov, perplexity=ppl, in_vocabulary_only=False,
+                       restricted_to_types=restricted, fingerprint="1446762140db7f1a")
+
+    oov_b, oov_d = 0.05797277814630697, 0.009151013210127124
+    assert comparable_heldout(held(D28_NAIVE_B, oov_b, in_vocab=3_243_509), held(D28_NAIVE_D, oov_d)) is not None, \
+        "the unrestricted pair is comparable now, so D28's correction is stale"
+    assert comparable_heldout(held(D28_RESTRICTED_B, oov_b, 8192, 3_243_509), held(D28_RESTRICTED_D, oov_d, 8192)) is None, \
+        "the restricted pair is refused now, so the decomposition cannot be made"
+    # And a restriction applied to only one side is refused, which is what makes the pair meaningful.
+    assert comparable_heldout(held(D28_RESTRICTED_B, oov_b, 8192, 3_243_509), held(D28_NAIVE_D, oov_d)) is not None
+
+
+def test_d28_quotes_the_decomposition_and_which_way_each_figure_moved():
+    """Both numbers move in opposite directions under restriction and that is the mechanism, not a
+    detail: cell B rises because it loses cheap `<unk>` targets, cell D falls because it stops being
+    charged for 140,000 rare types. A writeup quoting only the ratio hides why it changed."""
+    decisions = docs("docs/DECISIONS.md")
+    for figure in (f"{D28_RESTRICTED_B:.3f}", f"{D28_RESTRICTED_D:.3f}",
+                   f"{D28_RESTRICTED_D / D28_RESTRICTED_B:.3f}x", f"{D28_NAIVE_D / D28_NAIVE_B:.3f}x"):
+        assert figure in decisions, f"D28 no longer quotes {figure}"
+    assert "rises" in decisions and "falls" in decisions, "D28 states the ratio without the mechanism"
+    # The share of the gap that was the question rather than the model.
+    naive_gap = D28_NAIVE_D - D28_NAIVE_B
+    moved = naive_gap - (D28_RESTRICTED_D - D28_RESTRICTED_B)
+    assert f"{moved:.1f}" in decisions and f"{moved / naive_gap:.0%}" in decisions, \
+        f"D28 does not say that {moved:.1f} of {naive_gap:.1f} points ({moved / naive_gap:.0%}) was the question"
+
+
+def test_the_restricted_result_does_not_touch_the_headline():
+    """D28's 5.516x needed no restriction — both models already sat at the same OOV — and a reader
+    must not come away thinking the decomposition weakened it."""
+    decisions = docs("docs/DECISIONS.md")
+    assert "5.516x" in decisions
+    tail = decisions[decisions.index("Restricted, the answer is 1.291x"):]
+    assert "None of this touches the 5.516x" in tail, "D28 does not say the headline is unaffected"

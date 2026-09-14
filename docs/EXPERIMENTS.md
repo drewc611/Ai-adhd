@@ -1032,3 +1032,39 @@ The restricted comparison asks a sharper question than the one the amendment cla
 same targets, is a transformer that also had to model 140,000 rare words worse at the common ones
 than one that spent all its capacity on 8,192?** That is capacity dilution, and it is a better
 question than the one refused.
+
+#### The shared-vocabulary result: capacity dilution is real and is 1.291x, not 2.215x
+
+Both cells re-scored over the same 8,192 targets, contexts untouched, `restricted_to_types: 8192` on
+both records, neither truncated, same frozen set.
+
+| | cell B, 8,192 types | cell D, 148,114 types |
+|---|---|---|
+| all targets | 64.285 | 142.408 |
+| **restricted to the shared 8,192** | **69.120** | **89.229** |
+
+`comparable_heldout` accepts the restricted pair — that path exists precisely so this decomposition
+can be made — and the answer is **1.291x**, against the naive **2.215x** the refused comparison would
+have reported.
+
+**Most of the apparent gap was the question, not the model.** 58.0 of the 78.1 points between the two
+cells, **74% of it**, disappears when both are asked about the same words. What remains is the real
+effect: a transformer carrying 140,000 rare types is **1.29x worse at the common ones** than one that
+spent all its capacity on 8,192. Capacity dilution exists and is modest.
+
+**Both numbers move, in opposite directions, and that is the mechanism.** Cell B *rises* 64.285 →
+69.120: it loses the `<unk>` targets that were cheap for it, because `<unk>` is common in its training
+by construction. Cell D *falls* 142.408 → 89.229: it stops being charged for 140,000 rare types it
+alone had to predict. Neither model changed; the question did.
+
+**The refusal's own estimate was conservative, in the safe direction.** Its message said the
+vocabulary difference "could account for 25.1 points of whatever separates 64.3 from 142.4". The
+measured displacement is 58.0 points — more than twice that — so refusing was even more warranted than
+the message claimed. The two figures are related and not the same quantity: 25.1 comes from E8's
+slope, fitted on *n-grams* at different caps and extrapolated here, while restriction changes the
+target set for both models rather than isolating an OOV term. That the extrapolation understates
+rather than overstates is worth knowing and is not evidence against E8.
+
+**What this does not rescue.** The 5.516x against the shipped n-gram is untouched: that pair needed no
+restriction, because both models already sat at the same 0.915101% out-of-vocabulary. D28's headline
+stands as measured.

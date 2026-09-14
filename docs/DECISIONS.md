@@ -2647,6 +2647,20 @@ The registered claim was checkable, was checked, and was wrong. The rescue is `s
 it is exact here because cell B's 8,192 types are a strict subset of cell D's 148,114 with zero
 B-only types.
 
+**Restricted, the answer is 1.291x and not 2.215x.** Re-scored over the same 8,192 targets, cell B is
+**69.120** and cell D is **89.229**, and `comparable_heldout` accepts that pair. **58.0 of the 78.1
+points between them — 74% — was the question rather than the model.** Both figures move in opposite
+directions, which is the mechanism: cell B *rises* from 64.285 because it loses `<unk>` targets that
+were cheap for it, and cell D *falls* from 142.408 because it stops being charged for 140,000 rare
+types it alone had to predict. Neither model changed.
+
+What survives is the real effect and it is modest: **a transformer carrying 140,000 rare types is
+1.29x worse at the common ones** than one that spent all its capacity on 8,192. Capacity dilution
+exists, and the refused comparison overstated it by 1.7x.
+
+None of this touches the 5.516x above. That pair needed no restriction: both models already sat at the
+same 0.915101% out-of-vocabulary, which is why the cell was worth running.
+
 ### What the cell found besides its number
 
 **A model this repository trained could not be loaded by this repository.** `MAX_LINE_BYTES` was a
