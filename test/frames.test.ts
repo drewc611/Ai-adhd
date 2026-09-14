@@ -563,6 +563,54 @@ test("FIRST_PRINCIPLES cannot be dispatched at any class's default n, and nothin
     if (cls.action === "run") assert.ok(!cls.frames.includes("FIRST_PRINCIPLES"));
 });
 
+/**
+ * The claim above is stronger than a sample, and saying so matters: a frame reachable on one seed
+ * in ten thousand reads as unreachable at any seed count you can afford, so "did not turn up in 400
+ * shuffles" and "cannot turn up" are different claims that look identical in a report.
+ *
+ * This one is structural. Alternates are appended after the primary list, every run class's default
+ * `n` is at most the length of its primary list, so no class reaches an alternate at default `n` at
+ * all — and a frame in no primary list is unreachable there for every seed there is.
+ */
+test("FIRST_PRINCIPLES is unreachable by construction, not by not turning up in the sample", () => {
+  // The two premises, checked rather than asserted.
+  for (const [pc, cls] of Object.entries(cfg.routing.classes)) {
+    if (cls.action !== "run") continue;
+    const n = cls.n ?? Math.min(cfg.routing.defaults.max_branches, cls.frames.length);
+    assert.ok(n <= cls.frames.length, `${pc} draws ${n} from a primary list of ${cls.frames.length}, so it reaches alternates`);
+    assert.ok(!cls.frames.includes("FIRST_PRINCIPLES"), `${pc} has FIRST_PRINCIPLES in its primary list`);
+  }
+  assert.deepEqual(frameReach(cfg, 40).proved_unreachable, ["FIRST_PRINCIPLES"]);
+
+  // One seed and forty give the same answer, because the answer does not come from the seeds.
+  assert.deepEqual(frameReach(cfg, 1).unreachable_at_default, frameReach(cfg, 40).unreachable_at_default);
+
+  // And the report says which kind of claim it is making, where a reader sees it.
+  assert.match(frameReach(cfg, 40).text, /proved, not sampled/);
+});
+
+/**
+ * The proof rests on two premises, so it has to stop claiming a proof when either fails. A class
+ * whose default n reaches past its primary list draws alternates, and then only sampling can say
+ * whether any seed picks a given one.
+ */
+test("reach stops claiming a proof when a class can reach its alternates", () => {
+  const widened = {
+    ...cfg,
+    routing: {
+      ...cfg.routing,
+      classes: Object.fromEntries(
+        Object.entries(cfg.routing.classes).map(([k, c]) =>
+          k === "design_decision" && c.action === "run" ? [k, { ...c, n: c.frames.length + 2 }] : [k, c],
+        ),
+      ),
+    },
+  } as typeof cfg;
+  const r = frameReach(widened, 60);
+  assert.deepEqual(r.proved_unreachable, [], "one class reaching its alternates ends the proof for every frame");
+  assert.match(r.text, /Otherwise sampled, not proved|sampled, not proved/);
+});
+
 test("every fixture names a class routing can actually run, or one it declines on purpose", () => {
   const reach = frameReach(cfg, 60);
   const reachable = new Set(reach.frames.filter((f) => f.at_default.length).map((f) => f.frame));

@@ -828,6 +828,12 @@ export interface ReachReport {
   frames: ReachStat[];
   unreachable_at_default: string[];
   unreachable_at_all: string[];
+  /**
+   * Unreachable at default `n` by construction rather than by not turning up in the sample: in no
+   * class's primary list, and no class's default `n` reaches past its primary list. No seed count
+   * could contradict this, which is a different and much stronger claim than the rest of the report.
+   */
+  proved_unreachable: string[];
   seeds: number;
   text: string;
 }
@@ -905,6 +911,19 @@ export function frameReach(cfg: Config, seeds = 400): ReachReport {
   const unreachable_at_default = frames.filter((f) => f.at_default.length === 0).map((f) => f.frame);
   const unreachable_at_all = frames.filter((f) => f.at_any_n.length === 0).map((f) => f.frame);
 
+  // Sampling establishes unreachability weakly: a frame reachable on one seed in ten thousand reads
+  // as unreachable at any seed count you can afford. For one shape of frame the answer is structural
+  // and needs no seeds at all. Alternates are appended after the primary list, so a class whose
+  // default `n` is at most the length of its primary list never reaches an alternate — and a frame
+  // in no primary list is then unreachable at default `n` by construction, for every seed there is.
+  const drawsOnlyFromPrimary = runClasses.every(({ cls }) => defaultN(cls) <= cls.frames.length);
+  const inNoPrimary = new Set(
+    cfg.frames.frames
+      .filter((f) => !runClasses.some(({ cls }) => cls.frames.includes(f.id)))
+      .map((f) => f.id),
+  );
+  const proved = drawsOnlyFromPrimary ? unreachable_at_default.filter((id) => inNoPrimary.has(id)) : [];
+
   const lines = [
     `frame reach over ${runClasses.length} run class(es) and ${seeds} seeds each, asking routing rather than the corpus`,
     "",
@@ -929,7 +948,18 @@ export function frameReach(cfg: Config, seeds = 400): ReachReport {
       "A fixture states a class and lets routing choose, so a frame unreachable at default n cannot have one. " +
         "Whether that is a routing fix or a retirement is a decision, not a count: see docs/RETIREMENT.md and D6.",
     );
-  lines.push(`Sampled, not proved. ${seeds} seeds per combination; a frame reachable on one seed in ten thousand would read as reachable here.`);
+  if (proved.length)
+    lines.push(
+      `${proved.join(", ")}: proved, not sampled. Every run class draws its default n entirely from its primary list ` +
+        `(n <= primary length for all ${runClasses.length}), alternates are appended after it, and ${proved.length === 1 ? "this frame is" : "these frames are"} ` +
+        `in no primary list. No seed reaches ${proved.length === 1 ? "it" : "them"} at default n, and no seed count would show otherwise.`,
+    );
+  const sampledOnly = unreachable_at_default.filter((id) => !proved.includes(id));
+  lines.push(
+    sampledOnly.length || !unreachable_at_default.length
+      ? `Otherwise sampled, not proved. ${seeds} seeds per combination; a frame reachable on one seed in ten thousand would read as reachable here.`
+      : `Reachability above is sampled at ${seeds} seeds per combination; the unreachability is not.`,
+  );
 
-  return { frames, unreachable_at_default, unreachable_at_all, seeds, text: lines.join("\n") };
+  return { frames, unreachable_at_default, unreachable_at_all, proved_unreachable: proved, seeds, text: lines.join("\n") };
 }

@@ -175,9 +175,19 @@ yet enough to know whether they work.
     lets routing choose, so this frame cannot have one. `--stats` had reported it as never
     dispatched and there was no way to tell that from bad luck across eleven runs.
 
-    Three tests pin it: that the report obeys D6 because it runs the real selector, that every frame
+    **And the finding is proved rather than sampled, which is a different claim.** A frame reachable
+    on one seed in ten thousand reads as unreachable at any seed count you can afford, so "did not
+    turn up in 400 shuffles" and "cannot turn up" look identical in a report and are not the same
+    thing. This one is structural: alternates are appended after the primary list, every run class's
+    default `n` is at most the length of its primary list, so no class reaches an alternate at
+    default `n` at all — and a frame in no primary list is unreachable there for every seed there
+    is. `--reach` says which kind of claim it is making, `proved_unreachable` carries it, and a test
+    checks both premises and that widening one class's `n` past its primary list ends the proof for
+    every frame. (Sampling agreed anyway: 0 hits in 120,000 class/seed combinations.)
+
+    Five tests pin it: that the report obeys D6 because it runs the real selector, that every frame
     primary for a class is reachable at that class's default n unless a same-axis frame sits earlier
-    in the same list, and the FIRST_PRINCIPLES finding itself — which fails when routing gains a
+    in the same list, the FIRST_PRINCIPLES finding itself — which fails when routing gains a
     class where it is primary or `MECHANIC` moves off `mechanism`, both of which make this record
     stale. A fourth checks every fixture names a class that can dispatch something.
 
