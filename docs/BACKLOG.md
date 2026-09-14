@@ -213,6 +213,23 @@ yet enough to know whether they work.
     produces the question nobody else asks is doing its job even when pruned. But this one has
     never run, so there is no evidence either way — which is itself the argument for one of the
     first two before the third.
+
+    **The second option does not fix the thing this item is about, and `--reach` already said so in
+    the sentence under the table.** FIRST_PRINCIPLES is unreachable because it is in no class's
+    primary list, not because it shares an axis. Checked directly: every one of the six run classes
+    has `n` at or below its primary length — five at 5 of 5, `enumerate_options` at 7 of 9 — so
+    alternates are appended after a list that is already long enough and no seed ever draws one.
+    Give `mechanism` to MECHANIC alone and put FIRST_PRINCIPLES on an axis of its own and it is
+    still in no primary list, so it is still never dispatched. The axis was never the binding
+    constraint.
+
+    That leaves the split defensible on its own terms and not as a fix: the stances really are
+    different, and `frame_hash` covers `axis`, so splitting changes FIRST_PRINCIPLES's hash and
+    nothing else — MECHANIC keeps `mechanism`, and no recorded run contains FIRST_PRINCIPLES, so the
+    comparability cost is zero. What it cannot have is D6's orthogonality check, which needs the two
+    frames to have co-occurred and they never have. So the split is a judgment about the stance text
+    with no data behind it, and making FIRST_PRINCIPLES *reachable* is a separate decision that
+    still costs what option one costs: a primary slot, taken from a frame currently earning it.
 20. **Probe ordering experiment.** Do the numbered probes change the answer if reordered?
 21. ~~**Forbidden-list audit.** Which `forbidden` entries have ever been violated in a real run?~~
     **Built as `adhd frames --forbidden`, and the answer to the question asked is one: MECHANIC forbids
@@ -289,6 +306,25 @@ yet enough to know whether they work.
     reports both. A dimension whose interval spans chance is unmeasured, not weak, which raises a
     third option for this item: drop `foreclosure` rather than rewrite it, since the contract
     validator already enforces what it is scoring.
+
+    **The cost is larger than this item states, measured rather than argued.** Dropping
+    `foreclosure` and bumping `version` was tried on 2026-09-14 and reverted. `validatePassA`
+    rejects any dimension the *current* rubric does not list, so all seven recorded runs stop being
+    readable — not non-comparable, unreadable: "critic pass A: A.foreclosure is not a rubric
+    dimension" for every letter of every run, and 13 tests fail across `replay`, `learn`, the rubric
+    linter and the corpus rollup. Every tool that reads a recorded run breaks, `adhd why` and the
+    viewer included.
+
+    So this item is blocked on a mechanism it never named: validating a recorded run against the
+    rubric version it was scored under rather than the one on disk. `score.json` already records
+    `rubric_version`, so the fact is there and nothing reads it. Three shapes, and the choice is the
+    owner's because each says something different about what a rubric version is: mark the dimension
+    `retired: true` and keep it in the file, excluded from scoring and from the critic brief but
+    accepted in old pass A files, which keeps one file as the whole record and means "dropped" is
+    not quite what happened; split the rubric into versioned files and validate against the run's
+    recorded version, which is honest and duplicates 140 lines per version; or store the dimension
+    list in each run's own record, which is the most correct — a run carries its own contract — and
+    leaves the seven already-recorded runs with nothing to validate against.
 
 ## 5. Kernel (D7)
 
@@ -1018,6 +1054,20 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     evidence that the instruction carries, and it is not evidence about `TaskList`, which is the
     claim D4 actually flags as argued rather than demonstrated. Item 88 is why that one still cannot
     be checked here.
+
+91. **`enumerate_options` is the only class where a reseed changes the frame set, and item 3 used the
+    one where it cannot.** Its primary list holds nine frames and `n` is seven, so the seeded shuffle
+    drops two primaries per run and which two is a property of the seed. Every other run class has
+    `n` exactly equal to its primary length, so a reseed there permutes dispatch order and nothing
+    else (item 89). Fixture 001 is `design_decision`, which is why seeds 1, 2 and 3 selected the same
+    five frames.
+
+    So the experiment item 3 was written to run — do the findings survive a reshuffle, or are they
+    seed artifacts — is answerable today, on a fixture routed to `enumerate_options`, and is not
+    answerable on 001 at any seed. Two of the eight fixtures route there. This is not an argument
+    against the 001 reseeds, which measure branch sampling at a fixed frame set and are worth having
+    under that description; it is an argument that the description in item 3 belongs to a different
+    class, and that `docs/EXPERIMENTS.md` should say which of the two E1a measured.
 
 ## Not doing, and why
 
