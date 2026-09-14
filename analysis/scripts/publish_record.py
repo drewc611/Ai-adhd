@@ -58,6 +58,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.name and len(args.records) > 1:
         ap.error("--name takes one record")
+    # A name without the suffix writes an extensionless file, which is checked in, looks published,
+    # and is invisible to every test: `test_published_figures.py` reads `records/*.json`. Passing a
+    # stem is the obvious mistake because `--name e9-cellD` reads like a record id rather than a
+    # filename, and the failure is silent in the direction that matters.
+    if args.name and not args.name.endswith(".json"):
+        ap.error(f"--name is a filename, so it needs the .json suffix: try {args.name}.json")
     for src in args.records:
         if not src.exists():
             print(f"missing: {src}", file=sys.stderr)

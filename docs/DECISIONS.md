@@ -2592,3 +2592,86 @@ D19's 25.65 has and the same reason `former_ids` and `evals/replay-baseline.json
 result is what the reader was shown. This entry is what supersedes them, `analysis/records/b82-*.json`
 carry the new runs, and the pre-D26 markers come off the READMEs because the figures they warned about
 no longer describe anything published.
+
+---
+
+## D28. E9: the transformer loses by 5.52x at the n-gram's own vocabulary, so the cap was not the excuse
+
+**Asked.** D21 measured the transformer losing to Kneser-Ney by 2.09x, and to get there E6 had to
+match the vocabularies by *capping the n-gram* to 8,192 types. Both models were then answering a
+question neither would have chosen, and nothing in D21 or D24 said whether the transformer's loss was
+the architecture or the cap it had been forced into. Backlog 79 is the cell that removes the excuse:
+the transformer at 148,114 types, the shipped model's own vocabulary, made affordable by a sampled
+softmax at training time and scored under the full normalised distribution.
+
+**Resolved. It loses by more.**
+
+| | shipped Kneser-Ney | cell D transformer |
+|---|---|---|
+| types | 148,114 | 148,114 |
+| training tokens | 64,347,232 | 18,341,790 |
+| held-out OOV | 0.915101% | 0.915101% |
+| **held-out perplexity, all targets** | **25.815** | **142.408** |
+| ratio | — | **5.516x** |
+
+Both on frozen set fingerprint `1446762140db7f1a`, 366 documents, 3,443,116 tokens, 3,411,608 in
+vocabulary, neither truncated. `comparable_heldout` accepts the pair: the OOV rates are not close but
+*identical to every digit*, because both models draw the same types and the same tokens therefore fall
+outside on the same set. The gap is zero against a 0.2507% budget.
+
+That acceptance is the entire point of the cell. E6's comparison was possible only by handicapping the
+n-gram; this one needs no handicap, and the conclusion it reaches is the stronger version of D21's:
+**the 8,192-type cap was not flattering the n-gram.** Given its own vocabulary the transformer does
+worse, not better.
+
+### The three things this does not say
+
+**It is not 5.52x on equal text.** Cell D read 18,341,790 tokens against the shipped model's
+64,347,232 — 3.51x less — because the run was capped at 20M training tokens by an amendment made
+before any result existed, on a measured 4.7-hour full epoch in a container that had already restarted
+once mid-run. The figure is "a transformer on 3.5x less text loses by 5.5x". Whether it closes the gap
+on equal text is unanswered and this cell cannot answer it.
+
+**The training signal was a noisy estimate of the loss being minimised.** The sampled-softmax gap is
+**0.679 nats** — final training loss 4.6145 under the estimator against 3.9352 under the full softmax
+on the same batch. Scoring never uses the estimator, so the 142.41 is unaffected, and this is why D2's
+"a sampled softmax at scoring time is a different measurement wearing the same name" was worth two
+hours of wall clock. But a cell trained against the full softmax might land elsewhere, and that is the
+honest caveat, not a footnote.
+
+**It says nothing about the two transformers.** The amendment claimed capping cell D bought a
+comparison against E6's cell B at the same text and different vocabularies. `comparable_heldout`
+refuses that pair — 5.80% against 0.92% OOV, a 4.88% gap against the 0.62% those perplexities carry,
+so up to 25.1 of the 78.1 points between 64.285 and 142.408 are the vocabulary rather than the model.
+The registered claim was checkable, was checked, and was wrong. The rescue is `shared_vocabulary`, and
+it is exact here because cell B's 8,192 types are a strict subset of cell D's 148,114 with zero
+B-only types.
+
+### What the cell found besides its number
+
+**A model this repository trained could not be loaded by this repository.** `MAX_LINE_BYTES` was a
+64MB constant justified by a comment about an 8,192 × 128 matrix; cell D's `tok` line is 204,355,608
+bytes, and every other line in the file is under 1MB. Exactly one line in the format scales with
+vocabulary and nothing had ever pushed on it. The bound is derived from the header's declared shape
+now — safe because the header is validated and its parameter count checked against a memory ceiling
+before any body line is read, and a *tightening* for every earlier model, since 8,192 × 128 derives
+25MB against the flat 64MB it replaces.
+
+**The scoring default would have reported a prefix as a perplexity.** `score_heldout.py` defaults
+`--max-seconds` to 3600; cell D's scoring needs about 122 minutes, measured at 471 positions per
+second before launch. The default would have stopped at 60 minutes with `truncated` set, and that
+number would have been compared against the shipped model's complete one.
+
+**`evaluate(shared_vocabulary=...)` had no route from a shell.** Built under backlog 77 for exactly
+the comparison E9 needed, and nothing on `score_heldout.py`'s command line could pass it. It takes
+`--shared-vocabulary MODEL` now.
+
+**The pre-registration slipped by fifteen seconds.** The training process started 09:20:10 and the
+amendment commit landed 09:20:25, against a rule in `docs/EXPERIMENTS.md` saying that file is not
+edited after a run starts. No result existed at either moment and no reading changed. Recorded while
+cell D was at step 4,400 of 4,882, before any number existed, because a discipline reported only when
+the breach is serious is not a discipline.
+
+### The shipped model
+
+Unchanged, and now for a better-supported reason than D21 had. The background model stays Kneser-Ney.

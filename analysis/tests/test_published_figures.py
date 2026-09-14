@@ -490,3 +490,66 @@ def test_the_manifest_marks_the_prose_mutable_and_the_docs_say_why():
     assert "## D26." in decisions
     for figure in ("4,807", "0.105%", "mutable: true"):
         assert figure in decisions, f"D26 no longer quotes {figure}"
+
+
+# --- E9 / D28: the transformer at the n-gram's own vocabulary ------------------------------------
+
+#: Measured. Cell D and the shipped model on frozen set `1446762140db7f1a`, all targets.
+D28_CELL_D = 142.408
+D28_SHIPPED = 25.815
+#: The sampled estimator against the full softmax on the same final batch. Reported, not assumed away.
+D28_SAMPLED_LOSS, D28_FULL_LOSS = 4.6145, 3.9352
+
+
+def test_d28_cell_d_ran_at_the_shipped_vocabulary_with_no_ceiling_binding():
+    """E9's first fixed reading: a ceiling that binds voids the cell."""
+    d = record("e9-cellD")
+    assert d["vocab_size"] == 148_114, "cell D is the transformer at the n-gram's vocabulary or it is nothing"
+    assert d["stopped_because"] == "epochs", f"a budget bound and the cell is void: {d['stopped_because']}"
+    assert d["epochs_completed"] > 0.999, f"cell D saw less text than registered: {d['epochs_completed']}"
+    assert d["config"]["d_model"] == 128 and d["config"]["n_layers"] == 2, "the shape moved from E6's"
+
+
+def test_d28_reports_the_sampled_softmax_gap_rather_than_assuming_it_away():
+    """The gap is 0.68 nats and it is large. It does not touch the perplexity, because scoring uses
+    the full normalised distribution — but a cell trained against the full softmax might land
+    elsewhere, and that is the caveat D28 has to carry rather than bury."""
+    d = record("e9-cellD")
+    assert d["full_loss_on_last_batch"] is not None, "the full-softmax reading was not taken"
+    assert abs(d["final_loss"] - D28_SAMPLED_LOSS) < 0.01
+    assert abs(d["full_loss_on_last_batch"] - D28_FULL_LOSS) < 0.01
+    gap = d["final_loss"] - d["full_loss_on_last_batch"]
+    assert gap > 0, "the estimator reported the model as better than it is, which is the dangerous sign"
+    assert f"{gap:.3f}" in docs("docs/DECISIONS.md"), f"D28 does not quote the gap it measured ({gap:.3f})"
+
+
+def test_d28_quotes_its_result_and_the_asymmetry_that_qualifies_it():
+    decisions = docs("docs/DECISIONS.md")
+    assert "## D28." in decisions
+    for figure in (f"{D28_CELL_D:.3f}", f"{D28_SHIPPED:.3f}", f"{D28_CELL_D / D28_SHIPPED:.3f}x"):
+        assert figure in decisions, f"D28 no longer quotes {figure}"
+    # The asymmetry is registered as something quoted with every cell D figure, so it is checked
+    # rather than trusted: a ratio published without it reads as a fair fight and is not.
+    d = record("e9-cellD")
+    assert f"{d['budget_corpus']['tokens']:,}" in decisions, "D28 does not say how much text cell D read"
+    assert "64,347,232" in decisions, "D28 does not say how much text the shipped model read"
+    assert "3.51x less" in decisions, "D28 does not state the text asymmetry"
+
+
+def test_d28_records_that_comparable_heldout_accepted_the_pair():
+    """The reason the cell exists. E6 could compare only by capping the n-gram; this pair needs no
+    handicap, and the acceptance is what makes the 5.52x mean anything."""
+    from adhd_analysis.text.evaluate import HeldOut, comparable_heldout
+
+    def held(ppl, oov):
+        return HeldOut(truncated=None, documents=366, sentences=148_153, tokens=3_443_116,
+                       in_vocabulary=3_411_608, oov_rate=oov, perplexity=ppl,
+                       in_vocabulary_only=False, restricted_to_types=None, fingerprint="1446762140db7f1a")
+
+    oov = 0.009151013210127124
+    assert comparable_heldout(held(D28_SHIPPED, oov), held(D28_CELL_D, oov)) is None, \
+        "the pair D28 rests on is no longer comparable, which would void the decision"
+    # And the pair the amendment wrongly claimed, which is refused: cell B at 5.797% against cell D.
+    why = comparable_heldout(held(64.285, 0.05797277814630697), held(D28_CELL_D, oov))
+    assert why is not None, "cell B against cell D is comparable now, so D28's correction is stale"
+    assert "out-of-vocabulary" in why
