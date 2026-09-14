@@ -191,15 +191,23 @@ fixes took it 3.35x from where it started. `python -m adhd_analysis.text.train_t
 and `scripts/score_heldout.py` scores either class by reading the model file's own format header.
 
 **D21 records what it is worth, which is less than the n-gram.** Held at the same 8,192-word
-vocabulary on the same 20M tokens, one epoch, 1.46M parameters: **64.1** against Kneser-Ney's **30.7**,
-a 2.09x loss inside the band E6 registered before running. The same Kneser-Ney over the full 64.4M
-tokens scores 19.9 and is *refused* against both, because the top 8,192 words of 64.4M tokens and of
-20M share only 82.6% of their types — a fixed vocabulary cap is not a fixed vocabulary.
+vocabulary on the same 20M tokens, one epoch, 1.46M parameters: **64.29** against Kneser-Ney's
+**30.95**, a 2.077x loss inside the band E6 registered before running. The same Kneser-Ney over the
+full 64.4M tokens scores 19.94 and is *refused* against both, because the top 8,192 words of 64.4M
+tokens and of 20M share only 82.6% of their types — a fixed vocabulary cap is not a fixed vocabulary.
 
 Two numbers from that run worth carrying: **90% of the transformer's OOV is the 8,192 ceiling rather
 than `min_count`** (63,697 types met the frequency floor and were cut by the cap anyway), and the
-transformer saw **18,343,512 real tokens to the control's 20,000,029**, an 8.3% disadvantage from the
-`<s>`/`</s>` its materialised array carries. Neither covers 2.09x.
+transformer saw **18,341,790 real tokens to the control's 20,000,294**, an 8.3% disadvantage from the
+`<s>`/`</s>` its materialised array carries. Neither covers 2.077x.
+
+**D28 then removed the excuse in all of this.** Every figure in the two paragraphs above is a
+comparison at 8,192 types, a vocabulary reached by *capping the n-gram*, and nothing in D21 said
+whether the transformer's loss was the architecture or the cap. E9's cell D is the transformer at the
+n-gram's own 148,114 types: **142.41** against the shipped model's **25.82**, a 5.516x loss, with the
+pair accepted because both sit at 0.915101% out-of-vocabulary — identical to every digit, since both
+draw the same types. At its own vocabulary it loses by more, not less. Cell D read 3.51x less text,
+which is quoted with the figure everywhere it appears.
 
 **A third model class in D24: an LSTM, and it loses to both.** `text/lstm.py`, from scratch over numpy
 with BPTT written by hand. At d128/2 layers — 1,311,744 parameters against the transformer's 1,459,456,

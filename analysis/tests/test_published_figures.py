@@ -198,16 +198,60 @@ def test_every_readme_perplexity_belongs_to_a_recorded_run(readmes):
     assert "26.29" not in (ROOT / "README.md").read_text(), "26.29 is two revisions stale"
 
 
-def test_the_readme_quotes_post_d26_figures_where_it_says_it_does(readmes):
+def test_the_readmes_quote_post_d26_figures_where_they_say_they_do():
     """The README asserts "Every figure here is post-D26" and quoted the pre-D26 ones. D27 recorded
-    both columns; only one of them belongs above that sentence."""
-    readme = (ROOT / "README.md").read_text()
-    assert "Every figure here is **post-D26**" in readme, "the claim this checks has moved"
-    for stale, current in (("64.1", "64.29"), ("30.7", "30.95"), ("159.3", "154.81")):
-        assert f"**{stale}**" not in readme, f"the README still quotes the pre-D26 {stale}, not {current}"
-        assert f"**{current}**" in readme, f"the README does not quote the post-D26 {current}"
-    # And the ratios that follow from them.
-    assert "**2.077x**" in readme and "**2.09x**" not in readme, "E6's ratio is the pre-D26 one"
+    both columns; only one of them belongs in a README.
+
+    D27's rule is asymmetric on purpose and both halves are checked here. `docs/DECISIONS.md` keeps
+    D21's and D24's text — a recorded result is what the reader was shown — while the READMEs move,
+    "because the figures they warned about no longer describe anything published". So a stale figure
+    is a defect in a README and evidence in the decisions log, and a test that treated them alike
+    would force one of the two to be wrong.
+
+    Ratios are checked unbolded as well as bolded. The first version of this test looked only for
+    `\\*\\*2.09x\\*\\*`, and `analysis/README.md` writes "a 2.09x loss" and "Neither covers 2.09x" — two
+    stale ratios in the file, inside the test's remit, invisible to it.
+    """
+    for where in ("README.md", "analysis/README.md"):
+        text = (ROOT / where).read_text()
+        for stale, current in (("64.1", "64.29"), ("30.7", "30.95"), ("159.3", "154.81")):
+            assert f"**{stale}**" not in text, f"{where} still quotes the pre-D26 {stale}, not {current}"
+        # A stale ratio is allowed in a paragraph that also carries its replacement, because stating
+        # the move is exactly what D27 asks a README to do — "E6's ratio moved 2.086x to 2.077x" is
+        # correct and a blanket ban would forbid it. Stating it *alone* is the defect.
+        #
+        # The unit is the paragraph, not the line. Per line was the first attempt and it failed on
+        # that very sentence: these files are hard-wrapped, so "moved 2.086x to" ends one line and
+        # "**2.077x**" begins the next. A prose rule enforced per line is a rule about where the
+        # author pressed return.
+        for stale, current in (("2.09x", "2.077x"), ("2.086x", "2.077x"),
+                               ("2.49x", "2.408x"), ("2.485x", "2.408x"), ("5.18x", "5.00x")):
+            for para in re.split(r"\n\s*\n", text):
+                if stale in para:
+                    assert current in para, (
+                        f"{where} quotes the pre-D26 {stale} without {current} in the same paragraph:\n"
+                        f"  {' '.join(para.split())[:200]}"
+                    )
+        assert "2.077x" in text, f"{where} does not quote E6's post-D26 ratio"
+    root = (ROOT / "README.md").read_text()
+    assert "Every figure here is **post-D26**" in root, "the claim this checks has moved"
+    for current in ("64.29", "30.95", "154.81"):
+        assert f"**{current}**" in root, f"the README does not quote the post-D26 {current}"
+
+    # The other half of D27's rule: the decisions log keeps what it recorded.
+    decisions = docs("docs/DECISIONS.md")
+    for kept in ("64.1", "30.7", "2.086x"):
+        assert kept in decisions, f"D21's recorded {kept} was rewritten; D27 says it stays"
+
+
+def test_both_readmes_carry_the_e9_result_that_removes_the_cap_excuse():
+    """D21's figures are all at 8,192 types, a vocabulary reached by capping the n-gram. A README
+    that states them without D28 leaves the reader with E6's open question and no answer to it."""
+    for where in ("README.md", "analysis/README.md"):
+        text = (ROOT / where).read_text()
+        assert "142.41" in text, f"{where} does not carry E9's result"
+        assert "0.915101%" in text, f"{where} does not say why the pair is comparable"
+        assert "3.5" in text and "less text" in text, f"{where} states the ratio without its asymmetry"
 
 
 # --- E8: the vocabulary sweep, the slope, and the threshold derived from it ---------------------
