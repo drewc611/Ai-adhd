@@ -926,3 +926,75 @@ serious. Anyone reading E9's result is entitled to know the registration landed 
 fixed readings stay as registered, and this note adds nothing to what cell D is measured against. It
 was written before the number existed precisely so it cannot be read as an excuse constructed after
 seeing one.
+
+### E9 result, 2026-09-14
+
+**Cell D scores 142.41 against the shipped Kneser-Ney's 25.82. The n-gram wins by 5.52x, at the same
+vocabulary, on the same frozen set, with the comparison not refused.**
+
+| | shipped Kneser-Ney | cell D transformer |
+|---|---|---|
+| types | 148,114 | 148,114 |
+| training tokens | 64,347,232 | 18,341,790 |
+| held-out OOV | 0.915101% | 0.915101% |
+| **held-out perplexity, all targets** | **25.815** | **142.408** |
+| truncated | none | none |
+
+Both scored 3,443,116 tokens over 366 documents, 3,411,608 of them in vocabulary, on frozen-set
+fingerprint `1446762140db7f1a`.
+
+**The registered readings, in the order they were registered.**
+
+*A ceiling that binds voids the cell.* None bound. Training stopped on `epochs` at
+`epochs_completed` 0.99982, and both scorings report `truncated: null`. The cell is valid.
+
+*The comparison must not be refused.* It is not. The two OOV rates are not close, they are
+**identical to every digit** — 0.009151013210127124 against 0.009151013210127124 — because both
+models draw the same 148,114 types, so the same tokens fall outside on the same frozen set.
+`allowed_oov_gap` sized a budget of 0.2507% for these perplexities and the gap is zero. This was the
+whole reason the cell exists: E6 could not separate the architecture from the vocabulary, and this
+pair differs in nothing but architecture and how much text each read.
+
+*The sampled-softmax gap is reported, not assumed away.* It is **0.679 nats** — final training loss
+4.6145 under the sampled estimator against 3.9352 under the full softmax on the same batch, or 100.94
+against 51.17 as training perplexities. That is large, it runs in the direction that flatters nothing
+(the estimator reports the model as *worse* than it is), and it is the first thing to doubt. It does
+not touch the 142.41: scoring never uses the estimator, only the full normalised distribution, which
+is why D2's "a sampled softmax at scoring time is a different measurement wearing the same name" was
+worth the extra two hours of wall clock. What the gap does mean is that **the training signal cell D
+learned from was a noisy estimate of the loss it was minimising**, and a cell trained against the
+full softmax might land elsewhere. That is the honest caveat on this number and it is not small.
+
+*A loss is a result.* 142.41 lands **inside** the amended 90-to-200 band and **outside** the original
+55-to-110, which is recorded as superseded rather than deleted. The amendment moved the band because
+the token cap cut the training text, not because a result had been seen; that it lands inside the
+amended band and above the original is what you would expect if the cap mattered, and is weak
+evidence that it did.
+
+**The asymmetry, quoted here as registered.** Cell D read 18,341,790 tokens; the shipped model read
+64,347,232. **3.51x less text.** The 5.52x is therefore not "a transformer loses to an n-gram by
+5.5x" — it is "a transformer on 3.5x less text loses by 5.5x". Whether the transformer closes the
+gap on equal text is not answered here and this cell cannot answer it: the full epoch that would
+answer it is 4.7 hours of training on this machine, measured, in a container that has already
+restarted once mid-run.
+
+**What it does answer**, and the reason backlog 79 was worth doing: **the vocabulary was not the
+explanation.** E6 found the transformer losing at 8,192 types and left open whether that was the
+architecture or the 18x smaller vocabulary it had been forced into. At the n-gram's own vocabulary,
+against the n-gram's own OOV rate, on the n-gram's own frozen set, it loses by more, not less. The
+gap E6 measured was not an artefact of the cap.
+
+**A defect the cell found, which is worth as much as the number.** Cell D trained for two hours and
+then could not be loaded by its own loader: `MAX_LINE_BYTES` was a 64MB constant justified by a
+comment about an 8,192 x 128 matrix, and cell D's `tok` line is 204,355,608 bytes. Every other line
+in the file is under 1MB, so exactly one line in the format scales with vocabulary and nothing had
+ever pushed on it. The bound is derived from the header's declared shape now, which tightens it for
+every model that existed before this one. A constant that happens to exceed the largest model so far
+is not a bound; it is a record of what had been trained by then.
+
+**And a second one, in the tooling around it.** `score_heldout.py` defaults `--max-seconds` to 3600.
+Cell D's scoring needs about 122 minutes, measured at 471 positions per second before it was
+launched. The default would have stopped it at 60 minutes and reported a prefix score with
+`truncated` set — a number that looks like a perplexity, is not one, and would have been compared to
+the shipped model's full score. The ceiling was raised for this scoring run and the reading
+`truncated: null` above is what confirms it did not bind.
