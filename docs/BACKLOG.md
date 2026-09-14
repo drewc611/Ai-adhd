@@ -302,7 +302,28 @@ yet enough to know whether they work.
 
 ## 7. Documentation
 
-46. **A worked example**, end to end, with the actual commands and the actual output.
+46. ~~**A worked example**, end to end, with the actual commands and the actual output.~~
+    **Built as `docs/WORKED-EXAMPLE.md`, seven sections over `001-first-run`: compile and the D5
+    gate, the brief one branch is handed, what it returns, `adhd traps` on it, `adhd why` on a frame
+    that lost, the pruned block in full, `adhd eval` against the linear-CoT control, and `adhd diff`
+    against seed 2.**
+
+    **Every block is output I ran, and two tests keep it that way** — one comparing the quoted hash,
+    pruned-block bullets and brief opening against the files on disk, one checking that the brief the
+    document calls isolated names no sibling. A document whose entire claim is "this is what it
+    printed" rots the moment a detector is reworded, and rereading it is not a check.
+
+    The section that earns the document is the last one. Same problem, same frames, seed 1 against
+    seed 2: both survivors are pruned in the other run and the recommendation changes. The worked
+    example ends on evidence against itself, because eleven runs is not a sample and items 3 and 4
+    are what would make it one.
+
+    **Found while capturing output: `adhd replay <dir>` and `adhd replay` disagreed about the same
+    run.** The all-runs form says "drifted as the baseline records" and gives the reason; the
+    single-run form said "DRIFTED" and exited 0, so a reader checking one run got an alarm and a
+    success code together. The exit code had consulted `expected_drift` from the start and only the
+    printed line had not. Fixed, with a test on both spellings and one that keeps unexplained drift
+    shouting.
 47. ~~**FAQ**, starting with "why not just prompt the model to consider multiple perspectives".~~
     **Built as `docs/FAQ.md`, opening with exactly that question. Seven answers, each with the evidence
     attached and every number checked by an existing test — including the ones that are least flattering:

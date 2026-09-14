@@ -321,3 +321,49 @@ test("the README's fixture 001 rates are the rates the audit computes", async ()
       "an assertion only some real runs surface is being described as a property of one sample",
     );
 });
+
+/**
+ * The worked example quotes real command output, which is the only thing that makes it worth
+ * having and also the thing that rots. A renderer change, a reworded detector, a new frame name:
+ * any of them turns a quoted block into a confident lie, and a document whose whole claim is
+ * "every block here is what it printed" fails harder than one that never claimed it.
+ *
+ * Checked mechanically rather than by rereading: the blocks that come from files on disk are
+ * compared to those files, and the hash is compared to the plan that produced it.
+ */
+test("the worked example still quotes what the run actually says", () => {
+  const doc = readFileSync(join(cfg.root, "docs", "WORKED-EXAMPLE.md"), "utf8");
+  const runDir = join(cfg.root, "evals", "recorded", "001-first-run");
+  const plan = JSON.parse(readFileSync(join(runDir, "plan.json"), "utf8")) as { problem_hash: string };
+
+  // The hash appears four times in the document and is the one claim everything else rests on.
+  const quoted = [...doc.matchAll(/sha256:[0-9a-f]{64}/g)].map((m) => m[0]);
+  assert.ok(quoted.length >= 3, "the worked example should quote the hash");
+  for (const h of new Set(quoted)) assert.equal(h, plan.problem_hash, "a hash in the worked example is not this run's");
+
+  // Each bullet of the pruned block, as the synthesis actually renders it today.
+  const synth = readFileSync(join(runDir, "synthesis.md"), "utf8");
+  const block = synth.slice(synth.indexOf("## Pruned, with reason"));
+  const bullets = block.split("\n").filter((l) => l.startsWith("  - detector output:"));
+  assert.equal(bullets.length, 2, "001-first-run prunes two frames");
+  for (const b of bullets) assert.ok(doc.includes(b), `the worked example's pruned block has drifted:\n${b.slice(0, 120)}`);
+
+  // And the brief excerpt, which is what shows a branch is handed no sibling.
+  const brief = readFileSync(join(runDir, "briefs", "LEDGER.md"), "utf8");
+  assert.ok(doc.includes(brief.split("\n").slice(0, 5).join("\n")), "the quoted brief opening has drifted");
+});
+
+/**
+ * And the isolation claim the document makes about that brief is the one a reader is most likely
+ * to take on trust, so it is checked against the brief rather than asserted in prose.
+ */
+test("the brief the worked example quotes really does name no sibling", () => {
+  const runDir = join(cfg.root, "evals", "recorded", "001-first-run");
+  const brief = readFileSync(join(runDir, "briefs", "LEDGER.md"), "utf8");
+  for (const f of cfg.frames.frames) {
+    if (f.id === "LEDGER") continue;
+    assert.ok(!new RegExp(`\\b${f.id}\\b`).test(brief), `${f.id} appears in LEDGER's brief`);
+  }
+  assert.ok(!/so far/i.test(brief));
+  assert.ok(!/\b(five|5) branches\b/i.test(brief), "the brief states the branch count");
+});

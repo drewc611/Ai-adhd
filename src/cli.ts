@@ -565,7 +565,22 @@ program
       if (runDir) {
         const r = replayRun(cfg, runDir, { write: o.write });
         if (o.print) { console.log(r.rendered); return; }
-        console.log(o.json ? JSON.stringify({ ...r, rendered: undefined }, null, 2) : `${r.run}: ${r.error ? `ERROR ${r.error}` : !r.had_recorded ? "no synthesis.md recorded" : r.same ? "same" : `DRIFTED, first differs at line ${r.first_diff_line}`}`);
+        // The same drift reported two ways used to depend on how you asked. `adhd replay` over
+        // every run says "drifted as the baseline records" and names the reason; `adhd replay
+        // <dir>` said "DRIFTED" and exited 0, so a reader checking one run got an alarm and a
+        // success code together and had no way to tell which to believe. The exit code was
+        // always right — it has consulted `expected_drift` from the start — and only the line
+        // printed above it was not.
+        const verdict = r.error
+          ? `ERROR ${r.error}`
+          : !r.had_recorded
+            ? "no synthesis.md recorded"
+            : r.same
+              ? "same"
+              : r.expected_drift
+                ? `drifted as the baseline records, from line ${r.first_diff_line}: ${r.expected_drift}`
+                : `DRIFTED, first differs at line ${r.first_diff_line}`;
+        console.log(o.json ? JSON.stringify({ ...r, rendered: undefined }, null, 2) : `${r.run}: ${verdict}`);
         process.exit(r.error || (r.had_recorded && !r.same && !r.expected_drift) ? 1 : 0);
       }
       const rep = replayAll(cfg, o.recorded, { write: o.write });
