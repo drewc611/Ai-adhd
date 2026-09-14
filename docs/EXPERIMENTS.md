@@ -788,3 +788,79 @@ small, and changes sign; the dominant term is rare words the cap used to hide.
 The threshold is now `allowed_oov_gap` in `evaluate.py` — 5% of the smaller perplexity divided by the
 worst measured slope, floored at E4's gap and capped at the old 0.01 so that E8 tightens the guard at
 every perplexity and loosens it at none.
+
+## E9. A transformer at the n-gram's vocabulary, via sampled softmax
+
+**Registered 2026-09-14, before any code was written.** Backlog 79 is the item and it says why this needs
+a registration rather than a run: reaching 148,114 types means changing the loss the model optimises,
+and a cell whose loss is not the loss every other cell used is a cell that has to declare itself.
+
+### The question E6 could not ask
+
+E6 held both classes at **8,192 types** because the output projection is `d_model x vocab_size` and
+every token's loss touches all of it. That is a real constraint and it bought a real comparison, but it
+also means every transformer figure in this repository describes a model that has never been asked the
+question the shipped model answers.
+
+Worse, the two cannot be compared even in principle. `comparable_heldout` refuses the shipped model at
+0.915% held-out OOV against cell A at 4.711% — a 3.80-point gap where D25 allows 0.23 — and it is right
+to: E8 measured that the vocabulary difference alone could account for **19.5 perplexity points** of
+whatever separates 19.9 from 25.8. At one vocabulary that refusal goes away.
+
+**So this is the first cell that could be compared to the shipped model on all targets.** That is the
+point of it.
+
+### The cell
+
+| cell | model | vocabulary | training tokens | measured |
+|---|---|---|---|---|
+| shipped | Kneser-Ney order 4, `min_count` 3 | 148,114 | 64,347,232 | **25.82** |
+| **D** | **transformer, d128, 2 layers, ctx 128** | **148,114** | **64,347,232** | to be measured |
+
+Same corpus read (`de7c24b2218ad055`), same `min_count` 3, same uncapped vocabulary, same frozen
+held-out set. The transformer's output projection is tied to its embedding, so at this vocabulary that
+one table is **18,958,592 parameters** against the 1.46M of every transformer cell so far.
+
+### What changes, stated precisely
+
+**Training** uses a sampled softmax: for each position the loss is computed over the target plus a
+shared set of negatives drawn log-uniformly over the frequency-sorted vocabulary, each logit corrected
+by `-log Q(id)`, with any negative that collides with the target masked out. That is an estimator of the
+full softmax loss, not the full softmax loss.
+
+**Evaluation does not change.** `logprob_terms` computes the full normalised distribution over all
+148,114 types, exactly as every other cell is scored. A sampled softmax at scoring time would be a
+different measurement wearing the same name, so the registered reading is that **cell D's perplexity is
+a true held-out perplexity and is comparable to the shipped model's.**
+
+### The prediction
+
+**D lands between 55 and 110**, a loss of **2.1x to 4.3x** against the shipped model's 25.82, and my
+point estimate is about 78 — roughly 3x.
+
+Two forces pull against each other and I do not know the crossover. The transformer gets **3.2x more
+text** than any transformer cell so far, and more data is the thing transformers are supposed to convert
+into quality better than an n-gram does: Kneser-Ney converts that same 3.2x into only 1.2x (30.95 to
+25.82), which is the shape of a model that has stopped learning from more of the same genre. Against
+that, the output space is **18x larger**, the tail it now has to predict is exactly the part a cap used
+to hide, and E8 measured that going from 8,192 to 71,603 types costs 38% of perplexity on its own.
+
+If D beats 25.82 the headline of this repository changes and D20's "needs somewhere north of 10^8 tokens
+before its perplexity beats a well-smoothed 5-gram" is wrong at 6.4 x 10^7. I do not expect that.
+
+### Fixed readings
+
+- **A ceiling that binds voids the cell.** `stopped_because` decides, on all three budgets, and
+  `epochs_completed` below 1.0 means D saw less text than registered.
+- **D is compared to the shipped model on all targets, and the comparison must not be refused.** Both
+  sit at 148,114 types on one corpus read, so their held-out OOV should agree to the digit. If
+  `comparable_heldout` refuses the pair, the cell is invalid rather than close — that refusal is the
+  whole reason this cell exists.
+- **The sampled-softmax gap is reported, not assumed away.** The final training loss is recorded twice,
+  once under the sampled estimator and once under the full softmax on the same batch. A large gap means
+  the number measures my estimator rather than the architecture, and it is the first thing to doubt.
+- **The backward pass is gradient-checked exhaustively against central differences**, on a fixed sample
+  set so the loss is deterministic, to the same standard D24 held the LSTM to. The sampled path is new
+  code on the one part of the model that carries 93% of its parameters.
+- **A loss is a result.** Being outside 55-to-110 in either direction is worth more than being inside.
+- **No shape, learning rate, sample count or token cap moves after a result is seen.**
