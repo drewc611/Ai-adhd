@@ -219,19 +219,55 @@ test("adhd_frames exposes every report the CLI has, and picks one at a time", as
  * Read from the CLI source rather than from a list maintained beside it, because a hand-kept list
  * is a third thing to forget.
  */
-test("every report mode adhd frames offers on the CLI is an input the MCP tool accepts", async () => {
+test("every report mode the CLI offers is an input the MCP tool accepts", async () => {
   const cli = readFileSync(join(cfg.root, "src", "cli.ts"), "utf8");
-  const block = cli.slice(cli.indexOf('.command("frames")'), cli.indexOf(".action", cli.indexOf('.command("frames")')));
-  const modes = [...block.matchAll(/\.option\("--([a-z-]+)"/g)].map((m) => m[1]!).filter((m) => m !== "recorded" && m !== "json");
-  assert.ok(modes.length >= 7, `expected the CLI's report modes, found ${modes.join(",")}`);
+  /** The boolean report flags on one CLI command, read from the source rather than a kept list. */
+  const modesOf = (command: string) => {
+    const at = cli.indexOf(`.command("${command}")`);
+    assert.notEqual(at, -1, `no CLI command ${command}`);
+    const block = cli.slice(at, cli.indexOf(".action", at));
+    // Flags taking a value are paths and directories, not reports. `--json` is a rendering choice
+    // and MCP returns text either way.
+    return [...block.matchAll(/\.option\("--([a-z-]+)"(?!\s*<)/g)].map((m) => m[1]!).filter((m) => m !== "json");
+  };
 
   const client = await connect();
-  const tools = await client.listTools();
-  const frames = tools.tools.find((t) => t.name === "adhd_frames")!;
-  const props = Object.keys((frames.inputSchema as { properties: Record<string, unknown> }).properties);
-  for (const m of modes) assert.ok(props.includes(m), `adhd frames --${m} has no MCP equivalent; the two surfaces have drifted`);
-  // And the description names each one, since that is all a host has to choose from.
-  for (const m of modes) assert.ok(new RegExp(`\\b${m}=true`).test(frames.description ?? ""), `the MCP description never mentions ${m}=true`);
+  const tools = (await client.listTools()).tools;
+  const propsOf = (name: string) => {
+    const t = tools.find((x) => x.name === name);
+    assert.ok(t, `no MCP tool ${name}`);
+    return { props: Object.keys((t!.inputSchema as { properties: Record<string, unknown> }).properties), description: t!.description ?? "" };
+  };
+
+  // `eval --update` rewrites the gate's baseline and is withheld on purpose, so it is named here
+  // rather than silently skipped: a deliberate omission and a forgotten one look identical from
+  // outside, and this is the file that decides which this is.
+  const withheld: Record<string, string[]> = { eval: ["update"] };
+
+  for (const [command, tool] of [["frames", "adhd_frames"], ["eval", "adhd_eval"]] as const) {
+    const modes = modesOf(command).filter((m) => !(withheld[command] ?? []).includes(m));
+    assert.ok(modes.length >= 3, `expected report modes on ${command}, found ${modes.join(",")}`);
+    const { props, description } = propsOf(tool);
+    for (const m of modes) assert.ok(props.includes(m), `adhd ${command} --${m} has no MCP equivalent; the two surfaces have drifted`);
+    for (const m of modes) assert.ok(new RegExp(`\\b${m}=true`).test(description), `${tool}'s description never mentions ${m}=true`);
+    for (const m of withheld[command] ?? []) assert.ok(!props.includes(m), `${tool} exposes --${m}, which this test records as withheld`);
+  }
+  // And the withholding is explained where a host reads, not only here.
+  assert.match(propsOf("adhd_eval").description, /not available here on purpose/);
+});
+
+test("the eval report modes return their own reports through MCP", async () => {
+  const client = await connect();
+  const seen = new Map<string, string>();
+  for (const mode of ["audit", "history", "gate"]) {
+    const r = (await client.callTool({ name: "adhd_eval", arguments: { [mode]: true } })) as { content: { text: string }[]; isError?: boolean };
+    assert.ok(!r.isError, `${mode} errored: ${r.content[0]!.text}`);
+    seen.set(mode, r.content[0]!.text);
+  }
+  assert.equal(new Set(seen.values()).size, 3, "two eval modes returned identical text");
+  assert.match(seen.get("audit")!, /fixture audit over/);
+  assert.match(seen.get("history")!, /assertion history over/);
+  assert.match(seen.get("gate")!, /regression gate over/);
 });
 
 test("each frames report mode returns its own report through MCP, not the default listing", async () => {

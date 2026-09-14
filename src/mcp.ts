@@ -8,7 +8,8 @@ import { pathToFileURL } from "node:url";
 import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
-import { formatEvalReport, runEval } from "./eval.js";
+import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
+import { assertionHistory, regressionGate } from "./fixtures.js";
 import { axisCoverage, forbiddenAudit, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { openKernel, recordRun } from "./os.js";
 
@@ -61,8 +62,32 @@ export function buildServer(): McpServer {
 
   server.registerTool(
     "adhd_eval",
-    { description: "Replay recorded runs against fixture assertions.", inputSchema: { fixtures_dir: z.string().optional(), recorded_dir: z.string().optional(), root: z.string().optional() } },
-    async (a) => wrap(() => formatEvalReport(runEval(loadConfig(a.root), { fixturesDir: a.fixtures_dir, recordedDir: a.recorded_dir }))),
+    {
+      description:
+        "Replay recorded runs against fixture assertions. Default is the full report. audit=true reports which assertions discriminate a real run from its negative control, which is the only thing that says whether an assertion measures anything; history=true reports which runs have ever held each assertion; gate=true fails when an assertion that used to hold on a run stops holding on it. " +
+        // `--update` rewrites evals/assertion-baseline.json and is deliberately not offered here. A
+        // gate whose baseline the caller can silently move is not a gate, and a host driving this
+        // over MCP is exactly the caller who would move it by accident. The CLI keeps it, where a
+        // person types it on purpose.
+        "The CLI's --update, which rewrites the gate's baseline, is not available here on purpose: a gate whose baseline the caller can move is not a gate.",
+      inputSchema: {
+        fixtures_dir: z.string().optional(),
+        recorded_dir: z.string().optional(),
+        audit: z.boolean().optional(),
+        history: z.boolean().optional(),
+        gate: z.boolean().optional(),
+        root: z.string().optional(),
+      },
+    },
+    async (a) =>
+      wrap(() => {
+        const cfg = loadConfig(a.root);
+        const opts = { fixturesDir: a.fixtures_dir, recordedDir: a.recorded_dir };
+        if (a.audit) return auditFixtures(cfg, opts).text;
+        if (a.history) return assertionHistory(cfg, opts).text;
+        if (a.gate) return regressionGate(cfg, { ...opts, update: false }).text;
+        return formatEvalReport(runEval(cfg, opts));
+      }),
   );
 
   server.registerTool(

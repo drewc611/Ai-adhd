@@ -477,12 +477,25 @@ yet enough to know whether they work.
     to learn that two were missing. CLAUDE.md ships the MCP server as "the same four as stdio tools",
     and "the same" had quietly stopped being true.**
 
-    All three are wired now, each with its description, and two tests hold the surfaces together: one
-    reads the modes out of `src/cli.ts` itself rather than from a list kept beside it — a hand-kept
-    list being a third thing to forget — and one calls all seven through MCP and asserts they return
-    seven *different* reports, because a wiring bug that fell through to the default listing would
-    pass every other check. Verified by deleting `reach` from the MCP schema: the first test fails
-    and names the mode.
+    All three are wired now, each with its description, and a test reads the modes out of
+    `src/cli.ts` itself rather than from a list kept beside it, a hand-kept list being a third thing
+    to forget. A second calls all seven through MCP and asserts they return seven *different*
+    reports, because a wiring bug that fell through to the default listing would pass every other
+    check.
+
+    **Generalising that test found the same gap on `adhd_eval`, which was worse.** It accepted three
+    directory arguments and none of `--audit`, `--history` or `--gate` — so a host driving evals over
+    MCP could replay fixtures and could not gate on a regression, which is the one thing a host would
+    want the command for, and could not run the audit that says whether an assertion discriminates a
+    real run from its control at all. All three wired.
+
+    `--update`, which rewrites the gate's baseline, is deliberately withheld: a gate whose baseline
+    the caller can move is not a gate, and a host is exactly the caller who would move it by
+    accident. The CLI keeps it, where a person types it on purpose. The test names the withholding
+    rather than skipping it, because a deliberate omission and a forgotten one look identical from
+    outside, and it asserts the tool description explains it where a host actually reads.
+
+    Verified by deleting each in turn from the MCP schema: the test fails and names the mode.
 
 ## 9. Hygiene, done
 
