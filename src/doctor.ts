@@ -271,6 +271,49 @@ function checkRouting(cfg: Config): Finding[] {
   return out;
 }
 
+/**
+ * What an overlay changed, reported rather than assumed (D33).
+ *
+ * A merge nobody can see is the failure mode the item warned about: the loaded library is one file
+ * plus another and every report downstream speaks as though it were one file. `loadConfig` already
+ * refuses a merge that breaks a cross-check, so this is not validation — it is the line that tells a
+ * reader of `adhd frames` or `adhd why` which definitions they are reading.
+ */
+function checkOverlay(cfg: Config): Finding[] {
+  const o = cfg.overlay;
+  if (!o) return [];
+  const out: Finding[] = [
+    {
+      severity: "warn",
+      check: "overlay",
+      message:
+        `${o.path} (${o.hash}) is applied: ` +
+        [
+          o.replaced_frames.length ? `${o.replaced_frames.length} frame(s) replaced (${o.replaced_frames.join(", ")})` : null,
+          o.added_frames.length ? `${o.added_frames.length} added (${o.added_frames.join(", ")})` : null,
+          o.replaced_classes.length ? `${o.replaced_classes.length} routing class(es) replaced (${o.replaced_classes.join(", ")})` : null,
+          o.added_classes.length ? `${o.added_classes.length} class(es) added (${o.added_classes.join(", ")})` : null,
+          o.replaced_dimensions.length ? `${o.replaced_dimensions.length} rubric dimension(s) replaced (${o.replaced_dimensions.join(", ")})` : null,
+        ]
+          .filter(Boolean)
+          .join("; ") +
+        ". Every frame_hash below is the merged definition, and a recorded run carries this overlay hash so it can be traced back.",
+    },
+  ];
+  // A replaced frame keeps its id and changes its `frame_hash`, which is exactly what `--drift`
+  // reports as "the definition has changed since". That reading is right about the definition and
+  // wrong about the cause, so it is worth saying once here rather than leaving a reader to infer it.
+  if (o.replaced_frames.length)
+    out.push({
+      severity: "warn",
+      check: "overlay",
+      message:
+        `\`adhd frames --drift\` will report ${o.replaced_frames.join(", ")} as changed for any run recorded under a different library. ` +
+        "That is the definition genuinely differing, not a rewrite of history: compare the plan's overlay hash before concluding a frame was edited.",
+    });
+  return out;
+}
+
 /** Is every recorded run's directory shaped the way the readers expect? */
 function checkCorpus(cfg: Config): Finding[] {
   const out: Finding[] = [];
@@ -353,6 +396,7 @@ const CHECKS: { name: string; run: (cfg: Config) => Finding[] }[] = [
   { name: "routing against the library", run: checkRouting },
   { name: "recorded corpus shape", run: checkCorpus },
   { name: "fixture assertions", run: checkFixtureAssertions },
+  { name: "config overlay", run: checkOverlay },
 ];
 
 export function doctor(cfg: Config): DoctorReport {

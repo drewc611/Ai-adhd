@@ -14,6 +14,7 @@ import {
   type RubricFile,
 } from "./schema.js";
 import { ConfigError } from "./errors.js";
+import { applyOverlay, readOverlay, type OverlayApplied } from "./overlay.js";
 
 export interface Prompts {
   orchestrator: string;
@@ -33,6 +34,12 @@ export interface Config {
   rubric: RubricFile;
   prompts: Prompts;
   trapsDoc: string;
+  /**
+   * What an overlay changed, or null when the library is the shipped one (D33). On the Config
+   * rather than computed on demand, because every consumer that reports a frame needs to be able
+   * to say which definition it is reporting.
+   */
+  overlay: OverlayApplied | null;
 }
 
 /** Repo root: dist/src/config.js -> ../../ . Override with ADHD_ROOT or an explicit argument. */
@@ -169,12 +176,39 @@ export function crossCheck(frames: FramesFile, routing: RoutingFile, rubric: Rub
   return problems;
 }
 
-export function loadConfig(rootArg?: string): Config {
+/**
+ * Where an overlay comes from, in precedence order: the argument, `$ADHD_OVERLAY`, then
+ * `config/overlay.yaml` under the root if it exists. The last one means a team can drop a file in
+ * and every command picks it up, which is the point — an overlay nobody remembers to pass is a fork
+ * with extra steps.
+ */
+export function resolveOverlay(root: string, explicit?: string): string | null {
+  if (explicit) return resolve(explicit);
+  if (process.env.ADHD_OVERLAY) return resolve(process.env.ADHD_OVERLAY);
+  const conventional = join(root, "config", "overlay.yaml");
+  return existsSync(conventional) ? conventional : null;
+}
+
+export function loadConfig(rootArg?: string, overlayArg?: string): Config {
   const root = resolveRoot(rootArg);
   const problems: string[] = [];
-  const frames = loadYaml(join(root, "config", "frames.yaml"), FramesFileSchema, problems);
-  const routing = loadYaml(join(root, "config", "routing.yaml"), RoutingFileSchema, problems);
-  const rubric = loadYaml(join(root, "config", "critic-rubric.yaml"), RubricFileSchema, problems);
+  let frames = loadYaml(join(root, "config", "frames.yaml"), FramesFileSchema, problems);
+  let routing = loadYaml(join(root, "config", "routing.yaml"), RoutingFileSchema, problems);
+  let rubric = loadYaml(join(root, "config", "critic-rubric.yaml"), RubricFileSchema, problems);
+
+  // D33: the overlay is applied before the cross-check, so a merged library is validated as a
+  // library rather than as a base plus a patch. An overlay that strands a routing class on a frame
+  // it deleted fails here, in the same message a hand-edited config would.
+  let overlay: OverlayApplied | null = null;
+  const overlayPath = resolveOverlay(root, overlayArg);
+  if (overlayPath && frames && routing && rubric) {
+    const { overlay: file, hash } = readOverlay(overlayPath);
+    const merged = applyOverlay({ frames, routing, rubric }, file, overlayPath, hash);
+    frames = merged.frames;
+    routing = merged.routing;
+    rubric = merged.rubric;
+    overlay = merged.applied;
+  }
   const p = join(root, "prompts");
   const prompts: Prompts = {
     orchestrator: readText(join(p, "orchestrator.md"), problems),
@@ -196,5 +230,6 @@ export function loadConfig(rootArg?: string): Config {
     rubric: rubric!,
     prompts,
     trapsDoc,
+    overlay,
   };
 }

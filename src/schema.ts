@@ -244,6 +244,21 @@ export const PlanSchema = z
     seed: z.number().int(),
     n: z.number().int(),
     allow_wide: z.boolean(),
+    /**
+     * Which library produced this plan, or null for the shipped one (D33). Optional so every run
+     * recorded before overlays existed still validates — those ran on the shipped library and a
+     * missing field says so as clearly as an explicit null would.
+     */
+    overlay: z
+      .object({
+        path: z.string(),
+        hash: z.string(),
+        replaced_frames: z.array(z.string()),
+        added_frames: z.array(z.string()),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     estimate: z
       .object({
         tokens_branches: z.number().int(),

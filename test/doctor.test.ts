@@ -40,7 +40,9 @@ function editYaml(root: string, file: string, from: string, to: string): void {
 test("the repository passes its own doctor", () => {
   const r = doctor(cfg);
   assert.deepEqual(r.errors, [], r.errors.map((e) => `[${e.check}] ${e.message}`).join("\n"));
-  assert.equal(r.checked.length, 9);
+  // Pinned so a check cannot be added without saying so here, and dropped without the same.
+  assert.equal(r.checked.length, 10);
+  assert.ok(r.checked.includes("config overlay"), "D33's overlay report is not among the checks");
 });
 
 test("doctor says what the fixture audit knows, because it used to say nothing", () => {

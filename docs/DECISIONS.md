@@ -2927,3 +2927,65 @@ impossible rather than when it is merely hard.
 
 **Nothing changes in code.** The test asserting `prompts/` never mentions refusal stays, and now has a
 decision behind it instead of an absence.
+
+---
+
+## D33. Backlog 71: config overlays, where a reused id replaces the base definition whole
+
+**Asked.** `adhd init` copies the shipped `config/`, which forks it: a team that scaffolds gets the
+library with eleven runs of evidence behind it and then has no way to pull later improvements. An
+overlay fixes that, and its merge semantics are a genuine decision rather than a detail — each answer
+changes what `frame_hash` means for a run under a merged library, and one of them quietly makes
+`adhd frames --drift` unable to say which definition ran.
+
+**Resolved. A reused id replaces the base definition entirely.** Frames, routing classes and rubric
+dimensions all merge by id; nothing merges field by field.
+
+`config/overlay.yaml` under the root, `$ADHD_OVERLAY`, or `--overlay <file>` — in that precedence
+order, reversed. The conventional path matters: an overlay nobody remembers to pass is a fork with
+extra steps.
+
+### Why whole replacement, and what it costs
+
+A field-wise merge makes the definition that ran a function of two files and a merge order, and
+`frame_hash` exists to answer "is this the same definition". Whole replacement keeps that answerable —
+the loaded frame is one object from one file.
+
+The cost is real and was chosen rather than overlooked: **an overlay that wants to change one probe
+must restate the stance, the attacks, the tools and the forbidden list.** That is verbose on purpose. A
+one-line override of a stance is exactly the edit whose provenance nobody can reconstruct six months
+later.
+
+### The provenance the item warned about
+
+The plan records `overlay: { path, hash, replaced_frames, added_frames }`, or `null` on the shipped
+library. Together with the `frame_hash` already on every branch, that separates two facts the drift
+report used to conflate: **"this definition changed since"** and **"that install runs an overlay"**.
+`adhd doctor` says so in two lines — what the overlay replaced, and that `--drift` will report those
+frames as changed against a run from a different library, which is the definition genuinely differing
+rather than a rewrite of history.
+
+`overlay` on the plan schema is optional as well as nullable, so every run recorded before overlays
+existed still validates. Those ran on the shipped library and a missing field says so as clearly as an
+explicit null.
+
+### Two things the build found
+
+**A merged library is cross-checked as a library, not as a base plus a patch.** The overlay is applied
+*before* `crossCheck`, so an overlay whose routing class names a frame it did not define fails at load
+with the same message a hand-edited config would produce. Validating the base and then patching it
+would have let that through.
+
+**Reporting every restated definition as a replacement defeats the report.** An overlay is written by
+copying a list and editing one entry, so most of what it names is identical to the base. The first
+version counted all ten rubric dimensions as replaced when one weight moved — the same failure the
+report exists to prevent, with extra words. Frames now compare by `frame_hash` and everything else by
+canonical JSON, so the report lists only what actually differs. A test pins that an overlay restating
+the library unchanged reports nothing.
+
+### The one silent failure whole replacement does not close
+
+An overlay that edits the rubric without moving `version` is **refused**. `score.json` records
+`rubric_version`, and two installs writing the same version over different weights makes every
+cross-install pass A total look comparable when it is not. The check fires only on a genuine change,
+so restating the rubric unchanged is allowed.

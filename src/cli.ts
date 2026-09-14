@@ -28,6 +28,7 @@ program
   .name("adhd")
   .description("Anchoring Defeat by Heterogeneous Divergence. Compiles, validates, scores, evals. Never calls a model.")
   .option("--root <dir>", "repo root holding config/ and prompts/ (default: the package root or $ADHD_ROOT)")
+  .option("--overlay <file>", "a config overlay to apply over the shipped library (default: $ADHD_OVERLAY, or config/overlay.yaml under the root). A reused id replaces the base definition whole; see D33")
   .showHelpAfterError();
 
 function fail(e: unknown): never {
@@ -68,7 +69,7 @@ program
     const phase = o.phase as Phase;
     if (!["compile", "critique", "deepen", "synth"].includes(phase)) fail(new ContractError("run", [`unknown phase ${phase}`]));
     try {
-      const cfg = loadConfig(program.opts().root);
+      const cfg = loadConfig(program.opts().root, program.opts().overlay);
       const r = runPhase(cfg, phase, {
         runDir: o.run,
         problemPath: o.problem,
@@ -94,7 +95,7 @@ program
   .option("--json")
   .action((file, o: { hash?: string; json?: boolean }) => {
     try {
-      const r = trapsReport(file, { expectHash: o.hash, frames: knownFrameIds(loadConfig(program.opts().root)) });
+      const r = trapsReport(file, { expectHash: o.hash, frames: knownFrameIds(loadConfig(program.opts().root, program.opts().overlay)) });
       // The exit code is the contract a script branches on, so --json carries it too rather
       // than replacing it. A caller that only reads stdout still gets the verdict.
       console.log(o.json ? JSON.stringify({ file, ok: r.exitCode === 0, exit_code: r.exitCode, report: r.text }, null, 2) : r.text);
@@ -116,7 +117,7 @@ program
   .option("--json", "machine readable")
   .action((o) => {
     try {
-      const cfg = loadConfig(program.opts().root);
+      const cfg = loadConfig(program.opts().root, program.opts().overlay);
       if (o.audit) {
         const a = auditFixtures(cfg, { fixturesDir: o.fixtures, recordedDir: o.recorded });
         console.log(o.json ? JSON.stringify(a.items, null, 2) : a.text);
@@ -154,7 +155,7 @@ program
   .option("--json")
   .action((o) => {
     try {
-      const cfg = loadConfig(program.opts().root);
+      const cfg = loadConfig(program.opts().root, program.opts().overlay);
       if (o.stats) {
         const r = frameStats(cfg, o.recorded);
         console.log(o.json ? JSON.stringify({ runs: r.runs, frames: r.frames, traps: r.traps }, null, 2) : r.text);
@@ -209,7 +210,7 @@ program
   .option("--json")
   .action((runA: string, runB: string, o: { json?: boolean }) => {
     try {
-      const r = diffRuns(loadConfig(program.opts().root), runA, runB);
+      const r = diffRuns(loadConfig(program.opts().root, program.opts().overlay), runA, runB);
       console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
       // A mismatched problem_hash means the two are not runs of one problem, so the comparison
       // is meaningless rather than merely uninteresting. Say so with an exit code.
@@ -233,7 +234,7 @@ program
   .option("--json")
   .action((o: { sensitivity?: boolean; correlation?: boolean; agreement?: string; agreementAll?: boolean; panel?: boolean; run?: string; recorded?: string; delta: string; json?: boolean }) => {
     try {
-      const cfg = loadConfig(program.opts().root);
+      const cfg = loadConfig(program.opts().root, program.opts().overlay);
       if (o.agreement && !o.run) throw new UsageError("--agreement needs --run: a second scoring is only meaningful against the run it re-scores");
       if (o.panel) {
         if (!o.run) throw new UsageError("--panel needs --run: a panel scores one artifact pack");
@@ -284,7 +285,7 @@ program
   .option("--json")
   .action((run: string, frame: string, o: { json?: boolean }) => {
     try {
-      const r = explainFrame(loadConfig(program.opts().root), run, frame);
+      const r = explainFrame(loadConfig(program.opts().root, program.opts().overlay), run, frame);
       console.log(o.json ? JSON.stringify(r, null, 2) : r.text);
     } catch (e) {
       fail(e);
@@ -296,7 +297,7 @@ program
   .description("the commands without the flags: menus over the same verbs, each printing what it ran")
   .action(async () => {
     try {
-      await wizard(loadConfig(program.opts().root));
+      await wizard(loadConfig(program.opts().root, program.opts().overlay));
     } catch (e) {
       fail(e);
     }
@@ -310,7 +311,7 @@ program
   .option("--json")
   .action((o: { out: string; recorded?: string; json?: boolean }) => {
     try {
-      const r = writeViewer(loadConfig(program.opts().root), o.out, { recordedDir: o.recorded });
+      const r = writeViewer(loadConfig(program.opts().root, program.opts().overlay), o.out, { recordedDir: o.recorded });
       if (o.json) return void console.log(JSON.stringify(r, null, 2));
       console.log(
         `wrote ${r.path} (${(r.bytes / 1024).toFixed(0)} KB): ${r.runs} run(s), ${r.frames} frame(s).`,
@@ -322,7 +323,7 @@ program
   });
 
 const os = program.command("os").description("the kernel: submit, confirm, claim, return, status, result, cancel, list, reap. Never calls a model.");
-const kernelFor = (o: { osRoot?: string; lease?: number }) => openKernel(loadConfig(program.opts().root), o.osRoot, { leaseSeconds: o.lease });
+const kernelFor = (o: { osRoot?: string; lease?: number }) => openKernel(loadConfig(program.opts().root, program.opts().overlay), o.osRoot, { leaseSeconds: o.lease });
 const out = (v: unknown) => console.log(typeof v === "string" ? v : JSON.stringify(v, null, 2));
 
 os.command("submit")
@@ -378,7 +379,7 @@ os.command("record <run_id>")
   .requiredOption("--name <name>", "short name, e.g. kernel-run")
   .option("--force", "replace an existing recording")
   .option("--os-root <dir>", "kernel root")
-  .action((id, o) => { try { out(recordRun(loadConfig(program.opts().root), kernelFor(o), id, { fixtureId: o.fixture, name: o.name, force: o.force })); } catch (e) { fail(e); } });
+  .action((id, o) => { try { out(recordRun(loadConfig(program.opts().root, program.opts().overlay), kernelFor(o), id, { fixtureId: o.fixture, name: o.name, force: o.force })); } catch (e) { fail(e); } });
 os.command("status <run_id>").option("--os-root <dir>", "kernel root").action((id, o) => { try { out(kernelFor(o).status(id)); } catch (e) { fail(e); } });
 os.command("result <run_id>").option("--os-root <dir>", "kernel root").action((id, o) => {
   try { const r = kernelFor(o).result(id); out(r.synthesis ?? `no synthesis yet (state ${r.state}${r.reason ? `: ${r.reason}` : ""})`); process.exit(r.synthesis ? 0 : 3); } catch (e) { fail(e); }
@@ -480,7 +481,7 @@ program
   .option("--json")
   .action((dir, o) => {
     try {
-      const r = initConfig(loadConfig(program.opts().root), dir, { force: o.force });
+      const r = initConfig(loadConfig(program.opts().root, program.opts().overlay), dir, { force: o.force });
       console.log(o.json ? JSON.stringify({ dest: r.dest, written: r.written, skipped: r.skipped }, null, 2) : r.text);
     } catch (e) { fail(e); }
   });
@@ -506,7 +507,7 @@ program
   .option("--json")
   .action((o) => {
     try {
-      const r = comparisonMatrix(loadConfig(program.opts().root), { fixturesDir: o.fixtures, recordedDir: o.recorded });
+      const r = comparisonMatrix(loadConfig(program.opts().root, program.opts().overlay), { fixturesDir: o.fixtures, recordedDir: o.recorded });
       console.log(o.json ? JSON.stringify({ runs: r.runs, items: r.items, cells: r.cells }, null, 2) : r.text);
     } catch (e) { fail(e); }
   });
@@ -517,7 +518,7 @@ program
   .option("--json", "the same document wrapped, for a caller that wants the path alongside it")
   .action((runDir, o) => {
     try {
-      const markdown = exportRun(loadConfig(program.opts().root), runDir);
+      const markdown = exportRun(loadConfig(program.opts().root, program.opts().overlay), runDir);
       console.log(o.json ? JSON.stringify({ run: runDir, markdown }, null, 2) : markdown);
     } catch (e) { fail(e); }
   });
@@ -540,7 +541,7 @@ program
   .option("--json")
   .action((fixture, o) => {
     try {
-      const r = lintFixtures(loadConfig(program.opts().root), { fixturesDir: o.fixtures, only: fixture });
+      const r = lintFixtures(loadConfig(program.opts().root, program.opts().overlay), { fixturesDir: o.fixtures, only: fixture });
       console.log(o.json ? JSON.stringify({ errors: r.errors, warnings: r.warnings, fixtures: r.fixtures }, null, 2) : r.text);
       process.exit(r.errors.length ? 1 : 0);
     } catch (e) { fail(e); }
@@ -552,7 +553,7 @@ program
   .option("--json")
   .action((o) => {
     try {
-      const r = doctor(loadConfig(program.opts().root));
+      const r = doctor(loadConfig(program.opts().root, program.opts().overlay));
       console.log(o.json ? JSON.stringify({ errors: r.errors, warnings: r.warnings, checked: r.checked }, null, 2) : r.text);
       process.exit(r.errors.length ? 1 : 0);
     } catch (e) { fail(e); }
@@ -567,7 +568,7 @@ program
   .option("--json")
   .action((runDir, o) => {
     try {
-      const cfg = loadConfig(program.opts().root);
+      const cfg = loadConfig(program.opts().root, program.opts().overlay);
       if (runDir) {
         const r = replayRun(cfg, runDir, { write: o.write });
         if (o.print) { console.log(r.rendered); return; }
@@ -602,7 +603,7 @@ program
   .option("--json")
   .action((o) => {
     try {
-      const r = costReport(loadConfig(program.opts().root), o.recorded);
+      const r = costReport(loadConfig(program.opts().root, program.opts().overlay), o.recorded);
       console.log(o.json ? JSON.stringify({ runs: r.runs, total: r.total, total_estimate: r.total_estimate, by_phase: r.by_phase, unbroken: r.unbroken }, null, 2) : r.text);
     } catch (e) { fail(e); }
   });
@@ -613,7 +614,7 @@ program
   .option("--json")
   .action((o: { json?: boolean }) => {
     try {
-      const cfg = loadConfig(program.opts().root);
+      const cfg = loadConfig(program.opts().root, program.opts().overlay);
       const summary = {
         ok: true,
         frames: cfg.frames.frames.length,

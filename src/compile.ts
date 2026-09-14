@@ -144,6 +144,11 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
     seed,
     n,
     allow_wide: allowWide,
+    // D33: which library produced this plan. Null on the shipped one. `frame_hash` already says what
+    // each frame was, and this says where the definitions came from — the pair is what lets
+    // `adhd frames --drift` tell "the definition changed since" apart from "that install runs an
+    // overlay", which are different facts and used to be one message.
+    overlay: cfg.overlay ? { path: cfg.overlay.path, hash: cfg.overlay.hash, replaced_frames: cfg.overlay.replaced_frames, added_frames: cfg.overlay.added_frames } : null,
     estimate: { tokens_branches, tokens_critic, tokens_deepen, tokens_total: tokens_branches + tokens_critic + tokens_deepen },
     branches: frames.map((f) => ({
       frame: f.id,

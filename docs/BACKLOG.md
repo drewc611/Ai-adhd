@@ -634,12 +634,32 @@ the end is a record section they have been mis-filed — which is the whole of w
     including that 002's *prompt* still says "or so", because a prompt is evidence and is never
     edited to suit an assertion.
 
-71. **Config overlays** (owner's call). `adhd init` copies the shipped library, which forks it: a
+71. ~~**Config overlays** (owner's call). `adhd init` copies the shipped library, which forks it: a
     team that scaffolds has no way to pull later improvements. An overlay would fix that and its
     merge semantics are a genuine decision, not a detail. Does an overlay frame reusing an id
     replace the base frame or fail loudly? Does a routing class merge its `frames` list or replace
     it? Each answer changes what `frame_hash` means for a run under a merged library, and one of
-    them quietly makes the drift report unable to say which definition ran.
+    them quietly makes the drift report unable to say which definition ran.~~
+    **Built as D33: a reused id replaces the base definition whole.** `config/overlay.yaml`,
+    `$ADHD_OVERLAY` or `--overlay <file>`. Frames, routing classes and rubric dimensions merge by id
+    and nothing merges field by field, because `frame_hash` exists to answer "is this the same
+    definition" and a field-wise merge makes the answer depend on two files and an order.
+
+    The cost was chosen rather than overlooked: changing one probe means restating the stance, the
+    attacks, the tools and the forbidden list. Verbose on purpose — a one-line stance override is
+    exactly the edit whose provenance nobody can reconstruct later.
+
+    The provenance question the item raised is answered on the plan: `overlay: { path, hash,
+    replaced_frames, added_frames }`, or null on the shipped library, which separates "this definition
+    changed since" from "that install runs an overlay". `adhd doctor` says both in two lines.
+
+    Two things the build found. A merged library is cross-checked as a library — the overlay applies
+    *before* `crossCheck`, so a routing class naming an undefined frame fails at load. And reporting
+    every restated definition as a replacement defeats the report: the first version called all ten
+    rubric dimensions replaced when one weight moved, so frames now compare by `frame_hash` and the
+    rest by canonical JSON. An overlay that edits the rubric without moving `version` is refused,
+    because two installs writing the same `rubric_version` over different weights makes every
+    cross-install pass A total look comparable when it is not.
 
 72. ~~**Publishing to npm** (owner's action).~~ **The name decided itself and the pipeline is
     built; one secret remains.** npm already serves `adhd`: a 2022 stub at 0.0.0, description
