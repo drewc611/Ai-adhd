@@ -203,8 +203,8 @@ transformer saw **18,343,512 real tokens to the control's 20,000,029**, an 8.3% 
 
 **A third model class in D24: an LSTM, and it loses to both.** `text/lstm.py`, from scratch over numpy
 with BPTT written by hand. At d128/2 layers — 1,311,744 parameters against the transformer's 1,459,456,
-and 274 training tokens apart — it scores **159.3**: 2.49x worse than the transformer, 5.18x worse than
-the n-gram. E7 predicted it would land between them and was wrong by 2.7x, which is the informative
+and 274 training tokens apart — it scores **154.81**: 2.408x worse than the transformer, 5.00x worse
+than the n-gram. E7 predicted it would land between them and was wrong by 2.7x, which is the informative
 direction: **attention is doing substantial work at 20M tokens**, so E6's result is about transformers
 rather than about neural language models generally.
 
@@ -263,7 +263,15 @@ Equal token counts are not equal tokens.
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre
 is worth about **2.83x** on that genre, so this is much more an RFC model than a model of technical
-prose. Per genre it runs 24.8 on RFCs, 54.3 on PEPs, 103.7 on EIPs. The artifacts the genericity
+prose.
+
+**D25 retroactively refuses that pair, and it is quoted here anyway because the refusal is the point.**
+`comparable_heldout` returned `None` when D17 was written and does not now: the OOV gap is 1.60
+percentage points against the 0.53 those perplexities can carry. By E8's slope the vocabulary
+difference alone could account for **8.2 of the 99.2 points**, 8.3% of the gap, so the finding is very
+likely to survive — it is not currently defensible *as stated*. Reading the two models' headers then
+found the larger problem: the pair was never controlled at all, `min_count` 2 against 3.
+`evaluate(shared_vocabulary=...)` is the method that settles it, and backlog 77 is the retrain. Per genre it runs 24.8 on RFCs, 54.3 on PEPs, 103.7 on EIPs. The artifacts the genericity
 measure scores are in none of those genres, which is why that report says to name the corpus or not
 quote the number.
 

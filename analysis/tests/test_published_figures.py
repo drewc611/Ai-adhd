@@ -179,13 +179,35 @@ def test_the_decisions_log_quotes_the_e6_result_it_recorded():
 
 def test_every_readme_perplexity_belongs_to_a_recorded_run(readmes):
     """The check that would have caught 26.29 surviving two replacements: every headline perplexity
-    in a README is one of the figures a checked-in record can account for."""
-    known = {"25.82", "30.7", "64.1", "19.9", "6.06", "26.29", "2.09"}
-    quoted = set(re.findall(r"perplexity \*\*([\d.]+)\*\*", readmes))
+    in a README is one of the figures a checked-in record can account for.
+
+    The pattern used to be `perplexity \\*\\*N\\*\\*` alone, and it missed the paragraph that matters most.
+    The transformer section writes its figures as "scores **64.1** against Kneser-Ney's **30.7**", so
+    three pre-D26 numbers sat directly above a sentence reading "Every figure here is post-D26" and
+    this test could not see any of them. A guard whose regex does not reach the prose it guards is
+    indistinguishable from no guard, and it passed for as long as the drift existed.
+    """
+    # D17's per-genre pair is here on purpose. D25 refuses it and `analysis/README.md` says so beside
+    # the figures; a number the repository still quotes has to be accounted for whether or not the
+    # comparison it came from currently stands.
+    known = {"25.82", "30.95", "64.29", "154.81", "142.41", "19.94", "6.06", "2.077", "153.53", "54.30"}
+    quoted = set(re.findall(r"(?:perplexity|scores)\s+\*\*([\d.]+)\*\*", readmes))
     unknown = quoted - known
     assert not unknown, f"the READMEs quote perplexities nothing accounts for: {sorted(unknown)}"
     assert "25.82" in readmes, "the shipped figure is no longer stated"
     assert "26.29" not in (ROOT / "README.md").read_text(), "26.29 is two revisions stale"
+
+
+def test_the_readme_quotes_post_d26_figures_where_it_says_it_does(readmes):
+    """The README asserts "Every figure here is post-D26" and quoted the pre-D26 ones. D27 recorded
+    both columns; only one of them belongs above that sentence."""
+    readme = (ROOT / "README.md").read_text()
+    assert "Every figure here is **post-D26**" in readme, "the claim this checks has moved"
+    for stale, current in (("64.1", "64.29"), ("30.7", "30.95"), ("159.3", "154.81")):
+        assert f"**{stale}**" not in readme, f"the README still quotes the pre-D26 {stale}, not {current}"
+        assert f"**{current}**" in readme, f"the README does not quote the post-D26 {current}"
+    # And the ratios that follow from them.
+    assert "**2.077x**" in readme and "**2.09x**" not in readme, "E6's ratio is the pre-D26 one"
 
 
 # --- E8: the vocabulary sweep, the slope, and the threshold derived from it ---------------------

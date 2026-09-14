@@ -14,7 +14,7 @@
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-450-2ea44f" alt="450 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-226-2ea44f" alt="226 Python tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-227-2ea44f" alt="227 Python tests"></a>
   <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D27%20resolved-0969da" alt="D1 through D27 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
@@ -450,15 +450,28 @@ inside D2 — no download, no key, no provider SDK — and it exists to make an 
 it beats a well-smoothed n-gram.
 
 E6 measured it and the assertion holds. At a matched 8,192-word vocabulary on the same 20M tokens, the
-transformer scores **64.1** against Kneser-Ney's **30.7** — a **2.09x** loss, inside the 1.5x-to-3x band
-registered before the run.
+transformer scores **64.29** against Kneser-Ney's **30.95** — a **2.077x** loss, inside the 1.5x-to-3x
+band registered before the run.
 
 E7 then added an LSTM, to ask whether that loss was about attention or about neural language models at
-this scale. The answer is attention: the LSTM scores **159.3**, losing to the transformer by 2.49x and
-to the n-gram by 5.18x, and **the registered prediction put it between the two** — wrong by 2.7x, in
-the direction that narrows E6's conclusion rather than generalising it. Being neural is not the
+this scale. The answer is attention: the LSTM scores **154.81**, losing to the transformer by 2.408x
+and to the n-gram by 5.00x, and **the registered prediction put it between the two** — wrong by 2.6x,
+in the direction that narrows E6's conclusion rather than generalising it. Being neural is not the
 handicap; lacking attention is a further and larger one. D24 has the arithmetic. The shipped model is
 unchanged.
+
+E9 closed the hole both of those left. E6 matched the vocabularies by *capping the n-gram* to 8,192
+types, so every figure above is a comparison at a vocabulary neither model would have chosen, and
+nothing said whether the transformer's loss was the architecture or the cap. Sampled softmax makes
+148,114 types affordable, so cell D is the transformer at the n-gram's own vocabulary: it scores
+**142.41** against the shipped model's **25.82**, a **5.52x** loss, with `comparable_heldout` accepting
+the pair because both sit at 0.915101% out-of-vocabulary — identical to every digit, since both draw
+the same types on the same frozen set.
+
+**The cap was not the explanation.** At its own vocabulary the transformer loses by more, not less.
+The figure carries one asymmetry, stated with it everywhere: cell D read 18,341,790 tokens against the
+shipped model's 64,347,232, so this is a transformer on 3.5x less text losing by 5.5x, and whether it
+closes the gap on equal text is a 4.7-hour training run nobody has done.
 
 Every figure here is **post-D26**, re-measured once the repository's own prose came out of the corpus.
 D27 has the before and after: the shipped 25.82 reproduced to two decimals, E6's ratio moved 2.086x to
