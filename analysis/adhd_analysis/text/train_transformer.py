@@ -350,16 +350,29 @@ def main(argv: list[str] | None = None) -> int:
 
     library = Library.load(args.manifest)
     if not args.include_mutable_sources:
+        excluded = sorted(library.mutable_names())
         library = library.stable()
-        if not library.sources:
-            # The remedy names no script on purpose. `test/boundary.test.ts` asserts that nothing in
-            # this package contains the fetcher's name, because the package's ban on network is
-            # enforced by import and a package that names the fetcher is one step from calling it.
-            # This message violated that on its first draft and the test caught it.
+        # `describe()` and not a token count: it globs and stats, it reads nothing, and the two cases
+        # worth distinguishing are both visible in a file count. Without this the clean-checkout path
+        # reached `train()` and died on "the corpus produced no tokens; check the paths in the
+        # manifest" — which is wrong twice, because the paths are right and the reason is that the only
+        # sources holding text were the ones excluded a line above. CI found it on the first push.
+        #
+        # The remedy names no script on purpose. `test/boundary.test.ts` asserts nothing in this package
+        # contains the fetcher's name, because the package's ban on network is enforced by import and a
+        # package that names it is one step from calling it. This message said it on its first draft and
+        # that test caught it.
+        if not any(d["files"] for d in library.describe()):
             raise SystemExit(
-                "every source in the manifest is `mutable: true`, so there is nothing repeatable to "
-                "train on. Put a corpus at the paths the manifest names, or pass "
-                "--include-mutable-sources for a smoke test whose numbers mean nothing."
+                "nothing repeatable to train on: "
+                + (
+                    f"the only sources with text are marked `mutable: true` ({', '.join(excluded)}), "
+                    "and a commit changes their text, so a run including them cannot be repeated"
+                    if excluded
+                    else "every source the manifest names is empty"
+                )
+                + ". Put a corpus at the paths the manifest names, or pass --include-mutable-sources "
+                "for a smoke test whose numbers mean nothing. See D26."
             )
     if args.held_out_file is not None:
         from .evaluate import FrozenSplit

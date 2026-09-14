@@ -176,6 +176,37 @@ def test_the_manifest_marks_the_repositorys_own_prose_mutable():
     assert lib.stable().sources, "the manifest declares nothing repeatable to train on"
 
 
+def two_source_manifest(tmp_path: Path, *, stable_docs: int) -> Path:
+    """A manifest with one mutable source and one stable source, both under `tmp_path`.
+
+    Written rather than pointing at `corpora.yaml`, because the real manifest's only non-mutable
+    sources are the fetched corpus, which is gitignored and absent on CI. The first version of these
+    tests used the real manifest and passed on a machine that happened to have the corpus — then failed
+    on CI with "the corpus produced no tokens", which is exactly the clean-checkout case the tests were
+    supposed to be about.
+    """
+    (tmp_path / "prose").mkdir(exist_ok=True)
+    (tmp_path / "prose" / "a.md").write_text("A commit can rewrite this document freely.\n")
+    (tmp_path / "corpus").mkdir(exist_ok=True)
+    for i in range(stable_docs):
+        (tmp_path / "corpus" / f"{i:03d}.txt").write_text(
+            "\n".join(f"Clause {i} number {j} holds and the actor waits." for j in range(40)) + "\n"
+        )
+    manifest = tmp_path / "two.yaml"
+    manifest.write_text(
+        "corpora:\n"
+        "  - name: repo-docs\n"
+        f"    path: {tmp_path / 'prose'}\n"
+        '    include: ["**/*.md"]\n'
+        "    mutable: true\n"
+        "  - name: corpus\n"
+        f"    path: {tmp_path / 'corpus'}\n"
+        '    include: ["**/*.txt"]\n'
+        "    required: false\n"
+    )
+    return manifest
+
+
 def test_the_trainer_excludes_mutable_sources_unless_asked(tmp_path, capsys):
     """The guard D26 turns on, at the only layer that can enforce it.
 
@@ -185,26 +216,46 @@ def test_the_trainer_excludes_mutable_sources_unless_asked(tmp_path, capsys):
     """
     from adhd_analysis.text.train import main
 
-    out = tmp_path / "m.kn.gz"
+    manifest = two_source_manifest(tmp_path, stable_docs=4)
     rec = tmp_path / "m.json"
-    argv = [
-        "--manifest", str(MANIFEST), "--out", str(out), "--record", str(rec),
-        "--order", "3", "--min-count", "1", "--max-tokens", "4000", "--max-seconds", "120",
-    ]
-    assert main(argv) == 0
+    base = ["--manifest", str(manifest), "--order", "3", "--min-count", "1", "--max-seconds", "120"]
+    assert main(base + ["--out", str(tmp_path / "m.kn.gz"), "--record", str(rec)]) == 0
     capsys.readouterr()
     names = {s["name"] for s in json.loads(rec.read_text())["sources"]}
-    assert names.isdisjoint(Library.load(MANIFEST).mutable_names()), (
-        f"a measurement read text a commit can rewrite: {sorted(names)}"
-    )
+    assert names == {"corpus"}, f"a measurement read text a commit can rewrite: {sorted(names)}"
 
     # And the opt-in really does opt in, or the smoke test on a clean checkout has no way to run.
     rec2 = tmp_path / "m2.json"
-    assert main(argv[:2] + ["--out", str(tmp_path / "m2.kn.gz"), "--record", str(rec2)]
-               + argv[6:] + ["--include-mutable-sources"]) == 0
+    assert main(base + ["--out", str(tmp_path / "m2.kn.gz"), "--record", str(rec2),
+                        "--include-mutable-sources"]) == 0
     capsys.readouterr()
-    names2 = {s["name"] for s in json.loads(rec2.read_text())["sources"]}
-    assert names2 & Library.load(MANIFEST).mutable_names()
+    assert {s["name"] for s in json.loads(rec2.read_text())["sources"]} == {"repo-docs", "corpus"}
+
+
+def test_a_clean_checkout_is_told_why_rather_than_told_its_paths_are_wrong(tmp_path):
+    """The regression CI caught on the first push of D26.
+
+    Before D26 a checkout with no downloaded corpus trained on repository prose. After it, the default
+    path has nothing — and it died inside `train()` on "the corpus produced no tokens; check the paths
+    in the manifest", which is wrong twice: the paths are right, and the reason is that the only sources
+    holding text were excluded one line earlier. The message has to name the exclusion and the opt-in.
+    """
+    from adhd_analysis.text.train import main
+
+    manifest = two_source_manifest(tmp_path, stable_docs=0)
+    with pytest.raises(SystemExit) as e:
+        main(["--manifest", str(manifest), "--out", str(tmp_path / "x.kn.gz")])
+    message = str(e.value)
+    assert "nothing repeatable to train on" in message
+    assert "repo-docs" in message, "the message does not name what it excluded"
+    assert "--include-mutable-sources" in message, "the message does not name the way out"
+    assert "check the paths" not in message, "still blaming the manifest's paths"
+
+    # The same checkout with the opt-in trains, which is what keeps a clean clone testable at all.
+    rec = tmp_path / "smoke.json"
+    assert main(["--manifest", str(manifest), "--out", str(tmp_path / "s.kn.gz"), "--record", str(rec),
+                 "--order", "3", "--min-count", "1", "--include-mutable-sources"]) == 0
+    assert {s["name"] for s in json.loads(rec.read_text())["sources"]} == {"repo-docs", "corpus"}
 
 
 def test_a_manifest_of_nothing_but_mutable_sources_refuses_rather_than_trains(tmp_path, capsys):
