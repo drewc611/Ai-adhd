@@ -233,6 +233,52 @@ function evaluateGate(cfg: Config, fixture: Fixture): PairResult {
   return { fixture: fixture.id, recorded: "(no run: gate only)", outcome, expected: "pass", ok: outcome === "pass", failures, notes };
 }
 
+/**
+ * A fixture whose claim is about dispatch rather than about reasoning — backlog 15 and 16.
+ *
+ * "The compiler should still hash and dispatch it" is a real assertion and no recorded run is needed
+ * to make it, the same way fixture 008's gate assertion needs none. A one-word problem and a
+ * several-thousand-word one are the two ends of the range, and the failure both guard against is the
+ * same: a problem the system cannot turn into briefs is a problem the user never finds out about.
+ */
+function evaluateCompiles(cfg: Config, fixture: Fixture): PairResult {
+  const failures: string[] = [];
+  const notes: string[] = [];
+  const r = compile(cfg, fixture.prompt, { problem_class: fixture.problem_class }, { seed: fixture.seed });
+  if (r.kind === "declined") {
+    failures.push(`expect a compiled plan, got a decline: ${r.reason}`);
+  } else {
+    const briefs = r.briefs;
+    if (!briefs.length) failures.push("the plan compiled zero branches");
+    if (!/^sha256:[0-9a-f]{64}$/.test(r.plan.problem_hash)) failures.push(`problem_hash is not a sha256: ${r.plan.problem_hash}`);
+    // The problem reaches every brief byte for byte, compared against the fenced block the renderer
+    // puts it in rather than by `includes`. A substring test passes on a brief that *expanded* the
+    // problem — "What should we do about Retries?" contains "Retries?" — and expansion is exactly the
+    // failure a one-word problem invites, since every instinct says a terse prompt needs helping. The
+    // fence is where the problem is, so the fence is what gets compared.
+    // Compared with one trailing newline allowed on either side and nothing else. A YAML `|` block
+    // scalar keeps a final newline, so a multi-line fixture's prompt ends with one and a single-line
+    // one does not; the compiler fences exactly what it was handed either way. That is a property of
+    // the fixture file rather than of the problem, and it is the only difference tolerated here —
+    // trimming both sides would also forgive leading whitespace, which would not be the same problem.
+    const endTrim = (t: string) => t.replace(/\n$/, "");
+    const want = endTrim(fixture.prompt);
+    for (const b of briefs) {
+      const fenced = [...b.text.matchAll(/```\n([\s\S]*?)\n```/g)].map((m) => endTrim(m[1]!));
+      if (!fenced.length) failures.push(`${b.frame}'s brief fences no problem block`);
+      else if (!fenced.some((f) => f === want))
+        failures.push(`${b.frame}'s brief does not carry the problem verbatim; it fenced ${JSON.stringify(fenced[0]!.slice(0, 60))}`);
+    }
+    const sizes = briefs.map((b) => Buffer.byteLength(b.text, "utf8"));
+    const largest = Math.max(...sizes);
+    if (fixture.expect.brief_bytes_max !== undefined && largest > fixture.expect.brief_bytes_max)
+      failures.push(`largest brief is ${largest} bytes, over the ${fixture.expect.brief_bytes_max} this fixture allows`);
+    notes.push(`compiled ${briefs.length} brief(s), largest ${largest} bytes, hash ${r.plan.problem_hash.slice(0, 14)}...`);
+  }
+  const outcome = failures.length ? "fail" : "pass";
+  return { fixture: fixture.id, recorded: "(no run: compile only)", outcome, expected: "pass", ok: outcome === "pass", failures, notes };
+}
+
 function evaluateDecline(cfg: Config, fixture: Fixture): PairResult {
   const failures: string[] = [];
   const notes: string[] = [];
@@ -264,6 +310,10 @@ export function runEval(cfg: Config, opts: { fixturesDir?: string; recordedDir?:
     }
     if (fx.expect.injection_warnings_min !== undefined && !fx.must_surface.length) {
       pairs.push(evaluateGate(cfg, fx));
+      continue;
+    }
+    if (fx.expect.compiles && !fx.must_surface.length) {
+      pairs.push(evaluateCompiles(cfg, fx));
       continue;
     }
     const runs = recorded.filter((d) => d.startsWith(`${fx.id}-`) || d === fx.id);

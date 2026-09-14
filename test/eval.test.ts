@@ -255,7 +255,7 @@ test("a fixture with no assertions and no decline is rejected at load", () => {
     join(dir, "bad.yaml"),
     "id: '900'\nname: empty\nproblem_class: design_decision\nseed: 1\nprompt: does it work\n",
   );
-  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline or expect.injection_warnings_min is set/);
+  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline, expect.injection_warnings_min or expect.compiles is set/);
 });
 
 test("a decline fixture carrying assertions is rejected, because there is no output to assert on", () => {

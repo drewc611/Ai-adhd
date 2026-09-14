@@ -315,14 +315,21 @@ export const FixtureSchema = z
          * `decline`, and of whether a run was recorded.
          */
         injection_warnings_min: z.number().int().positive().optional(),
+        // A fixture that asserts the compiler and nothing about a run, which fixture 008 established
+        // the precedent for: some properties are about dispatch rather than about reasoning, and
+        // waiting for a recorded run to check them means never checking them. `brief_bytes_max` is the
+        // one number worth pinning — a brief that grows without bound is how a long problem stops
+        // being dispatchable at all.
+        compiles: z.boolean().optional(),
+        brief_bytes_max: z.number().int().positive().optional(),
       })
       .strict()
       .default({ decline: false, reason_includes: [] }),
   })
   .strict()
   // A run fixture with no must_surface asserts nothing and would pass on any output at all.
-  .refine((f) => f.expect.decline || f.expect.injection_warnings_min !== undefined || f.must_surface.length > 0, {
-    message: "must_surface is required unless expect.decline or expect.injection_warnings_min is set",
+  .refine((f) => f.expect.decline || f.expect.injection_warnings_min !== undefined || f.expect.compiles || f.must_surface.length > 0, {
+    message: "must_surface is required unless expect.decline, expect.injection_warnings_min or expect.compiles is set",
     path: ["must_surface"],
   })
   .refine((f) => !f.expect.decline || (f.must_surface.length === 0 && f.must_not.length === 0), {

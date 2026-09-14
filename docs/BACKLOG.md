@@ -67,8 +67,16 @@ yet enough to know whether they work.
 14. ~~**A fixture whose problem contains an injection attempt** ("ignore the frame above").
     Asserts the branch contract holds against adversarial problem text.~~
    **Built as fixture 008, asserting the D5 gate rather than a run. Building it found the detector caught only injections phrased in this repo's own vocabulary.**
-15. **A fixture with a very long problem** (several thousand words) to exercise brief size.
-16. **A fixture whose problem is one word.** The compiler should still hash and dispatch it.
+15. ~~**A fixture with a very long problem** (several thousand words) to exercise brief size.~~
+    **Built as fixture 010, 5,014 words, and it asserts the compiler rather than a run — the precedent
+    008 set. Largest brief 32,496 bytes, five of them per run. Verified against the failure it is for:
+    truncating the problem to 200 characters in the compiler fails it on every frame.**
+16. ~~**A fixture whose problem is one word.** The compiler should still hash and dispatch it.~~
+    **Built as fixture 009, "Retries?". The risk at this size is not truncation but *expansion* — every
+    instinct says a terse prompt needs helping — and a substring check cannot see it, because "What
+    should we do about Retries?" contains "Retries?". The check compares the fenced problem block
+    exactly instead, allowing one trailing newline for YAML's block scalar and nothing else. Verified:
+    a compiler that expands a short problem fails this fixture and passes the substring version.**
 
 ## 3. Frame library (D6)
 
