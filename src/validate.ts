@@ -213,7 +213,7 @@ export function validateBranchArtifact(text: string, expectedHash: string, expec
   }
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
   if (typeof got !== "string" || got !== expectedHash) {
-    throw new HashMismatch(expectedHash, String(got), `branch ${expectedFrame}`);
+    throw new HashMismatch(expectedHash, got, `branch ${expectedFrame}`);
   }
   const r = BranchArtifactSchema.safeParse(raw);
   if (!r.success) {
@@ -253,7 +253,7 @@ function refusalReason(raw: unknown, pass: "A" | "B"): string | null {
 export function validatePassA(text: string, expectedHash: string, letters: string[], dimensionIds: string[]): PassA {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
-  if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass A");
+  if (got !== expectedHash) throw new HashMismatch(expectedHash, got, "critic pass A");
   const refused = refusalReason(raw, "A");
   if (refused !== null) throw new CriticRefusal("A", refused);
   const r = PassASchema.safeParse(raw);
@@ -276,7 +276,7 @@ export function validatePassA(text: string, expectedHash: string, letters: strin
 export function validatePassB(text: string, expectedHash: string, frameIds: string[], minEvidenceWordsOnFire = 0): PassB {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
-  if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass B");
+  if (got !== expectedHash) throw new HashMismatch(expectedHash, got, "critic pass B");
   const refusedB = refusalReason(raw, "B");
   if (refusedB !== null) throw new CriticRefusal("B", refusedB);
   const r = PassBSchema.safeParse(raw);
@@ -325,7 +325,7 @@ export function validatePassB(text: string, expectedHash: string, frameIds: stri
 export function validateDeepen(text: string, expectedHash: string, expectedFrame: string): DeepenArtifact {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
-  if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), `deepen ${expectedFrame}`);
+  if (got !== expectedHash) throw new HashMismatch(expectedHash, got, `deepen ${expectedFrame}`);
   const r = DeepenArtifactSchema.safeParse(raw);
   if (!r.success) throw new ContractError(`deepen ${expectedFrame}`, r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`));
   if (r.data.frame !== expectedFrame) throw new ContractError(`deepen ${expectedFrame}`, [`frame field is ${r.data.frame}`]);

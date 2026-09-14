@@ -206,8 +206,44 @@ yet enough to know whether they work.
 36. ~~**Journal compaction** for long-lived kernels.~~
     **Already built and found open by the audit below: `adhd os compact` moves journal lines belonging
     to finished runs into a dated archive beside the journal. Tested in `test/os.test.ts`.**
-37. **A worker that returns malformed YAML on purpose**, asserting the contract failure is
-    more useful than a silent repair.
+37. ~~**A worker that returns malformed YAML on purpose**, asserting the contract failure is
+    more useful than a silent repair.~~
+    **Built as `test/malformed.test.ts`, five tests over the four shapes of garbage a worker can
+    return. The useful part is what it found rather than what it confirmed.**
+
+    **Confirmed: the pruned block is more useful than a repair would be.** An unparseable branch is
+    dropped from the scored set, and the user's pruned block names the frame, says "no valid
+    artifact", and carries the YAML parser's own message down to `line 1, column 12`. A reader can
+    open that artifact and look at that character. The run finishes on the other four.
+
+    **Found: the abort message named the wrong cause.** `validateBranchArtifact` throws
+    `HashMismatch` the moment `problem_hash` is not the expected string, and `String(got)` turned an
+    *absent* hash into "got undefined. Paraphrase drift. Run invalidated." Prose, an empty artifact
+    and a document of the wrong shape all aborted under an accusation none of them had earned, and
+    paraphrase drift has a specific meaning and a different fix. `HashMismatch` now takes `unknown`
+    and distinguishes the two: a hash that is *different* still reports drift, a hash that is
+    *missing* reports contract failure and says it is not drift. Both still abort — behaviour is
+    unchanged, only the diagnosis is true now.
+
+    **Not built: a `--malformed` flag on `test/worker.ts`.** That worker exists for multi-process
+    contention, and nothing about malformed YAML is about contention. The flag would have been
+    surface area with no claim behind it.
+
+    Left open as item 84, because it is a decision rather than a defect.
+84. **Should an unparseable branch artifact abort the run** (owner's call). Item 37 found the
+    severity inverted and did not change it. A branch that returns *valid* YAML with no
+    `problem_hash` aborts the whole run; a branch whose YAML will not parse at all costs one
+    branch and the run continues with four. Both are "the worker returned garbage", and the
+    lenient case is the one where less is known — an unparseable artifact cannot be shown to have
+    addressed this problem either, which is the exact argument the abort rests on.
+
+    The case for leaving it: pruning is what the pruned block is for, four branches is a real run,
+    and aborting on one bad parse hands a whole run's spend to one flaky subagent. The case for
+    changing it: `monoculture_fraction` is 0.8, so dropping a branch moves the denominator — four
+    of four is a monoculture where four of five is exactly at the threshold, and the arithmetic
+    changed without anyone deciding it should. Whichever way it goes it wants a D-number, because
+    the current split reads like an accident and `test/malformed.test.ts` currently pins it as
+    intent.
 
 ## 6. CLI and reporting
 
