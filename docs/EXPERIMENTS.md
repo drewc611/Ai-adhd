@@ -998,3 +998,37 @@ launched. The default would have stopped it at 60 minutes and reported a prefix 
 `truncated` set — a number that looks like a perplexity, is not one, and would have been compared to
 the shipped model's full score. The ceiling was raised for this scoring run and the reading
 `truncated: null` above is what confirms it did not bind.
+
+#### The amendment's second claim was wrong, and the tool said so
+
+The amendment above wrote: "It also buys a comparison the original could not make. Cell D and E6's
+cell B now train on the same ~18.3M tokens and differ only in vocabulary — 8,192 against 148,114 —
+which is E8's question asked of a transformer instead of an n-gram."
+
+**Differing only in vocabulary is precisely what makes them incomparable.** `comparable_heldout`
+refuses the pair:
+
+> these were scored at 5.80% and 0.92% out-of-vocabulary, a gap of 4.88% against the 0.62% these
+> perplexities can carry. E8 measured a point of out-of-vocabulary at up to 5.1 perplexity points on
+> this corpus, so the vocabulary difference alone could account for 25.1 points of whatever separates
+> 64.3 from 142.4
+
+The naive reading is 64.285 against 142.408, a 2.215x loss for the larger vocabulary. Of the 78.1
+points between them, up to 25.1 are the vocabulary rather than the model — so the ratio is not a
+ratio, and E8's whole point is that a model can lower its perplexity by knowing fewer words.
+
+I wrote that claim into the amendment on the way to the run and the machinery built to catch exactly
+this caught it. That is the discipline working rather than failing: the registration was checkable,
+it was checked, and it was wrong.
+
+**The rescue, and it is exact.** Cell B's 8,192 types are a strict subset of cell D's 148,114 —
+verified, zero B-only types, same frequency ordering — so `shared_vocabulary` restricts both sums to
+the same targets and neutralises the gap completely rather than approximately. That is what
+`evaluate(shared_vocabulary=...)` was built for under backlog 77, and the comparison it enables was
+unreachable from a shell until now: nothing on `score_heldout.py`'s command line could pass it. It
+takes `--shared-vocabulary MODEL` as of this result.
+
+The restricted comparison asks a sharper question than the one the amendment claimed: **given the
+same targets, is a transformer that also had to model 140,000 rare words worse at the common ones
+than one that spent all its capacity on 8,192?** That is capacity dilution, and it is a better
+question than the one refused.
