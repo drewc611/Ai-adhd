@@ -14,6 +14,7 @@ import { STAGE_AGENT, STAGE_TOOLS } from "./super/index.js";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
 import { TRAP_IDS } from "./schema.js";
+import { frameReach } from "./frames.js";
 import { auditFixtures } from "./eval.js";
 
 export type Severity = "error" | "warn";
@@ -241,6 +242,32 @@ function checkRouting(cfg: Config): Finding[] {
       out.push({ severity: "warn", check: "routing", message: `class ${id} wants ${n} branches from ${c.frames.length} primary frames, so ${n - c.frames.length} come from alternates on every run of this class` });
   }
   for (const f of cfg.frames.frames) if (!reachable.has(f.id)) out.push({ severity: "warn", check: "routing", message: `${f.id} is named by no class, primary or alternate, so no problem can route to it` });
+
+  // Being named is weaker than being reachable, and the difference is a whole frame. The check
+  // above passes any frame appearing in some class's `alternates`, but a class whose default `n` is
+  // at most the length of its primary list never draws an alternate at all — so a frame that is
+  // only ever an alternate is named six times and dispatched never. `FIRST_PRINCIPLES` was in that
+  // position and `--stats` could only report it as having no runs, which is what bad luck also looks
+  // like. This asks the real selector instead.
+  //
+  // A fixture states a class and lets routing choose, so an unreachable frame cannot have one, and a
+  // run that never dispatches it cannot produce evidence for or against keeping it. That is a
+  // decision rather than a defect, which is why this warns and names where the decision lives.
+  const reach = frameReach(cfg);
+  for (const id of reach.unreachable_at_default) {
+    if (!reachable.has(id)) continue; // already reported above, for a blunter reason
+    const f = reach.frames.find((x) => x.frame === id)!;
+    const named = Object.values(cfg.routing.classes).filter((c) => c.action === "run" && c.alternates.includes(id)).length;
+    out.push({
+      severity: "warn",
+      check: "routing",
+      message:
+        `${id} is an alternate in ${named} class(es) and primary in none, so no class dispatches it at its default n` +
+        (reach.proved_unreachable.includes(id) ? " — by construction, not by sampling" : ` in ${reach.seeds} seeded shuffles`) +
+        (f.blocked_by.length ? `; ${f.blocked_by.join(", ")} hold${f.blocked_by.length === 1 ? "s" : ""} its axis (${f.axis}) in the primary lists` : "") +
+        ". Route it or retire it: see docs/RETIREMENT.md and `adhd frames --reach`",
+    });
+  }
   return out;
 }
 
