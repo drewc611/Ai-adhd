@@ -901,3 +901,28 @@ transformer instead of an n-gram.
 between **90 and 200**, against cell B's 64.29 at the same text and one eighteenth of the vocabulary.
 The original 55-to-110 is recorded as superseded rather than deleted, and if cell D lands there anyway
 that is a result about how little the extra text was worth.
+
+### The amendment above was committed fifteen seconds after the run started
+
+Noted 2026-09-14, with cell D at step 4,400 of 4,882 and no result of any kind in existence. This
+file's own rule, six lines from the top, is that it "is not edited after a run starts, except to link
+the result", and the amendment breaks it: the training process started at 09:20:10 and the commit
+carrying the amendment landed at 09:20:25. I launched and then committed, rather than committing and
+then launching.
+
+**What the rule is for held; what the rule says did not.** The purpose of registering before the run
+is that no reading may be chosen in light of a result, and at 09:20:25 there was no result to choose
+in light of — the first progress line printed minutes later, and the first number that could move a
+prediction is the perplexity, which does not exist while this is being written. The token cap itself
+was derived from a timing measurement made before either moment, and the cap is in the command line
+that started at 09:20:10, so the run and the registration describe the same experiment.
+
+**It is recorded because the alternative is worse.** A fifteen-second gap is the exact size of
+violation that is easiest to not mention and most corrosive to mention selectively: the discipline is
+worth something only if it is reported when it is inconvenient and trivial, not only when it is
+serious. Anyone reading E9's result is entitled to know the registration landed after the process id.
+
+**No reading changes.** The prediction stays 90 to 200, the superseded 55-to-110 stays recorded, the
+fixed readings stay as registered, and this note adds nothing to what cell D is measured against. It
+was written before the number existed precisely so it cannot be read as an excuse constructed after
+seeing one.
