@@ -12,6 +12,7 @@ in the held-out half is out of vocabulary.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -674,3 +675,58 @@ def test_the_scoring_script_releases_each_model_before_loading_the_next(tmp_path
     assert code == 0
     assert len(alive) == 2, "both models should have been loaded"
     assert all(r() is None for r in alive), "a model outlived the loop"
+
+
+# ---- backlog 77: one target set, so the difference is modelling rather than coverage -------------
+
+
+def test_a_shared_vocabulary_makes_two_models_comparable_at_different_oov_rates(tmp_path):
+    """What `in_vocabulary_only` cannot do, and backlog 77 asked for anyway.
+
+    D17 measures 2.83x between a model that read 584 PEPs and one that read none, on the same 31
+    documents, with OOV going 1.36% to 2.96% across the pair. Part of that gap is vocabulary and part is
+    modelling, and the item proposed separating them by scoring both `in_vocabulary_only` — which is
+    exactly what D25 refuses, because there each model sums over *its own* in-vocabulary targets and the
+    two numbers are two tests on different text.
+
+    Handing both models one set of words fixes it: same targets, so the remaining difference is how well
+    each predicts them.
+    """
+    lib = _library(tmp_path, n=40)
+    train_side = SplitLibrary(lib, every=10, side="train")
+    held = SplitLibrary(lib, every=10, side="heldout")
+    rec = train(train_side, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    words = [w for w in model.vocab.stoi if not w.startswith("<")]
+    shared = frozenset(words[: len(words) // 2])
+
+    whole = evaluate(model, held, Budget.smoke())
+    part = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke(),
+                    shared_vocabulary=shared)
+
+    assert whole.restricted_to_types is None
+    assert part.restricted_to_types == len(shared)
+    # The restriction narrows what is summed, never what is read: the OOV rate is over the same text.
+    assert part.oov_rate == pytest.approx(whole.oov_rate)
+    assert part.tokens == whole.tokens
+    # Two scores restricted to one set are comparable however far apart their own OOV rates are.
+    far = replace(part, oov_rate=part.oov_rate + 0.2, perplexity=part.perplexity * 3)
+    assert comparable_heldout(part, far) is None
+    # And a restricted score beside an unrestricted one is not.
+    why = comparable_heldout(part, whole)
+    assert why is not None and "shared vocabulary" in why
+
+
+def test_a_restricted_score_still_counts_the_sentence_end(tmp_path):
+    """`</s>` is in every vocabulary, so it is never what a restriction is about. Dropping it would make
+    a restricted score depend on sentence lengths rather than on words."""
+    lib = _library(tmp_path, n=20)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3,
+                 min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    empty = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke(),
+                     shared_vocabulary=frozenset())
+    # Every real word excluded leaves exactly the sentence ends, so there is still something to score.
+    assert empty.restricted_to_types == 0
+    assert math.isfinite(empty.perplexity) and empty.perplexity > 0

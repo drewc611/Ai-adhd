@@ -34,7 +34,7 @@ from typing import Iterator
 from .budget import Budget
 from .corpora import Library
 from .ngram import KneserNey
-from .tokenize import sentences, tokens
+from .tokenize import EOS, sentences, tokens
 from .train import TrainingRecord, train
 
 
@@ -115,6 +115,14 @@ class HeldOut:
     perplexity: float
     #: True when OOV targets were left out of the sum. See `evaluate(in_vocabulary_only=...)`.
     in_vocabulary_only: bool = False
+    #: How many word types the sum was restricted to, or None when it was not restricted.
+    #:
+    #: `in_vocabulary_only` lets each model sum over *its own* in-vocabulary targets, which is why D25
+    #: refuses to compare two such scores at different OOV rates: they are two tests. This is the fix
+    #: for the comparison that needs making anyway — hand both models one set of words and both sum
+    #: over the same targets, so the difference is modelling and not coverage. Backlog 77 asked for the
+    #: decomposition and proposed the method D25 forbids; this is the method that works.
+    restricted_to_types: int | None = None
     #: Why the budget stopped the scoring, or None if it read the whole set.
     #:
     #: A perplexity over a prefix is not a perplexity over the set, and until this field existed
@@ -211,6 +219,7 @@ def evaluate(
     *,
     allow_in_sample: bool = False,
     in_vocabulary_only: bool = False,
+    shared_vocabulary: frozenset[str] | None = None,
 ) -> HeldOut:
     """Perplexity of a trained model on documents it never saw.
 
@@ -222,6 +231,12 @@ def evaluate(
     Refuses outright when the model trained on the text being scored — see `in_sample_refusal`.
     `allow_in_sample=True` is for deliberately measuring the gap between seen and unseen text, which
     is a real measurement and reads as one in a diff. It is not a way past a failing check.
+
+    `shared_vocabulary` restricts the sum to targets whose word is in that set, whatever either model's
+    own vocabulary is. Two models handed the same set sum over the same targets and are therefore
+    comparable at different OOV rates, which `in_vocabulary_only` is not: there each model sums over its
+    own in-vocabulary targets and the two numbers are two tests. Contexts are never restricted — a model
+    reads the text as it is and only the *scoring* is narrowed.
 
     `in_vocabulary_only=True` drops OOV targets from the sum, leaving contexts alone, which is the
     definition `genericity.py` already uses for surprisal. It separates two things the ordinary
@@ -235,7 +250,7 @@ def evaluate(
         if why is not None:
             raise ValueError(f"refusing to report this as held-out perplexity: {why}")
     b = budget or Budget.weekly()
-    docs = n_sentences = n_tokens = in_vocab = 0
+    docs = n_sentences = n_tokens = in_vocab = restricted = 0
     total_logprob = 0.0
     predictions = 0
     identity = hashlib.sha256()
@@ -254,6 +269,19 @@ def evaluate(
             in_vocab += sum(1 for t in ts if t in model.vocab.stoi)
             b.spend(len(ts))
             terms = model.logprob_terms(model.vocab.encode(ts))
+            if shared_vocabulary is not None:
+                # `logprob_terms` emits one term per target of `<s> ts </s>`, so the targets are the
+                # words themselves followed by the sentence end. The end is in every vocabulary, so it
+                # is never what a restriction is about and is kept.
+                targets = ts + [EOS]
+                if len(targets) == len(terms):
+                    terms = [t for t, w in zip(terms, targets) if w == EOS or w in shared_vocabulary]
+                    restricted += 1
+                else:  # pragma: no cover - a model whose term count stops matching its targets
+                    raise ValueError(
+                        f"{type(model).__name__} returned {len(terms)} terms for {len(targets)} "
+                        "targets, so a restricted score cannot say which target each term belongs to"
+                    )
             if in_vocabulary_only:
                 terms = [t for t in terms if t[1]]
             total_logprob += sum(lp for lp, _ in terms)
@@ -291,6 +319,7 @@ def evaluate(
         oov_rate=1.0 - (in_vocab / n_tokens if n_tokens else 0.0),
         perplexity=math.exp(-total_logprob / predictions) if predictions else float("inf"),
         in_vocabulary_only=in_vocabulary_only,
+        restricted_to_types=len(shared_vocabulary) if shared_vocabulary is not None else None,
         fingerprint=identity.hexdigest()[:16],
     )
 
@@ -456,6 +485,11 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     # Same text, different question. One of these sums every position and the other skips the OOV
     # targets, so they are two measurements that happen to share a fingerprint — which is exactly
     # the case a fingerprint check alone waves through.
+    if a.restricted_to_types != b.restricted_to_types:
+        return (
+            f"one of these was scored over a shared vocabulary of {a.restricted_to_types} types and the "
+            f"other over {b.restricted_to_types}, so they summed over different targets"
+        )
     if a.in_vocabulary_only != b.in_vocabulary_only:
         return (
             "one of these was scored over in-vocabulary targets only and the other over all of them, "
@@ -466,6 +500,12 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     # wrong thing, which is the whole complaint against the truncation bug that reported itself as
     # "different held-out text".
     gap = abs(a.oov_rate - b.oov_rate)
+    if a.restricted_to_types is not None:
+        # The whole point of a shared vocabulary: both sums ran over the same targets, so a difference
+        # in each model's own OOV rate no longer means they were asked different questions. This is the
+        # one path where an OOV gap is not a reason to refuse, and it exists so that backlog 77's
+        # decomposition can be made at all.
+        return None
     if a.in_vocabulary_only:
         # Neither model is charged for `<unk>` here, so the discount below does not exist. The problem
         # is stronger instead: each model sums over *its own* in-vocabulary targets, so different

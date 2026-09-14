@@ -242,8 +242,15 @@ yet enough to know whether they work.
 ## 8. Distribution
 
 51. **Publish to npm** under a scoped name.
-52. **A GitHub Action** that runs `adhd eval` on every PR touching `config/` or `prompts/`.
-53. **A one-command demo** that runs a fixture from a clean checkout.
+52. ~~**A GitHub Action** that runs `adhd eval` on every PR touching `config/` or `prompts/`.~~
+    **Already built and found open by the audit in item 83. `.github/workflows/library.yml` is
+    path-filtered on `config/**`, `prompts/**`, `evals/fixtures/**` and `agents/**`, and it is separate
+    from `test.yml` on purpose: the reports it runs are evidence rather than gates, and gating a PR on a
+    co-clustering rate is the thing `docs/RETIREMENT.md` explicitly says not to act on.**
+53. ~~**A one-command demo** that runs a fixture from a clean checkout.~~
+    **Already built and found open by the audit in item 83: `npm run demo` runs `scripts/demo.sh`. It is
+    honest about the one thing it cannot do — D2 means the package never calls a model, so a demo cannot
+    produce a run, and what it shows is everything either side of that boundary.**
 54. **Plugin agents exercised as plugin agents.** Every recorded run so far used
     general-purpose subagents; the shipped agent definitions are untested in their real role.
 
@@ -382,6 +389,22 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     re-scoring the two models on the same 31 documents settles it in about two minutes of compute. No
     prediction recorded, because either answer is interesting: mostly vocabulary would say the model
     generalises better than 2.83x suggests, and mostly modelling would say worse.
+
+    **Two corrections to this item, both found while doing it.** `evaluate.py` already had
+    `in_vocabulary_only`; the sentence above was stale. And the method it proposes is the one D25
+    forbids: scoring both models `in_vocabulary_only` at 1.36% and 2.96% OOV means each sums over *its
+    own* in-vocabulary targets, which is two tests rather than two scores, and `comparable_heldout`
+    refuses exactly that.
+
+    **Worse, D25 retroactively refuses D17's own pair.** The gap is 1.60 percentage points against the
+    0.53 those perplexities can carry, so `comparable_heldout` returns None no longer — it returned None
+    when D17 was written, which is why nobody noticed. By E8's slope the vocabulary difference alone
+    could account for **8.2 of the 99.2-point difference, 8.3% of it**, so the finding is very likely to
+    survive; it is not currently defensible as stated.
+
+    `evaluate(shared_vocabulary=...)` is the method that works: hand both models one set of words and
+    both sum over the same targets, so a difference in their own OOV rates no longer means they were
+    asked different questions. Built, tested, and the re-score is what closes this item.
 
 78. ~~**Measure how much a percentage point of OOV is worth, and re-derive the threshold from it**
     (small, and a code comment currently promises it). `comparable_heldout` refuses two all-targets
