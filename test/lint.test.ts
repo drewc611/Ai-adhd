@@ -150,16 +150,41 @@ test("ordinary problem statements do not trip the injection warning", () => {
   for (const c of clean) assert.deepEqual(lintProblemInjection(c), [], `false positive on: ${c}`);
 });
 
+/**
+ * Measured as a *minimum* over repeated trials, on inputs big enough to take milliseconds — the same
+ * shape `blind-fuzz.test.ts` uses, and for the same reason it was changed to.
+ *
+ * The first version took one sample of each size at n=500, where the work is sub-millisecond and a
+ * `Math.max(..., 0.01)` floor was doing the arithmetic. It failed at "4x the input took 20.6x the
+ * time" on a machine training an LSTM in another process — load average 5.3 on 4 vCPUs. Nothing about
+ * the linter had changed. Contention can only make a measurement slower, never faster, so a minimum
+ * over trials removes it from both sides; a single sample cannot tell inflation from blowup.
+ */
 test("the injection check stays linear on adversarial input", () => {
   const grow = (n: number) => "All " + "approach ".repeat(n) + " should " + "x ".repeat(n) + " agree";
-  const time = (n: number) => {
+  const fastest = (n: number, trials = 5) => {
     const text = grow(n);
-    const t = process.hrtime.bigint();
-    lintProblemInjection(text);
-    return Number(process.hrtime.bigint() - t) / 1e6;
+    let best = Infinity;
+    for (let i = 0; i < trials; i++) {
+      const t = process.hrtime.bigint();
+      lintProblemInjection(text);
+      best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6);
+    }
+    return best;
   };
-  time(500);
-  const small = Math.max(time(500), 0.01);
-  const large = time(2000);
-  assert.ok(large < small * 20, `4x the input took ${(large / small).toFixed(1)}x the time`);
+  fastest(4_000, 2); // warm the JIT, so the first measured trial is not compiling
+  const small = fastest(4_000);
+  const large = fastest(32_000);
+  // **8x the input, not 4x, and the reason is that the old bound had no teeth.** Measured on this
+  // machine: at a 4x ratio the linter runs 3.80x and a deliberately quadratic scan over the same text
+  // runs 16.32x — *under* the 20x bound this test used to assert. So it caught exponential blowup and
+  // waved quadratic through, which is the shape a ReDoS actually takes.
+  //
+  // At 8x the two separate cleanly: the linter runs 9.93x and the quadratic probe 68.41x. 30x sits
+  // between them with about 3x of headroom on each side, so it fails on real blowup and not on a
+  // constant factor.
+  assert.ok(
+    large < small * 30,
+    `8x the input took ${(large / small).toFixed(1)}x the time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
+  );
 });

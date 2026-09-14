@@ -25,6 +25,7 @@ from typing import Iterator
 from .budget import Budget
 from .corpora import Library
 from .corpusread import sentence_tokens
+from .selection import add_library_arguments, training_library
 from .ngram import KneserNey, count_ngrams
 from .tokenize import Vocab
 
@@ -204,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="adhd_analysis.text.train",
         description="Train a Kneser-Ney background model on the document library in corpora.yaml. No weights are downloaded and no model is called.",
     )
-    ap.add_argument("--manifest", default="corpora.yaml")
+    add_library_arguments(ap)
     ap.add_argument("--out", default="models/background.kn.gz")
     ap.add_argument("--order", type=int, default=4)
     ap.add_argument("--min-count", type=int, default=2)
@@ -213,34 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-seconds", type=float, default=None)
     ap.add_argument("--max-ngrams", type=int, default=None)
     ap.add_argument("--max-rss-mb", type=int, default=None)
-    ap.add_argument(
-        "--held-out-file",
-        default=None,
-        metavar="PATH",
-        help="train on everything except the documents named in this frozen set. Unlike a stride, the "
-        "names do not move when the corpus grows, so two runs weeks apart are scored on the same text "
-        "and their perplexities can be compared. Everything not named here is training data, "
-        "including everything fetched after the set was cut.",
-    )
-    ap.add_argument(
-        "--held-out-every",
-        type=int,
-        default=None,
-        metavar="N",
-        help="train on all but every Nth document, leaving that Nth for evaluation. Without this the "
-        "model trains on the whole manifest and no honest held-out perplexity can be computed from "
-        "it: `evaluate` refuses such a model rather than reporting a memorisation score.",
-    )
     ap.add_argument("--record", default=None, help="write the training record here as JSON")
-    ap.add_argument(
-        "--include-mutable-sources",
-        action="store_true",
-        help="also read the sources `corpora.yaml` marks `mutable: true` — this repository's own docs, "
-        "prompts and READMEs. Off by default because a commit changes their text, which makes the run "
-        "unrepeatable: E8 wrote up its result and a retrain of its four cells moved by up to 4,807 "
-        "n-grams with every cell on a different corpus digest. Pass it for a smoke test on a clean "
-        "checkout that has no downloaded corpus; never for a measurement. See D26.",
-    )
     args = ap.parse_args(argv)
 
     b = Budget.weekly()
@@ -253,42 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         if val is not None:
             setattr(b, attr, val)
 
-    library = Library.load(args.manifest)
-    if not args.include_mutable_sources:
-        excluded = sorted(library.mutable_names())
-        library = library.stable()
-        # `describe()` and not a token count: it globs and stats, it reads nothing, and the two cases
-        # worth distinguishing are both visible in a file count. Without this the clean-checkout path
-        # reached `train()` and died on "the corpus produced no tokens; check the paths in the
-        # manifest" — which is wrong twice, because the paths are right and the reason is that the only
-        # sources holding text were the ones excluded a line above. CI found it on the first push.
-        #
-        # The remedy names no script on purpose. `test/boundary.test.ts` asserts nothing in this package
-        # contains the fetcher's name, because the package's ban on network is enforced by import and a
-        # package that names it is one step from calling it. This message said it on its first draft and
-        # that test caught it.
-        if not any(d["files"] for d in library.describe()):
-            raise SystemExit(
-                "nothing repeatable to train on: "
-                + (
-                    f"the only sources with text are marked `mutable: true` ({', '.join(excluded)}), "
-                    "and a commit changes their text, so a run including them cannot be repeated"
-                    if excluded
-                    else "every source the manifest names is empty"
-                )
-                + ". Put a corpus at the paths the manifest names, or pass --include-mutable-sources "
-                "for a smoke test whose numbers mean nothing. See D26."
-            )
-    if args.held_out_file is not None:
-        from .evaluate import FrozenSplit
-
-        library = FrozenSplit.load(library, args.held_out_file, side="train")
-    elif args.held_out_every is not None:
-        # Imported here rather than at module scope: evaluate imports train, and the other direction
-        # at import time is a cycle.
-        from .evaluate import SplitLibrary
-
-        library = SplitLibrary(library, every=args.held_out_every, side="train")
+    library = training_library(args)
     rec = train(library, args.out, order=args.order, min_count=args.min_count, max_vocab=args.max_vocab, budget=b)
     payload = rec.to_dict()
     if args.record:

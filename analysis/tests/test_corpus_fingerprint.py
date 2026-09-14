@@ -207,29 +207,72 @@ def two_source_manifest(tmp_path: Path, *, stable_docs: int) -> Path:
     return manifest
 
 
-def test_the_trainer_excludes_mutable_sources_unless_asked(tmp_path, capsys):
-    """The guard D26 turns on, at the only layer that can enforce it.
+#: Every trainer CLI, and the extra flags each needs to run at a size a test can afford.
+#:
+#: Parameterised over all three because D26 patched two of them. `train_lstm.py` has its own `main()`
+#: with its own copy of the selection, it went on reading the repository's own prose, and the only
+#: reason anyone found out is that the backlog-82 re-measurement script asserted no cell had read a
+#: mutable source. A rule enforced in three copies is a rule enforced in two copies eventually — the
+#: selection lives in `selection.py` now, and this is the test that would have caught it either way.
+TRAINER_CLIS = [
+    ("adhd_analysis.text.train", ["--order", "3", "--min-count", "1"], "m.kn.gz"),
+    (
+        "adhd_analysis.text.train_transformer",
+        ["--vocab-size", "128", "--d-model", "16", "--n-heads", "2", "--n-layers", "1",
+         "--context", "16", "--d-ff", "32", "--epochs", "0.02", "--batch-size", "2",
+         "--max-train-tokens", "3000", "--progress", "0"],
+        "m.tf.gz",
+    ),
+    (
+        "adhd_analysis.text.train_lstm",
+        ["--vocab-size", "128", "--d-model", "16", "--n-layers", "1", "--context", "16",
+         "--epochs", "0.02", "--batch-size", "2", "--max-train-tokens", "3000", "--progress", "0"],
+        "m.lstm.gz",
+    ),
+]
 
-    `train()` itself takes whatever library it is handed — deliberately, because leave-one-source-out
-    evaluation needs that — so the exclusion lives in the CLI, which is what every measurement in this
-    repository actually invokes.
+
+@pytest.mark.parametrize("module,extra,out", TRAINER_CLIS, ids=[c[0].rsplit(".", 1)[-1] for c in TRAINER_CLIS])
+def test_every_trainer_cli_excludes_mutable_sources_unless_asked(module, extra, out, tmp_path, capsys):
+    """The guard D26 turns on, at the only layer that can enforce it, for every entry point.
+
+    The `train_*` functions take whatever library they are handed — deliberately, because
+    leave-one-source-out evaluation needs that — so the exclusion lives in the CLI, which is what every
+    measurement in this repository actually invokes.
     """
-    from adhd_analysis.text.train import main
+    import importlib
 
-    manifest = two_source_manifest(tmp_path, stable_docs=4)
-    rec = tmp_path / "m.json"
-    base = ["--manifest", str(manifest), "--order", "3", "--min-count", "1", "--max-seconds", "120"]
-    assert main(base + ["--out", str(tmp_path / "m.kn.gz"), "--record", str(rec)]) == 0
+    main = importlib.import_module(module).main
+    manifest = two_source_manifest(tmp_path, stable_docs=6)
+    rec = tmp_path / f"{out}.json"
+    base = ["--manifest", str(manifest), "--max-seconds", "300", *extra]
+
+    assert main(base + ["--out", str(tmp_path / out), "--record", str(rec)]) == 0
     capsys.readouterr()
     names = {s["name"] for s in json.loads(rec.read_text())["sources"]}
-    assert names == {"corpus"}, f"a measurement read text a commit can rewrite: {sorted(names)}"
+    assert names == {"corpus"}, f"{module} read text a commit can rewrite: {sorted(names)}"
 
     # And the opt-in really does opt in, or the smoke test on a clean checkout has no way to run.
-    rec2 = tmp_path / "m2.json"
-    assert main(base + ["--out", str(tmp_path / "m2.kn.gz"), "--record", str(rec2),
+    rec2 = tmp_path / f"{out}.2.json"
+    assert main(base + ["--out", str(tmp_path / f"2{out}"), "--record", str(rec2),
                         "--include-mutable-sources"]) == 0
     capsys.readouterr()
     assert {s["name"] for s in json.loads(rec2.read_text())["sources"]} == {"repo-docs", "corpus"}
+
+
+def test_the_selection_is_defined_once():
+    """The duplication that caused this. Three `main()`s each loading the library themselves is three
+    places for one rule, and D26 reached two of them."""
+    import inspect
+
+    from adhd_analysis.text import train, train_lstm, train_transformer
+
+    for mod in (train, train_transformer, train_lstm):
+        src = inspect.getsource(mod)
+        assert "training_library(args)" in src, f"{mod.__name__} does not use the shared selection"
+        assert "Library.load(args.manifest)" not in src, (
+            f"{mod.__name__} loads the library itself again, which is how train_lstm.py was missed"
+        )
 
 
 def test_a_clean_checkout_is_told_why_rather_than_told_its_paths_are_wrong(tmp_path):

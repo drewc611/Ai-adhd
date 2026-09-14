@@ -115,16 +115,19 @@ test("label matching is linear on adversarial input", () => {
     }
     return best;
   };
-  fastest(8_000, 2); // warm the JIT, so the first measured trial is not compiling
-  const small = fastest(8_000);
+  fastest(4_000, 2); // warm the JIT, so the first measured trial is not compiling
+  const small = fastest(4_000);
   const large = fastest(32_000);
-  // 4x the input. Linear lands near 4x, quadratic near 16x, and exponential leaves the building.
-  // 20x is the same tolerance this test has always used, kept rather than tightened: the point is
-  // catching blowup, and a threshold that also has to be right about the constant factor is a
-  // threshold that fails for the wrong reason.
+  // **8x the input, not 4x, because the 4x version had no teeth.** The comment here used to reason
+  // that "linear lands near 4x, quadratic near 16x" and then set the bound at 20x, which accepts the
+  // quadratic case it names. Measured against a deliberately quadratic scan over the same text: at a
+  // 4x ratio this check runs 4.24x and the quadratic probe 14.97x, so a quadratic regression passed.
+  // At 8x the check runs 5.53x and the probe 63.77x.
+  //
+  // 30x sits between them. The same correction is in `lint.test.ts`, whose bound had the same hole.
   assert.ok(
-    large < small * 20,
-    `4x the input took ${(large / small).toFixed(1)}x the time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
+    large < small * 30,
+    `8x the input took ${(large / small).toFixed(1)}x the time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
   );
 });
 
