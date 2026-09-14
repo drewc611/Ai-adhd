@@ -714,3 +714,101 @@ export function frameDrift(cfg: Config, recordedDir = join(cfg.root, "evals", "r
   else if (rows.some((r) => r.changed === false)) lines.push("Every stamped branch ran under the definition the library still carries.");
   return { rows, changed, unknown, text: lines.join("\n") };
 }
+
+// ---- the forbidden lists, and how much of them anything actually checks -------------------------
+
+export interface ForbiddenEntry {
+  frame: string;
+  text: string;
+  /** The literal phrases this entry can be checked by, or empty when it names no checkable phrase. */
+  probes: string[];
+  fired: number;
+  examples: string[];
+}
+
+export interface ForbiddenReport {
+  entries: ForbiddenEntry[];
+  artifacts: number;
+  checkable: number;
+  violated: number;
+  text: string;
+}
+
+/**
+ * Every phrase a forbidden entry puts in quotes, which is the only part of it a machine can check.
+ *
+ * The lists are prose written at a model — "any sentence that would fit unchanged into an answer to a
+ * different problem" is a real rule and nothing in this repository can test it. What *is* testable is
+ * the part an entry quotes, because quoting is how these entries name a literal: `any sentence
+ * beginning with "in general" or "typically"`.
+ */
+export function forbiddenProbes(text: string): string[] {
+  // The upper bound was 40 and silently dropped a real rule: FRAME_BREAKER forbids ending with "it
+  // depends on whether the assumption holds", which is 42 characters. A cap that quietly reclassifies
+  // a checkable rule as unenforceable is worse than no cap, because the report then *undercounts* what
+  // the repository could be testing — the exact number this audit exists to produce. 200 is past the
+  // longest entry in the library, so the bound is on runaway quoting rather than on real phrases.
+  return [...text.matchAll(/["“]([^"”]{2,200})["”]/g)].map((m) => m[1]!.trim()).filter(Boolean);
+}
+
+/**
+ * Which `forbidden` entries have ever been violated in a recorded run — backlog 21.
+ *
+ * The headline is not the violations. It is how many entries have no mechanical form at all: those are
+ * instructions to a model that this repository states and never checks, which is the same shape as the
+ * rule D13 wrote down and lost, and as `cut_heldout.py`'s conclusion that D26 had to correct. Counting
+ * them is the point; a list of three fired probes would not be.
+ */
+export function forbiddenAudit(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): ForbiddenReport {
+  const entries: ForbiddenEntry[] = cfg.frames.frames.flatMap((f) =>
+    (f.forbidden ?? []).map((text: string) => ({ frame: f.id, text, probes: forbiddenProbes(text), fired: 0, examples: [] as string[] })),
+  );
+
+  let artifacts = 0;
+  if (existsSync(recordedDir))
+    for (const id of readdirSync(recordedDir).sort()) {
+      const dir = join(recordedDir, id);
+      if (!statSync(dir).isDirectory()) continue;
+      const branches = join(dir, "branches");
+      if (!existsSync(branches)) continue;
+      for (const file of readdirSync(branches)) {
+        if (!file.endsWith(".yaml")) continue;
+        const writer = file.slice(0, -".yaml".length);
+        const body = readFileSync(join(branches, file), "utf8");
+        artifacts++;
+        // Only against the frame that was told the rule. A forbidden entry binds its own branch, so a
+        // phrase in someone else's artifact is not a violation of it.
+        for (const e of entries.filter((x) => x.frame === writer))
+          for (const probe of e.probes) {
+            const hits = [...body.matchAll(new RegExp(`\\b${pattern(probe)}\\b`, "gi"))];
+            if (!hits.length) continue;
+            e.fired += hits.length;
+            if (e.examples.length < 3) e.examples.push(`${id}/${writer}: "${hits[0]![0]}"`);
+          }
+      }
+    }
+
+  const checkable = entries.filter((e) => e.probes.length).length;
+  const violated = entries.filter((e) => e.fired > 0).length;
+  const lines = [
+    `forbidden-list audit over ${artifacts} recorded artifact(s)`,
+    "",
+    `${entries.length} entries across ${cfg.frames.frames.length} frames. ${checkable} name a phrase that can be`,
+    `checked mechanically; ${entries.length - checkable} do not, and nothing in this repository tests those.`,
+    "",
+  ];
+  if (violated) {
+    lines.push("violated in a recorded run:", "");
+    for (const e of entries.filter((x) => x.fired > 0).sort((a, b) => b.fired - a.fired)) {
+      lines.push(`  ${e.frame}: ${e.fired} hit(s)`);
+      lines.push(`    ${e.text}`);
+      for (const ex of e.examples) lines.push(`      ${ex}`);
+    }
+    lines.push("");
+  } else {
+    lines.push(`no checkable entry has ever fired. That is ${checkable} probe(s) over ${artifacts} artifact(s),`, "which is prevention or is too little evidence, and this report cannot tell you which.", "");
+  }
+  lines.push("entries with no mechanical form, which are guidance and not rules:", "");
+  for (const e of entries.filter((x) => !x.probes.length)) lines.push(`  ${e.frame}: ${e.text}`);
+  return { entries, artifacts, checkable, violated, text: lines.join("\n") };
+}

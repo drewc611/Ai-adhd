@@ -4,7 +4,7 @@ import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
 import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
-import { axisCoverage, diffRuns, frameDrift, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
+import { axisCoverage, diffRuns, frameDrift, frameHealth, frameStats, labelCollisions, listFrames, orthogonality, forbiddenAudit } from "./frames.js";
 import { costReport } from "./cost.js";
 import { replayAll, replayRun } from "./replay.js";
 import { doctor } from "./doctor.js";
@@ -148,6 +148,7 @@ program
   .option("--health", "docs/RETIREMENT.md's bar, counted: which frames meet criteria for examination")
   .option("--axes", "frames per axis, and which axes no recorded run has exercised")
   .option("--drift", "which recorded runs used a frame whose definition has changed since")
+  .option("--forbidden", "which `forbidden` entries a recorded run has violated, and how many cannot be checked")
   .option("--recorded <dir>")
   .option("--json")
   .action((o) => {
@@ -167,6 +168,11 @@ program
         const r = frameDrift(cfg, o.recorded);
         console.log(o.json ? JSON.stringify({ rows: r.rows, changed: r.changed, unknown: r.unknown.length }, null, 2) : r.text);
         process.exit(r.changed.length ? 1 : 0);
+      }
+      if (o.forbidden) {
+        const r = forbiddenAudit(cfg, o.recorded);
+        console.log(o.json ? JSON.stringify({ artifacts: r.artifacts, checkable: r.checkable, violated: r.violated, entries: r.entries }, null, 2) : r.text);
+        return;
       }
       if (o.axes) {
         const r = axisCoverage(cfg, o.recorded);

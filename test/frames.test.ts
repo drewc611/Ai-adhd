@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameStats, labelCollisions, orthogonality } from "../src/frames.js";
+import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameStats, labelCollisions, orthogonality, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
 import { frameHash } from "../src/hash.js";
 import { compile } from "../src/compile.js";
 
@@ -467,4 +467,38 @@ test("a new compile stamps every branch, so the corpus stops being unknown from 
     assert.ok(b.frame_hash, `${b.frame} was dispatched without a definition stamp`);
     assert.equal(b.frame_hash, frameHash(cfg.frames.frames.find((f) => f.id === b.frame)!));
   }
+});
+
+// ---- backlog 21: the forbidden lists, and how much of them is enforced --------------------------
+
+test("the forbidden audit finds the phrases an entry quotes, however long", () => {
+  assert.deepEqual(forbiddenProbes('Any sentence beginning with "in general" or "typically".'), ["in general", "typically"]);
+  assert.deepEqual(forbiddenProbes("Answering the literal question."), []);
+  // The bound was 40 and silently dropped FRAME_BREAKER's rule at 42 characters, which made the
+  // audit undercount what the repository could be testing — the one number it exists to produce.
+  const long = 'Ending with "it depends on whether the assumption holds". You have already decided it does not.';
+  assert.deepEqual(forbiddenProbes(long), ["it depends on whether the assumption holds"]);
+});
+
+test("every frame forbids something, and most of what they forbid nothing checks", () => {
+  const r = forbiddenAudit(cfg);
+  assert.equal(r.entries.length, 39, "the library's forbidden entries moved; the audit's numbers are stale");
+  for (const f of cfg.frames.frames) {
+    assert.ok(r.entries.some((e) => e.frame === f.id), `${f.id} forbids nothing, which config/frames.yaml says is not allowed`);
+  }
+  // The finding, asserted so it cannot quietly become false. 35 of 39 entries are instructions to a
+  // model that this repository states and never tests — the shape D13 lost a rule in, and the shape
+  // `cut_heldout.py` reached a wrong conclusion in. If this ratio improves, the prose should say so.
+  assert.ok(r.checkable <= 6, `${r.checkable} entries are checkable; the report's framing assumes few`);
+  assert.ok(r.entries.length - r.checkable >= 30, "most entries should still have no mechanical form");
+  assert.match(r.text, /guidance and not rules/);
+});
+
+test("a forbidden entry binds its own frame and no other", () => {
+  const r = forbiddenAudit(cfg);
+  // MECHANIC forbids "conventional" as support and used it twice. That is a real violation in a
+  // recorded run, which is the answer backlog 21 asked for and the reason the audit is not decoration.
+  const fired = r.entries.filter((e) => e.fired > 0);
+  assert.ok(fired.length >= 1, "no checkable entry has ever fired, so this test proves nothing");
+  for (const e of fired) for (const ex of e.examples) assert.match(ex, new RegExp(`/${e.frame}:`), `${e.frame}'s entry fired on another frame's artifact`);
 });

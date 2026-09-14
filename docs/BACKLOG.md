@@ -86,7 +86,21 @@ yet enough to know whether they work.
 19. **Per-frame fixtures.** One fixture per frame that the frame should obviously win, as a
     unit test for the frame's own stance.
 20. **Probe ordering experiment.** Do the numbered probes change the answer if reordered?
-21. **Forbidden-list audit.** Which `forbidden` entries have ever been violated in a real run?
+21. ~~**Forbidden-list audit.** Which `forbidden` entries have ever been violated in a real run?~~
+    **Built as `adhd frames --forbidden`, and the answer to the question asked is one: MECHANIC forbids
+    "conventional" as support and used it in `002-first-run` and `002-kernel-enduser`.
+
+    The answer worth having is the other one. **35 of the 39 entries have no mechanical form at all** —
+    "Answering the literal question", "Costing only the asker's side of the ledger" — so they are
+    instructions to a model that this repository states and never checks. That is the shape D13 lost a
+    rule in and the shape `cut_heldout.py` reached a wrong conclusion in, and it is now counted rather
+    than assumed. An entry binds only its own frame, because a phrase in someone else's artifact is not
+    a violation of it.
+
+    Writing the extractor produced a small instance of the same failure: a 40-character cap on quoted
+    phrases silently dropped FRAME_BREAKER's rule at 42 characters, so the audit *undercounted* what
+    could be tested — the one number it exists to produce. Caught by reading the output rather than the
+    count.**
 22. ~~**Axis coverage report.** Ten axes, thirteen frames. Which axes are thin?~~
     **Built as `adhd frames --axes`. Seven of the ten axes carry one frame, and because a run never
     contains two frames from one axis (D6), routing has no alternative to offer on any of them.
