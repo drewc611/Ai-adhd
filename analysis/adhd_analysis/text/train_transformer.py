@@ -15,6 +15,8 @@ and a perplexity from a run that saw a twentieth of the training side has to say
 
 from __future__ import annotations
 
+import hashlib
+
 import json
 import math
 import sys
@@ -58,6 +60,18 @@ class TransformerRecord:
     vocab_truncated_types: int
     vocab_truncated_tokens: int
     split: dict | None
+    #: Identity of the token stream the vocabulary pass read, and of the one the training array was
+    #: built from. Same mechanism as `TrainingRecord.corpus_fingerprint` and for the same reason: this
+    #: repository's own docs are corpus sources, so editing a document changes what a cell trained on
+    #: and nothing used to notice.
+    #:
+    #: Unlike the n-gram trainer, these two are **expected to differ** here. The corpus pass stops at
+    #: `max_train_tokens` while the vocabulary pass runs to its own ceiling, and the array carries a
+    #: BOS and an EOS per sentence that the vocabulary pass does not — measured at 8.3% on the E6
+    #: corpus, 18,343,512 array slots against 20,000,029 real tokens. So there is no equality check
+    #: here; the two digests are recorded to identify the two reads, not to compare them.
+    vocabulary_fingerprint: str
+    corpus_fingerprint: str
     #: Why training stopped: a budget ceiling, or "epochs" when it ran the schedule out.
     stopped_because: str
     budget_vocabulary: dict
@@ -132,9 +146,11 @@ def train_transformer(
     b2 = b1.restart()
     b3 = b2.restart()
 
+    d1, d2 = hashlib.sha256(), hashlib.sha256()
+
     freq: Counter[str] = Counter()
     n_sentences = 0
-    for ts in sentence_tokens(library, b1):
+    for ts in sentence_tokens(library, b1, d1):
         freq.update(ts)
         n_sentences += 1
     if not freq:
@@ -151,7 +167,7 @@ def train_transformer(
     bos, eos = vocab.stoi[BOS], vocab.stoi[EOS]
     flat: list[int] = []
     cap = max_train_tokens
-    for ts in sentence_tokens(library, b2):
+    for ts in sentence_tokens(library, b2, d2):
         flat.append(bos)
         flat.extend(vocab.encode(ts))
         flat.append(eos)
@@ -220,6 +236,8 @@ def train_transformer(
                 else None
             ),
             "sources": library.describe(),
+            "vocabulary_fingerprint": d1.hexdigest()[:16],
+            "corpus_fingerprint": d2.hexdigest()[:16],
             "steps": steps,
             "tokens_seen": steps * per_step,
             "stopped_because": stopped,
@@ -247,6 +265,8 @@ def train_transformer(
         vocab_truncated_types=vocab.truncated_types,
         vocab_truncated_tokens=vocab.truncated_tokens,
         split=model.meta["split"],
+        vocabulary_fingerprint=model.meta["vocabulary_fingerprint"],
+        corpus_fingerprint=model.meta["corpus_fingerprint"],
         stopped_because=stopped,
         budget_vocabulary=b1.report(),
         budget_corpus=b2.report(),
@@ -304,6 +324,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="write a progress line to stderr every STEPS steps; 0 for silence. An epoch "
                     "here is hours, and a silent run is indistinguishable from a hung one")
     ap.add_argument("--record", default=None, help="write the training record here as JSON")
+    ap.add_argument(
+        "--include-mutable-sources",
+        action="store_true",
+        help="also read the sources `corpora.yaml` marks `mutable: true` — this repository's own docs, "
+        "prompts and READMEs. Off by default because a commit changes their text, which makes the run "
+        "unrepeatable: E8 wrote up its result and a retrain of its four cells moved by up to 4,807 "
+        "n-grams with every cell on a different corpus digest. Pass it for a smoke test on a clean "
+        "checkout that has no downloaded corpus; never for a measurement. See D26.",
+    )
     args = ap.parse_args(argv)
 
     cfg = TransformerConfig(
@@ -320,6 +349,18 @@ def main(argv: list[str] | None = None) -> int:
             setattr(b, attr, val)
 
     library = Library.load(args.manifest)
+    if not args.include_mutable_sources:
+        library = library.stable()
+        if not library.sources:
+            # The remedy names no script on purpose. `test/boundary.test.ts` asserts that nothing in
+            # this package contains the fetcher's name, because the package's ban on network is
+            # enforced by import and a package that names the fetcher is one step from calling it.
+            # This message violated that on its first draft and the test caught it.
+            raise SystemExit(
+                "every source in the manifest is `mutable: true`, so there is nothing repeatable to "
+                "train on. Put a corpus at the paths the manifest names, or pass "
+                "--include-mutable-sources for a smoke test whose numbers mean nothing."
+            )
     if args.held_out_file is not None:
         from .evaluate import FrozenSplit
 

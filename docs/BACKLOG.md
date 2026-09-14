@@ -362,7 +362,7 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     prediction recorded, because either answer is interesting: mostly vocabulary would say the model
     generalises better than 2.83x suggests, and mostly modelling would say worse.
 
-78. **Measure how much a percentage point of OOV is worth, and re-derive the threshold from it**
+78. ~~**Measure how much a percentage point of OOV is worth, and re-derive the threshold from it**
     (small, and a code comment currently promises it). `comparable_heldout` refuses two all-targets
     perplexities whose OOV rates differ by more than one percentage point, because every OOV target is
     charged as a prediction of `<unk>` and `<unk>` is among the most frequent symbols a
@@ -379,7 +379,16 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     slope, and the threshold becomes the OOV gap worth some stated fraction of a perplexity point
     rather than a round number. No prediction recorded, because the direction is not obvious: `<unk>`
     is cheap to predict, but a model that has folded 5% of the corpus into one symbol has also lost
-    the contexts those words provided, and the two effects work against each other.
+    the contexts those words provided, and the two effects work against each other.~~
+    **Done as E8, and it is worth up to 5.2 perplexity points, so the round number was 3.4x too loose.
+    Four caps on one corpus read: 30.73 / 35.29 / 39.17 / 42.50 at 5.798% / 4.033% / 3.011% / 2.368%
+    held-out OOV. The fit is -3.352 points per point at r-squared 0.977, but the pairwise spread is
+    2.005x against the 2x line E8 drew in advance, so the worst case (-5.179, the highest-vocabulary
+    pair) governs. `allowed_oov_gap` scales with the perplexities in hand, floored at E4's 0.22-point
+    gap and capped at the old 0.01 so the change tightens everywhere and loosens nowhere. Two
+    corrections fell out: the `<unk>` discount the comment blamed is real but changes sign near 3% OOV
+    and is not the dominant term, and this registration's own commit moved the corpus it was about,
+    which is why models now carry a `corpus_fingerprint`. D25 has all of it.**
 
 79. **Price a transformer at the n-gram's vocabulary** (large, and it may not be reachable here).
     E6 holds the vocabulary at 8,192 because the output projection is `d_model x vocab_size` and every
@@ -409,6 +418,54 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     does not exist yet rather than accuracy on the one that does. That is the argument for it being
     backlog rather than a defect, and it stops being the argument the moment a non-English source is
     added to `corpora.yaml`.
+
+81. ~~**Decide whether the repository's own prose stays in the training corpus** (owner's call, and it
+    re-bases every published figure if it goes). `repo-docs`, `repo-prompts` and `repo-readme` are
+    sources in `corpora.yaml`, so **writing down a measurement changes the corpus the measurement came
+    from.** E8 hit this twice: its registration commit moved the type count 51 types off the number it
+    had registered in advance, and writing up its result moved the retrain by one n-gram in 12.4M and
+    one discount in its fourth decimal. D25 has the arithmetic and the reproduction records.
+
+    The consequence is structural rather than a size: a corpus digest can never cover a state that
+    includes its own description, so a published cell cannot be re-derived exactly while this holds.
+    Today the drift does not reach two significant figures of any published number, and the frozen
+    held-out set contains no repository prose at all, so nothing measured is wrong. It is
+    reproducibility that is gone, not correctness.
+
+    Three options, none free:
+
+    - **Remove the three sources.** Reproducibility returns immediately. Every figure in the repository
+      re-bases at once — 25.82, E6's four cells, E7's LSTM, this sweep — and each needs re-measuring or
+      marking superseded, which is the D19 pattern and is expensive but honest.
+    - **Freeze them.** Snapshot the prose as it stood, point the manifest at the snapshot, and let the
+      live documents drift away from it. Cheap and it makes the corpus say something false about itself:
+      a source named `repo-docs` that is not this repository's docs.
+    - **Keep them and stop claiming reproducibility.** Record the drift per experiment, as D25 now does.
+      Cheapest, and it means every future cell carries the same asterisk.
+
+    Worth weighing against what the prose buys, which D10 cared about: it is the only source in the
+    manifest whose licence is unambiguously this repository's own. It is also **0.105% of the manifest
+    by bytes** — 369,505 of 351,101,283 — so what it buys is licence comfort rather than data.~~
+    **Resolved as D26, by the first option. The three sources carry `mutable: true` in `corpora.yaml`
+    and the trainers read `Library.stable()`; they stay in the manifest so a clean checkout still trains,
+    behind `--include-mutable-sources`, which no measurement passes. The licence comfort is untouched
+    because the entries remain. E8 is re-measured on the stable corpus; 25.82, E6 and E7 are marked as
+    pre-D26 and item 82 is the re-measurement.**
+
+82. **Re-measure the pre-D26 figures on the stable corpus** (real compute, and nothing is wrong with
+    them). 25.82, E6's cells A / A′ / B and E7's cell C all read the repository's own prose, which D26
+    took out of every measurement. They are not incorrect — they read 0.105% more text than a run today
+    would, and the frozen held-out set they were scored on never contained that prose — but they cannot
+    be re-derived exactly, and a figure that cannot be re-derived is a figure nobody can check.
+
+    The n-gram cells are cheap: the shipped model is about 14 minutes of training plus scoring, A is the
+    same, A′ is 200 seconds. The neural cells are not: the transformer is **2.33 hours per epoch** and
+    the LSTM about 1.3, so cells B and C are roughly 3.6 hours of compute before either is scored.
+
+    Order matters if this is done piecemeal. E6's claim is A′ **against** B, so re-measuring one and not
+    the other produces a ratio between a stable-corpus number and a mutable-corpus one, which is the
+    comparability mistake `comparable_training` now exists to refuse. Either pair moves together or
+    neither does.
 
 ## Not doing, and why
 

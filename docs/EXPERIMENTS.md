@@ -747,3 +747,35 @@ round number was generous and the refusal is close to decoration.
   resident-set ceiling; `scripts/score_heldout.py` already exits 2 on truncation.
 - **Being outside the predicted range is the more useful outcome.** E7's registered range was wrong by
   2.7x and that was worth more than a hit.
+
+**Result: D25. Half right, and the half that was wrong is the specific one.** The slope is negative as
+predicted and the fit of **-3.352 points per percentage point** (r-squared 0.977) is inside the
+registered 3-to-10 band, but V3 came in at **42.50**, below the registered 45-to-70 range. The four
+cells are 30.73 / 35.29 / 39.17 / 42.50 at 5.798% / 4.033% / 3.011% / 2.368% held-out OOV.
+
+Three of the fixed readings fired.
+
+**"V3's type count is checked against 71,883 before its perplexity is read."** It came out **71,934**,
+and the cause is that `docs/` is a corpus source: the commit carrying this registration added 94 lines
+to this file, and `docs/SECURITY-OPS.md` had arrived since A′ was trained. **Writing the registration
+changed the corpus the registration was about.** So the reading's verdict stands — the sweep as
+registered was invalid — and the repair was to retrain the 8,192 cell rather than reuse A′. It
+reproduces A′ to 0.03 perplexity points.
+
+**"The slope is fitted on all four points and also read pairwise."** The six pairwise slopes run -2.583
+to -5.179, a spread of **2.005x** against the 2x line this registration drew. Over by a quarter of a
+percent, so the worst case governs rather than the fitted number — and the steepest pair is the
+highest-vocabulary one, which is the regime the shipped model sits in.
+
+**"E4 must still pass."** It does, with room: the derived gap is 0.2967 points at A′'s perplexity
+against E4's 0.22-point gap, so the floor does not bind.
+
+The decomposition also corrected the reason written beside the threshold. Scoring every cell over
+in-vocabulary targets only puts `<unk>` **cheaper** than the average real token at 8,192 types (32.29
+against 30.73) and **dearer** at 71,934 (41.50 against 42.50), crossing over near 3% OOV, while
+all-targets perplexity rises monotonically throughout. The `<unk>` discount the comment named is real,
+small, and changes sign; the dominant term is rare words the cap used to hide.
+
+The threshold is now `allowed_oov_gap` in `evaluate.py` — 5% of the smaller perplexity divided by the
+worst measured slope, floored at E4's gap and capped at the old 0.01 so that E8 tightens the guard at
+every perplexity and loosens it at none.

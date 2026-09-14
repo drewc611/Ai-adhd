@@ -172,6 +172,14 @@ pruned, `split` recorded.** Every discount row is a real modified-Kneser-Ney est
 0.75 fallback. **Held-out perplexity 25.82** on 366 frozen documents, 3,443,116 tokens, 0.91% OOV,
 fingerprint `1446762140db7f1a`, `truncated: null`.
 
+**25.82, and every E6 and E7 figure below, are pre-D26 measurements.** They read the repository's own
+prose, which `corpora.yaml` now marks `mutable: true` and no measurement reads — a commit changes that
+text, so a run including it cannot be repeated. Nothing about them is wrong: they read 0.105% more text
+than a run today would, and the frozen held-out set they were scored on never contained that prose. What
+they cannot do is be re-derived exactly. Backlog 82 is the re-measurement, and it takes E6's A′ and B
+together or not at all, because a ratio between a stable-corpus number and a mutable-corpus one is the
+comparability mistake `comparable_training` exists to refuse. E8's figures further down are post-D26.
+
 25.65 appears in D19 and is superseded rather than beaten. It was measured under an ASCII-only
 tokenizer that learned `Löwis` as `l` and `wis`, across a fifth of the corpus; a different
 tokenization is a different vocabulary over the same text, so the two are different measurements.
@@ -208,6 +216,42 @@ That advantage closed about 6% of a gap already set during training (4.923 again
 the architecture's one edge over the transformer bought almost nothing here. And it trains **1.8x
 faster** than the transformer despite stepping sequentially through time, which says more about what
 dominates cost in numpy at this shape than about recurrence.
+
+**D25 prices the thing all three of those comparisons depend on.** Every figure above is an
+all-targets perplexity, which charges each out-of-vocabulary target as a prediction of `<unk>`, and
+`comparable_heldout` had refused pairs whose OOV rates differ by more than one percentage point without
+anyone knowing what a percentage point was worth. E8 measures it: four Kneser-Ney models on one
+20,000,139-token read, differing in nothing but the cap.
+
+| cap | types | held-out OOV | **all targets** | in-vocabulary only |
+|---|---|---|---|---|
+| 8,192 | 8,192 | 5.798% | **30.73** | 32.29 |
+| 16,384 | 16,384 | 4.033% | **35.29** | 35.99 |
+| 32,768 | 32,768 | 3.011% | **39.17** | 39.11 |
+| none | 71,934 | 2.368% | **42.50** | 41.50 |
+
+**-3.352 perplexity points per percentage point of OOV** at an r-squared of 0.977 — but the six
+pairwise slopes span -2.583 to -5.179, a spread of 2.005x against the 2x line E8 drew in advance, so
+the worst case governs and the round threshold was **3.4x too loose**. `allowed_oov_gap` now sizes the
+refusal from the perplexities in hand, floored at E4's sound 0.22-point comparison and capped at the
+old 0.01 so E8 tightens the guard everywhere and loosens it nowhere.
+
+The in-vocabulary column corrects the reason. `<unk>` is **cheaper** than the average real token at
+8,192 types and **dearer** at 71,934, crossing over near 3% OOV, while all-targets perplexity rises
+throughout — so the discount the comment blamed is real, small, and sign-changing, and the dominant
+term is the rare words a cap used to hide.
+
+`scripts/oov_slope.py` is the measurement — it scores a list of models both ways, fits the slope, reads
+the pairwise slopes, and derives the threshold — and `scripts/score_heldout.py --in-vocabulary-only`
+does the second reading on its own.
+
+E8 also caught the corpus moving underneath it. Its registered arithmetic predicted 71,883 uncapped
+types and the run said 71,934, because `docs/` is a corpus source and the commit carrying the
+registration edited `docs/EXPERIMENTS.md`. **Writing the registration changed the corpus it was
+about**, which invalidated the plan to reuse E6's cell A′ and cost a retrain — it reproduces to 0.03
+perplexity points. Models now carry a `corpus_fingerprint` over the token stream they read, the n-gram
+trainer records `vocabulary_covers_counts`, and `comparable_training` refuses two models that did not
+read the same text. Equal token counts are not equal tokens.
 
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre

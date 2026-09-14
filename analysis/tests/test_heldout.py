@@ -434,12 +434,18 @@ def test_the_shipped_frozen_set_holds_out_no_document_a_commit_can_rewrite():
     The first cut of `analysis/heldout.json` put `docs/ARCHITECTURE.md` and `README.md` in the set,
     and those are rewritten whenever a decision is recorded — so writing one would have moved the
     next perplexity for a reason that has nothing to do with the model, silently, because the
-    fingerprint is over names. Repository prose stays in the training half, where mutating text is
-    harmless.
+    fingerprint is over names.
+
+    This docstring used to end "Repository prose stays in the training half, where mutating text is
+    harmless." **E8 measured that wrong** — writing up its result moved a retrain of its own four cells
+    by up to 4,807 n-grams and gave each cell a different corpus digest — so D26 keeps mutable text out
+    of the training read too, and the set of mutable sources now lives in `corpora.yaml` rather than in
+    a literal repeated across three files.
     """
     spec = json.loads((ROOT / "analysis" / "heldout.json").read_text())
     assert spec["documents"], "the shipped frozen set is empty"
-    mutable = {"repo-docs", "repo-prompts", "repo-readme"}
+    mutable = Library.load(ROOT / "analysis" / "corpora.yaml").mutable_names()
+    assert mutable, "the manifest marks nothing mutable, so this test proves nothing"
     offenders = [n for n in spec["documents"] if n.split("/")[0] in mutable]
     assert not offenders, f"the frozen set holds documents this repository rewrites: {offenders}"
     assert len(spec["fingerprint"]) == 16

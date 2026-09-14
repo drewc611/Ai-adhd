@@ -9,6 +9,14 @@
 # a background corpus on their own: ~200KB of text against the 10^6-10^7 tokens modified
 # Kneser-Ney needs to be worth reading. Point the fourth entry at a real library and enable it.
 #
+# They are also marked `mutable: true`, and **no measurement reads them.** A commit to this repository
+# changes their text, so a run that includes them cannot be repeated: E8 wrote up its own result and a
+# retrain of its four cells moved by up to 4,807 n-grams and 27 types, with each cell landing on a
+# different corpus digest. `cut_heldout.py` had already kept them out of the frozen evaluation set for
+# the neighbouring reason. D26 extends that to the training side, and the trainers read
+# `Library.stable()` unless `--include-mutable-sources` is passed, which is how the clean-checkout
+# smoke test still works.
+#
 # Anything on disk works. A directory of PDFs converted to text, an export of internal design
 # docs, a checkout of a documentation site, a JSONL dump with `jsonl_field` naming the text key.
 # Nothing here downloads anything: if a corpus is not on this machine it does not exist, and a
@@ -22,14 +30,17 @@ corpora:
   - name: repo-docs
     path: ../docs
     include: ["**/*.md"]
+    mutable: true
 
   - name: repo-prompts
     path: ../prompts
     include: ["**/*.md", "**/*.txt"]
+    mutable: true
 
   - name: repo-readme
     path: ..
     include: ["README.md", "CLAUDE.md"]
+    mutable: true
 
   # The background corpus. `python scripts/fetch_corpus.py` puts it here; it is gitignored, so a
   # clean checkout has none and `required: false` keeps that checkout training on repository prose

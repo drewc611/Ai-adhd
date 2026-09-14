@@ -56,6 +56,14 @@ def main(argv: list[str] | None = None) -> int:
     # run of this script reported 65.8 with `TRUNCATED` beside it. The cgroup on this machine kills at
     # 13,943MB, so this is close to the largest ceiling that is still a ceiling rather than a crash.
     ap.add_argument("--max-rss-mb", type=int, default=13_200)
+    ap.add_argument(
+        "--in-vocabulary-only",
+        action="store_true",
+        help="drop out-of-vocabulary targets from the sum, leaving contexts alone. Separates how many "
+        "words a model lacks from how well it predicts the ones it has. `comparable_heldout` refuses to "
+        "rank two models scored this way at different OOV rates, because each summed over its own "
+        "target set, so expect refusals rather than ratios on a mixed-vocabulary set.",
+    )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -67,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         # A fresh budget per model. Sharing one scores the second model on whatever the first left,
         # which is how `compare_orders` once reported a truncated 37.55 beside a complete 25.65.
         b = Budget(max_tokens=args.max_tokens, max_seconds=args.max_seconds, max_rss_mb=args.max_rss_mb)
-        out = evaluate(model, held, b)
+        out = evaluate(model, held, b, in_vocabulary_only=args.in_vocabulary_only)
         scored.append((path.name, kind, out))
         if not args.json:
             print(f"{path.name:28} {kind:11} {out}")

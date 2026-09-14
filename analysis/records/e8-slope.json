@@ -1,0 +1,148 @@
+{
+  "points": [
+    {
+      "model": "e8-v0.kn.gz",
+      "vocab_size": 8192,
+      "load_seconds": 59.5,
+      "all_targets": {
+        "perplexity": 30.7312,
+        "oov_rate": 0.057976,
+        "tokens": 3443116,
+        "in_vocabulary": 3243497,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      },
+      "in_vocabulary_only": {
+        "perplexity": 32.2878,
+        "oov_rate": 0.057976,
+        "tokens": 3443116,
+        "in_vocabulary": 3243497,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      }
+    },
+    {
+      "model": "e8-v1.kn.gz",
+      "vocab_size": 16384,
+      "load_seconds": 62.8,
+      "all_targets": {
+        "perplexity": 35.2888,
+        "oov_rate": 0.040332,
+        "tokens": 3443116,
+        "in_vocabulary": 3304247,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      },
+      "in_vocabulary_only": {
+        "perplexity": 35.9939,
+        "oov_rate": 0.040332,
+        "tokens": 3443116,
+        "in_vocabulary": 3304247,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      }
+    },
+    {
+      "model": "e8-v2.kn.gz",
+      "vocab_size": 32768,
+      "load_seconds": 67.3,
+      "all_targets": {
+        "perplexity": 39.1747,
+        "oov_rate": 0.030108,
+        "tokens": 3443116,
+        "in_vocabulary": 3339449,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      },
+      "in_vocabulary_only": {
+        "perplexity": 39.1095,
+        "oov_rate": 0.030108,
+        "tokens": 3443116,
+        "in_vocabulary": 3339449,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      }
+    },
+    {
+      "model": "e8-v3.kn.gz",
+      "vocab_size": 71934,
+      "load_seconds": 70.4,
+      "all_targets": {
+        "perplexity": 42.5024,
+        "oov_rate": 0.023683,
+        "tokens": 3443116,
+        "in_vocabulary": 3361571,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      },
+      "in_vocabulary_only": {
+        "perplexity": 41.5042,
+        "oov_rate": 0.023683,
+        "tokens": 3443116,
+        "in_vocabulary": 3361571,
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a"
+      }
+    }
+  ],
+  "fit": {
+    "slope_perplexity_per_oov_point": -3.352,
+    "intercept": 49.669,
+    "r_squared": 0.97741,
+    "pairwise": [
+      {
+        "a": "e8-v0.kn.gz",
+        "b": "e8-v1.kn.gz",
+        "d_oov_points": -1.7644,
+        "d_perplexity": 4.5576,
+        "slope": -2.583
+      },
+      {
+        "a": "e8-v0.kn.gz",
+        "b": "e8-v2.kn.gz",
+        "d_oov_points": -2.7868,
+        "d_perplexity": 8.4435,
+        "slope": -3.03
+      },
+      {
+        "a": "e8-v0.kn.gz",
+        "b": "e8-v3.kn.gz",
+        "d_oov_points": -3.4293,
+        "d_perplexity": 11.7712,
+        "slope": -3.433
+      },
+      {
+        "a": "e8-v1.kn.gz",
+        "b": "e8-v2.kn.gz",
+        "d_oov_points": -1.0224,
+        "d_perplexity": 3.8859,
+        "slope": -3.801
+      },
+      {
+        "a": "e8-v1.kn.gz",
+        "b": "e8-v3.kn.gz",
+        "d_oov_points": -1.6649,
+        "d_perplexity": 7.2136,
+        "slope": -4.333
+      },
+      {
+        "a": "e8-v2.kn.gz",
+        "b": "e8-v3.kn.gz",
+        "d_oov_points": -0.6425,
+        "d_perplexity": 3.3277,
+        "slope": -5.179
+      }
+    ],
+    "pairwise_spread": 2.005,
+    "linear": false
+  },
+  "threshold": {
+    "relative_budget": 0.05,
+    "read_at_perplexity": 30.7312,
+    "worst_pairwise_slope": 5.179,
+    "derived_gap": 0.002967,
+    "floor_gap": 0.0022,
+    "floor_bound": false,
+    "threshold_gap": 0.002967
+  }
+}

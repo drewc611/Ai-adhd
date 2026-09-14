@@ -12,6 +12,7 @@ climbs through training and whose perplexity looks better the less of the corpus
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import sys
@@ -52,6 +53,24 @@ class TrainingRecord:
     #: Which side of which split this trained on, or None for the whole manifest. On the record as
     #: well as in the model's meta, because the record is what a person reads.
     split: dict | None
+    #: Identity of the token stream this model was actually trained on.
+    #:
+    #: `HeldOut.fingerprint` has done this job for the scoring side since D16. The training side had
+    #: nothing, and the gap is not theoretical: this repository's own `docs/` and `README.md` are
+    #: sources in `corpora.yaml`, so **writing a registration changes the corpus the registration is
+    #: about.** E8 found it by arithmetic that came out 51 types short — committing the E8 registration
+    #: moved the training read from 20,000,029 tokens to 20,000,139 and the type count from 71,883 to
+    #: 71,934, which invalidated the plan to reuse E6's cell A' and cost a retrain.
+    #:
+    #: Over tokens rather than document content, which is deliberately stronger than the held-out
+    #: fingerprint: a tokenizer change is invisible to a content digest and moved the shipped baseline
+    #: from 25.65 to 25.82 without it noticing.
+    corpus_fingerprint: str
+    #: The same digest taken over the vocabulary pass. This module's docstring promises that both
+    #: passes read the same text under the same ceilings — "the vocabulary therefore always covers the
+    #: data the counts were taken from" — and until now nothing checked it. Unequal means the promise
+    #: broke on this run, which produces a model whose `<unk>` rate climbs through training.
+    vocabulary_fingerprint: str
     discounts: list[tuple[float, float, float]]
     budget_pass1: dict
     budget_pass2: dict
@@ -74,6 +93,9 @@ class TrainingRecord:
                 "tokens": self.vocab_truncated_tokens,
             },
             "split": self.split,
+            "corpus_fingerprint": self.corpus_fingerprint,
+            "vocabulary_fingerprint": self.vocabulary_fingerprint,
+            "vocabulary_covers_counts": self.corpus_fingerprint == self.vocabulary_fingerprint,
             "discounts": [[round(x, 4) for x in d] for d in self.discounts],
             "budget": {"vocabulary": self.budget_pass1, "counts": self.budget_pass2},
             "sources": self.sources,
@@ -99,9 +121,13 @@ def train(
     b1 = budget or Budget.weekly()
     b2 = b1.restart()
 
+    # One digest per pass. Both are cheap — a sha256 update per sentence against a read that already
+    # tokenizes every one of them — and the pair is what turns this module's docstring into a check.
+    d1, d2 = hashlib.sha256(), hashlib.sha256()
+
     freq: Counter[str] = Counter()
     n_sentences = 0
-    for ts in sentence_tokens(library, b1):
+    for ts in sentence_tokens(library, b1, d1):
         freq.update(ts)
         n_sentences += 1
     if not freq:
@@ -109,7 +135,7 @@ def train(
     vocab = Vocab.build(freq, min_count=min_count, max_size=max_vocab)
 
     def ids() -> Iterator[list[int]]:
-        for ts in sentence_tokens(library, b2):
+        for ts in sentence_tokens(library, b2, d2):
             yield vocab.encode(ts)
 
     top, meta = count_ngrams(ids(), order, b2, vocab)
@@ -124,6 +150,10 @@ def train(
             "min_count": min_count,
             "oov_rate": round(oov, 5),
             "vocab_truncated": {"types": vocab.truncated_types, "tokens": vocab.truncated_tokens},
+            # Truncated to 16 hex characters, matching `FrozenSplit`'s fingerprint, because these are
+            # read by people in tables and 64 characters of hex is not.
+            "corpus_fingerprint": d2.hexdigest()[:16],
+            "vocabulary_fingerprint": d1.hexdigest()[:16],
             # Which side of which split this trained on, or None for the whole manifest. Recorded
             # so `evaluate` can refuse to score a model on text it trained on. D13 wrote that
             # failure mode down — "building it over everything hands the model every word it is
@@ -157,6 +187,8 @@ def train(
         vocab_truncated_types=vocab.truncated_types,
         vocab_truncated_tokens=vocab.truncated_tokens,
         split=model.meta["split"],
+        corpus_fingerprint=model.meta["corpus_fingerprint"],
+        vocabulary_fingerprint=model.meta["vocabulary_fingerprint"],
         discounts=model.discounts,
         budget_pass1=b1.report(),
         budget_pass2=b2.report(),
@@ -200,6 +232,15 @@ def main(argv: list[str] | None = None) -> int:
         "it: `evaluate` refuses such a model rather than reporting a memorisation score.",
     )
     ap.add_argument("--record", default=None, help="write the training record here as JSON")
+    ap.add_argument(
+        "--include-mutable-sources",
+        action="store_true",
+        help="also read the sources `corpora.yaml` marks `mutable: true` — this repository's own docs, "
+        "prompts and READMEs. Off by default because a commit changes their text, which makes the run "
+        "unrepeatable: E8 wrote up its result and a retrain of its four cells moved by up to 4,807 "
+        "n-grams with every cell on a different corpus digest. Pass it for a smoke test on a clean "
+        "checkout that has no downloaded corpus; never for a measurement. See D26.",
+    )
     args = ap.parse_args(argv)
 
     b = Budget.weekly()
@@ -213,6 +254,18 @@ def main(argv: list[str] | None = None) -> int:
             setattr(b, attr, val)
 
     library = Library.load(args.manifest)
+    if not args.include_mutable_sources:
+        library = library.stable()
+        if not library.sources:
+            # The remedy names no script on purpose. `test/boundary.test.ts` asserts that nothing in
+            # this package contains the fetcher's name, because the package's ban on network is
+            # enforced by import and a package that names the fetcher is one step from calling it.
+            # This message violated that on its first draft and the test caught it.
+            raise SystemExit(
+                "every source in the manifest is `mutable: true`, so there is nothing repeatable to "
+                "train on. Put a corpus at the paths the manifest names, or pass "
+                "--include-mutable-sources for a smoke test whose numbers mean nothing."
+            )
     if args.held_out_file is not None:
         from .evaluate import FrozenSplit
 

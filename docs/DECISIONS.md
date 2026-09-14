@@ -2260,3 +2260,244 @@ it is.
 
 `train_lstm.py` passes a model factory to the loop in `train_transformer.py` rather than copying it.
 One line differs between training the two classes, and now one line does.
+
+## D25. E8: a point of out-of-vocabulary is worth up to 5.2 perplexity points, and the threshold was 3.4x too loose
+
+**Asked.** Backlog 78, and a code comment that had promised this run since it was written:
+`comparable_heldout` refuses two all-targets perplexities whose held-out OOV rates differ by more than
+one percentage point, and nobody had ever measured what a percentage point was worth.
+
+**Resolved.** It is worth between 2.6 and 5.2 perplexity points on this corpus. The threshold is now
+derived from that rather than chosen, and the derivation makes it **3.4x tighter**.
+
+### The result
+
+Four Kneser-Ney models, order 4, `min_count` 3, one 20,000,139-token read of the train side of frozen
+set `8e2d77cbe8901b1e`, scored on its 366 held-out documents. The vocabulary cap is the only thing
+that moves.
+
+| cap | types | held-out OOV | **all targets** | in-vocabulary only |
+|---|---|---|---|---|
+| 8,192 | 8,192 | 5.798% | **30.73** | 32.29 |
+| 16,384 | 16,384 | 4.033% | **35.29** | 35.99 |
+| 32,768 | 32,768 | 3.011% | **39.17** | 39.11 |
+| none | 71,934 | 2.368% | **42.50** | 41.50 |
+
+Least squares over the four all-targets points: **-3.352 perplexity points per percentage point of
+OOV**, r-squared 0.977. Monotone, and steep: the whole range of this repository's vocabulary choices
+moves perplexity by 38%.
+
+### The prediction was half right, which is the half that matters least
+
+E8 predicted the sign and the magnitude and one cell. The sign is right and the fitted magnitude is
+inside the registered 3-to-10 band. **The cell prediction is wrong**: V3 was registered at "between 45
+and 70 at roughly 2% held-out OOV" and came in at **42.50** at 2.368%, outside by 2.5 points.
+
+So the direction I argued for against backlog 78's "not obvious" was correct — more vocabulary is
+worse on all targets, reliably — and my sense of how much was 6% optimistic at the one point I was
+specific about. Worth saying plainly because the registration's whole purpose is that the specific
+claim is the falsifiable one.
+
+### The relationship is not linear, by 0.005
+
+E8 registered a rule: "If the pairwise slopes disagree by more than 2x the relationship is not linear
+in OOV and the threshold is stated as a curve or as the worst case, not as one number."
+
+The six pairwise slopes are -2.583, -3.030, -3.433, -3.801, -4.333 and **-5.179**. The spread is
+**2.005x**. That is over the line by a quarter of a percent, and the temptation to call it 2.0 and use
+the tidy fitted number is exactly what a pre-registered rule is for. **The worst case governs.**
+
+It is also the right worst case rather than an arbitrary one. The steepest pair is 32,768 against
+71,934 — the *highest*-vocabulary pair. The marginal cost of a point of OOV is largest where OOV is
+smallest, which is the regime the shipped 148,353-type model sits in and the regime where a refusal
+matters most.
+
+### Half of the reason written beside the threshold was wrong
+
+The comment said the smaller vocabulary gets a discount because every OOV target is charged as a
+prediction of `<unk>` and `<unk>` is among the most frequent symbols a closed-vocabulary model holds.
+Scoring all four models over in-vocabulary targets only tests that directly, and it does not hold
+throughout:
+
+- At 8,192 types, dropping the OOV targets moves perplexity **up**, 30.73 to 32.29. `<unk>` was
+  cheaper than the average real token by 1.56 points. The discount is real.
+- At 71,934 types, dropping them moves perplexity **down**, 42.50 to 41.50. `<unk>` is now *dearer*
+  than the average real token.
+
+The crossover is near 3% OOV, and it is where it should be: `<unk>`'s training frequency *is* the OOV
+rate, so a model at 2.4% OOV holds `<unk>` as an uncommon symbol. Meanwhile all-targets perplexity
+rises monotonically across the whole sweep. **So the `<unk>` discount is real, small, and changes
+sign, and it is not the dominant term.** The dominant term is that a larger vocabulary has thousands
+more rare words left to predict instead of folding them into one symbol.
+
+The refusal was right. One of its two stated reasons was not, and at the vocabularies this repository
+actually ships it was the wrong one.
+
+### What the threshold is now
+
+`allowed_oov_gap(a, b)` in `evaluate.py`, clamped at both ends:
+
+    0.05 * min(perplexity_a, perplexity_b) / 5.179 / 100,  floored at 0.0022,  capped at 0.01
+
+Perplexity-relative because the measured slope is in absolute points and the question is what share of
+*this* comparison a vocabulary gap could account for. 5% of the smaller score is the judgement that
+remains, and it is now a judgement about one measured quantity rather than about an effect of unknown
+size.
+
+Both clamps earn their place:
+
+- **Floored at E4's 0.22 points.** E4 compared `min_count` 2 against 3 at 0.63% and 0.85% OOV and that
+  comparison was sound. The derived gap clears 0.22 at any perplexity above about 22.8, so the floor
+  does not bind today — it is there so a future recalibration cannot silently invalidate E4.
+- **Capped at the old 0.01.** The derived gap grows with perplexity, and E8 measured the slope near
+  perplexity 30 on one model class. Letting it scale to E7's LSTM at 159.3 would grant a 1.5-point gap
+  on the strength of an experiment that never went near there. Capping at the previous unconditional
+  value makes E8 **a strict tightening at every perplexity and a loosening at none**, which is the
+  only honest direction for one experiment to move a guard.
+
+Nothing published moves. E6's A against A′ (4.71% against 5.80%) was refused before and is refused
+now. A′ against B, and both against E7's C, all sit at 5.798% and pass. E4 passes.
+
+### Writing the registration changed the corpus the registration was about
+
+E8 planned to reuse E6's cell A′ for the 8,192 point, and registered the expected uncapped type count
+as arithmetic from A′'s record: 8,192 kept plus 63,691 discarded is 71,883. The run reported
+**71,934**, fifty-one too many.
+
+The cause is that `docs/`, `prompts/` and `README.md` are sources in `corpora.yaml`. The commit
+carrying the E8 registration added 94 lines to `docs/EXPERIMENTS.md`, and D22 had added
+`docs/SECURITY-OPS.md` as a fourteenth document in `docs/` since A′ was trained. Together they moved
+the training read from 20,000,029 tokens to 20,000,139.
+
+**So the sweep as registered was invalid, and its own fixed reading said so.** The repair was to
+retrain the 8,192 cell on the current corpus rather than reuse A′, which is why the table above says
+30.73 where E6 says 30.7. That reproduction is the reassuring part: 110 tokens and a whole extra
+document moved the figure by 0.03 perplexity points, 0.1%, against an effect of 38%.
+
+The part that is not reassuring is that **nothing in the code would have said a word.** The only
+reason it was caught is that a number had been registered in advance, and registering a number in
+advance is not a mechanism. So:
+
+- `sentence_tokens` now takes an optional digest and updates it with every token it yields, in order.
+- Both trainers record `corpus_fingerprint` and `vocabulary_fingerprint` from it.
+- The n-gram trainer records `vocabulary_covers_counts`, which makes mechanical a property this
+  module's docstring has asserted since it was written and nothing checked: that both passes read the
+  same prefix. Equal token counts were the only evidence, and equal token counts are not equal tokens.
+- `comparable_training(a, b)` refuses to treat two models as trained on the same text when they were
+  not, in the four ways that can happen.
+
+Over the token stream rather than over document content, deliberately. `HeldOut.fingerprint` hashes
+content and therefore cannot see a tokenizer change — the failure that moved the shipped baseline from
+25.65 to 25.82 with every other field agreeing. A digest over tokens cannot miss it, and it stops
+exactly where the budget stopped, which a per-document digest cannot do.
+
+Writing the test for it found two more things about the read, both worth knowing while looking at a
+digest. The ceiling is polled rather than enforced, so at the default 20,000-token interval a
+50-token ceiling over an 800-token corpus is never consulted. And `sentences()` splits on newlines
+rather than on sentence punctuation, so a document written as one long line is a single sentence that
+**no ceiling can cut**. The first version of that test made both mistakes at once and passed.
+
+### The fingerprint found a fixed point, and D26 closes it
+
+Retraining the four cells with the mechanism in place did **not** reproduce them, and it did something
+worse than drift: because the retrain ran while this file and `docs/EXPERIMENTS.md` were being written,
+each of the four cells read a *different* corpus. `analysis/records/e8-v*-drift.json` carry all four.
+
+| cell | corpus digest | types | n-grams against the scored run | tokens read |
+|---|---|---|---|---|
+| v0 | `eebd3264d2ed8810` | 8,192 | 12,392,247 (**+1**) | 20,000,139 |
+| v1 | `d995281acd1e576f` | 16,384 | 13,382,525 (**+2,440**) | 20,000,016 |
+| v2 | `ec1b44de8a26315d` | 32,768 | 14,128,112 (**+2,868**) | 20,000,007 |
+| v3 | `b81760427e2006be` | 71,961 (**+27**) | 14,870,934 (**+4,807**) | 20,000,007 |
+
+Four digests, monotone in write-up order, and `comparable_training` refuses all six pairs. **The
+mechanism's first real finding is that the run which built it was invalid.** A first estimate taken off
+v0 alone put the drift at one n-gram in 12.4 million; that was the cell retrained before most of this
+section existed, and quoting it would have understated the effect by three orders of magnitude.
+
+This is not an accident to tidy up. **A digest can never cover a corpus state that includes its own
+description.** Writing down a measurement changes the corpus the measurement came from, so re-deriving
+a published cell exactly is impossible by construction while the repository's own prose is training
+data — and worse, a long enough run cannot even hold one corpus still across its own cells.
+
+What E8's own numbers still support, stated exactly. The four **scored** cells were trained back to
+back with no document edited between them, they agree byte for byte on every source, they all read
+20,000,139 tokens, and the frozen held-out set contains no repository prose at all — 366 documents,
+every one `rfc/`, `pep/`, `eip/` or `erc/`. So the **sweep is internally valid and the slope stands.**
+The drift table above is what the corpus did *afterwards*, while the result was being written up.
+
+`cut_heldout.py` had already seen half of this. It has excluded these three sources from the frozen set
+since it was written, on the reasoning that "a frozen set fixes *which* documents are scored, it cannot
+fix what they say" — and then concluded: "They stay in the training half. Repository prose is legitimate
+training text; it is only unfit as a *test* set, and those are different jobs."
+
+**That conclusion is wrong, and the table above is why.** The hazard was never specific to the test set.
+Mutable text anywhere in a read makes the read unrepeatable, and a training read is the one thing every
+published figure depends on. D26 takes it out.
+
+## D26. The repository's own prose comes out of every measurement
+
+**Asked.** Fix it — the fixed point D25 found, where writing down a measurement changes the corpus the
+measurement came from.
+
+**Resolved.** `corpora.yaml` marks `repo-docs`, `repo-prompts` and `repo-readme` **`mutable: true`**, and
+no measurement reads a mutable source. The three entries stay in the manifest, because they are what
+makes a clean checkout trainable with nothing downloaded, and that property is worth keeping. What
+changes is that the trainers read `Library.stable()` unless `--include-mutable-sources` says otherwise.
+
+### The argument was already written down, and it stopped one step short
+
+`scripts/cut_heldout.py` has excluded these three sources from the frozen evaluation set since it was
+written. Its reasoning is exactly right: "A frozen set fixes *which* documents are scored. It cannot fix
+what they say, and these are the documents this repository rewrites." The first cut had put
+`docs/ARCHITECTURE.md` and `README.md` in the set, so recording a decision would have moved the next
+week's perplexity for a reason unrelated to the model, silently, because the fingerprint is over names.
+
+Then it concluded: **"They stay in the training half. Repository prose is legitimate training text; it is
+only unfit as a *test* set, and those are different jobs."**
+
+They are different jobs, and the hazard belongs to neither of them. It belongs to **repeatability**, and a
+training read needs that at least as much as a test set does. D25's table is the demonstration: retraining
+E8's four cells while E8's own write-up was being committed moved them by up to 4,807 n-grams and 27 types,
+landed each cell on a different corpus digest, and `comparable_training` refuses all six pairs. The
+mechanism's first real finding was that the run which motivated it could not be repeated.
+
+### What it costs, and what it does not
+
+**0.105% of the manifest by bytes** — 369,505 of 351,101,283 — so as data it is a rounding error. What it
+bought was licence comfort: it is the only source in the manifest whose terms are unambiguously this
+repository's own. That comfort is unaffected, because the entries remain and a clean checkout still trains
+on them; they are simply not what any published number comes from.
+
+Every figure measured before this change read that prose. Rather than leave them looking current:
+
+- **E8 is re-measured on the stable corpus.** It is the experiment in flight and the one whose numbers
+  this commit publishes, so it is the one that must not carry an asterisk.
+- **25.82, E6's four cells and E7's LSTM are pre-D26 measurements** and are marked as such where they are
+  quoted. Re-measuring them is real compute — the transformer alone is 2.33 hours per epoch — and backlog
+  82 is the item. Nothing about them is wrong; they read 0.105% more text than a run today would, and the
+  drift that matters is that they cannot be re-derived exactly.
+
+### Where the rule lives
+
+On the source, as `mutable: true`, and nowhere else. It had been a set literal in `cut_heldout.py` and
+repeated in two tests — three copies of one fact about the corpus, which is how copies of a fact start
+disagreeing. `Library.mutable_names()` and `Library.stable()` read the manifest, `cut_heldout.py` reads
+`mutable_names()`, and both tests read it too.
+
+The exclusion sits in the CLI rather than in `train()`. `train()` takes whatever library it is handed on
+purpose: E2b's leave-one-source-out evaluation depends on being able to hand it an arbitrary one. The CLI
+is what every measurement in this repository actually invokes, so that is where the default belongs, and
+`tests/test_corpus_fingerprint.py` asserts a CLI run's record names no mutable source.
+
+One case needed a real error rather than a silent empty read: a manifest whose every source is mutable now
+exits saying there is nothing repeatable to train on and naming the opt-in, instead of training on nothing.
+
+### A floating-point trap, caught by an existing test
+
+Setting the threshold floor to E4's gap exactly refused E4. `0.0085 - 0.0063` is `0.0022000000000000006`
+in binary floating point and the refusal is a strict `>`, so a floor of `0.0022` voided the comparison it
+was written to protect, by six parts in 10^19. `test_the_min_count_pair_e4_compared_stays_comparable`
+caught it on the first run after D25 changed that line. The floor is `0.0023` — just above E4's gap, with
+the reason recorded next to it, and `E4_GAP` now computed from the two rates rather than typed as a
+literal.
