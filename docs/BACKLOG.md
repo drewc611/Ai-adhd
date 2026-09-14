@@ -456,7 +456,7 @@ inconsistency is churn, not a fix. `commander` stays pinned below 15 because 15 
     because the entries remain. E8 is re-measured on the stable corpus; 25.82, E6 and E7 are marked as
     pre-D26 and item 82 is the re-measurement.**
 
-82. **Re-measure the pre-D26 figures on the stable corpus** (real compute, and nothing is wrong with
+82. ~~**Re-measure the pre-D26 figures on the stable corpus** (real compute, and nothing is wrong with
     them). 25.82, E6's cells A / A′ / B and E7's cell C all read the repository's own prose, which D26
     took out of every measurement. They are not incorrect — they read 0.105% more text than a run today
     would, and the frozen held-out set they were scored on never contained that prose — but they cannot
@@ -475,7 +475,13 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Order matters if this is done piecemeal. E6's claim is A′ **against** B, so re-measuring one and not
     the other produces a ratio between a stable-corpus number and a mutable-corpus one, which is the
     comparability mistake `comparable_training` now exists to refuse. Either pair moves together or
-    neither does.
+    neither does.~~
+    **Done as D27, and every conclusion survives. 25.82 → 25.82, A 19.9 → 19.94, A′ 30.7 → 30.95,
+    B 64.1 → 64.29, C 159.3 → 154.81; E6's ratio 2.086x → 2.077x inside its 1.5–3x band and E7's
+    2.485x → 2.408x. The shipped figure reproduced to two decimals across 73,496 fewer training tokens.
+    Three defects turned up on the way and none were in the figures: D26 had missed `train_lstm.py`,
+    `score_heldout.py` held two models at once and was OOM-killed, and two ReDoS bounds let quadratic
+    blowup through. All three surfaced only because the run actually ran.**
 
 ## Not doing, and why
 

@@ -399,19 +399,58 @@ def test_the_derived_threshold_still_admits_e4_and_still_refuses_e6():
     assert comparable_heldout(held(30.7, 0.05798), held(64.1, 0.05798)) is None
 
 
-def test_the_pre_d26_figures_are_marked_as_such(readmes):
-    """D26 took the repository's own prose out of every measurement, and every figure measured before it
-    read that prose. A stale figure that looks current is the failure D19 already had once — 25.65 sat in
-    the prose as a live number after a tokenizer change had invalidated it.
+#: The re-measured cells, and the perplexity each scored on the frozen set. Backlog 82 / D27.
+B82_CELLS = {"b82-shipped": 25.82, "b82-cellA": 19.94, "b82-cellB": 64.29, "b82-cellC": 154.81}
 
-    Checked per file, for the reason the shipped-figure test is: concatenating them proved only that some
-    document carried the caveat.
-    """
-    for name in SHIPPED_CLAIM_SITES:
-        text = (ROOT / name).read_text()
-        assert "pre-D26" in text, f"{name} quotes pre-D26 figures without saying so"
-        assert "0.105%" in text, f"{name} does not say how much text the change moved"
-        assert "82" in text, f"{name} does not point at the re-measurement item"
+
+def test_the_re_measured_cells_carry_a_fingerprint_and_read_no_prose():
+    """D26 took the repository's own prose out of every measurement. These are the runs that make that
+    true of the figures as well as of the code."""
+    from adhd_analysis.text.corpora import Library
+
+    mutable = Library.load(ROOT / "analysis" / "corpora.yaml").mutable_names()
+    for name in B82_CELLS:
+        r = record(name)
+        assert r["corpus_fingerprint"], f"{name} carries no training fingerprint"
+        names = {s["name"] for s in r["sources"]}
+        assert names.isdisjoint(mutable), f"{name} read text a commit can rewrite: {sorted(names)}"
+    # The two n-gram cells read the whole training side and the two neural cells a 20M-token prefix, so
+    # two digests are expected and three would mean something moved mid-run.
+    prints = {record(n)["corpus_fingerprint"] for n in B82_CELLS}
+    assert len(prints) == 2, f"the re-measurement did not hold two corpus reads: {prints}"
+
+
+def test_d27_quotes_the_figures_it_re_measured(readmes):
+    """Every re-measured perplexity appears in the decisions log, and the pre-D26 caveat is gone from
+    both READMEs — it warned about figures that no longer describe anything published."""
+    decisions = docs("docs/DECISIONS.md")
+    assert "## D27." in decisions
+    for name, ppl in B82_CELLS.items():
+        assert f"{ppl:g}" in decisions, f"D27 no longer quotes {name}'s {ppl}"
+    for where in SHIPPED_CLAIM_SITES:
+        text = (ROOT / where).read_text()
+        assert "post-D26" in text, f"{where} does not say which corpus its figures come from"
+        assert "pre-D26 figures" not in text, f"{where} still carries the superseded caveat"
+    assert "25.82" in readmes, "the shipped figure is no longer stated"
+
+
+def test_the_re_measurement_left_every_registered_band_intact():
+    """The claims, not the numbers. E6 registered 1.5x-to-3x before it ran; if the re-measurement had
+    pushed the ratio out of that band, D21 would be a different decision rather than a rounded one."""
+    shipped, a, b, c = (record(n) for n in ("b82-shipped", "b82-cellA", "b82-cellB", "b82-cellC"))
+    aprime = record("e8-v0")  # A′'s configuration exactly, so E8's sweep re-measured it
+    assert aprime["vocab_size"] == 8192 and aprime["min_count"] == 3 and aprime["order"] == 4
+    ppl = B82_CELLS
+    e6 = ppl["b82-cellB"] / 30.95
+    assert 1.5 < e6 < 3.0, f"E6's ratio left its registered band at {e6:.3f}x"
+    assert f"{e6:.3f}x" in docs("docs/DECISIONS.md"), f"D27 does not quote E6's new ratio {e6:.3f}x"
+    # E7 predicted C between 40 and 60. It was wrong before and it is wrong the same way now.
+    assert ppl["b82-cellC"] > 60, "E7's prediction stopped being wrong, which would be a new result"
+    # And the shape of each cell is unchanged, or the comparison is between different models.
+    assert b["config"]["d_model"] == c["config"]["d_model"] == 128
+    assert b["config"]["n_layers"] == c["config"]["n_layers"] == 2
+    assert b["stopped_because"] == c["stopped_because"] == "epochs"
+    assert a["vocab_size"] == 8192 and shipped["vocab_size"] > 100_000
 
 
 def test_the_manifest_marks_the_prose_mutable_and_the_docs_say_why():

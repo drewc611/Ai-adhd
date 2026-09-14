@@ -1,0 +1,126 @@
+{
+  "budget_corpus": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 8000,
+      "max_seconds": 5400.0,
+      "max_tokens": 20000000
+    },
+    "checks": 914,
+    "peak_rss_mb": 528,
+    "seconds": 2200.26,
+    "stopped_because": null,
+    "tokens": 18341790
+  },
+  "budget_training": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 8000,
+      "max_seconds": 5400.0,
+      "max_tokens": 20000000
+    },
+    "checks": 977,
+    "peak_rss_mb": 528,
+    "seconds": 2200.26,
+    "stopped_because": null,
+    "tokens": 19996672
+  },
+  "budget_vocabulary": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 8000,
+      "max_seconds": 5400.0,
+      "max_tokens": 20000000
+    },
+    "checks": 997,
+    "peak_rss_mb": 528,
+    "seconds": 2200.4,
+    "stopped_because": "token ceiling: 20,000,007 >= 20,000,000",
+    "tokens": 20000007
+  },
+  "config": {
+    "context": 128,
+    "d_ff": 512,
+    "d_model": 128,
+    "init_std": 0.02,
+    "n_heads": 4,
+    "n_layers": 2,
+    "vocab_size": 8192
+  },
+  "corpus_fingerprint": "50870d804f8abb03",
+  "documents": 7322,
+  "epochs_completed": 0.9998189026621309,
+  "final_loss": 3.9457170853360752,
+  "loss_curve": [
+    5.843467454441258,
+    4.703175715002858,
+    4.398970767855644,
+    4.287016186802114,
+    4.19000746089904,
+    4.056016448824132,
+    4.046124544544298,
+    3.9491814858600742,
+    4.023681875867922,
+    3.949471265810435,
+    3.52938973903656
+  ],
+  "min_count": 3,
+  "model_path": "models/b82-cellB.tf.gz",
+  "oov_rate": 0.0440744845739304,
+  "optimiser": {
+    "batch_size": 32,
+    "epochs_requested": 1.0,
+    "lr": 0.0003,
+    "max_train_tokens": 20000000,
+    "seed": 0,
+    "warmup": 100
+  },
+  "seconds": 2200.255963107,
+  "sentences": 899889,
+  "sources": [
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 11785368,
+      "files": 615,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "pep",
+      "path": "analysis/corpora/pep",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "steps": 4882,
+  "stopped_because": "epochs",
+  "tokens_seen": 19996672,
+  "train_tokens": 20000294,
+  "vocab_size": 8192,
+  "vocab_truncated_tokens": 791845,
+  "vocab_truncated_types": 63411,
+  "vocabulary_fingerprint": "080865e040e7b88d"
+}

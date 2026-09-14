@@ -14,8 +14,8 @@
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-425-2ea44f" alt="425 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-212-2ea44f" alt="212 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D26%20resolved-0969da" alt="D1 through D26 resolved"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-214-2ea44f" alt="214 Python tests"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D27%20resolved-0969da" alt="D1 through D27 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -420,7 +420,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D26 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D27 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -457,10 +457,11 @@ the direction that narrows E6's conclusion rather than generalising it. Being ne
 handicap; lacking attention is a further and larger one. D24 has the arithmetic. The shipped model is
 unchanged.
 
-The shipped 25.82, E6's cells and E7's LSTM are **pre-D26** figures: they read the repository's own
-prose, which no measurement reads any more, because a commit changes that text and a run that includes it
-cannot be repeated. They are not wrong — 0.105% more text than a run today, on a held-out set that never
-held that prose — but they cannot be re-derived exactly. Backlog 82 re-measures them.
+Every figure here is **post-D26**, re-measured once the repository's own prose came out of the corpus.
+D27 has the before and after: the shipped 25.82 reproduced to two decimals, E6's ratio moved 2.086x to
+**2.077x** and E7's 2.485x to **2.408x**, so nothing left its registered band. The re-measurement found
+three defects on the way — a trainer D26 had missed, a scorer that held two models at once, and two
+ReDoS bounds that let quadratic blowup through — and none of them were in the figures.
 
 Held-out perplexity is what says whether a training run improved anything, because vocabulary size,
 table size and wall clock all rise when a model gets worse. Two numbers from different held-out sets

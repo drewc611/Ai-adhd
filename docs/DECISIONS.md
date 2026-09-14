@@ -2521,3 +2521,74 @@ was written to protect, by six parts in 10^19. `test_the_min_count_pair_e4_compa
 caught it on the first run after D25 changed that line. The floor is `0.0023` — just above E4's gap, with
 the reason recorded next to it, and `E4_GAP` now computed from the two rates rather than typed as a
 literal.
+
+## D27. Backlog 82: every pre-D26 figure re-measured, and every conclusion survives
+
+**Asked.** D26 took the repository's own prose out of every measurement, which left 25.82, E6's cells and
+E7's LSTM describing a corpus the manifest no longer reads. Backlog 82 is the re-measurement.
+
+**Resolved.** All of them, on the stable corpus. Nothing moved by more than 3%, no ratio left its
+registered band, and the shipped figure reproduced exactly.
+
+| cell | pre-D26 | **post-D26** | change |
+|---|---|---|---|
+| shipped Kneser-Ney, 148k types | 25.82 | **25.82** | −0.02% |
+| E6 cell A, cap 8,192, 64M tokens | 19.9 | **19.94** | +0.22% |
+| E6 cell A′, cap 8,192, 20M tokens | 30.7 | **30.95** | +0.81% |
+| E6 cell B, transformer | 64.1 | **64.29** | +0.29% |
+| E7 cell C, LSTM | 159.3 | **154.81** | −2.82% |
+
+All five on frozen set `8e2d77cbe8901b1e`, 366 documents, 3,443,116 tokens, fingerprint
+`1446762140db7f1a`, nothing truncated. The n-gram cells read corpus `de7c24b2218ad055` and the neural
+cells `50870d804f8abb03` — different digests because they read different amounts of the same corpus,
+which is what a 20M-token cap means.
+
+**A′ needed no run.** `e8-v0` is order 4, `min_count` 3, cap 8,192 on the train side of the same frozen
+set, which is A′'s configuration exactly, so E8's sweep had already re-measured it.
+
+### The conclusions
+
+| claim | pre-D26 | post-D26 | registered band |
+|---|---|---|---|
+| E6: A′ against B | 2.086x | **2.077x** | 1.5x–3x, holds |
+| E7: B against C | 2.485x | **2.408x** | — |
+| E7: A′ against C | 5.184x | **5.002x** | — |
+
+E7's registered prediction put C between 40 and 60. It is **154.81**, still outside by 2.6x and still on
+the side that narrows E6 to transformers rather than generalising it to neural models. Being wrong
+twice, in the same direction, on two corpora, is a stronger result than being wrong once.
+
+**The shipped model's 25.82 reproduced to two decimals** across 73,496 fewer training tokens and 239
+fewer vocabulary types. That is the most reassuring number here and it is worth saying why it is not
+luck: the frozen held-out set never contained repository prose, so removing that prose changes what the
+model read and not what it was asked.
+
+### What the re-measurement cost, in defects it found
+
+Three, none of them in the figures:
+
+- **D26 had missed a trainer.** `train_lstm.py` carries its own `main()` with its own copy of the
+  library selection, and D26 patched the other two. Cell C's first attempt trained on the prose — the
+  exact thing D26 exists to prevent, in the commit claiming to prevent it. Selection lives once in
+  `selection.py` now, with a test parameterised over all three entry points and another asserting no
+  trainer loads the library itself.
+- **`score_heldout.py` held two models at once.** Rebinding the loop variable frees the previous model
+  only after the next one is built, so four models peaked at cell A's 32.1M n-grams beside the shipped
+  model's 40.2M and the cgroup killed it at 13.9GB mid-load — no traceback, an empty JSON file. The
+  resident-set ceiling cannot catch that: it is polled inside `evaluate`, so it governs scoring and not
+  loading.
+- **Two ReDoS bounds had no teeth**, found while fixing a timing test that failed under the
+  re-measurement's own CPU load. At a 4x input ratio a deliberately quadratic scan ran 16.32x and
+  14.97x against a 20x bound, so both tests caught exponential blowup and waved quadratic through —
+  which is the shape a ReDoS takes. At 8x the cases separate and the bound is 30x between them.
+
+The figures were never wrong. Everything that was wrong was a mechanism around them, and all three
+surfaced only because the run actually ran.
+
+### Where the old numbers stay
+
+D21 and D24 keep their text. They record what was measured when they were written, the same treatment
+D19's 25.65 has and the same reason `former_ids` and `evals/replay-baseline.json` exist: a recorded
+result is what the reader was shown. This entry is what supersedes them, `analysis/records/b82-*.json`
+carry the new runs, and the pre-D26 markers come off the READMEs because the figures they warned about
+no longer describe anything published.

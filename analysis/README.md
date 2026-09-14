@@ -172,13 +172,10 @@ pruned, `split` recorded.** Every discount row is a real modified-Kneser-Ney est
 0.75 fallback. **Held-out perplexity 25.82** on 366 frozen documents, 3,443,116 tokens, 0.91% OOV,
 fingerprint `1446762140db7f1a`, `truncated: null`.
 
-**25.82, and every E6 and E7 figure below, are pre-D26 measurements.** They read the repository's own
-prose, which `corpora.yaml` now marks `mutable: true` and no measurement reads — a commit changes that
-text, so a run including it cannot be repeated. Nothing about them is wrong: they read 0.105% more text
-than a run today would, and the frozen held-out set they were scored on never contained that prose. What
-they cannot do is be re-derived exactly. Backlog 82 is the re-measurement, and it takes E6's A′ and B
-together or not at all, because a ratio between a stable-corpus number and a mutable-corpus one is the
-comparability mistake `comparable_training` exists to refuse. E8's figures further down are post-D26.
+**Every figure below is post-D26**, re-measured on the corpus with this repository's own prose excluded.
+D27 has the before and after: nothing moved by more than 3%, no ratio left its registered band, and the
+shipped 25.82 reproduced to two decimals across 73,496 fewer training tokens. The frozen held-out set
+never contained that prose, so removing it changed what the models read and not what they were asked.
 
 25.65 appears in D19 and is superseded rather than beaten. It was measured under an ASCII-only
 tokenizer that learned `Löwis` as `l` and `wis`, across a fifth of the corpus; a different
