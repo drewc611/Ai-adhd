@@ -255,12 +255,19 @@ yet enough to know whether they work.
     whatever it calls itself, because a half-scored pack claiming to be a refusal is the one shape
     that could hide a real failure. Hash mismatch still wins: paraphrase drift invalidates the run
     whatever the critic then says about it.**
-69. **Decide whether to tell the critic it may refuse** (owner's call). Nothing in `prompts/` mentions
+69. ~~**Decide whether to tell the critic it may refuse** (owner's call). Nothing in `prompts/` mentions
     refusing, and a test asserts that, so today the handler only catches a refusal a critic produces
     unprompted. Offering one explicitly is a change to the product with a real cost: an escape hatch a
     critic is told about is easier to take than scoring, and the critique phase is where T1 gets caught.
     The argument for is that a critic with no way to say "these two artifacts are byte-identical" will
-    invent a score instead, which is worse than refusing. Neither side is settled by anything recorded.
+    invent a score instead, which is worse than refusing. Neither side is settled by anything recorded.~~
+    **Decided as D32: leave it unmentioned.** The critique phase is where T1 gets caught, and an escape
+    hatch a critic is told about is easier to take than scoring. The counter-argument is recorded
+    rather than dismissed — an invented score is worse than a refusal — and what settles it is that
+    the capability already exists unadvertised: `criticRefusal` recognises an unprompted refusal in two
+    shapes. So the choice was only whether to advertise it, and not advertising it means a critic
+    reaches for it when scoring is impossible rather than when it is hard.
+
 29. ~~**Detector output quality check.** Some evidence strings are one clause. Set a floor and
     reject pass B if a fired trap's evidence is under N words.~~
    **Built. Floor set from data: real fired evidence runs 29 to 50 words.**
@@ -388,13 +395,21 @@ yet enough to know whether they work.
     `os.json`, which `adhd os record` does not copy, so `writeCost` now writes `by_frame` into
     `cost.json`; the two pre-kernel recordings cannot be reconstructed and are reported as
     unavailable rather than estimated.**
-68. **Recalibrate `tokens_per_branch_estimate`** (owner's call). `adhd cost` shows the D5 preview
+68. ~~**Recalibrate `tokens_per_branch_estimate`** (owner's call). `adhd cost` shows the D5 preview
     quoting about a third of what a run costs, consistently across seven runs. Setting the mean
     ratio to 1.0 means half of future runs come in over the quoted figure, which for a consent
     gate may be worse than a high quote that is never exceeded. The alternatives are a point
     estimate at the mean, a point estimate at the observed maximum, or a range in the preview
     text. All three change what the gate promises a user, which is why this is not a number to
-    pick while nobody is looking.
+    pick while nobody is looking.~~
+    **Decided as D32: the observed maximum.** `tokens_per_branch_estimate` 12,000 -> **51,000**, so a
+    five-branch preview reads 520,200 against the worst recorded run of 519,482, and the label is now
+    "up to" rather than "order of magnitude" — which described the old figure honestly and was not an
+    estimate. The shape was wrong too: the critic was priced at `tpb * n` against a measured 30/49, so
+    it was over-weighted by a third while diverge was under-weighted. Components are proportions of the
+    measured split now. `adhd cost` prices the current config beside the historical ratio, because the
+    recorded estimate is what each run was quoted and that number never changes.
+
 42. ~~**TTY colour and progress** for `adhd os` while a run advances.~~
     **Already built and found open by the audit below. `src/tty.ts` carries the colour table, a
     `Progress` line that redraws in place and one line per change when piped, and `stateColour` so a

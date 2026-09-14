@@ -15,8 +15,14 @@ defaults:
   shuffle_frames: true     # delivery order is randomised; collection is unordered
   seed: random             # D3: every run has a seed, logged in plan.json; --seed overrides;
                            # fixtures carry a fixed seed. Pass A's blind shuffle reuses it.
-  tokens_per_branch_estimate: 12000   # D5: the honest number shown before the spend.
-                                      # Order of magnitude. Revised from cost.json history.
+  tokens_per_branch_estimate: 51000   # D5: the honest number shown before the spend, and D32 makes
+                                      # it the *observed maximum* rather than a mean. The diverge
+                                      # cost of one branch; critique and deepen are proportions of
+                                      # it, measured at 30/49 and 21/49 by `adhd cost`.
+                                      # Seven runs came in at 2.6x to 3.3x the old 12,000, always
+                                      # low. At 51,000 a five-branch preview reads 520,200 against
+                                      # the worst run recorded, 519,482. A consent gate that is
+                                      # never exceeded is worth more than one accurate on average.
   branch_tools_allowed: [WebSearch, WebFetch]   # D4: the only grantable tools. Never filesystem.
 
 # The only object the orchestrator may produce. Validated with unknown keys rejected.

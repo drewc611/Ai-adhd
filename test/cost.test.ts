@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { costReport, PHASES } from "../src/cost.js";
+import { compile, previewText } from "../src/compile.js";
 import { kernelStats } from "../src/os.js";
 
 function recorded(runs: Record<string, { cost: unknown; plan?: unknown; os?: unknown }>): string {
@@ -140,4 +141,53 @@ test("kernel stats name the longest task against the lease that has to cover it"
   assert.match(s.text, /the default is 900s/);
   // Every phase the timing table can report is a phase a task can be in.
   for (const p of s.phases) assert.ok((PHASES as readonly string[]).includes(p.phase));
+});
+
+/**
+ * D32 chose the observed maximum over the mean, and the reason is that a consent gate is a promise
+ * rather than a statistic: a user who agreed to 156,000 tokens and spent 519,482 was misled, and
+ * being misled upward costs them nothing. So the property to hold is not "the estimate is accurate"
+ * but "the estimate is never exceeded by a run on record".
+ *
+ * This fails when a new run comes in above the quote, which is exactly when the figure needs raising
+ * again — and it fails loudly rather than leaving `adhd cost` to mention a drifting mean.
+ */
+test("the D5 gate never quotes less than the worst run on record", () => {
+  const report = costReport(cfg);
+  const withEstimate = report.runs.filter((r) => r.ratio !== null);
+  assert.ok(withEstimate.length >= 7, "there should be recorded runs to check against");
+  const worst = Math.max(...withEstimate.map((r) => r.tokens));
+
+  for (const n of new Set(withEstimate.map((r) => r.n).filter((n): n is number => n !== null))) {
+    const c = compile(cfg, "What timeouts should I set on this HTTP client?", { problem_class: "design_decision" }, { seed: 1 });
+    if (c.kind !== "plan") throw new Error("expected a plan");
+    if (c.plan.branches.length !== n) continue;
+    assert.ok(
+      c.plan.estimate.tokens_total >= worst,
+      `the gate quotes ${c.plan.estimate.tokens_total.toLocaleString()} for n=${n} against a recorded run of ${worst.toLocaleString()}`,
+    );
+  }
+});
+
+test("the estimate's shape matches the measured phase split, not an invented one", () => {
+  // `adhd cost` reports 49% diverge, 30% critique, 21% deepen. The old model used tpb*n for the
+  // critic and tpb*ceil(n/2) for deepen, which is 38/38/23 — it over-weighted the critic by a third.
+  // A total that is right with components that are wrong tells a user the wrong thing about which
+  // phase to stop before.
+  const c = compile(cfg, "What timeouts should I set on this HTTP client?", { problem_class: "design_decision" }, { seed: 1 });
+  if (c.kind !== "plan") throw new Error("expected a plan");
+  const e = c.plan.estimate;
+  const share = (part: number) => part / e.tokens_total;
+  assert.ok(Math.abs(share(e.tokens_branches) - 0.49) < 0.02, `diverge share is ${share(e.tokens_branches).toFixed(2)}, measured 0.49`);
+  assert.ok(Math.abs(share(e.tokens_critic) - 0.30) < 0.02, `critique share is ${share(e.tokens_critic).toFixed(2)}, measured 0.30`);
+  assert.ok(Math.abs(share(e.tokens_deepen) - 0.21) < 0.02, `deepen share is ${share(e.tokens_deepen).toFixed(2)}, measured 0.21`);
+});
+
+test("the preview says up to, because the figure is a ceiling and not an average", () => {
+  const c = compile(cfg, "What timeouts should I set on this HTTP client?", { problem_class: "design_decision" }, { seed: 1 });
+  if (c.kind !== "plan") throw new Error("expected a plan");
+  const preview = previewText(c);
+  assert.match(preview, /estimate: up to/);
+  assert.ok(!/order of magnitude/.test(preview), "the old label described the old figure, which was one");
+  assert.match(preview, /Nothing has been spent/);
 });

@@ -2867,3 +2867,63 @@ and introduces a different confound.
 `nopep.kn.gz` and `background.kn.gz`, the original D17 pair, stay refused and are superseded rather
 than reinterpreted. Their OOV gap is real and `comparable_heldout` is right to refuse them; this
 decision replaces the measurement instead of arguing with the refusal.
+
+---
+
+## D32. Backlog 68 and 69: the consent gate quotes the observed maximum, and the critic is still not told it may refuse
+
+Two decisions about what the product promises, taken together because both turn on the same
+question: what does a user get told before something irreversible happens.
+
+### Backlog 68: the gate quotes the worst run, not the average one
+
+**Asked.** `adhd cost` showed the D5 preview quoting **2.6x to 3.3x under** what a run costs, across
+seven runs, always low. Setting the figure to the mean makes half of future runs exceed the quote.
+
+**Resolved. The observed maximum, and the preview says "up to".**
+
+`tokens_per_branch_estimate` moves from **12,000 to 51,000**. A five-branch preview now reads
+**520,200** against the worst run on record, **519,482**.
+
+The choice is not statistical. A consent gate is a promise, and a user who agreed to 156,000 tokens
+and spent 519,482 was misled; being misled *upward* costs them nothing. "Order of magnitude" was the
+old label and it described the old figure honestly — 156,000 against a real 407,000 to 519,000 *is* an
+order of magnitude, and was not an estimate.
+
+**The shape was wrong too, and that was the part nobody had noticed.** The old model priced the critic
+at `tpb * n` and deepen at `tpb * ceil(n / 2)`, giving 38/38/23. `adhd cost` measures **49% diverge,
+30% critique, 21% deepen** over the five runs that record a breakdown. So the critic was over-weighted
+by a third and diverge under-weighted, and a total that is right with components that are wrong tells a
+user the wrong thing about which phase to stop before. The components are now proportions of the
+measured split.
+
+**`adhd cost` no longer accuses a gate that has been fixed.** The recorded estimate in each
+`cost.json` is what that run was *quoted*, from the config as it stood then, so the historical ratio
+stays 3.0x forever. The report now also prices the current config against the worst recorded run and
+says which number is which. A warning that outlives its cause is noise, and this is the second one
+this session — the governor's 2.9x caution was the first.
+
+**Three tests.** That the gate never quotes below the worst run on record, which fails when a new run
+exceeds it and is therefore the trigger to raise the figure again; that the components match the
+measured split rather than an invented one; and that the preview says "up to". Verified by reverting
+the config: the first fails with `the gate quotes 122,400 for n=5 against a recorded run of 519,482`.
+
+### Backlog 69: the critic is not told it may refuse
+
+**Asked.** Nothing in `prompts/` mentions refusing, and a test asserts that. The handler catches a
+refusal a critic produces unprompted. Should the option be offered explicitly?
+
+**Resolved. No, and the reason is where the trap lives.** The critique phase is where T1 — the
+consensus trap this repository exists to catch — gets caught. An escape hatch a critic is *told about*
+is easier to take than scoring, and the one place the system cannot afford an easier option is the
+place doing the work.
+
+The argument the other way is real and is recorded rather than dismissed: a critic with no way to say
+"these two artifacts are byte-identical" may invent a score, and an invented score is worse than a
+refusal. What makes the balance fall this way is that the capability already exists — `criticRefusal`
+recognises an unprompted refusal in two shapes and the run handles it — so the choice is only whether
+to *advertise* it. Keeping it unadvertised means a critic reaches for it when scoring is genuinely
+impossible rather than when it is merely hard.
+
+**Nothing changes in code.** The test asserting `prompts/` never mentions refusal stays, and now has a
+decision behind it instead of an absence.
