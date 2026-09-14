@@ -1,0 +1,158 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { cfg } from "./helpers.js";
+import { validateBranchArtifact } from "../src/validate.js";
+import { RunAbort } from "../src/errors.js";
+
+/**
+ * Backlog 87. The output contract gives `reasoning` a block scalar and leaves `position`,
+ * `falsifier` and `missing_actor` as plain ones, so a colon-space anywhere in those three makes
+ * the artifact unparseable, and since D30 an unparseable artifact aborts the run.
+ *
+ * These are not invented strings. All three are verbatim from run `20260914223732-7e664e`, the
+ * seed 3 dispatch of fixture 001, which lost three branches out of five this way and aborted
+ * having paid for all five. D30's record priced the case as "one flaky subagent"; the cause here
+ * is the contract, and it fires on any branch that writes the way people write.
+ *
+ * Nothing here chooses the fix. It pins what the contract does today, in the shape the failure
+ * actually took, so that whichever fix is adopted has something to turn green — and so that the
+ * "eleven recorded runs all parse" fact is held as the coincidence it is rather than as evidence
+ * the contract is sound.
+ */
+
+const HASH = "sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394";
+
+/** The three values, verbatim, and the internal `: ` in each that the parser refuses. */
+const OBSERVED: { frame: string; field: "falsifier" | "missing_actor"; value: string; culprit: string }[] = [
+  {
+    frame: "DOOR_KEEPER",
+    field: "falsifier",
+    value:
+      "The one-week histogram shows healthy p99.9 time-to-last-byte above 2s. A second, equally cheap falsifier: the would-have-retried counter shows well under 0.1% of requests.",
+    culprit: "falsifier: ",
+  },
+  {
+    frame: "LEDGER",
+    field: "falsifier",
+    value:
+      "Instrument the client for a week and plot the latency distribution of successful responses. Cheaper still: find one production incident report where a client's retries amplified a remote brownout.",
+    culprit: "still: ",
+  },
+  {
+    frame: "FRAME_BREAKER",
+    field: "falsifier",
+    value:
+      "Instrument the existing client for a week and compare the distribution of time-remaining-at-call against the fixed timeout. Equally falsifying: if deadline-exceeded work is a rounding error in traces, the budget framing is solving a problem this system does not have.",
+    culprit: "falsifying: ",
+  },
+];
+
+/** The shipped contract's shape: `reasoning` folded, the other free-text fields plain. */
+function asContractSpecifies(frame: string, field: string, value: string): string {
+  const fields: Record<string, string> = {
+    position: "Do the smallest thing that bounds the call.",
+    falsifier: "users never cancel within the first token timeout",
+    missing_actor: "the human watching the spinner, who can cancel",
+  };
+  fields[field] = value;
+  return [
+    "```yaml",
+    `problem_hash: ${HASH}`,
+    `frame: ${frame}`,
+    `position: ${fields.position}`,
+    "reasoning: |",
+    "  From inside the frame: the human can cancel, so treat them as the control.",
+    "forecloses:",
+    "  - a fixed 30s timeout for every caller",
+    "  - silent retry against the same instance",
+    `falsifier: ${fields.falsifier}`,
+    `missing_actor: ${fields.missing_actor}`,
+    "confidence: medium",
+    "```",
+  ].join("\n");
+}
+
+test("the three values a real run actually wrote abort that run, and the contract is why", () => {
+  for (const { frame, field, value, culprit } of OBSERVED) {
+    assert.ok(value.includes(culprit), `${frame}: the culprit ${JSON.stringify(culprit)} is not in the value`);
+    const text = asContractSpecifies(frame, field, value);
+    let thrown: unknown;
+    assert.throws(() => validateBranchArtifact(text, HASH, frame), (e: unknown) => ((thrown = e), e instanceof RunAbort));
+    const e = thrown as RunAbort;
+    assert.equal(e.code, "UNPARSEABLE", `${frame} aborted for the wrong reason: ${e.message}`);
+    // The parser's own message travels on the abort (D30), so the reader gets the column.
+    assert.match(e.message, /not valid YAML/);
+  }
+});
+
+test("the same three values parse when the field is a block scalar, which is what makes this the contract's defect", () => {
+  // The branches are not at fault and the values are not too long or too strange. Fold the field
+  // and every one of them is a valid artifact — so the difference between a run that completes and
+  // a run that aborts is one character in prompts/branch.md.
+  for (const { frame, field, value } of OBSERVED) {
+    const text = asContractSpecifies(frame, field, value).replace(`${field}: ${value}`, `${field}: |\n  ${value}`);
+    const r = validateBranchArtifact(text, HASH, frame);
+    assert.equal(r.ok, true, r.ok ? "" : `${frame}/${field} still fails: ${r.violations.join("; ")}`);
+  }
+});
+
+test("`reasoning` is the one free-text field the contract folds, and the other three are why prose is fatal", () => {
+  const contract = readFileSync(join(cfg.root, "prompts", "branch.md"), "utf8");
+  assert.match(contract, /^reasoning: \|$/m, "reasoning is no longer a block scalar; this test's premise is gone");
+  for (const f of ["position", "falsifier", "missing_actor"]) {
+    const m = new RegExp(`^${f}: (.*)$`, "m").exec(contract);
+    assert.ok(m, `${f} is missing from the output contract`);
+    // If a fix folds these, this assertion is the one to delete, deliberately and with the
+    // recorded runs' comparability argued in DECISIONS.md first.
+    assert.notEqual(m[1], "|", `${f} is now folded; backlog 87 was fixed and this test should say so`);
+  }
+});
+
+test("not one unquoted value in any recorded run contains a colon-space, which is the luck this rests on", () => {
+  // The eleven recorded runs all parse, and this is the reason, counted. Across 39 branch artifacts
+  // there are 117 `position` / `falsifier` / `missing_actor` values. None is folded. 106 are bare
+  // plain scalars and **not one of them carries an internal `: `** — that is the coincidence, and
+  // it held for eleven runs before breaking on the twelfth, where three branches in five broke it
+  // at once.
+  //
+  // Eleven values are quoted, which is the other way out, and exactly one of those needed to be:
+  // `001-seed2/ACTOR_CENSUS`'s falsifier reads "Look at the inbound path for one hour of real
+  // traffic: if no caller sends a deadline". So quoting does happen, unprompted and inconsistently,
+  // in 9% of values. It is a habit some branches have, not a property the contract secures.
+  //
+  // A future recording that carries an unquoted colon fails here rather than at someone's
+  // critique phase, which is a cheaper place to find out.
+  const recorded = join(cfg.root, "evals", "recorded");
+  let plain = 0;
+  let quoted = 0;
+  let folded = 0;
+  let files = 0;
+  const offenders: string[] = [];
+  for (const run of readdirSync(recorded)) {
+    const dir = join(recorded, run, "branches");
+    if (!existsSync(dir)) continue;
+    for (const file of readdirSync(dir).filter((f) => f.endsWith(".yaml"))) {
+      files++;
+      for (const line of readFileSync(join(dir, file), "utf8").split("\n")) {
+        const m = /^(position|falsifier|missing_actor): (.*)$/.exec(line);
+        if (!m) continue;
+        const v = m[2]!;
+        if (v.startsWith("|") || v.startsWith(">")) {
+          folded++;
+          continue;
+        }
+        if (v.startsWith('"') || v.startsWith("'")) {
+          quoted++;
+          continue;
+        }
+        plain++;
+        if (/\S: /.test(v)) offenders.push(`${run}/${file} ${m[1]}`);
+      }
+    }
+  }
+  assert.equal(files, 39, "the recorded corpus changed size; re-count before trusting the rest of this test");
+  assert.deepEqual({ plain, quoted, folded }, { plain: 106, quoted: 11, folded: 0 });
+  assert.deepEqual(offenders, [], "a recorded artifact now carries the backlog 87 defect unquoted, so the luck has run out");
+});

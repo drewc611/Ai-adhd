@@ -33,6 +33,11 @@ yet enough to know whether they work.
 3. **Same fixture, different seed.** Run 001 at seed 2 and seed 3. If the frame set is the
    mechanism, the findings should survive a reshuffle; if they are seed artifacts, that is the
    most important thing this repo could learn about itself.
+   **Seed 2 is recorded. Seed 3 was dispatched on 2026-09-14 as run `20260914223732-7e664e` and
+   aborted at critique under D30 before any scoring; the cause is item 87 and it is not a seed
+   finding. Five branches returned, 262,788 tokens spent, nothing scored. Two things were learned
+   anyway and both are below: what the reseed can actually vary (item 89), and the first
+   observation bearing on D4's launch-permit claim (item 90).**
 4. **Same fixture, same seed, different day.** Run-to-run variance with everything fixed.
    Establishes the noise floor against which every other comparison is read.
 5. ~~**Critic self-consistency.** Score one artifact pack twice with two fresh critics and
@@ -933,6 +938,86 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Three defects turned up on the way and none were in the figures: D26 had missed `train_lstm.py`,
     `score_heldout.py` held two models at once and was OOM-killed, and two ReDoS bounds let quadratic
     blowup through. All three surfaced only because the run actually ran.**
+
+87. **The output contract cannot hold prose in its plain-scalar fields, and under D30 that ends a
+    run.** Three of the five branches in run `20260914223732-7e664e` returned YAML that will not
+    parse, all for the same reason: `falsifier` and `missing_actor` are specified as plain scalars
+    and each branch wrote a second `: ` inside the value. DOOR_KEEPER wrote "A second, equally cheap
+    falsifier: the would-have-retried counter", LEDGER wrote "Cheaper still: find one production
+    incident report", FRAME_BREAKER wrote "Equally falsifying: if deadline-exceeded work is a
+    rounding error". Each becomes a nested mapping in a compact mapping and the parser refuses it.
+    ACTOR_CENSUS and MINIMALIST parse only because neither happened to punctuate that way.
+
+    This is a defect in `prompts/branch.md`, not in the branches. `reasoning` is specified as a
+    block scalar and is safe at any length with any punctuation; `position`, `falsifier` and
+    `missing_actor` are the three free-text fields specified without one, and a colon-space
+    anywhere in them is fatal.
+
+    Every artifact in the eleven recorded runs parses, and counting them says why. Across 39 branch
+    artifacts there are 117 values in those three fields. **None is folded. 106 are bare plain
+    scalars and not one carries an internal `: `.** That is the whole of the protection: eleven runs
+    of coincidence, broken on the twelfth by three branches at once. The remaining 11 values are
+    quoted, which is the other way out, and exactly one of them needed to be — `001-seed2`'s
+    ACTOR_CENSUS falsifier opens "Look at the inbound path for one hour of real traffic: if no
+    caller sends a deadline". So quoting happens, unprompted, in 9% of values. It is a habit some
+    branches have and not a property the contract secures, and that is the sharpest evidence that
+    the contract is at fault: it shows these fields as bare `<placeholder>` text and branches copy
+    the shape they are shown.
+
+    D30's own record priced this as "one flaky subagent now ends a run that has already paid for
+    four branches". The first real run after the decision lost three branches out of five to a
+    systematic cause, and the run aborted having paid for all five. The decision is not wrong — an
+    artifact that will not parse shows nothing, and scoring the parseable subset would score under
+    an undeclared rule — but its cost estimate assumed independent flakiness and this is not that.
+    At the observed rate a run of five aborts more often than it completes.
+
+    Three candidate fixes, none of them free, and the choice is the owner's because it changes the
+    product: specify the three fields as block scalars in the contract, which makes them safe and
+    changes the brief every recorded run was produced under; keep the contract and quote the values,
+    which pushes the same requirement onto the branch and will be forgotten the same way; or parse
+    the three fields leniently in `validate.ts`, which keeps every recorded run comparable and puts
+    a YAML-shaped guess in the validator, which is how a parser stops being a contract. The middle
+    option is the weakest: it is what the contract already implies and three branches out of five
+    did not do it.
+88. **`TaskList` is not a launch permit in every host, and in at least one it is not a launch permit
+    at all.** D4 grants `adhd-branch`, `adhd-critic` and `adhd-deepen` exactly one tool, `TaskList`,
+    on the reasoning that the host refuses to launch an agent with zero tools. Attempting to spawn
+    `adhd-branch` in a Claude Code remote session refuses with "would be spawned with zero tools —
+    refusing. Its tools list resolved to nothing: recognized but matched no tools in this session
+    [TaskList]". The name is recognised and resolves to nothing, so the permit buys nothing and the
+    three agents cannot be dispatched. Loading `TaskList` into the parent session first does not
+    change it; subagent grants resolve against a fixed set that excludes it.
+
+    `adhd-branch-search` launches in the same session without complaint and reports exactly
+    `WebSearch, WebFetch` when asked what it holds. So the plugin agents are not broadly untestable
+    and item 54 overstates it: the two web tools resolve, and the failure is specific to the one
+    tool D4 chose precisely because it does nothing. D4 already names the remedy shape — "if it
+    turns out to leak, the fix is a different launch permit, not a weaker rule" — and this is the
+    neighbouring case, where it does not leak because it does not load.
+
+    Picking the replacement is a decision and not a small one, because the permit has to resolve in
+    every host the plugin ships to and this repository can observe one. `ListAgents` is the worst
+    candidate available and worth naming as such: it resolves, it is read-only, it touches no file —
+    and it enumerates sibling agents, which is the one thing the architecture exists to prevent.
+    Any permit chosen on D4's stated criteria alone can be that.
+89. **A reseed of fixture 001 cannot change its frame set, so item 3 measures less than it reads
+    like it does.** `design_decision` lists exactly five primary frames and `n` resolves to five, so
+    every seed selects all of them and the shuffle only permutes dispatch order. Seed 1 ran
+    LEDGER, MINIMALIST, DOOR_KEEPER, ACTOR_CENSUS, FRAME_BREAKER; seed 2 ran ACTOR_CENSUS,
+    DOOR_KEEPER, MINIMALIST, FRAME_BREAKER, LEDGER; seed 3 compiled ACTOR_CENSUS, DOOR_KEEPER,
+    LEDGER, FRAME_BREAKER, MINIMALIST — the same five, three times. E1a's finding that
+    `001/human_cancel` survived a whole new frame set but not a reseed is therefore a statement
+    about dispatch order and branch sampling, not about frame composition, and `001-altframes` is
+    the only recorded run that varies which frames appear. Worth stating in `docs/EXPERIMENTS.md`
+    where E1a is registered, because the pair of results reads as stronger than it is.
+90. **First observation bearing on D4's untested isolation claim, and it is indirect.** All five
+    branches of run `20260914223732-7e664e` were dispatched as `general-purpose`, as all eleven
+    recorded runs were, which grants the filesystem tools D4 forbids. Every one of the five returned
+    with `tool_uses: 0`. So the grant D4 refuses went unused by every branch that held it, under a
+    brief that told each of them "You have no tools. Everything you need is in this brief." That is
+    evidence that the instruction carries, and it is not evidence about `TaskList`, which is the
+    claim D4 actually flags as argued rather than demonstrated. Item 88 is why that one still cannot
+    be checked here.
 
 ## Not doing, and why
 
