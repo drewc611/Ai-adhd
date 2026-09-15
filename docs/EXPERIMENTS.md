@@ -1194,3 +1194,91 @@ rather than overstates is worth knowing and is not evidence against E8.
 **What this does not rescue.** The 5.516x against the shipped n-gram is untouched: that pair needed no
 restriction, because both models already sat at the same 0.915101% out-of-vocabulary. D28's headline
 stands as measured.
+
+## E10. Does a finding survive a frame set the seed actually changed?
+
+**Registered 2026-09-15, before the runs. Backlog item 91.**
+
+E1a set out to ask whether a finding is a property of the frame library or of one draw, and could
+not: `design_decision` lists five primaries and resolves `n` to five, so a reseed of fixture 001
+permutes dispatch order and nothing else. Every frame is dispatched at every seed. E1b changed the
+frame set by naming one explicitly, which answers a different question — a hand-picked set is not
+a set the machinery would ever choose.
+
+`enumerate_options` is the only class where the two come apart. Nine primaries, `n: 7`, so the
+seeded shuffle drops two and which two is the seed's. Fixture 014 is the only fixture routed there.
+Compiled at four seeds without spending anything, it draws:
+
+| seed | dropped |
+|---|---|
+| 14 | `MECHANIC`, `MINIMALIST` |
+| 1 | `DOOR_KEEPER`, `FRAME_BREAKER` |
+| 2 | `FRAME_BREAKER`, `MINIMALIST` |
+| 3 | `FRAME_BREAKER`, `MECHANIC` |
+
+**The cells.** Seed 14 and seed 1. They share five frames — `ACTOR_CENSUS`, `LEDGER`,
+`NIGHT_OPERATOR`, `PARTICULARIST`, `SABOTEUR` — and swap two in each direction, which is the widest
+contrast available and the only pair among these four with no overlap in what it drops.
+
+**The assertions were written first and they were written from the problem.** Fixture 014 had none:
+it was a compile-only fixture asserting the wide path dispatches seven branches on seven axes. Five
+`must_surface` items were added in the commit that registers this experiment and before either run.
+They come from asking what a good answer to "our cron job started overlapping with itself" has to
+contain, not from reading the frame roster: why it started overlapping (`why_it_started`), what
+happens to the run a lock skips (`the_skipped_work`), that a job outrunning its period is on the
+wrong scheduler rather than missing a lock (`not_a_lock_problem`), whether a half-finished shell-out
+is safe to restart (`the_half_finished_run`), and that a job which silently skips looks healthy from
+outside (`who_notices`).
+
+### The predictions, so the result can be wrong
+
+Fixing which frame carries which item is the experiment. A prediction that names the frame *and* the
+direction is falsifiable in a way "the frame set matters" is not.
+
+| item | predicted carrier | holds at seed 14 | holds at seed 1 |
+|---|---|---|---|
+| `not_a_lock_problem` | `FRAME_BREAKER` | **yes** | **no** |
+| `the_half_finished_run` | `DOOR_KEEPER` | **yes** | no, or weakly via `SABOTEUR` |
+| `why_it_started` | `MECHANIC` | no, or weakly via `PARTICULARIST` | **yes** |
+| `the_skipped_work` | `MINIMALIST` | no | **yes** |
+| `who_notices` | `NIGHT_OPERATOR`, in both | yes | yes |
+
+`who_notices` is the control: `NIGHT_OPERATOR` is dispatched at both seeds, so an item it carries
+should hold at both, and if it misses at one the reading is session variance and not the frame set.
+
+### What would make this uninterpretable, stated now
+
+**Item 4 is the reason this section exists.** A same-seed repeat of fixture 001 moved the prune set
+from two of five to none of five with everything else held, so two runs differing by seed differ by
+session as well, and reading the whole difference as the frame set is the exact mistake E1a made.
+
+So only one class of reading is clean here, and it is clean for a mechanical reason rather than a
+statistical one: **a frame that was not dispatched cannot produce anything.** If
+`not_a_lock_problem` misses at seed 1 and the artifacts show `FRAME_BREAKER` absent, the miss is the
+frame set with certainty, because no sampling could have rescued it. That is the same form E1b
+established for `retry_cost`, and it is the only form two runs can support.
+
+Everything else is confounded and will be reported as confounded:
+
+- An item holding at both seeds says the frame set did not remove it. It does not say the frame set
+  is irrelevant, only that this pair does not test it.
+- An item missing at both says nothing in either set asks that question, which is a frame-library
+  gap of the kind fixture 002 found and not a seed result.
+- A **prune set** difference between the two runs is not readable at all. Item 4 measured that
+  quantity as unstable at n=1 with the seed held, so at different seeds it carries no information.
+- A **pass A** difference under 0.05 is inside the measured session floor and is not a seed effect.
+
+### Fixed readings
+
+- **If a predicted carrier is dispatched and the item still misses**, the prediction about that
+  frame was wrong and the frame does not reliably produce that question. That is a finding about the
+  frame library and it is recorded as one, not explained away.
+- **If an item holds at a seed whose predicted carrier was dropped**, another frame produces it,
+  and which one is named from the artifacts. That is evidence the library is more redundant than the
+  axis list suggests, and it belongs in D6's file rather than here.
+- **If `who_notices` misses at exactly one seed**, the control failed, this pair cannot separate
+  frame set from session on any item, and the experiment needs a same-seed replicate before
+  anything above is read.
+- **Two new scored runs join the corpus either way.** That is not the point of the experiment, but
+  `committal`'s interval (backlog 98) and every rate in `frames --health` are thin enough that it
+  is worth saying the runs count for something even if the predictions all fail.

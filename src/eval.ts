@@ -319,12 +319,24 @@ export function runEval(cfg: Config, opts: { fixturesDir?: string; recordedDir?:
       pairs.push(evaluateGate(cfg, fx));
       continue;
     }
-    if (fx.expect.compiles && !fx.must_surface.length) {
+    const runs = recorded.filter((d) => d.startsWith(`${fx.id}-`) || d === fx.id);
+    /*
+     * A fixture's compile expectations do not need a run, so they are checked whenever there is no
+     * run to check instead. Fixture 014 found this: it carried `branches_expected: 7` and
+     * `distinct_axes`, gained pre-registered `must_surface` items under E10 before the run those
+     * items are for existed, and silently stopped reporting the two compile checks it was built
+     * around — "no recorded runs" reads as nothing to say, not as a check that went away. Writing
+     * assertions before the run is the discipline this repo asks for, so the window between the
+     * two has to stay covered.
+     */
+    if (fx.expect.compiles && (!fx.must_surface.length || !runs.length)) {
       pairs.push(evaluateCompiles(cfg, fx));
+      if (!runs.length) continue;
+    }
+    if (!runs.length) {
+      without.push(fx.id);
       continue;
     }
-    const runs = recorded.filter((d) => d.startsWith(`${fx.id}-`) || d === fx.id);
-    if (!runs.length) without.push(fx.id);
     for (const d of runs) pairs.push(evaluatePair(fx, loadRecorded(join(recordedDir, d))));
   }
   return { pairs, fixtures_without_runs: without, ok: pairs.every((p) => p.ok) };

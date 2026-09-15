@@ -45,6 +45,72 @@ why: |
   what `enumerate_options` is for and it is also the combination most likely to produce a
   monoculture, so the run this fixture is waiting for may say something about fixture 012 as well.
 
+must_surface:
+  - id: why_it_started
+    trap: T1
+    description: |
+      The job did not always overlap, so something crossed a line: the data grew, the script got
+      slower, the window got tighter, a dependency started taking longer. An answer that reaches
+      straight for mutual exclusion has treated a changed runtime as a missing lock. Registered
+      before any run of this fixture, as E10 requires.
+    any_of:
+      - "(why|what) (it |they |the job )?(started|began|changed|now)"
+      - "(runtime|duration|takes longer|slower|grew|growing|got slower)"
+      - "(exceeds?|exceeded|longer than|outgrown|outgrew|past) (the |its )?(interval|period|schedule|window|cadence)"
+      - "(data|volume|backlog|input|table|queue) (has )?(grew|grown|growing|increased|got bigger)"
+      - "when did (it|this) start"
+  - id: the_skipped_work
+    trap: T7
+    description: |
+      A lock makes the second invocation exit, and the work that invocation would have done is
+      dropped or deferred. An answer that stops at "take a lock" has silently chosen one of those
+      and told nobody which.
+      Registered before any run of this fixture.
+    any_of:
+      - "(skip|skipped|skipping|dropped|drops|lost|discard) (that |the |a |this )?(run|invocation|tick|execution|cycle|work)"
+      - "(catch|catches|catching) up"
+      - "(defer|deferred|queued|enqueue|backlog) (the |that |it)"
+      - "(never|not) (run|runs|executed|processed)"
+      - "silently (skip|exit|return|do nothing)"
+  - id: not_a_lock_problem
+    trap: T2
+    description: |
+      A job whose duration exceeds its period is not a job missing a lock; it is a job on the wrong
+      scheduler. Someone has to reject the framing that this is about preventing concurrency and say
+      the period, the work per run, or cron itself is the thing to change.
+      Registered before any run of this fixture.
+    any_of:
+      - "(wrong|not the right|not a) (tool|scheduler|abstraction|model|question|problem)"
+      - "(queue|worker|daemon|long[- ]running|continuous|event[- ]driven|streaming) (instead|rather than|not)"
+      - "(cron|schedule) is (the|not)"
+      - "stop (using )?cron"
+      - "(reduce|shrink|split|chunk|partition) the work (per|each)"
+      - "(lengthen|widen|increase) the (interval|period)"
+  - id: the_half_finished_run
+    trap: T7
+    description: |
+      A shell-out killed part way through leaves whatever it had already written. Whether a second
+      start, a timeout kill, or a lock takeover is safe depends on whether the script is idempotent
+      or resumable, and that question is not the same as the locking question.
+      Registered before any run of this fixture.
+    any_of:
+      - "idempoten"
+      - "(partial|half|part)[- ](written|finished|complete|done|way)"
+      - "(resume|resumable|restart|rerun|re-run) (safely|the job|it|from)"
+      - "(kill|killed|killing|terminate|terminated|SIGKILL|SIGTERM)[^.]{0,60}(mid|part|while|during)"
+      - "(stale|orphan|leftover) (lock|lockfile|pid|file|state)"
+  - id: who_notices
+    trap: T6
+    description: |
+      An overlapping job that starts silently skipping looks exactly like a healthy one from
+      outside. Someone other than the person writing the fix is named as needing to see it.
+      Registered before any run of this fixture.
+    any_of:
+      - "(alert|alerting|page|paged|pager|on[- ]call|monitor|monitoring|observab)"
+      - "(nobody|no one|no-one) (notices|knows|sees|would notice)"
+      - "(looks|appears|seems) (healthy|fine|normal|green|successful)"
+      - "(operator|sre|ops|whoever runs|the team that)"
+
 expect:
   compiles: true
   branches_expected: 7
