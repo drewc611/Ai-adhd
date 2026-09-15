@@ -122,8 +122,11 @@ test("assertion history reports which runs held each item, matching the recorded
   const h = assertionHistory(cfg);
   const row = (f: string, i: string) => h.rows.find((r) => r.fixture === f && r.item === i)!;
 
-  // E1a: human_cancel survived a whole new frame set but not a reseed.
-  assert.deepEqual(row("001", "human_cancel").passing.sort(), ["001-altframes", "001-first-run"]);
+  // E1a: human_cancel survived a whole new frame set but not a reseed — and seed 3 put it back,
+  // so it holds on three runs of four and seed 2 was the unlucky draw rather than seed 1 the lucky
+  // one. The registered reading ("one sample, not the frame set") is confirmed for this item and
+  // its sign is the opposite of what the seed 2 recording implies on its own.
+  assert.deepEqual(row("001", "human_cancel").passing.sort(), ["001-altframes", "001-first-run", "001-seed3"]);
   assert.deepEqual(row("001", "human_cancel").failing, ["001-seed2"]);
   // E1b: retry_target_questioned survived a reseed but not the frame swap.
   assert.deepEqual(row("001", "retry_target_questioned").failing, ["001-altframes"]);
@@ -133,8 +136,12 @@ test("assertion history reports which runs held each item, matching the recorded
   // `payer` and `priced in` were registered first and adopted after the negative control failed
   // both. `retry budget` cleared the control and was refused anyway: a currency with no payer, and
   // this item asks for both, which is why altframes is still failing.
-  assert.deepEqual(row("001", "retry_cost").passing.sort(), ["001-first-run", "001-seed2"]);
+  // Three seeds, three passes, and the only miss is the run that changed the frames — so this is a
+  // frame-set dependency and not sample variance, which is the cleanest form E1b's supersession
+  // of E1a could take.
+  assert.deepEqual(row("001", "retry_cost").passing.sort(), ["001-first-run", "001-seed2", "001-seed3"]);
   assert.deepEqual(row("001", "retry_cost").failing, ["001-altframes"]);
+  assert.deepEqual(row("001", "retry_target_questioned").passing.sort(), ["001-first-run", "001-seed2", "001-seed3"]);
   // The frame-set gap that 004 is recorded as failing on.
   assert.deepEqual(row("004", "false_means").passing, []);
 
@@ -161,7 +168,7 @@ test("the gate catches an assertion that stops holding on a run it used to hold 
   const g = regressionGate(cfg, { fixturesDir: s.fixtures, recordedDir: s.recorded });
   assert.equal(g.regressions.length, 1);
   assert.equal(g.regressions[0]!.item, "human_cancel");
-  assert.deepEqual(g.regressions[0]!.now_failing.sort(), ["001-altframes", "001-first-run"]);
+  assert.deepEqual(g.regressions[0]!.now_failing.sort(), ["001-altframes", "001-first-run", "001-seed3"]);
   assert.match(g.text, /^REGRESSION\s+001\/human_cancel/m);
 });
 

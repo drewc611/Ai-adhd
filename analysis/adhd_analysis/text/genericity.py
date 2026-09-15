@@ -32,7 +32,7 @@ from pathlib import Path
 
 import yaml
 
-from ..corpus import Corpus, _forwarder
+from ..corpus import Corpus, _forwarder, load_artifact
 from ..resample import permutation_test
 from .ngram import KneserNey
 from .tokenize import tokens
@@ -59,7 +59,9 @@ class Scored:
 
 
 def artifact_text(path: Path) -> str:
-    doc = yaml.safe_load(path.read_text()) or {}
+    # `load_artifact` tolerates a markdown fence, which a branch's final message may carry and the
+    # host writes unedited. See its docstring: a fenced recording used to break this side only.
+    doc = load_artifact(path)
     return "\n".join(str(doc.get(f, "")) for f in SCORED_FIELDS)
 
 

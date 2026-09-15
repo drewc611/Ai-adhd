@@ -30,14 +30,24 @@ yet enough to know whether they work.
 2. ~~**Negative controls for 002, 003, 004.** Only 001 has a linear-CoT control. Without one per
    fixture, a passing run has nothing to beat.~~
    **Built. One linear-CoT control per fixture.**
-3. **Same fixture, different seed.** Run 001 at seed 2 and seed 3. If the frame set is the
+3. ~~**Same fixture, different seed.** Run 001 at seed 2 and seed 3. If the frame set is the
    mechanism, the findings should survive a reshuffle; if they are seed artifacts, that is the
-   most important thing this repo could learn about itself.
-   **Seed 2 is recorded. Seed 3 was dispatched on 2026-09-14 as run `20260914223732-7e664e` and
-   aborted at critique under D30 before any scoring; the cause is item 87 and it is not a seed
-   finding. Five branches returned, 262,788 tokens spent, nothing scored. Two things were learned
-   anyway and both are below: what the reseed can actually vary (item 89), and the first
-   observation bearing on D4's launch-permit claim (item 90).**
+   most important thing this repo could learn about itself.~~
+   **Done. Both seeds recorded. The first attempt at seed 3 (`20260914223732-7e664e`) aborted at
+   critique under D30 with three of five artifacts unparseable — that is item 87, resolved as D37 —
+   and the second (`20260915013807-7e664e`) completed and is recorded as `001-seed3`.**
+
+   **The answer is that the two kinds of dependency are separable, and the original reading had them
+   the wrong way round.** `human_cancel` holds at seeds 1 and 3 and under a new frame set, and
+   missed only seed 2: sample variance, with seed 2 the outlier rather than seed 1 the fluke.
+   `retry_cost` and `retry_target_questioned` hold on all three seeds and miss only where the frames
+   changed: frame-set properties. What actually fails at seed 3 is
+   `pruned_traps_include_any T1,T2,T3`, which has now held on one run of four. Full amendment in
+   `docs/EXPERIMENTS.md` under E1a.
+
+   **Read it with item 89 in hand**: a reseed of this fixture cannot change its frame set, so the
+   frame-set column is one run. The experiment the item's title describes still wants
+   `enumerate_options`, which is item 91.
 4. **Same fixture, same seed, different day.** Run-to-run variance with everything fixed.
    Establishes the noise floor against which every other comparison is read.
 5. ~~**Critic self-consistency.** Score one artifact pack twice with two fresh critics and
@@ -1124,11 +1134,17 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     the run procedure does exactly that before any spend — so the next real run answers this whether
     or not anyone sets out to. Record what it says either way: a permit that does not resolve is the
     same failure D36 exists to fix, one name later.
-94. **Re-run seed 3 under the folded contract.** The abort that produced items 87 through 91 spent
+94. ~~**Re-run seed 3 under the folded contract.** The abort that produced items 87 through 91 spent
     262,788 tokens and scored nothing. D37 removes the cause, so the run item 3 asks for is available
     again, and item 91 is the argument for spending it on a fixture routed to `enumerate_options`
     instead — that is the only class where a reseed changes the frame set, and 001 is not it. Either
-    way it is spend, so it is the owner's call under D5.
+    way it is spend, so it is the owner's call under D5.~~
+    **Done, on 001 rather than `enumerate_options`, because the first job was to show D37 works.**
+    Recorded as `001-seed3`, 485,412 tokens. Critique reported 5 valid artifacts and 0 contract
+    violations at the phase the previous attempt aborted in, and one branch wrote
+    `isolation: under this position` inside a `forecloses` item — the exact construct that aborted
+    it. D37 is demonstrated rather than argued. Item 91 is still the argument for the
+    `enumerate_options` run, which has not happened.
 
 95. **The critic contract has the defect D37 just fixed in the branch contract.** `prompts/critic-pass-a.md`
     shows each cell as `{ score: <0-3>, evidence: <one sentence> }`, a flow mapping with the evidence
@@ -1149,6 +1165,21 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     is that quoting inside `{ }` is the only option the syntax leaves, so the argument that beat it
     there does not apply. Worth doing before the next real run, and it is a contract change, so it
     wants a D-number.
+
+96. **The Python analysis could not read a fenced artifact and the TypeScript side could.** A branch
+    returns its artifact as its final message and the host writes that message unedited, so an
+    artifact may arrive wrapped in a ```` ```yaml ```` fence. `src/validate.ts` has always stripped
+    one. `adhd_analysis` did not, and `001-seed3` is the first recording to carry a fence, so the
+    entire Python suite errored — `found character '`' that cannot start any token` — while all 476
+    TypeScript tests stayed green.
+
+    Fixed by teaching the Python loader the same tolerance rather than by unfencing the recording,
+    because the recording is what the branches actually returned and that is the property the corpus
+    exists to preserve. What is left open is the asymmetry itself: two loaders, two notions of what
+    an artifact is, and nothing that fails when they disagree. A test that round-trips one artifact
+    through both would have caught this before a run did. Worth building; it is the same shape as
+    the `comparable_heldout` and `comparable_training` guards, which exist because a claim that
+    nothing checks is a claim that drifts.
 
 ## Not doing, and why
 

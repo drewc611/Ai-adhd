@@ -1,11 +1,13 @@
-# What eleven runs show
+# What twelve runs show
 
 A short account of what this repository has actually established, written so the negative results
 are as easy to find as the rest. Every number below comes from a command in this checkout and is
 pinned by a test; the commands are named so you can rerun them.
 
-Backlog item 49 asked for this at five runs. There are eleven now, seven with a `score.json`, and
-the extra six did not change the shape of the answer.
+Backlog item 49 asked for this at five runs. There are twelve now, eight with a `score.json`, and
+the extra seven did not change the shape of the answer — with two exceptions, both from the twelfth
+run and both named where they belong: it is the first contested decision the rubric actually
+separates, and the first run to come in under the token estimate it was quoted.
 
 ## The claim
 
@@ -21,7 +23,7 @@ in-context divergence technique is built on exactly that (D2).
 
 ## Method
 
-Eleven recorded runs over four fixtures, each fixture carrying `must_surface` assertions written
+Twelve recorded runs over four fixtures, each fixture carrying `must_surface` assertions written
 before the run and a linear chain-of-thought control. The mechanics — verbatim passthrough,
 `problem_hash`, blind pass A, the pruned block — are enforced by 476 tests rather than by
 inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
@@ -67,9 +69,14 @@ any `T[1-8]` anywhere in the pruned block.
 
 **The recommendation is a near-tie the rubric does not settle.** `adhd learn --sensitivity` reports
 that no shipped representative changes under any single-dimension weight move of ±1 — which reads
-as stability until you read the next line. All 4 contested decisions were settled by two anchor
-points or fewer out of 48, and two of them by exactly one. The representatives are not stable
-because the rubric is decisive; they are close enough that any of them could ship.
+as stability until you read the next line. 4 of the 5 contested decisions were settled by two anchor
+points or fewer, and two of them by exactly one. Those representatives are not stable because the
+rubric is decisive; they are close enough that any of them could ship.
+
+The fifth is `001-seed3`, where `DOOR_KEEPER` beat `MINIMALIST` by 0.1042 — four to five anchor
+points — and it is the first contested decision in the corpus the rubric actually separates. One
+case out of five is not a reversal of the paragraph above, and it is the first evidence that the
+narrowness is a property of particular packs rather than of the rubric.
 
 **Two critics scoring the same pack rank it differently every time.** `adhd learn
 --agreement-all`, pooled over 5 runs and 225 scored cells: 79% exact agreement, 100% within one
@@ -93,7 +100,7 @@ noise from signal, so every single-run number here — including the flattering 
 against a noise floor nobody has measured. `adhd diff` says so in place, on every comparison it
 prints, rather than leaving the reader to remember.
 
-Eleven runs over four fixtures is an existence proof that the machinery runs and the controls lose.
+Twelve runs over four fixtures is an existence proof that the machinery runs and the controls lose.
 It is not evidence that the frame library picks better answers than one careful pass, and no
 sentence in this repository should be read as claiming it does.
 

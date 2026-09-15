@@ -20,6 +20,29 @@ from pathlib import Path
 
 import yaml
 
+def unfence(text: str) -> str:
+    """Strip a markdown code fence around a YAML document, as `unfence` does in src/validate.ts.
+
+    A branch returns its artifact as its final message and the host writes that message unedited,
+    so an artifact may arrive wrapped in ```yaml ... ```. The TypeScript validator has always
+    tolerated that; this side did not, and `001-seed3` — the first recording to carry a fence —
+    broke every analysis that reads an artifact while the whole TypeScript suite stayed green.
+    Tolerating it here rather than editing the recording keeps the artifact byte-identical to what
+    the branch actually returned, which is the property the corpus exists to preserve.
+    """
+    s = text.lstrip()
+    if not s.startswith("```"):
+        return text
+    body = s.split("\n", 1)[1] if "\n" in s else ""
+    end = body.rfind("```")
+    return body[:end] if end != -1 else body
+
+
+def load_artifact(path: Path):
+    """Parse a recorded artifact, fenced or not."""
+    return yaml.safe_load(unfence(path.read_text())) or {}
+
+
 # Raters are files, in this order. `pass-a.yaml` is the one that shipped; the rest were scored
 # later from the same blind brief, by fresh critics instructed to read no other file.
 RATER_FILES = ["pass-a.yaml", "pass-a.rater2.yaml", "pass-a.rater3.yaml", "pass-a.rater4.yaml"]
@@ -124,7 +147,7 @@ def load(root: str | Path = ".") -> Corpus:
             p = run_dir / "critic" / name
             if not p.exists():
                 continue
-            doc = yaml.safe_load(p.read_text())
+            doc = load_artifact(p)
             for letter, row in (doc.get("scores") or {}).items():
                 for dim, cell in row.items():
                     scores[(run, rater, letter, dim)] = int(cell["score"])

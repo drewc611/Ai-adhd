@@ -1,0 +1,19 @@
+{
+  "tokens": 485412,
+  "wall": "1930s from compile",
+  "reported_tasks": 9,
+  "of_tasks": 9,
+  "by_phase": {
+    "diverge": 285272,
+    "critique_a": 69374,
+    "critique_b": 13296,
+    "deepen": 117470
+  },
+  "by_frame": {
+    "LEDGER": 57820,
+    "ACTOR_CENSUS": 59824,
+    "DOOR_KEEPER": 57845,
+    "FRAME_BREAKER": 54937,
+    "MINIMALIST": 54846
+  }
+}

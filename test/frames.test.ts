@@ -417,12 +417,19 @@ test("a frame hash covers what a branch is asked to do, and not what the frame i
   assert.notEqual(frameHash({ ...f, tools: ["WebSearch"] } as typeof f), base);
 });
 
-test("a run recorded before the stamp is unknown, which is not unchanged", () => {
-  // Assuming the corpus matches would invent the fact the report exists to establish.
+test("a run recorded before the stamp is unknown, which is not unchanged, and a stamped one is neither", () => {
+  // Assuming the corpus matches would invent the fact the report exists to establish. Every run
+  // recorded before `frame_hash` was stamped reads `null`, and until `001-seed3` that was all of
+  // them — this test asserted it of every row. That run is the first carrying the stamp, so it
+  // reads `false`, unchanged, on evidence rather than by assumption. Nothing reads `true`.
   const d = frameDrift(cfg);
   assert.deepEqual(d.changed, []);
   assert.ok(d.unknown.length >= 35, `only ${d.unknown.length} branches read as unknown`);
-  for (const r of d.rows) assert.equal(r.changed, null);
+
+  const stamped = d.rows.filter((r) => r.changed !== null);
+  assert.ok(stamped.length > 0, "no recorded run carries a frame_hash, so the stamp is not being written");
+  for (const r of stamped) assert.equal(r.changed, false, `${r.run}/${r.frame} reads as changed`);
+  for (const r of d.rows.filter((r) => !stamped.includes(r))) assert.equal(r.changed, null);
   assert.match(d.text, /unknown is not unchanged/);
 });
 

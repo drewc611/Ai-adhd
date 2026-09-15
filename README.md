@@ -77,28 +77,39 @@ What it never surfaces:
 That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
 the whole system. If a run only returns the timeout triple, the run failed.
 
-**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the three real
-recorded runs of this fixture it has passed once — in the run it was written against.
+**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the four real
+recorded runs of this fixture, every one of its four `must_surface` items has missed at least once
+except the one that asks least.
 
-| assertion | seed 1 | seed 2 | alt frames | rate |
-|---|---|---|---|---|
-| the human who can cancel | ok | **miss** | ok | 2/3 |
-| the retry target questioned | ok | ok | **miss** | 2/3 |
-| who pays for the retry | ok | ok | **miss** | 2/3 |
-| a trap named | ok | ok | ok | 3/3 |
+| assertion | seed 1 | seed 2 | seed 3 | alt frames | rate |
+|---|---|---|---|---|---|
+| the human who can cancel | ok | **miss** | ok | ok | 3/4 |
+| the retry target questioned | ok | ok | ok | **miss** | 3/4 |
+| who pays for the retry | ok | ok | ok | **miss** | 3/4 |
+| a trap named | ok | ok | ok | ok | 4/4 |
 
-**The four assertions have different dependencies, and that is the finding.** An earlier version of
-this paragraph explained the seed-2 misses away as a quirk of one sample rather than anything to do
-with the frame library, and E1b contradicted it. E3 then found that one of the two was neither: *who
-pays for the retry* had missed at seed 2 because the assertion's patterns only recognised seed 1's
-wording. `LEDGER` priced retries as a share of traffic and the critic's own detector output named the
-payer; the regexes wanted "pays for" and got "payer". Widening a pattern after seeing which runs
-failed is the move this repo refuses, so E3 registered the candidates and the adoption rule first and
-let the negative control decide. Two of three were adopted. The third, `retry budget`, cleared the
-control and was refused anyway: it matches a currency with no payer, and this item asks for both.
+**The four assertions have different dependencies, and seed 3 makes the split clean.** The two
+retry items hold on all three seeds and miss only when the frames change, which is a frame-set
+dependency: `LEDGER` and `ACTOR_CENSUS` carry them and `alt frames` dispatches neither. *The human
+who can cancel* does the opposite — it holds under a different frame set and missed one reseed out
+of three, which is sample variance, and seed 2 was the unlucky draw rather than seed 1 the lucky one.
+An earlier version of this paragraph read the seed-2 misses as "one sample, not the frame library"
+for both items; that was right about one and wrong about the other, and it took two more runs to
+separate them.
 
-*The human who can cancel* survived the frame swap and not the reseed, so for that one the sample
-reading holds. Nothing here is at 3/3 except the assertion that asks least.
+E3 is why *who pays for the retry* reads 3/4 rather than 2/4. It had missed at seed 2 only because
+the assertion's patterns recognised seed 1's wording: `LEDGER` priced retries as a share of traffic
+and the critic's own detector output named the payer, while the regexes wanted "pays for" and got
+"payer". Widening a pattern after seeing which runs failed is the move this repo refuses, so E3
+registered the candidates and the adoption rule first and let the negative control decide. Two of
+three were adopted. The third, `retry budget`, cleared the control and was refused anyway: it matches
+a currency with no payer, and this item asks for both.
+
+**What fails at seed 3 is not a `must_surface` item at all.** It is the structural expectation that
+the pruned block names one of T1, T2 or T3. Only T7 fired, on `FRAME_BREAKER` and `ACTOR_CENSUS`.
+That expectation has now held on exactly one run out of four — the one it was written against — which
+makes it the seed-1 artifact this table was originally reaching for, and the assertion most worth
+re-reading before the next run.
 
 The audit reports these rates rather than leaving them to prose, and a `sometimes` verdict is not a
 pattern to loosen: it says nothing in the dispatched set reliably asks that question. The only

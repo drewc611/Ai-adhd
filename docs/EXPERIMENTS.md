@@ -107,6 +107,50 @@ frame set; they were one sample.
 > Left standing rather than rewritten, per this file's own rule — a registered reading that turned
 > out half right is worth more than a tidy one.
 
+### E1a result amended by seed 3, 2026-09-15
+
+Recorded as `evals/recorded/001-seed3`. A third seed on the same frame set, and it separates the two
+items cleanly.
+
+| assertion | seed 1 | seed 2 | seed 3 | alt frames | rate | depends on |
+|---|---|---|---|---|---|---|
+| `human_cancel` | ok | **miss** | ok | ok | 3/4 | the sample |
+| `retry_cost` | ok | ok | ok | **miss** | 3/4 | the frame set |
+| `retry_target_questioned` | ok | ok | ok | **miss** | 3/4 | the frame set |
+| `trap_named` | ok | ok | ok | ok | 4/4 | — |
+
+**The registered reading holds for `human_cancel`, with its sign reversed.** "It was never a property
+of the frame set; it was one sample" is confirmed — but seed 2 was the outlier, not seed 1. The item
+holds on two of three seeds *and* under a whole new frame set, so the frame library produces it
+reliably and one draw in four missed it. Reading a single reseed as the truth and the original as the
+fluke was the available inference at two runs and it was backwards.
+
+**`retry_cost` and `retry_target_questioned` are frame-set properties, which is stronger than E1b
+could say.** Both hold on all three seeds and miss only where the frames changed. E1b established
+that `retry_cost` was not "one sample"; with a third seed it is positively a property of `LEDGER` and
+`ACTOR_CENSUS` being dispatched, and `alt frames` dispatches neither.
+
+**What actually fails at seed 3 is `pruned_traps_include_any T1,T2,T3`.** Only T7 fired, on
+`FRAME_BREAKER` and `ACTOR_CENSUS`. That expectation has now held on one run out of four — the run it
+was written against — which makes it the seed-1 artifact the original E1a table was reaching for when
+it named the wrong two items.
+
+**Two things this run establishes that are not about E1a**, both first occurrences in the corpus:
+
+- **The token gate held.** Quoted 520,200 under D32, cost 485,412: 0.9x, where all seven runs quoted
+  under the old 156,000 figure cost 2.6x to 3.3x. The "up to" wording is doing what it was changed to
+  do. Diverge ran 57,054 per branch against the 51,000 estimate, 12% over, and the total still came
+  in under because critique and deepen were cheaper than the measured proportions predicted.
+- **The rubric separated a contested decision.** `DOOR_KEEPER` over `MINIMALIST` by 0.1042, four to
+  five anchor points, against four earlier contested decisions at one or two. `docs/WRITEUP.md`'s
+  "close enough that any of them could ship" now covers four cases out of five rather than all of
+  them, which is the first evidence that the narrowness is a property of particular packs rather than
+  of the rubric.
+
+Caveat on the whole comparison, per backlog 89: a reseed of fixture 001 cannot change its frame set,
+because `design_decision` has exactly five primaries at n=5. All three seeds drew the same five and
+varied only dispatch order and sampling. The frame-set column is `001-altframes`, which is one run.
+
 The prune set moved as hard:
 
 | frame | seed 1 | seed 2 |

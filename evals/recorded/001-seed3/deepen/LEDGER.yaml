@@ -1,0 +1,53 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: LEDGER
+verdict: defend
+response: |
+  The objection is right about sequencing and wrong about what the position depends on. It
+  costs the position one foreclosure, not its core.
+
+  1. The bound was never waiting on anyone. A total deadline is enforced entirely inside the
+  calling process: start a clock, subtract elapsed time before each attempt, refuse an attempt
+  that cannot finish inside what remains, cancel at zero. Every one of those operations is
+  local. Nothing upstream has to send a header and nothing downstream has to honour
+  cancellation for the client to stop waiting — a client-side cancel frees the pool slot, the
+  socket and the task whether or not the server keeps working, and the pool slot was the
+  expensive item in the original bill. Propagation changes who chooses the number, not whether
+  a bound exists. So the objection's "cheap version, shipped this afternoon" is not an
+  alternative to this position, it is this position's first step, and I concede that the
+  original wording made inheritance sound like a precondition rather than a later upgrade.
+  The correction is a sequence, not a different plan: ship the local hard deadline today,
+  accept a deadline header when one arrives, ask the dependency's team for an SLO and
+  server-side shedding as the slowest item. Each step is useful alone and none blocks the one
+  before it.
+
+  2. At an edge hop there is still a budget arriving from outside; it is just not carried in a
+  header. The browser or mobile client gives up, the load balancer has an idle timeout, the
+  proxy in front has one, and the interaction has a point past which the user has already
+  left. Those are numbers the asker can read off their own infrastructure config without
+  asking permission. An outbound call whose total deadline exceeds the ALB timeout in front of
+  it is spending capacity on a response that cannot be delivered — the same waste the position
+  was written to price, reached without a single hop diagram.
+
+  3. On p99: the objection is correct that a single p99-derived number encodes a distribution's
+  current shape, and correct that the original falsifier required someone else's logs. But the
+  bimodality is detectable locally and before any cutting. The client already records the
+  duration of every completed call. A histogram of those durations, per route, shows a second
+  mode above the proposed cut if one exists, and it shows it without the dependency's
+  cooperation. That moves the derivation from one global number to a per-route budget: report,
+  batch and cold-path routes get their own, larger, still-bounded deadline, chosen from their
+  own observed second mode. A route with no usable history gets a conservative ceiling from
+  the inherited or infrastructure bound rather than a guess at p99. This is a real cost — it
+  is more work than one constant, and per-route budgets have to be maintained — but it is work
+  the asker can do alone.
+
+  What the objection does overturn is the third foreclosure, which claimed the number is not
+  the client's to choose. It is the client's to choose, unilaterally and immediately; a
+  propagated budget improves the choice rather than authorising it. The ledger entries
+  themselves — held concurrency, retry amplification onto a dependency mid-incident, a slow
+  failure sold as a chance of success — are untouched, and they are what makes the local
+  deadline worth shipping this afternoon.
+revised_position: Set one hard total deadline per request enforced locally today — derived from whatever bound already exists (an inherited deadline header if one arrives, otherwise the proxy, load balancer or user-facing timeout in front of the service), spent down across attempts with per-route budgets sized from the client's own observed completion histogram, at most one retry and only on idempotent calls, and immediate failure when the remaining budget is smaller than one attempt — treating deadline propagation and a server-side SLO as later upgrades that improve the number but are never a precondition for having a bound.
+revised_falsifier: Plot this client's own recorded completion durations per route for one hour of production traffic, before changing any timeout. If a route shows a distinct second mode above the proposed deadline rather than a thinning tail — a report, batch or cold-cache path where minutes is a legitimate success — then a single deadline for that route destroys good work wholesale and the route needs its own budget. If most routes are bimodal, per-route budgeting is unmaintainable and the position is wrong. Confirming against the dependency's success logs sharpens this, but is not required to run it.
+confidence: medium
+```

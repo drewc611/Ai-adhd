@@ -1,0 +1,150 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "ACTOR_CENSUS",
+      "status": "pruned",
+      "cluster": "inherit_and_propagate_a_deadline",
+      "pass_a": 0.8333333333333334,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "The speed-and-cost column belongs to other actors' moves, not to its own; inheriting a deadline, storing absolute instants at every hop, binding disconnect to a real socket abort and discovering the proxy's limit are presented without any cost of being wrong, detection latency, or statement of what it takes to back out, and dynamic config versus a literal is raised only as a fact about the operator."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop choosing timeout constants and make the client take an inherited absolute deadline: read the remaining budget from the inbound request, pass the remainder minus elapsed time to every downstream hop, and wire caller disconnect to a real socket abort.",
+      "forecloses": [
+        "A single tuned read timeout in config. The incident review that ends in \"change 30s to 10s\" is off the table, because there is no longer one number to change.",
+        "Unconditional retries inside the client. A retry becomes legal only when the inherited deadline still has room, so \"always retry twice with backoff\" is ruled out.",
+        "Sharing one client between user-facing calls and background jobs. Work with no caller has no deadline to inherit, so it needs its own separately and explicitly bounded client."
+      ],
+      "falsifier": "Add one counter: on every timeout firing, record whether the caller's connection was still open, and grep the ingress config and the call path for any deadline or remaining-budget value being passed in. If most timeouts fire with the caller already gone (nothing to inherit downstream of a vanished caller) and nothing upstream ever passes a deadline because this is a single edge hop, then there is no budget to propagate and plain constants are correct. One counter and an afternoon.",
+      "missing_actor": "The human at the keyboard, who can press cancel or refresh in under a second at zero cost, orphaning the in-flight request and doubling load on the very upstream the timeout was meant to protect."
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "status": "survivor",
+      "cluster": "ship_a_tight_constant_now",
+      "pass_a": 0.9523809523809523,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set an aggressive default now — 2s connect, 5s per-attempt read, 10s total deadline, no retries yet — ship it behind a config value you can change without a deploy, and spend the first week reading the resulting latency histogram before you commit to any retry or budget-propagation scheme.",
+      "forecloses": [
+        "Any retry policy shipping in this change — no retries at all go in until the idempotency question is answered in writing, which rules out the common \"3 retries with exponential backoff\" default that most HTTP client wrappers arrive with.",
+        "Deriving the timeout from the dependency's published SLA or from a number copied out of another service's config, since the position commits to the dependency's own measured histogram as the only input that decides the value.",
+        "A generous starting value chosen to avoid false failures — 30s or 60s, or the library default — which is the move that keeps the decision comfortable and pushes detection of being wrong out past the first traffic peak.",
+        "Refactoring now to caller-supplied deadlines and context propagation, which stays shut until the histogram or a discovered sequential fan-out justifies it."
+      ],
+      "falsifier": "One week of the latency histogram showing the dependency's p99.9 sitting above the 5s read timeout while those slow responses are still useful to the caller — or a timeout-cut count that is a non-trivial fraction of traffic rather than a handful of requests. Either observation means the aggressive default is cutting off successful work rather than only hanging work, and the sequencing was wrong to start aggressive. Equally falsifying and cheaper: discovering in the black-hole test that the configured connect timeout does not cover DNS or TLS, so the number in config was never the number in effect.",
+      "missing_actor": "The team that owns the HTTP endpoint you are calling. They can tell you their own latency distribution and whether the operation is idempotent, and they can add an idempotency key or a server-side deadline header, which converts your hardest one way door into a dial. The problem is framed as a client-side configuration choice, and half the decision lives on the other end of the wire."
+    },
+    {
+      "frame": "LEDGER",
+      "status": "survivor",
+      "cluster": "inherit_and_propagate_a_deadline",
+      "pass_a": 0.7857142857142857,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set one hard total deadline per request, inherited from the caller as an explicit budget and spent down across attempts (roughly 1s connect, read timeout at the dependency's measured p99 times three, total strictly under the remaining inherited budget), with at most one retry and only on idempotent calls, and fail immediately when the remaining budget is smaller than one attempt.",
+      "forecloses": [
+        "Forecloses the generous-and-resilient default of three retries with exponential backoff on long per-stage timeouts, which is a retry storm with good intentions.",
+        "Forecloses leaving library defaults in place (many clients default to no read timeout at all), and forecloses picking round numbers like 30s by feel without the dependency's latency histogram.",
+        "Forecloses tuning this client in isolation: under this position the number is not the client's to choose, it is a share of a budget that arrives from outside."
+      ],
+      "falsifier": "Take one hour of production logs and count requests this client cancelled that the dependency logged as completing successfully. If that count is more than a handful, the dependency's latency is fat-tailed or bimodal (a batch or report endpoint where 30s is a legitimate success), a p99-derived deadline is destroying good work, and this position is wrong for that route.",
+      "missing_actor": "The team that owns the service being called. They can publish a latency SLO and enforce a server-side deadline with load shedding, which turns the client timeout from a guess into a confirmation and stops the retry bill landing on them silently. The caller upstream is the other unnamed actor, and their action is to send a deadline at all."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "inherit_and_propagate_a_deadline",
+      "pass_a": 0.8809523809523809,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "The only cheapness it prices is the move it rejects — a constant as a one-line diff that passes review — while its own program of ingress middleware, a wrapped client, a propagated header, idempotency keys and a new metric arrives as one undifferentiated \"tomorrow\" with no cost of being wrong, no detection latency and no unwind path."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop choosing timeout constants and instead stamp every inbound request with a deadline at the edge, propagate the remaining budget through every outbound call, and let each HTTP attempt's timeout be whatever is left of that budget.",
+      "forecloses": [
+        "A shared default timeout in config, tuned once to cover the worst dependency, applied to every call the service makes.",
+        "Fixed retry policies: three attempts with backoff, independent of how much of the caller's deadline is left, which is the retry storm you get for free with per-client constants.",
+        "Treating a circuit breaker as the answer, where calls run unbounded and the breaker is expected to notice afterwards."
+      ],
+      "falsifier": "Pull the last three latency incidents in this system. If none of them involved a caller that had already given up while work continued, a chain where the inner waits exceeded the outer patience, or retries amplifying load on a slow dependency, then the budget machinery buys nothing here and a constant was the right answer. Cheaper still, check the call graph: if no request path has more than one outbound hop and the dependency's p99.9 sits far under any plausible constant, I am wrong.",
+      "missing_actor": "The owner of the upstream service you are calling. They can publish a latency SLO you can size a budget against, and honor the remaining-budget header by cancelling server-side work once the caller's deadline has passed, which is the half of the problem no client-side number can reach."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "survivor",
+      "cluster": "ship_a_tight_constant_now",
+      "pass_a": 0.8333333333333334,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set one client-wide total request timeout of 5 seconds and change nothing else.",
+      "forecloses": [
+        "A per-endpoint or per-operation timeout table, including separate connect, read, and write budgets; one total number replaces all of it until a specific endpoint proves it needs its own.",
+        "Retry with backoff, jitter, and a circuit breaker on top of the client. The first timeout failure stays a visible error, deliberately, because a visible error is information and a silent retry is not.",
+        "Deadline or cancellation propagation from the inbound request through this client, which would make the timeout a computed remaining budget rather than a constant."
+      ],
+      "falsifier": "Pull the existing latency distribution for calls this client already makes — one dashboard query, or a grep of request-duration logs for the last week. If the healthy p99 is anywhere near 5 seconds, or if any routine call legitimately runs longer, a single 5-second default turns working traffic into errors and this position is wrong. Equally falsifying: the client library or the framework around it already applies a finite default deadline, in which case the hang has some other cause and this change fixes nothing.",
+      "missing_actor": "The team operating the upstream service being called. They already know their own latency distribution and their own server-side timeout, and can hand over both in one message, which turns the 5 seconds from a guess into a derived number — and if their server cuts off at 2 seconds, the client timeout barely matters."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "ship_a_tight_constant_now",
+      "action": "Put a small hard timeout in config today with no retries and no deadline plumbing, and let a named observation decide whether anything more gets built.",
+      "members": [
+        "MINIMALIST",
+        "DOOR_KEEPER"
+      ],
+      "survivors": [
+        "MINIMALIST",
+        "DOOR_KEEPER"
+      ],
+      "singleton": false,
+      "strongest_objection": "A constant chosen inside one process cannot be right, because the quantity that determines whether a call should still be running is not the client's patience but how much of the caller's patience is left at the moment the call starts, and that number is different on every request. A fixed five or ten seconds is therefore wrong in both directions at once: when the caller has already given up, the remaining seconds are spent holding a socket, a pool slot, a worker and an upstream transaction to produce an answer nobody is left to read, and the bill is paid by every request queued behind it, which is exactly the failure mode that takes a service down at peak rather than the single hang the number was chosen to stop. In the other direction, the first legitimately slow path fails and the observation that proves it — a week of histogram, or an error cluster on one endpoint — only ever reports on the dependency's latency shape, never on the caller's deadline, so no amount of measuring the constant reveals the thing that makes the constant unsound. There is also a party in the path that was not considered: a reverse proxy, load balancer or mesh sidecar typically enforces its own cutoff near sixty seconds with no coordination with this code, so if the chosen number sits above it the config is decoration and the user gets a bare gateway error instead of the handled failure the position promised. Setting one number is cheap precisely because it settles nothing about who owns the end-to-end latency budget, which is the state in which an incident is possible and nobody's fault.",
+      "representative": "DOOR_KEEPER",
+      "mean_pass_a": 0.8928571428571428
+    },
+    {
+      "id": "inherit_and_propagate_a_deadline",
+      "action": "Stop choosing constants and plumb an inherited absolute deadline through the call path, deriving each attempt's timeout from the remaining budget and bounding retries by what is left.",
+      "members": [
+        "LEDGER",
+        "FRAME_BREAKER",
+        "ACTOR_CENSUS"
+      ],
+      "survivors": [
+        "LEDGER"
+      ],
+      "singleton": false,
+      "strongest_objection": "This position spends the asker's unbounded wait on a cross-team negotiation it does not control. A propagated budget only exists if something upstream actually sends a deadline and something downstream actually honours cancellation, and neither party has agreed to anything; until both do, the machinery collapses into a constant with extra plumbing around it, except that now there is no bound in place at all while the coordination runs, so the hang that prompted the question survives the entire project. The hard part was never the arithmetic of subtracting elapsed time — it is getting two other teams to ship something, which is the one cost in the plan that cannot be compressed by working harder. Second, deriving the per-attempt number from the dependency's measured p99 encodes that dependency's current shape as a standing contract, and it is unstable in exactly the regime that matters: latency distributions for real services are frequently bimodal rather than fat-tailed, with a small population of legitimately slow calls — a report, a batch, a cold cache — that a p99-derived deadline destroys wholesale rather than at the margin, and the counter that would reveal this requires correlating your cancellations against the dependency's own success logs, which is not an observation the asker can make alone either. Third, the position quietly assumes the asker's service is in the middle of a chain. If it is a single edge hop with one outbound call, there is no budget arriving from anywhere and nothing to divide, and every sentence about hops politely waiting thirty seconds each is describing someone else's system. The cheap version of this whole argument — one hard total deadline in config, shipped this afternoon — captures most of the protection against unbounded waiting, and the remainder is the part that needs the other teams; nothing in the position explains why the cheap part should wait for the expensive part.",
+      "representative": "LEDGER",
+      "mean_pass_a": 0.7857142857142857
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "Four branches attacked an assumption the question made and three attacked the dominant one directly — that the timeout is a constant belonging to the client rather than a share of a budget arriving from outside — so the run is not frame-trapped."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "All five populated missing_actor: four named the team owning the called endpoint with a concrete action, and one named the human at the keyboard whose cancel keystroke the position depends on."
+    },
+    "notes": []
+  },
+  "proceed": true,
+  "rubric_version": 1
+}

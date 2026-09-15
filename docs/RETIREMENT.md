@@ -78,7 +78,7 @@ A retired frame is not dispatched and does not count towards `n`. `adhd frames` 
 separate heading. Its recorded runs stay exactly as they are: they are the evidence for the
 retirement, and rewriting them would destroy the argument.
 
-## Current standing, as of seven runs
+## Current standing, as of eight runs
 
 `adhd frames --health` counts every criterion below over the recorded corpus. Read it before
 this section rather than after: the table is a snapshot and the command is the current state.
@@ -103,11 +103,12 @@ needs shared runs in the high single digits before it means anything.
 |---|---|---|
 | `FRAME_BREAKER` + `SABOTEUR` | 3 shared | criterion 1 met at 67%, on the minimum sample. Watch, do not act. |
 | `SUPPLICANT`, `PRIOR_ART` | 2 each | pruned in every appearance. `SUPPLICANT` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
+| `LEDGER` | 4 | criteria 1 and 3: co-clusters with `ACTOR_CENSUS` in 2 of the 3 runs they share (67%), and has held the recommendation 0 of 4 times. New to this list as of `001-seed3`, and both readings are weak for the same reason the `FRAME_BREAKER` + `SABOTEUR` flag is. The co-clustering sample is three runs at the minimum, and in the run that put it here the two frames landed in the same cluster and `ACTOR_CENSUS` was the one pruned — for T7, not for redundancy. Holding the recommendation 0 of 4 is criterion 3 on a frame that survived to deepen in that run and defended, which is the case the pruned-block exemption exists for. Under the floor at four runs. Watch, do not act. |
 | `NIGHT_OPERATOR` | 1 | pruned in its only appearance and never held the recommendation, so criteria 2 and 3 both read as met on a single sample. One run is a coin flip and not a property; it is here so the list is complete, not because it means anything yet. |
-| `DOOR_KEEPER`, `MECHANIC`, `SUCCESSOR` | 3, 3, 2 | never pruned. Not a retirement criterion, and the opposite worry, which belongs in D6. |
-| `FIRST_PRINCIPLES` | 0 | never dispatched; criterion 5's count has not started. |
+| `DOOR_KEEPER`, `MECHANIC`, `SUCCESSOR` | 4, 3, 2 | never pruned. Not a retirement criterion, and the opposite worry, which belongs in D6. |
+| `FIRST_PRINCIPLES` | 0 | never dispatched; criterion 5's count has not started. Reachable since D35 — a primary in `strategy` at n=6 — so the count starts on the next strategy run rather than never. |
 
-`FRAME_BREAKER` is the only frame at or past the five-run floor, at seven, and it meets no
+`FRAME_BREAKER` is the only frame at or past the five-run floor, at eight, and it meets no
 criterion on its own.
 
 ### Criterion 4, spelled out against the current library

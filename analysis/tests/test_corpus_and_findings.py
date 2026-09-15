@@ -49,7 +49,7 @@ def test_frame_ids_are_forwarded_so_a_rename_is_not_a_tenth_frame(corpus):
 def test_negative_controls_are_not_loaded_as_runs(corpus):
     """A control is a hand-written answer with no plan and no score, not a run."""
     assert not any(a.run.endswith("-linear-cot") for a in corpus.artifacts)
-    assert len(corpus.runs) == 7
+    assert len(corpus.runs) == 8, "001-seed3 is the eighth; the four -linear-cot controls are still excluded"
 
 
 def test_foreclosure_agrees_almost_always_and_measures_nothing(corpus):

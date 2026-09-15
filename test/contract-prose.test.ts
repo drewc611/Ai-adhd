@@ -175,11 +175,15 @@ test("the fold changes what the contract asks for and not what the validator acc
 });
 
 test("not one unquoted value in any recorded run contains a colon-space, which is the luck this rests on", () => {
-  // The eleven recorded runs all parse, and this is the reason, counted. Across 39 branch artifacts
-  // there are 117 `position` / `falsifier` / `missing_actor` values. None is folded. 106 are bare
-  // plain scalars and **not one of them carries an internal `: `** — that is the coincidence, and
-  // it held for eleven runs before breaking on the twelfth, where three branches in five broke it
-  // at once.
+  // The reason the corpus parses, counted, and the count now shows the fix landing. Across 44
+  // branch artifacts there are 132 `position` / `falsifier` / `missing_actor` values. **106 are bare
+  // plain scalars and not one carries an internal `: `** — that is the coincidence, and it held for
+  // eleven runs before breaking on the twelfth, where most of the artifacts broke it at once.
+  //
+  // **15 are folded, and all 15 are from `001-seed3`**, the first run dispatched under D37. Every
+  // prose value in it is a block scalar and none is plain, which is what the contract now asks for.
+  // One of them carries `isolation: under this position` inside a `forecloses` item — the exact
+  // construct that aborted the run before it.
   //
   // Eleven values are quoted, which is the other way out, and exactly one of those needed to be:
   // `001-seed2/ACTOR_CENSUS`'s falsifier reads "Look at the inbound path for one hour of real
@@ -216,7 +220,10 @@ test("not one unquoted value in any recorded run contains a colon-space, which i
       }
     }
   }
-  assert.equal(files, 39, "the recorded corpus changed size; re-count before trusting the rest of this test");
-  assert.deepEqual({ plain, quoted, folded }, { plain: 106, quoted: 11, folded: 0 });
+  assert.equal(files, 44, "the recorded corpus changed size; re-count before trusting the rest of this test");
+  assert.deepEqual({ plain, quoted, folded }, { plain: 106, quoted: 11, folded: 15 });
+  // Every folded value comes from the one run dispatched under the folded contract, and that run
+  // contributed no plain ones. If a later run adds plain values, D37 stopped reaching the briefs.
+  assert.equal(folded, 15, "the folded count moved without this comment moving with it");
   assert.deepEqual(offenders, [], "a recorded artifact now carries the backlog 87 defect unquoted, so the luck has run out");
 });

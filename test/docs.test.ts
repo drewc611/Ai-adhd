@@ -388,11 +388,20 @@ test("the writeup's numbers are the numbers the corpus has now", () => {
   assert.equal(agree.runs.filter((r) => r.report.ranking_changed).length, agree.runs.length, "the writeup says the ranking changed in all of them");
 
   const sens = weightSensitivity(cfg);
-  assert.ok(doc.includes(`All ${sens.margins.length} contested decisions`), `there are ${sens.margins.length} contested decisions`);
-  // The load-bearing claim is the margin, not the count: a decision settled by one anchor point
-  // was not settled by the rubric. `adhd learn` prints the anchor step; the writeup quotes it.
-  const step = Math.max(...sens.margins.map((m) => m.margin));
-  assert.ok(step <= 2 / 48 + 1e-9, `the writeup says two anchor points or fewer; the widest margin is now ${step.toFixed(4)}`);
+  // The writeup said "All N contested decisions were settled by two anchor points or fewer" until
+  // `001-seed3` arrived at 0.1042 and broke it. The claim is now a count of the near-ties rather
+  // than a universal, so the doc has to state both halves and this checks both.
+  const near = sens.margins.filter((m) => m.margin <= 2 / 48 + 1e-9);
+  const wide = sens.margins.filter((m) => m.margin > 2 / 48 + 1e-9);
+  assert.ok(
+    doc.includes(`${near.length} of the ${sens.margins.length} contested decisions`),
+    `${near.length} of ${sens.margins.length} contested decisions are near-ties and the writeup does not say so`,
+  );
+  // And the exception has to be named, with its margin, or the paragraph reads as the old universal.
+  for (const w of wide) {
+    assert.ok(doc.includes(w.run), `${w.run} is settled by ${(w.margin * 48).toFixed(1)} anchor points and the writeup does not name it`);
+    assert.ok(doc.includes(w.margin.toFixed(4)), `the writeup does not quote ${w.run}'s margin of ${w.margin.toFixed(4)}`);
+  }
   assert.equal(sens.flips.length, 0, "the writeup says no representative changed under a +/-1 move");
 
   // Recorded runs, and the subset carrying a score.
@@ -400,7 +409,7 @@ test("the writeup's numbers are the numbers the corpus has now", () => {
   const scored = recorded.filter((d) => existsSync(join(cfg.root, "evals", "recorded", d, "score.json")));
   assert.match(doc, new RegExp(`# What ${["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][recorded.length] ?? recorded.length} runs show`),
     `the title should say ${recorded.length}`);
-  assert.ok(doc.includes(`${["", "one", "two", "three", "four", "five", "six", "seven"][scored.length] ?? scored.length} with a \`score.json\``), `${scored.length} runs carry a score.json`);
+  assert.ok(doc.includes(`${["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][scored.length] ?? scored.length} with a \`score.json\``), `${scored.length} runs carry a score.json`);
 
   // The test count it quotes for the mechanics claim.
   const tests = readdirSync(join(cfg.root, "test")).filter((f) => f.endsWith(".test.ts"))

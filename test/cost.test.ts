@@ -75,16 +75,35 @@ test("cost says so rather than dividing by zero when there is nothing recorded",
   assert.match(r.text, /no run has recorded a cost yet/);
 });
 
-test("the recorded corpus shows the D5 estimate under-quoting every run", () => {
-  // The finding, pinned. Every recorded run costs more than the gate quoted, and the gate is
-  // the whole of D5's informed consent. If a future config change fixes the estimate this test
-  // fails and should be rewritten to the new truth, not deleted.
+test("every run quoted under the old estimate over-ran it, and the first run quoted under D32 did not", () => {
+  // This test pinned "the estimate under-quotes every run" and left instructions: if a config
+  // change fixes the estimate, rewrite it to the new truth rather than deleting it. D32 is that
+  // change — `tokens_per_branch_estimate` 12,000 -> 51,000 — and this is the new truth.
+  //
+  // Seven runs were quoted 156,000 and cost 407,407 to 519,482, a ratio of 2.6x to 3.3x. That was
+  // the finding, and it is still in the corpus because a recorded estimate is what that run was
+  // actually quoted and never changes. `001-seed3` was quoted 520,200 and cost 485,412: 0.9x, the
+  // first run in the corpus to come in under its own gate, and under by 6.7%.
+  //
+  // The "up to" wording in the preview is what that buys. A gate set to the mean would be exceeded
+  // about half the time; set to the observed maximum it is exceeded rarely, and a user who consents
+  // to a ceiling and is billed less than it has not been misled.
   const r = costReport(cfg);
   const withEstimate = r.runs.filter((x) => x.ratio !== null);
-  assert.ok(withEstimate.length >= 5, "the corpus lost its cost data");
-  for (const x of withEstimate) assert.ok(x.ratio! > 1, `${x.run} came in at or under estimate; the finding has changed`);
-  const mean = withEstimate.reduce((a, x) => a + x.ratio!, 0) / withEstimate.length;
-  assert.ok(mean > 2, `mean ratio is ${mean.toFixed(2)}, no longer the under-quote this pins`);
+  assert.ok(withEstimate.length >= 8, "the corpus lost its cost data");
+
+  const old = withEstimate.filter((x) => x.estimate === 156000);
+  const recalibrated = withEstimate.filter((x) => x.estimate !== 156000);
+  assert.ok(old.length >= 7, `expected the seven pre-D32 runs, found ${old.length}`);
+  for (const x of old) assert.ok(x.ratio! > 1, `${x.run} was quoted 156,000 and no longer over-ran it`);
+  const mean = old.reduce((a, x) => a + x.ratio!, 0) / old.length;
+  assert.ok(mean > 2, `mean ratio over the pre-D32 runs is ${mean.toFixed(2)}, no longer the under-quote this pins`);
+
+  assert.ok(recalibrated.length >= 1, "no run has been quoted under the recalibrated estimate yet");
+  for (const x of recalibrated) {
+    assert.equal(x.estimate, 520200, `${x.run} carries an estimate this test does not recognise`);
+    assert.ok(x.ratio! <= 1, `${x.run} over-ran the recalibrated gate at ${x.ratio!.toFixed(1)}x, so D32 is not yet enough`);
+  }
 });
 
 // ---- kernel journal statistics -------------------------------------------------------------
