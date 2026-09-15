@@ -1,0 +1,65 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: PARTICULARIST
+position: >-
+  Put the cron command behind `flock -n` and give the failed-acquire path an explicit stderr message, so the overlap stops on the next tick and every skipped run becomes cron mail you can count.
+reasoning: |
+  Probe 1 - the three most specific details.
+
+  (a) The scheduler is cron. Cron holds no state about the previous run; at the next matching
+  minute it forks a new process whatever the last one is doing. That is why overlap is possible
+  at all here, and it is also why the fix can live entirely in the crontab line.
+
+  (b) The job is a shell-out to a Python script. The unit of work is a whole process with its
+  own exit, so the mutual exclusion can sit outside the Python. Nothing has to be changed inside
+  the script, which matters because the script is the suspect.
+
+  (c) "It has started overlapping." It did not overlap before. Something crossed the interval
+  recently - the script got slower, or the data it walks got bigger, or one run stopped exiting.
+
+  Probe 2 - which detail changes the answer.
+
+  Detail (c). If the overlap were the original state, the answer would be a scheduling question
+  and you would pick the interval or the runner and be done. Because the overlap is new, the
+  overlap itself is the only measurement anyone has of a runtime trend nobody was tracking, and
+  the shape of the fix has to preserve that measurement rather than erase it. The value of (c)
+  that flips everything downstream is whether run duration is spiking or growing: if a handful of
+  runs spiked past the interval, the lock alone is the whole fix; if duration is climbing with
+  data volume, the lock buys weeks and then every run is a skipped run, and the real work is
+  making the script process only what is new since the last watermark. You cannot tell those
+  apart today, which is why the position is the lock plus the record, not the lock alone.
+
+  Probe 3 - the thirty-second answer and why it is wrong here.
+
+  The thirty-second answer is `flock -n /var/lock/job.lock /path/to/script` in the crontab. It is
+  right about the mechanism and wrong about the reporting. When flock cannot take the lock it
+  exits 1 and prints nothing, and cron mails on output, not on exit status - so a skipped run
+  produces no mail, no log line, nothing. Given detail (c), that is exactly the failure you
+  cannot afford: if runtime is climbing, bare `flock -n` turns a visible overlap into an
+  invisible job that silently stops doing work, and it converts a wedged run into a permanent
+  lock holder that skips every future run in silence. Appending `|| echo "skipped, previous run
+  still active" >&2` costs one shell operator and turns each skip into mail. Counting those mails
+  over a week answers Probe 2's open value without adding any instrumentation to the script.
+forecloses:
+  - >-
+    Lengthening the cron interval as the first move. Without the duration history, any new
+    interval is a guess, and stretching it hides the growth that produced the overlap.
+  - >-
+    Moving the job onto a queue, a worker system, or a timer unit with its own concurrency
+    control before the skip count exists. That is a rewrite justified by a number nobody has yet.
+  - >-
+    Taking the lock inside the Python script. The script's own runtime is the thing under
+    suspicion, so the skip decision and its logging must not depend on that process starting,
+    importing, and reaching its locking code.
+falsifier: >-
+  Pull start and end timestamps for the last ~50 runs from the script's log or the crontab
+  owner's mail spool. If run durations are flat and the overlap traces to one run that never
+  exited - a network call with no timeout, a held database connection - then this is a hang, not
+  a runtime trend, `flock -n` would let that wedged process block every successor, and the
+  correct layer is a timeout on the call plus a wall-clock kill, not a lock.
+missing_actor: >-
+  Whoever owns the mailbox the crontab runs as. Cron has been mailing that address the output of
+  every run since this started, so that person can produce the run history the falsifier needs
+  today, without adding a single line of instrumentation.
+confidence: medium
+```

@@ -35,7 +35,7 @@ from typing import Iterable, Iterator
 import numpy as np
 
 from .budget import Budget
-from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header, read_vocabulary
+from .modelfile import ModelFileRefused, body_lines, bounded_int, line_bound_for, read_header, read_vocabulary
 from .tokenize import BOS, EOS, UNK, Vocab
 
 #: What `load` allows itself when no `Budget` says otherwise. Generous against this machine's
@@ -212,12 +212,17 @@ class Transformer:
             self._masks[T] = m
         return m
 
-    def forward(self, idx: np.ndarray) -> tuple[np.ndarray, dict]:
+    def forward(self, idx: np.ndarray, *, project: bool = True) -> tuple[np.ndarray | None, dict]:
         """Logits for a batch of id sequences, plus everything the backward pass needs.
 
         `idx` is (batch, time). Returns logits (batch, time, vocab). The causal mask is applied as an
         additive -inf on the upper triangle rather than by slicing, because a mask that is a separate
         code path from the unmasked case is a mask that gets it wrong once.
+
+        `project=False` returns `None` for the logits and stops before the output projection, which is
+        what a sampled softmax needs: at 148,114 types that one matmul is the whole reason the full
+        loss is unaffordable, so computing it and then ignoring it would defeat the point. The cache
+        still carries `xf`, which is everything the sampled head reads.
         """
         c = self.config
         p = self.params
@@ -269,6 +274,8 @@ class Transformer:
         cache["xf"] = xf
         # Tied: the output projection is the token embedding. Halves the parameters that matter most
         # at this vocabulary size and is the standard choice for a small LM.
+        if not project:
+            return None, cache
         logits = xf @ p["tok"].T
         return logits, cache
 
@@ -301,6 +308,19 @@ class Transformer:
         grads["tok"] += dlogits.reshape(-1, c.vocab_size).T @ xf.reshape(-1, c.d_model)
         dxf = dlogits @ p["tok"]
 
+        self._backward_body(dxf, cache, grads)
+        return loss, grads
+
+    def _backward_body(self, dxf: np.ndarray, cache: dict, grads: dict[str, np.ndarray]) -> None:
+        """Everything below the output projection, given the gradient arriving at `xf`.
+
+        Shared by the full and the sampled head. They differ only in how `dxf` and the gradient of the
+        tied `tok` table are produced; below that point the two are the same sixty lines, and a second
+        copy is a second place for a hand-written backward pass to drift.
+        """
+        c = self.config
+        p = self.params
+        B, T = cache["B"], cache["T"]
         dx, dg, db = _layer_norm_backward(dxf, cache["ln_f"])
         grads["ln_f.g"] += dg
         grads["ln_f.b"] += db
@@ -346,7 +366,111 @@ class Transformer:
         idxf = cache["idx"].reshape(-1)
         np.add.at(grads["tok"], idxf, dx.reshape(-1, c.d_model))
         grads["pos"][:T] += dx.sum(axis=0)
+
+    def log_uniform_sampler(self, n_samples: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+        """`n_samples` candidate ids and the log of the probability each was drawn with.
+
+        Log-uniform over ids, which is the right shape only because `Vocab.build` sorts by frequency:
+        id 0 is the commonest word and the tail is at the end, so `P(i) ∝ 1/(i+1)` approximates drawing
+        by frequency. On an unsorted vocabulary this would be sampling noise with extra steps, so the
+        assumption is written here rather than left in a paper's notation.
+
+        Returns the ids and `log Q`, not `Q`: the correction below is additive in log space and taking
+        a log of a small probability after the fact loses the precision the correction needs.
+        """
+        v = self.config.vocab_size
+        # Inverse-CDF for P(i) ∝ 1/(i+1) normalised over [0, v): draw u uniform and map through
+        # `exp(u * log(v + 1)) - 1`. The clip guards the open end of the interval only.
+        u = rng.random(n_samples)
+        ids = np.clip(np.exp(u * math.log(v + 1)) - 1.0, 0, v - 1).astype(np.int64)
+        log_q = np.log((np.log(ids + 2.0) - np.log(ids + 1.0)) / math.log(v + 1))
+        return ids, log_q
+
+    def loss_and_grads_sampled(
+        self,
+        idx: np.ndarray,
+        targets: np.ndarray,
+        *,
+        n_samples: int,
+        rng: np.random.Generator,
+        samples: tuple[np.ndarray, np.ndarray] | None = None,
+    ) -> tuple[float, dict[str, np.ndarray]]:
+        """Sampled-softmax loss and gradients. **Not** the same loss as `loss_and_grads`.
+
+        Registered as E9 rather than slipped in, because the loss a model optimises is part of what the
+        model is. For each position the candidate set is the target plus a set of negatives shared
+        across the whole batch, each logit corrected by `-log Q(id)` so the estimator is unbiased in
+        the limit, and any negative colliding with that position's target masked out — without the mask
+        a collision teaches the model to push the target's own logit down.
+
+        `samples` overrides the draw, which is what makes the gradient check possible: the loss is
+        stochastic, and central differences need the same candidate set on both sides of the step.
+
+        Evaluation never comes here. `logprob_terms` computes the full normalised distribution, because
+        a sampled softmax at scoring time is a different measurement wearing the same name.
+        """
+        c = self.config
+        p = self.params
+        _, cache = self.forward(idx, project=False)
+        B, T = idx.shape
+        n = B * T
+        xf = cache["xf"].reshape(n, c.d_model)
+        tgt = targets.reshape(n)
+
+        sample_ids, log_q = samples if samples is not None else self.log_uniform_sampler(n_samples, rng)
+        S = sample_ids.shape[0]
+
+        w_t = p["tok"][tgt]                                   # (n, d)
+        w_s = p["tok"][sample_ids]                            # (S, d)
+        # The target is not drawn from Q — it is the observed outcome — so only the negatives carry the
+        # correction. Correcting both is a common and silent error: it cancels in the numerator and
+        # leaves the denominator biased towards frequent words.
+        z_t = np.einsum("nd,nd->n", xf, w_t)
+        # `- log Q(s) - log S`, and the second term is not decoration. The denominator being estimated
+        # is `exp(z_t) + Σ_s exp(z_s) / (S · Q(s))`: drawing S negatives with replacement and weighting
+        # each by `1/(S·Q)` is what makes the sum an unbiased estimate of the full one. Dropping `log S`
+        # leaves the loss high by exactly `log S` — measured at 1.29, 3.48, 5.54 and 7.59 for S of 4,
+        # 32, 256 and 2048 against `log S` of 1.39, 3.47, 5.55 and 7.62. The first version of this line
+        # dropped it, and the convergence test below is what found it: the estimator ran *away* from
+        # the full loss as the sample grew, which no amount of staring at the gradient check would show
+        # because the term is constant in the parameters and cancels out of every derivative.
+        z_s = xf @ w_s.T - log_q[None, :] - math.log(S)       # (n, S)
+        collide = sample_ids[None, :] == tgt[:, None]
+        z_s = np.where(collide, -np.inf, z_s)
+
+        z = np.concatenate([z_t[:, None], z_s], axis=1)       # (n, 1 + S)
+        z -= z.max(axis=1, keepdims=True)
+        e = np.exp(z)
+        denom = e.sum(axis=1, keepdims=True)
+        probs = e / denom
+        loss = float(-np.log(np.maximum(probs[:, 0], 1e-12)).mean())
+
+        dz = probs / n
+        dz[:, 0] -= 1.0 / n
+        dz_t, dz_s = dz[:, 0], dz[:, 1:]
+        # A masked candidate has probability zero and therefore no gradient, but `-inf` times zero is a
+        # NaN if the mask is left to arithmetic, so it is applied again here rather than trusted.
+        dz_s = np.where(collide, 0.0, dz_s)
+
+        grads = {k: np.zeros_like(v) for k, v in p.items()}
+        dxf = dz_t[:, None] * w_t + dz_s @ w_s
+        np.add.at(grads["tok"], tgt, dz_t[:, None] * xf)
+        np.add.at(grads["tok"], sample_ids, dz_s.T @ xf)
+
+        self._backward_body(dxf.reshape(B, T, c.d_model), cache, grads)
         return loss, grads
+
+    def full_loss(self, idx: np.ndarray, targets: np.ndarray) -> float:
+        """The true cross-entropy on one batch, with no gradients.
+
+        E9 records this beside the sampled loss at the end of training. A sampled softmax is an
+        estimator, and the gap between what it reports and what the model actually costs is the first
+        thing to doubt when the cell comes in worse than predicted.
+        """
+        logits, _ = self.forward(idx)
+        n = idx.shape[0] * idx.shape[1]
+        flat = _softmax(logits).reshape(n, self.config.vocab_size)
+        return float(-np.log(np.maximum(flat[np.arange(n), targets.reshape(n)], 1e-12)).mean())
 
     # ---- scoring, duck-typed against KneserNey ---------------------------------------------------
 
@@ -455,7 +579,7 @@ class Transformer:
             meta = head.get("meta", {})
             m = cls(config, vocab, meta if isinstance(meta, dict) else {})
             seen: set[str] = set()
-            for line in body_lines(fh, path):
+            for line in body_lines(fh, path, line_bound_for(max(p.size for p in m.params.values()))):
                 parts = line.rstrip("\n").split("\t")
                 if len(parts) != 3:
                     raise ModelFileRefused(f"{path}: a parameter line has {len(parts)} fields, expected 3")

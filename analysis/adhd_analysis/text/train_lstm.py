@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .budget import Budget
 from .corpora import Library
+from .selection import add_library_arguments, training_library
 from .lstm import LSTM, LSTMConfig
 from .train_transformer import TransformerRecord, train_transformer
 
@@ -41,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         description="Train an LSTM language model from scratch on the document library in corpora.yaml. "
         "Nothing is downloaded, no pretrained weights are loaded and no model is called.",
     )
-    ap.add_argument("--manifest", default="corpora.yaml")
+    add_library_arguments(ap)
     ap.add_argument("--out", default="models/background.lstm.gz")
     ap.add_argument("--vocab-size", type=int, default=8192)
     ap.add_argument("--d-model", type=int, default=128)
@@ -58,8 +59,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-seconds", type=float, default=None)
     ap.add_argument("--max-rss-mb", type=int, default=None)
     ap.add_argument("--progress", type=int, default=200, metavar="STEPS")
-    ap.add_argument("--held-out-file", default=None, metavar="PATH")
-    ap.add_argument("--held-out-every", type=int, default=None, metavar="N")
     ap.add_argument("--record", default=None)
     args = ap.parse_args(argv)
 
@@ -71,16 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         if val is not None:
             setattr(b, attr, val)
 
-    library = Library.load(args.manifest)
-    if args.held_out_file is not None:
-        from .evaluate import FrozenSplit
-
-        library = FrozenSplit.load(library, args.held_out_file, side="train")
-    elif args.held_out_every is not None:
-        from .evaluate import SplitLibrary
-
-        library = SplitLibrary(library, every=args.held_out_every, side="train")
-
+    library = training_library(args)
     rec = train_lstm(
         library, args.out, cfg, b,
         epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, warmup=args.warmup,

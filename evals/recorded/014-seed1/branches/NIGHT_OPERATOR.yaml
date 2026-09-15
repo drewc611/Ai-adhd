@@ -1,0 +1,78 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: NIGHT_OPERATOR
+position: >-
+  Do guard the job with a TTL lease held in a shared datastore that the on-call can read, break,
+  and disable from a runbook link in the alert without a deploy, and page on the lease outliving
+  the expected run duration rather than on the downstream damage.
+reasoning: |
+  What pages, and what do they see first. Nobody is ever paged for "overlap". Overlap is silent
+  until it turns into something else: the database connection pool is exhausted, rows are
+  double-written, a queue backs up, the box pins at load 40, or a downstream SLA check fires
+  because the 02:00 run never finished. So the first thing the responder sees is a symptom several
+  hops away from the cause, on a system they did not build, at 3am. They then have to work
+  backwards: ssh to a box they may have to guess at, run ps, and count nine copies of the same
+  script. Every minute of that is minutes the actual cause is still running. The design decision
+  that matters most is not which locking primitive is elegant, it is which one makes the alert say
+  "this job has been holding its lease for 47 minutes, expected 4" on the first line.
+
+  What they can change at 3am without a deploy. Almost nothing, unless it was put somewhere
+  writable on purpose. That is the whole argument for the lease living in a datastore rather than
+  in the process. A key in Redis, Postgres, or a config table gives the responder three verbs they
+  can actually execute: look at it (who holds it, which host, which run id, since when), break it
+  (delete the key so the next scheduled run can proceed), and stop it (flip a disabled flag the
+  script checks before it does any work, so the cron keeps firing and keeps exiting). Editing a
+  crontab on a host is not an equivalent: it needs access they may not have, it leaves no record,
+  and someone has to remember to put it back. A code-level mutex or a constant in the script gives
+  them nothing but a kill command and a hope.
+
+  How they know it worked. This is the part designs usually skip. Two signals, both of which the
+  job has to emit on its own: a concurrency gauge that should read one or zero, and a run-completed
+  event with a duration. After breaking the lease, the responder watches the next scheduled tick.
+  If it starts, acquires cleanly, and emits "finished in 4m", they are done and can go back to bed.
+  If it starts and immediately reports the lease is held by a run from ninety minutes ago, they
+  know a process is wedged rather than slow, which is a different action. Without those two
+  signals the only confirmation available is the absence of another page, which is not
+  confirmation, it is waiting.
+
+  What the on-call would beg for. First: make the lock something I can see from outside the box,
+  because the person paged is not the person who built this and may not know which host runs it.
+  Second: put the host, PID, and start time in the lease value, so I can tell a wedged run from a
+  slow one without a debugger. Third: give me a kill switch that is a data change, not a code
+  change, and write the exact command in the runbook. Fourth, and the one that gets forgotten:
+  alert on the job still running, not on the mess it makes. Fifth: if the lease is held, the new
+  run should refuse loudly and record the refusal, not queue up behind it, because a silent pile-up
+  is what got us here. The prevention path (a lock) and the recovery path (see it, break it, turn
+  it off, confirm) are two different pieces of work, and only the second one is any use tonight.
+forecloses:
+  - >-
+    flock or a local lockfile as the mechanism: it is invisible to anyone not already shelled into
+    the correct host, it gives the responder nothing to inspect, and it quietly stops working the
+    day the cron entry gets copied to a second box or the job moves into a container.
+  - >-
+    The "make the script idempotent and just let the runs overlap" option: safe concurrency removes
+    the corruption but leaves the on-call with no handle at all, no signal that overlap is even
+    happening, and nothing to switch off when the overlap is the symptom of something worse
+    upstream.
+  - >-
+    Replacing cron with a real scheduler (Airflow, Celery beat, systemd timers with
+    RefuseManualStart) as the answer to this question: it may well be right in six months, but it
+    is a migration and a deploy, and it does nothing for the person holding the pager before it
+    lands.
+falsifier: >-
+  Pull the last three pages that trace back to this job and read what the responder actually did
+  first. If every one was resolved by killing processes on a host they already had open, and none
+  of them needed to know whether a lock was held, stop the next run, or coordinate with a second
+  machine, then the external lease is ceremony and a local flock plus a run-duration alert is the
+  cheaper correct answer. Cheaper still, check whether the current on-call rotation even has write
+  credentials to the datastore you are proposing to put the lease in. If they do not, this position
+  is wrong as written tonight.
+missing_actor: >-
+  The on-call rotation itself, which the problem never names. Whoever carries the pager for this
+  service is not on the team choosing between these options, and they can settle the choice before
+  any code is written. Hand them the draft runbook step tomorrow and ask them to execute it against
+  a healthy system: find the lease, break it, disable the job, confirm recovery. If they cannot do
+  it in under five minutes, on a laptop, without asking the author a question, the design has
+  already failed and no amount of locking correctness redeems it.
+confidence: high
+```

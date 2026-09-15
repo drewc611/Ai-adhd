@@ -34,7 +34,7 @@ from typing import Iterator
 from .budget import Budget
 from .corpora import Library
 from .ngram import KneserNey
-from .tokenize import sentences, tokens
+from .tokenize import EOS, sentences, tokens
 from .train import TrainingRecord, train
 
 
@@ -115,6 +115,14 @@ class HeldOut:
     perplexity: float
     #: True when OOV targets were left out of the sum. See `evaluate(in_vocabulary_only=...)`.
     in_vocabulary_only: bool = False
+    #: How many word types the sum was restricted to, or None when it was not restricted.
+    #:
+    #: `in_vocabulary_only` lets each model sum over *its own* in-vocabulary targets, which is why D25
+    #: refuses to compare two such scores at different OOV rates: they are two tests. This is the fix
+    #: for the comparison that needs making anyway — hand both models one set of words and both sum
+    #: over the same targets, so the difference is modelling and not coverage. Backlog 77 asked for the
+    #: decomposition and proposed the method D25 forbids; this is the method that works.
+    restricted_to_types: int | None = None
     #: Why the budget stopped the scoring, or None if it read the whole set.
     #:
     #: A perplexity over a prefix is not a perplexity over the set, and until this field existed
@@ -211,6 +219,7 @@ def evaluate(
     *,
     allow_in_sample: bool = False,
     in_vocabulary_only: bool = False,
+    shared_vocabulary: frozenset[str] | None = None,
 ) -> HeldOut:
     """Perplexity of a trained model on documents it never saw.
 
@@ -222,6 +231,12 @@ def evaluate(
     Refuses outright when the model trained on the text being scored — see `in_sample_refusal`.
     `allow_in_sample=True` is for deliberately measuring the gap between seen and unseen text, which
     is a real measurement and reads as one in a diff. It is not a way past a failing check.
+
+    `shared_vocabulary` restricts the sum to targets whose word is in that set, whatever either model's
+    own vocabulary is. Two models handed the same set sum over the same targets and are therefore
+    comparable at different OOV rates, which `in_vocabulary_only` is not: there each model sums over its
+    own in-vocabulary targets and the two numbers are two tests. Contexts are never restricted — a model
+    reads the text as it is and only the *scoring* is narrowed.
 
     `in_vocabulary_only=True` drops OOV targets from the sum, leaving contexts alone, which is the
     definition `genericity.py` already uses for surprisal. It separates two things the ordinary
@@ -235,7 +250,7 @@ def evaluate(
         if why is not None:
             raise ValueError(f"refusing to report this as held-out perplexity: {why}")
     b = budget or Budget.weekly()
-    docs = n_sentences = n_tokens = in_vocab = 0
+    docs = n_sentences = n_tokens = in_vocab = restricted = 0
     total_logprob = 0.0
     predictions = 0
     identity = hashlib.sha256()
@@ -254,6 +269,19 @@ def evaluate(
             in_vocab += sum(1 for t in ts if t in model.vocab.stoi)
             b.spend(len(ts))
             terms = model.logprob_terms(model.vocab.encode(ts))
+            if shared_vocabulary is not None:
+                # `logprob_terms` emits one term per target of `<s> ts </s>`, so the targets are the
+                # words themselves followed by the sentence end. The end is in every vocabulary, so it
+                # is never what a restriction is about and is kept.
+                targets = ts + [EOS]
+                if len(targets) == len(terms):
+                    terms = [t for t, w in zip(terms, targets) if w == EOS or w in shared_vocabulary]
+                    restricted += 1
+                else:  # pragma: no cover - a model whose term count stops matching its targets
+                    raise ValueError(
+                        f"{type(model).__name__} returned {len(terms)} terms for {len(targets)} "
+                        "targets, so a restricted score cannot say which target each term belongs to"
+                    )
             if in_vocabulary_only:
                 terms = [t for t in terms if t[1]]
             total_logprob += sum(lp for lp, _ in terms)
@@ -291,6 +319,7 @@ def evaluate(
         oov_rate=1.0 - (in_vocab / n_tokens if n_tokens else 0.0),
         perplexity=math.exp(-total_logprob / predictions) if predictions else float("inf"),
         in_vocabulary_only=in_vocabulary_only,
+        restricted_to_types=len(shared_vocabulary) if shared_vocabulary is not None else None,
         fingerprint=identity.hexdigest()[:16],
     )
 
@@ -347,6 +376,71 @@ def compare_orders(
     return out
 
 
+#: What a percentage point of held-out out-of-vocabulary is worth, in perplexity points, measured by
+#: E8 and used to size the refusal below.
+#:
+#: Four Kneser-Ney models, order 4, `min_count` 3, the same 20,000,007-token read of the train side of
+#: frozen set `8e2d77cbe8901b1e` (corpus digest `080865e040e7b88d`), differing in nothing but the
+#: vocabulary cap:
+#:
+#:      8,192 types   5.797% OOV   perplexity 30.95
+#:     16,384 types   4.044% OOV   perplexity 35.52
+#:     32,768 types   3.063% OOV   perplexity 39.31
+#:     71,603 types   2.391% OOV   perplexity 42.77
+#:
+#: A least-squares fit gives -3.391 points per percentage point at an r-squared of 0.977. This is the
+#: worst of the six pairwise slopes instead, which run -2.610 to -5.148, and it is the highest-vocabulary
+#: pair — the regime the shipped 148,353-type model sits in, where the marginal cost of a point of OOV
+#: is largest.
+#:
+#: The worst case rather than the fit, unconditionally, and **not** because E8's pre-registered test
+#: selected it. That test was a 2x pairwise spread, and it does not discriminate: these same four cells
+#: measured 2.005x on the corpus that still included this repository's own prose and 1.972x after D26
+#: removed it, straddling the line on a 0.105% change in the corpus. A rule whose verdict flips on a
+#: change three orders of magnitude smaller than the effect it rules about is a coin toss, and the worst
+#: case is the conservative side of one. D26 records it.
+OOV_PERPLEXITY_SLOPE = 5.148
+#: The share of a perplexity a vocabulary gap alone may account for before two all-targets scores are
+#: two different questions. A judgement, unavoidably — but a judgement about one quantity now, rather
+#: than about a gap whose consequences nobody had measured.
+OOV_RELATIVE_BUDGET = 0.05
+#: The comparison the threshold must never refuse: E4 compared `min_count` 2 against 3 on all targets at
+#: 0.63% and 0.85% OOV, and that comparison was sound.
+E4_GAP = 0.0085 - 0.0063
+#: The gap the threshold must never refuse, set just above E4's.
+#:
+#: Just above rather than equal to, because `0.0085 - 0.0063` is `0.0022000000000000006` in binary
+#: floating point and the refusal below is a strict `>`. Setting the floor to E4's gap exactly refuses
+#: E4 by six parts in 10^19 — which is what happened, and what `test_the_min_count_pair_e4_compared_
+#: stays_comparable` caught on the first run after E8 changed this. A threshold calibrated so tightly
+#: that it voids its own calibrating comparison is a worse instrument than no threshold.
+#:
+#: The derived gap clears this at any perplexity above about 23.7, so today the floor does not bind. It
+#: is here so a future recalibration cannot silently invalidate E4.
+OOV_FLOOR_GAP = 0.0023
+#: The gap this refusal will never allow more than, whatever the arithmetic says.
+#:
+#: The derived gap scales with the perplexities in hand, which is right — the same absolute slope is a
+#: smaller share of a larger number — but E8 measured the slope near perplexity 30 on one model class
+#: and one corpus, and extrapolating it to E7's LSTM at 159.3 would grant a 1.5-point gap on the
+#: strength of an experiment that never went near there. 0.01 was the unconditional threshold before
+#: E8. Keeping it as the cap makes E8 a strict tightening at every perplexity and a loosening at none,
+#: which is the only honest direction for one experiment to move a guard.
+OOV_MAX_GAP = 0.01
+
+
+def allowed_oov_gap(a: HeldOut, b: HeldOut) -> float:
+    """The largest OOV gap at which these two all-targets perplexities are still one question.
+
+    Scales with the smaller of the two scores, because the slope E8 measured is in absolute perplexity
+    points and the question is what share of the comparison it could account for. Clamped at both ends:
+    see `OOV_FLOOR_GAP` and `OOV_MAX_GAP`.
+    """
+    base = min(a.perplexity, b.perplexity)
+    derived = OOV_RELATIVE_BUDGET * base / OOV_PERPLEXITY_SLOPE / 100
+    return min(max(derived, OOV_FLOOR_GAP), OOV_MAX_GAP)
+
+
 def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     """Why two held-out perplexities cannot be compared, or None if they can.
 
@@ -391,6 +485,11 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     # Same text, different question. One of these sums every position and the other skips the OOV
     # targets, so they are two measurements that happen to share a fingerprint — which is exactly
     # the case a fingerprint check alone waves through.
+    if a.restricted_to_types != b.restricted_to_types:
+        return (
+            f"one of these was scored over a shared vocabulary of {a.restricted_to_types} types and the "
+            f"other over {b.restricted_to_types}, so they summed over different targets"
+        )
     if a.in_vocabulary_only != b.in_vocabulary_only:
         return (
             "one of these was scored over in-vocabulary targets only and the other over all of them, "
@@ -401,6 +500,12 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     # wrong thing, which is the whole complaint against the truncation bug that reported itself as
     # "different held-out text".
     gap = abs(a.oov_rate - b.oov_rate)
+    if a.restricted_to_types is not None:
+        # The whole point of a shared vocabulary: both sums ran over the same targets, so a difference
+        # in each model's own OOV rate no longer means they were asked different questions. This is the
+        # one path where an OOV gap is not a reason to refuse, and it exists so that backlog 77's
+        # decomposition can be made at all.
+        return None
     if a.in_vocabulary_only:
         # Neither model is charged for `<unk>` here, so the discount below does not exist. The problem
         # is stronger instead: each model sums over *its own* in-vocabulary targets, so different
@@ -420,18 +525,70 @@ def comparable_heldout(a: HeldOut, b: HeldOut) -> str | None:
     # with the gap. The docstring's warning about an easier set applies within one set as soon as the
     # vocabularies differ.
     #
-    # A percentage point is a judgement, not a measurement, and it is calibrated on one thing: E4
-    # compared `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV, that comparison was
-    # sound, and this must not refuse it. The sensitivity of perplexity to a point of OOV on this
-    # corpus has never been measured; backlog 78 is the run that would, and this threshold should be
-    # re-derived from that number rather than left as a round one. E6 has already found how close to
-    # the line real cells land: two Kneser-Ney models at the same `max_size` over 20M and 64M tokens
-    # differ by 1.09 points, which crosses it, and they share only 82.6% of their 8,192 types.
-    if gap > 0.01:
+    # This was one percentage point, a round number defending a real effect of unknown size. E8
+    # measured the effect: `allowed_oov_gap` is where the number comes from now.
+    #
+    # E8 also corrected the reason. The paragraph above says the smaller vocabulary gets a discount
+    # because `<unk>` is cheap, and that is true at 5.8% OOV and false at 2.4%: scoring the same four
+    # models over in-vocabulary targets only puts 8,192 types at 32.51 against an all-targets 30.95 —
+    # `<unk>` cheaper than the average real token — and 71,603 types at 41.76 against 42.77, `<unk>`
+    # dearer. The crossover is near 3% OOV. So the `<unk>` discount is real, small, and changes sign,
+    # while all-targets perplexity rises monotonically with the vocabulary throughout. The dominant
+    # term is not the discount at all: it is that a larger vocabulary has more rare words left to
+    # predict instead of folding them into one symbol. The refusal was right; half of its stated
+    # reason was not.
+    allowed = allowed_oov_gap(a, b)
+    if gap > allowed:
         return (
-            f"these were scored at {a.oov_rate:.2%} and {b.oov_rate:.2%} out-of-vocabulary, so the "
-            "model with the smaller vocabulary was charged for predicting `<unk>` on a larger share "
-            "of the same text and its all-targets perplexity carries a discount the other's does not"
+            f"these were scored at {a.oov_rate:.2%} and {b.oov_rate:.2%} out-of-vocabulary, a gap of "
+            f"{gap:.2%} against the {allowed:.2%} these perplexities can carry. E8 measured a point of "
+            f"out-of-vocabulary at up to {OOV_PERPLEXITY_SLOPE:.1f} perplexity points on this corpus, so "
+            f"the vocabulary difference alone could account for {gap * 100 * OOV_PERPLEXITY_SLOPE:.1f} "
+            f"points of whatever separates {a.perplexity:.1f} from {b.perplexity:.1f}"
+        )
+    return None
+
+
+def comparable_training(a: dict, b: dict) -> str | None:
+    """Why two models' *training* corpora cannot be treated as the same text, or None if they can.
+
+    `comparable_heldout` guards the scoring side. Nothing guarded this side, and the hole is not
+    hypothetical on this repository specifically: `docs/`, `prompts/` and `README.md` are sources in
+    `corpora.yaml`, so **writing down an experiment changes the corpus that experiment is about.**
+
+    E8 hit it immediately. Its registration planned to reuse E6's cell A' unchanged, and the commit
+    carrying that registration added 94 lines to `docs/EXPERIMENTS.md` — which moved the training read
+    from 20,000,029 tokens to 20,000,139 and the count of types clearing `min_count` 3 from 71,883 to
+    71,934. The pre-registered arithmetic came out 51 types short, which is how it was caught, and the
+    only reason it was caught at all is that E8 had registered that number in advance. Nothing in the
+    code would have said a word.
+
+    Takes model metas or training records; both carry the same keys. Deliberately not a check inside
+    `evaluate`, because training on different text is not always an error — E6's cells A and A' differ
+    in training corpus on purpose, and this function's job is to say so, not to prevent it.
+    """
+    for label, side in (("the first", a), ("the second", b)):
+        if not side.get("corpus_fingerprint"):
+            return (
+                f"{label} of these was trained before the training corpus carried a fingerprint, so "
+                "there is no way to tell what text it read"
+            )
+        # Only the n-gram trainer promises this, and it records the boolean only when it applies. A
+        # neural record carries the two digests with no claim of equality, because its corpus pass
+        # stops at `max_train_tokens` while its vocabulary pass does not.
+        if side.get("vocabulary_covers_counts") is False:
+            return (
+                f"{label} of these read different text in its vocabulary pass than in its counting "
+                "pass, so its vocabulary does not cover the data its counts were taken from and its "
+                "`<unk>` rate climbed through training"
+            )
+    if a["corpus_fingerprint"] != b["corpus_fingerprint"]:
+        ta = a.get("tokens_seen")
+        tb = b.get("tokens_seen")
+        counts = f" ({ta:,} tokens against {tb:,})" if isinstance(ta, int) and isinstance(tb, int) else ""
+        return (
+            f"these trained on different text{counts}: fingerprints {a['corpus_fingerprint']} and "
+            f"{b['corpus_fingerprint']}. Equal token counts are not equal tokens"
         )
     return None
 

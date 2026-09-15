@@ -1,3 +1,4 @@
+import { dimensionsAt } from "../src/schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -165,7 +166,7 @@ function runToSynth(scoreFor: (frame: string, dimension: string) => number): str
   const scores: Record<string, Record<string, { score: number; evidence: string }>> = {};
   for (const [letter, frame] of Object.entries(blindMap)) {
     scores[letter] = {};
-    for (const d of cfg.rubric.dimensions) scores[letter]![d.id] = { score: scoreFor(frame, d.id), evidence: `evidence for ${letter}.${d.id}` };
+    for (const d of dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version)) scores[letter]![d.id] = { score: scoreFor(frame, d.id), evidence: `evidence for ${letter}.${d.id}` };
   }
   writeFileSync(join(runDir, "critic/pass-a.yaml"), yaml({ problem_hash: H, pass: "A", scores }));
   phaseCritique(cfg, runDir);
@@ -196,7 +197,7 @@ test("a one anchor point margin is named in the recommendation", () => {
   // The cluster's first member scores one point higher on one weight-1 dimension. That is the
   // smallest separation the rubric can express, and it decided two of the four contested
   // clusters in the recorded corpus.
-  const cheapest = cfg.rubric.dimensions.find((d) => d.weight === 1)!.id;
+  const cheapest = dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).find((d) => d.weight === 1)!.id;
   const synth = runToSynth((frame, dim) => (frame === clustered[0] && dim === cheapest ? 3 : 2));
   const rec = sections(synth)["Recommendation"]!;
   assert.match(rec, /\*\*Close call\.\*\*/);

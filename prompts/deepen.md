@@ -38,7 +38,16 @@ verdict: <defend | fold>
 response: |
   <If defend: why the objection does not overturn the position, in concrete terms. If fold:
   what the objection got right and what the position should have been.>
-revised_position: <one sentence. Unchanged if defended cleanly. Revised if the defence cost something. Null if folded.>
-revised_falsifier: <updated if the objection sharpened it>
+revised_position: >-
+  <one sentence. Unchanged if defended cleanly. Revised if the defence cost something.>
+revised_falsifier: >-
+  <updated if the objection sharpened it>
 confidence: <low | medium | high>
 ```
+
+`response`, `revised_position` and `revised_falsifier` all carry prose, so all three are block
+scalars. A value written on the key's own line ends at the first `: ` inside it and the artifact is
+rejected; a run has already been lost to exactly that. Keep the `|` and the `>-` and the two-space
+indent and you can write any sentence you like, colons included.
+
+If you folded, write `revised_position: null` on one line, without the `>-`.

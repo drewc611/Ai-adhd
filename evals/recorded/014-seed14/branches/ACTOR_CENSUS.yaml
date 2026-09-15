@@ -1,0 +1,70 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: ACTOR_CENSUS
+position: >-
+  Wrap the script in an flock-guarded, idempotent, resumable single-run entrypoint whose lock file
+  records the holder's PID and start time, so the on-call human can see who holds the job and kill
+  or rerun it by hand at any instant.
+reasoning: |
+  1. Who can act on this system.
+     - The on-call human at a shell: can SIGKILL a running copy, or comment out the crontab line,
+       in seconds, at zero cost, with no deploy and no review.
+     - The operator/team who owns the box: can edit the schedule or ship a new script version;
+       minutes to hours, costs a deploy.
+     - The cron daemon: fires on the wall clock whether or not the previous run is alive. It takes
+       its action for free, every interval, forever, and it has no opinion about overlap.
+     - The upstream service the script calls: can raise its latency or start rate-limiting, which
+       stretches a run past the interval. It acts instantly, at no cost to itself, without telling
+       anyone here.
+     - Whoever writes rows into the work set: can make a single run's input ten times larger by
+       doing something ordinary upstream. Free, unintentional, effective.
+     - An attacker: can do that same thing deliberately, inflating the queue until runs overlap
+       without bound and the box falls over. Cheap, and indistinguishable from a busy day.
+     - The downstream database: can hold a lock or a long transaction and stall a run.
+     - The person who pays: can shrink the instance or cap spend, which decides how many
+       concurrent copies survive before the box dies.
+  2. Named versus omitted. The statement names "we" (the operator, deciding a direction), the cron
+     scheduler, and the Python script. It leaves out the human at the keyboard during the incident,
+     the upstream service whose latency change is the most likely trigger, the data writer, the
+     attacker, the database, and the payer. Note what the framing does: "it has started overlapping
+     with itself" treats the system as autonomous and the overlap as something the software did.
+     Software did not do it. Something with hands changed the runtime.
+  3. Fastest and cheapest of the omitted. The human at the keyboard, by a wide margin. Seconds,
+     free, no approval, no deploy. Every other omitted actor is at best one edit or one deploy
+     behind them, and the attacker and the upstream service act at zero cost but only indirectly.
+  4. Design when that actor is primary. Stop choosing between locking strategies and start
+     designing the surface that human touches during the incident. The job becomes something that
+     is safe to kill mid-flight and safe to start by hand: each unit of work committed
+     individually and idempotently, so a killed run loses nothing and a rerun redoes nothing; a
+     lock file carrying PID and start time so the human can tell "still working" from "wedged
+     since Tuesday" at a glance; a non-zero, logged, loud outcome when a run exits because the
+     lock was held, so skipping is visible rather than silent; and a single documented command to
+     run it by hand. flock does the mechanical exclusion, but exclusion is not the deliverable -
+     the deliverable is that the fastest controller can intervene correctly at 3am without reading
+     the source. The queue-and-workers rewrite and the scheduler swap both cost a deploy and
+     neither helps the person holding the terminal tonight.
+forecloses:
+  - >-
+    Rules out the queue-and-worker-pool rewrite (Celery, RQ, a managed job runner) as the first
+    move: it replaces a five-line change with new infrastructure, and it removes the shell-level
+    kill-and-rerun the on-call human currently relies on.
+  - >-
+    Rules out treating overlap as acceptable and making the job concurrency-safe by sharding work
+    across simultaneous runs; that path makes every future incident require reasoning about N live
+    copies instead of one.
+  - >-
+    Rules out fixing this by widening the cron interval or adding jitter, which hides the symptom
+    until runtime grows again and tells the human nothing when it does.
+falsifier: >-
+  Pull start and end timestamps for the last thirty runs. If median runtime already exceeds the
+  cron interval as a steady condition rather than an occasional spike, then a lock converts overlap
+  into permanent silent skipping, the job never runs to completion again, and this position is
+  wrong - the real problem is throughput and belongs in the queue rewrite this position forecloses.
+  A second cheap check: if nobody has shell access to the host (immutable container, managed
+  scheduler), the actor this position is built around does not exist and the whole design collapses.
+missing_actor: >-
+  The on-call human at a shell: can SIGKILL a running copy or comment out the crontab line within
+  seconds, at zero cost and with no deploy or review, and does it invisibly unless the job records
+  who holds the lock and when they took it.
+confidence: medium
+```

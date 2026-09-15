@@ -13,9 +13,9 @@
 <p align="center">
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-425-2ea44f" alt="425 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-181-2ea44f" alt="181 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D24%20resolved-0969da" alt="D1 through D24 resolved"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-497-2ea44f" alt="497 TypeScript tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-246-2ea44f" alt="246 Python tests"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D40%20resolved-0969da" alt="D1 through D40 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -77,33 +77,52 @@ What it never surfaces:
 That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
 the whole system. If a run only returns the timeout triple, the run failed.
 
-**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the three real
-recorded runs of this fixture it has passed once — in the run it was written against.
+**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the five real
+recorded runs of this fixture, every one of its four `must_surface` items has now missed at least
+once, including the one that asks least.
 
-| assertion | seed 1 | seed 2 | alt frames | rate |
-|---|---|---|---|---|
-| the human who can cancel | ok | **miss** | ok | 2/3 |
-| the retry target questioned | ok | ok | **miss** | 2/3 |
-| who pays for the retry | ok | ok | **miss** | 2/3 |
-| a trap named | ok | ok | ok | 3/3 |
+| assertion | seed 1 | seed 2 | seed 3 | seed 3 again | alt frames | rate |
+|---|---|---|---|---|---|---|
+| the human who can cancel | ok | **miss** | ok | ok | ok | 4/5 |
+| the retry target questioned | ok | ok | ok | ok | **miss** | 4/5 |
+| who pays for the retry | ok | ok | ok | ok | **miss** | 4/5 |
+| a trap named | ok | ok | ok | **miss** | ok | 4/5 |
 
-**The four assertions have different dependencies, and that is the finding.** An earlier version of
-this paragraph explained the seed-2 misses away as a quirk of one sample rather than anything to do
-with the frame library, and E1b contradicted it. E3 then found that one of the two was neither: *who
-pays for the retry* had missed at seed 2 because the assertion's patterns only recognised seed 1's
-wording. `LEDGER` priced retries as a share of traffic and the critic's own detector output named the
-payer; the regexes wanted "pays for" and got "payer". Widening a pattern after seeing which runs
-failed is the move this repo refuses, so E3 registered the candidates and the adoption rule first and
-let the negative control decide. Two of three were adopted. The third, `retry budget`, cleared the
-control and was refused anyway: it matches a currency with no payer, and this item asks for both.
+**The four assertions have different dependencies, and seed 3 makes the split clean.** The two
+retry items hold on every seed and miss only when the frames change, which is a frame-set
+dependency: `LEDGER` and `ACTOR_CENSUS` carry them and `alt frames` dispatches neither. *The human
+who can cancel* does the opposite — it holds under a different frame set and missed one reseed out
+of four, which is sample variance, and seed 2 was the unlucky draw rather than seed 1 the lucky one.
+An earlier version of this paragraph read the seed-2 misses as "one sample, not the frame library"
+for both items; that was right about one and wrong about the other, and it took two more runs to
+separate them.
 
-*The human who can cancel* survived the frame swap and not the reseed, so for that one the sample
-reading holds. Nothing here is at 3/3 except the assertion that asks least.
+E3 is why *who pays for the retry* reads 4/5 rather than 3/5. It had missed at seed 2 only because
+the assertion's patterns recognised seed 1's wording: `LEDGER` priced retries as a share of traffic
+and the critic's own detector output named the payer, while the regexes wanted "pays for" and got
+"payer". Widening a pattern after seeing which runs failed is the move this repo refuses, so E3
+registered the candidates and the adoption rule first and let the negative control decide. Two of
+three were adopted. The third, `retry budget`, cleared the control and was refused anyway: it matches
+a currency with no payer, and this item asks for both.
+
+**The fourth column is the one to read.** *Seed 3 again* is fixture 001 run a second time at seed 3
+with briefs byte-identical to the first, so the only thing that changed is the session. It is the
+only column in the table that isolates anything, and *a trap named* — the assertion that asks almost
+nothing, any `T[1-8]` anywhere in the pruned block — is what it broke. That run's critic fired no
+detector on any branch and pruned nobody, where the identical pack had fired T7 twice. Three of that
+run's failed assertions are that single event, because an empty pruned block has nothing for any of
+them to read.
+
+**What fails at seed 3 is not a `must_surface` item at all.** It is the structural expectation that
+the pruned block names one of T1, T2 or T3. Only T7 fired, on `FRAME_BREAKER` and `ACTOR_CENSUS`.
+That expectation has now held on exactly one run out of five — the one it was written against — which
+makes it the seed-1 artifact this table was originally reaching for, and the assertion most worth
+re-reading before the next run.
 
 The audit reports these rates rather than leaving them to prose, and a `sometimes` verdict is not a
-pattern to loosen: it says nothing in the dispatched set reliably asks that question. The only
-assertion that holds everywhere is `trap_named`, which asks almost nothing — any `T[1-8]` anywhere in
-the pruned block. `docs/EXPERIMENTS.md` registered both experiments before they ran.
+pattern to loosen: it says nothing in the dispatched set reliably asks that question. Nothing on this
+fixture holds everywhere any more. `docs/EXPERIMENTS.md` registered both experiments before they ran,
+and E1a now carries the same-seed repeat that produced the fourth column.
 
 ## When to reach for it
 
@@ -275,11 +294,13 @@ carrying it.
 ```
 config/     frames, routing, critic rubric      <- the actual IP
 prompts/    orchestrator, branch, critic, deepen, synthesis
-docs/       architecture, traps, decisions, superagent, manifest, provenance, distribution, backlog
+docs/       architecture, traps, decisions, experiments, superagent, manifest, provenance,
+            distribution, backlog, FAQ, frame authoring, failure gallery, worked example,
+            writeup
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       425 tests over all of it
+test/       497 tests over all of it
 analysis/   Python: reliability, bootstrap intervals, two language models trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 agents/     four run subagents, five mission subagents, the trainer and its governor
@@ -349,6 +370,7 @@ node dist/src/cli.js frames --collisions     # which frame names are also ordina
 node dist/src/cli.js frames --health         # docs/RETIREMENT.md's bar, counted
 node dist/src/cli.js frames --axes           # frames per axis, and axes no run has exercised
 node dist/src/cli.js frames --drift          # runs that used a frame whose definition has changed since
+node dist/src/cli.js frames --reach          # can routing dispatch each frame at all? asks the selector, not the corpus
 node dist/src/cli.js cost                    # token spend per run, by phase and by frame, against the estimate
 node dist/src/cli.js os stats                # throughput, phase timing and lease expiry rate from the journal
 node dist/src/cli.js replay                  # re-render every recorded synthesis and report drift
@@ -420,7 +442,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D24 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D40 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -447,23 +469,55 @@ inside D2 — no download, no key, no provider SDK — and it exists to make an 
 it beats a well-smoothed n-gram.
 
 E6 measured it and the assertion holds. At a matched 8,192-word vocabulary on the same 20M tokens, the
-transformer scores **64.1** against Kneser-Ney's **30.7** — a **2.09x** loss, inside the 1.5x-to-3x band
-registered before the run.
+transformer scores **64.29** against Kneser-Ney's **30.95** — a **2.077x** loss, inside the 1.5x-to-3x
+band registered before the run.
 
 E7 then added an LSTM, to ask whether that loss was about attention or about neural language models at
-this scale. The answer is attention: the LSTM scores **159.3**, losing to the transformer by 2.49x and
-to the n-gram by 5.18x, and **the registered prediction put it between the two** — wrong by 2.7x, in
-the direction that narrows E6's conclusion rather than generalising it. Being neural is not the
+this scale. The answer is attention: the LSTM scores **154.81**, losing to the transformer by 2.408x
+and to the n-gram by 5.00x, and **the registered prediction put it between the two** — wrong by 2.6x,
+in the direction that narrows E6's conclusion rather than generalising it. Being neural is not the
 handicap; lacking attention is a further and larger one. D24 has the arithmetic. The shipped model is
 unchanged.
+
+E9 closed the hole both of those left. E6 matched the vocabularies by *capping the n-gram* to 8,192
+types, so every figure above is a comparison at a vocabulary neither model would have chosen, and
+nothing said whether the transformer's loss was the architecture or the cap. Sampled softmax makes
+148,114 types affordable, so cell D is the transformer at the n-gram's own vocabulary: it scores
+**142.41** against the shipped model's **25.82**, a **5.52x** loss, with `comparable_heldout` accepting
+the pair because both sit at 0.915101% out-of-vocabulary — identical to every digit, since both draw
+the same types on the same frozen set.
+
+**The cap was not the explanation.** At its own vocabulary the transformer loses by more, not less.
+The figure carries one asymmetry, stated with it everywhere: cell D read 18,341,790 tokens against the
+shipped model's 64,347,232, so this is a transformer on 3.5x less text losing by 5.5x, and whether it
+closes the gap on equal text is a 4.7-hour training run nobody has done.
+
+Every figure here is **post-D26**, re-measured once the repository's own prose came out of the corpus.
+D27 has the before and after: the shipped 25.82 reproduced to two decimals, E6's ratio moved 2.086x to
+**2.077x** and E7's 2.485x to **2.408x**, so nothing left its registered band. The re-measurement found
+three defects on the way — a trainer D26 had missed, a scorer that held two models at once, and two
+ReDoS bounds that let quadratic blowup through — and none of them were in the figures.
 
 Held-out perplexity is what says whether a training run improved anything, because vocabulary size,
 table size and wall clock all rise when a model gets worse. Two numbers from different held-out sets
 are two numbers about two tests, and `comparable_heldout` refuses five ways to be fooled by that: a
 truncated score beside a finished one, the same text tokenized differently, a missing or differing
-fingerprint, an in-vocabulary-only score beside an all-targets one, and a vocabulary gap that hands
-the smaller vocabulary a discount on all targets. Every one of those is a mistake this repository
-published or nearly published. See D13, D16, D20 and `analysis/README.md`.
+fingerprint, an in-vocabulary-only score beside an all-targets one, and a vocabulary gap too large for
+the scores to carry. Every one of those is a mistake this repository published or nearly published.
+
+That last threshold was a round percentage point until **E8 measured what a percentage point is worth**:
+four Kneser-Ney models differing only in vocabulary cap score **30.95 / 35.52 / 39.31 / 42.77** at
+**5.797% / 4.044% / 3.063% / 2.391%** held-out OOV, which is up to **5.1 perplexity points per point of
+OOV** and makes the old threshold 3.3x too loose.
+
+Three corrections came with it. Half the reason written beside the threshold was wrong — `<unk>` is
+cheaper than a real token at 5.8% OOV and dearer at 2.4%. **Writing the registration changed the corpus
+the registration was about**, because `docs/` was a corpus source, so **D26 took the repository's own
+prose out of every measurement**; models carry a `corpus_fingerprint` over their token stream and
+`comparable_training` refuses two models that did not read the same text. And the experiment's own
+pre-registered linearity test **does not discriminate** — its verdict flips across that 0.105% corpus
+change — so the threshold takes the worst measured slope as the conservative side of a coin toss. See
+D13, D16, D20, D25, D26 and `analysis/README.md`.
 
 That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
 `foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%
@@ -517,11 +571,18 @@ A reader should start here rather than discover it.
   figure.
 - **`002-kernel-enduser` is not robust to who scored it.** Four critics split 2-2 on which
   position goes to deepen. Left that way on purpose.
-- **`TaskList` is the one isolation claim that is argued rather than demonstrated.** It is the
-  launch permit every isolated agent carries, and what it shows a branch inside a running
-  dispatch has never been observed. D4 says so.
-- **The plugin agents have never run as plugin agents.** Every recorded run used general-purpose
-  subagents, so the manifest and the tool grants are checked mechanically and never end to end.
+- **Two launch permits were picked on reasoning and both were wrong.** `TaskList` is recognised in a
+  Claude Code remote session and not grantable to a subagent; `TodoWrite` is not recognised there at
+  all. D38 stops guessing: the permit is the pair, so a host with either can launch the three agents,
+  and a host with neither falls back to `adhd-branch-search` rather than to `general-purpose` — which
+  is *safer* on the sibling rule, because the web pair cannot read a file and `Read` can. The
+  remaining gap is that no host has been seen resolving either name, so rung 1 is still untested.
+- **Rung 1 of the dispatch ladder has never run anywhere.** `adhd-branch`, `adhd-critic` and
+  `adhd-deepen` declare `TodoWrite, TaskList` and no observed host resolves either for a subagent, so
+  those three agent files remain untested in their real role (D36, D38, backlog 93). What *has* run is
+  rung 2: three branches dispatched as `adhd-branch-search`, a shipped plugin agent launching under its
+  own definition, whose grant cannot reach a sibling artifact. That is the property that matters, and
+  every run recorded before it used `general-purpose`, which carries `Read`.
 - **One fixture assertion is still satisfied by a negative control.** `003/reframe` matches on
   deploy-pain vocabulary, which the real run uses as a reframe and the consensus answer uses as a
   selling point. Separating them needs a run that has not happened; writing a pattern against the

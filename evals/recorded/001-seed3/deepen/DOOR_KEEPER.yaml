@@ -1,0 +1,54 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+verdict: defend
+response: |
+  The objection is right about the end state and wrong about the ordering, and it names one
+  real error in the position that costs something to fix.
+
+  1. It compares the position to the ideal rather than to the status quo. The alternative to a
+  10s total deadline today is not a propagated deadline today; it is whatever is in the code
+  now, which is either no timeout or a library default at 30s or more. The failure mode the
+  objection describes — a socket, pool slot, worker and upstream transaction held to produce an
+  answer nobody will read, with the bill paid by the queue behind it — is strictly worse under
+  both of those. Going from infinite or 60s to 10s shrinks the orphaned-work window by a large
+  multiple or from unbounded, and it shrinks it this afternoon. There is no ordering that
+  reaches propagated deadlines without first having a bounded ceiling and a config surface to
+  hold it, so this step is on every path, not an alternative to the right one.
+
+  2. Propagation does not remove the constant, it demotes it to one argument of a min. The
+  effective timeout becomes min(remaining caller budget, ceiling), and the ceiling still has to
+  exist for every caller that supplies no deadline, an absurd one, or a hostile one — cron jobs,
+  batch backfills, an internal caller that passes five minutes because it has no deadline of its
+  own. A system with propagation and no ceiling has simply moved the choice of infinity to
+  whoever calls you. The objection therefore proves the constant insufficient, which the
+  position already conceded in its fifth step, not unsound.
+
+  3. The hit that lands. The falsifier named the wrong instrument. The dependency's latency
+  histogram cannot report on the caller's remaining budget, and no amount of reading it will.
+  That is an error in the position, not a nuance. But the remedy the objection's own diagnosis
+  implies is a metric, not a refactor: count outbound calls still in flight after the inbound
+  caller has disconnected or cancelled, and count caller-side cancellations per endpoint. That
+  is hours of work, fully reversible, and it reports directly on the quantity the objection says
+  is invisible. The blind spot was real; closing it is a two-way door, which is why it goes in
+  alongside the default rather than displacing it.
+
+  4. The proxy is a genuine missing actor and it cuts toward the position. A 10s total deadline
+  sits well below the typical sixty-second enforced cutoff, so in this configuration the number
+  is not decoration; the numbers that would be decoration are exactly the generous ones — 30s,
+  60s, the library default — that the position already forecloses. What the position failed to do
+  is verify the cutoff, so that check joins the black-hole test on the same-day list: find the
+  proxy, mesh and load-balancer timeouts and confirm ours is the innermost.
+
+  5. What the defence costs. The fifth step stops being conditional on a fat tail and becomes
+  the scheduled next change, with its trigger moved off the dependency's latency shape and onto
+  two caller-side facts: any observed orphaned work, or any handler making more than one
+  sequential downstream call. And the ownership question the objection ends on gets a named
+  owner and a date rather than being left for the histogram to raise, which it never would. The
+  objection is correct that one number settles nothing about who owns the end-to-end budget. It
+  does not follow that the number should wait for that conversation, because the unbounded
+  window stays open for its whole duration.
+revised_position: "Set the aggressive config default today as a ceiling rather than as the answer — 2s connect, 5s per-attempt read, 10s total, no retries, verified to sit inside the proxy and mesh cutoffs — ship caller-side cancellation and orphaned-work metrics in the same change, and schedule deadline propagation as the next change with an owner rather than gating it on the dependency's histogram."
+revised_falsifier: "Caller-side, within days rather than a week: any non-trivial count of outbound calls still running after the inbound caller has disconnected or cancelled, or any handler making more than one sequential downstream call, means propagation belonged in this change and constant-first sequencing was wrong. Cheaper and equally falsifying: a proxy, load balancer or mesh cutoff below the 10s total deadline, or a connect timeout that does not cover DNS and TLS, either of which means the configured number was never the number in effect. The dependency-histogram falsifier is retained only for choosing the value, and is explicitly not evidence about the shape."
+confidence: medium
+```

@@ -1,0 +1,132 @@
+{
+  "budget": {
+    "counts": {
+      "ceilings": {
+        "max_ngrams": 60000000,
+        "max_rss_mb": 11000,
+        "max_seconds": 2400.0,
+        "max_tokens": 20000000
+      },
+      "checks": 997,
+      "peak_rss_mb": 3263,
+      "seconds": 193.22,
+      "stopped_because": "token ceiling: 20,000,016 >= 20,000,000",
+      "tokens": 20000016
+    },
+    "vocabulary": {
+      "ceilings": {
+        "max_ngrams": 60000000,
+        "max_rss_mb": 11000,
+        "max_seconds": 2400.0,
+        "max_tokens": 20000000
+      },
+      "checks": 997,
+      "peak_rss_mb": 3263,
+      "seconds": 193.23,
+      "stopped_because": "token ceiling: 20,000,016 >= 20,000,000",
+      "tokens": 20000016
+    }
+  },
+  "corpus_fingerprint": "d995281acd1e576f",
+  "discounts": [
+    [
+      0.2721,
+      0.779,
+      1.219
+    ],
+    [
+      0.6646,
+      1.1166,
+      1.4942
+    ],
+    [
+      0.7955,
+      1.196,
+      1.4655
+    ],
+    [
+      0.6927,
+      1.3315,
+      1.5063
+    ]
+  ],
+  "documents": 7345,
+  "min_count": 3,
+  "model": "/tmp/claude-0/-home-user-Ai-adhd/7e17329f-76d2-5e63-a23b-d97dc2aa81b3/scratchpad/e8raw/e8-v1.kn.gz",
+  "ngrams": 13382525,
+  "oov_rate": 0.02519,
+  "order": 4,
+  "python": "3.11.15",
+  "seconds": 193.22,
+  "sentences": 898944,
+  "sources": [
+    {
+      "bytes": 333308,
+      "files": 14,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-docs",
+      "path": "docs",
+      "split": "train"
+    },
+    {
+      "bytes": 11940,
+      "files": 7,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-prompts",
+      "path": "prompts",
+      "split": "train"
+    },
+    {
+      "bytes": 36534,
+      "files": 2,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "repo-readme",
+      "path": ".",
+      "split": "train"
+    },
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 11785368,
+      "files": 615,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "pep",
+      "path": "analysis/corpora/pep",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "tokens_seen": 20000016,
+  "vocab_size": 16384,
+  "vocab_truncated": {
+    "tokens": 413322,
+    "types": 55573
+  },
+  "vocabulary_covers_counts": true,
+  "vocabulary_fingerprint": "d995281acd1e576f"
+}

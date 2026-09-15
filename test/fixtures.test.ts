@@ -75,20 +75,31 @@ test("two items sharing an id is an error, because a baseline cannot tell them a
   assert.ok(lintFixture(dup).some((i) => i.severity === "error" && /share the id/.test(i.message)));
 });
 
-test("the shipped fixtures have no lint errors, and their two warnings are real", () => {
+test("the shipped fixtures lint clean, and the two findings that were pinned here are fixed", () => {
   const r = lintFixtures(cfg);
   assert.deepEqual(r.errors, [], r.errors.map((e) => `${e.fixture}/${e.item}: ${e.message}`).join("\n"));
 
-  // Both warnings are findings, not noise, and this pins them so a fix has to be deliberate.
-  const ids = r.warnings.map((w) => `${w.fixture}/${w.item}`).sort();
-  assert.deepEqual(ids, ["002/must_surface.or_so_noticed", "003/must_surface.one_way_door"]);
+  // This test used to pin two warnings as deliberate — `002/or_so_noticed` and `003/one_way_door`
+  // — so that fixing them had to be a decision rather than a drift. Backlog 70 was that decision,
+  // and both are fixed, so the pin becomes its inverse: they must not come back.
+  assert.deepEqual(r.warnings.map((w) => `${w.fixture}/${w.item}`).sort(), []);
 
-  // 002's prompt literally contains "or so", so any branch quoting the question satisfies an
-  // assertion meant to check the imprecision is treated as evidence.
+  // 002's prompt still contains "or so" — the prompt is evidence and is never edited to suit an
+  // assertion. What changed is that the assertion no longer lists it, so quoting the question no
+  // longer satisfies a check about whether the imprecision was *treated as evidence*.
   assert.match(fx("002").prompt, /or so/);
-  // 003 lists "reversib" and "irreversib" as alternatives; the first matches inside the second.
+  const orSo = fx("002").must_surface.find((m) => m.id === "or_so_noticed")!;
+  assert.ok(!orSo.any_of.includes("or so"), "the prompt's own phrase is back in the assertion");
+  assert.ok(orSo.any_of.length >= 4, "the four patterns that were doing the work should remain");
+
+  // 003 keeps both alternatives and the looser one is now bounded, so it cannot match inside
+  // "irreversible" — two words that mean opposite things in an assertion about which door is which.
   const oneWay = fx("003").must_surface.find((m) => m.id === "one_way_door")!;
-  assert.ok(oneWay.any_of.some((p) => p.includes("reversib")));
+  assert.ok(oneWay.any_of.includes("\\breversib"), "the bounded form is missing");
+  assert.ok(!oneWay.any_of.includes("reversib"), "the unbounded form matches irreversible too");
+  assert.ok(oneWay.any_of.includes("irreversib"), "the specific alternative was dropped rather than unshadowed");
+  assert.ok(!new RegExp(oneWay.any_of.find((p) => p.includes("breversib"))!, "i").test("an irreversible door"));
+  assert.ok(new RegExp(oneWay.any_of.find((p) => p.includes("breversib"))!, "i").test("a reversible door"));
 });
 
 test("the prompt check applies to must_surface only, where its meaning holds", () => {
@@ -111,8 +122,14 @@ test("assertion history reports which runs held each item, matching the recorded
   const h = assertionHistory(cfg);
   const row = (f: string, i: string) => h.rows.find((r) => r.fixture === f && r.item === i)!;
 
-  // E1a: human_cancel survived a whole new frame set but not a reseed.
-  assert.deepEqual(row("001", "human_cancel").passing.sort(), ["001-altframes", "001-first-run"]);
+  // E1a: human_cancel survived a whole new frame set but not a reseed — and seed 3 put it back,
+  // so it holds on four runs of five and seed 2 was the unlucky draw rather than seed 1 the lucky
+  // one. The registered reading ("one sample, not the frame set") is confirmed for this item and
+  // its sign is the opposite of what the seed 2 recording implies on its own. `001-seed3-repeat`
+  // is the same pack as `001-seed3` at the same seed, so it is a fifth run and not a fifth draw;
+  // that the three content items all reproduced on it is the evidence that they are stable, and
+  // backlog 99 is the counter that cannot tell the two apart.
+  assert.deepEqual(row("001", "human_cancel").passing.sort(), ["001-altframes", "001-first-run", "001-seed3", "001-seed3-repeat"]);
   assert.deepEqual(row("001", "human_cancel").failing, ["001-seed2"]);
   // E1b: retry_target_questioned survived a reseed but not the frame swap.
   assert.deepEqual(row("001", "retry_target_questioned").failing, ["001-altframes"]);
@@ -122,8 +139,12 @@ test("assertion history reports which runs held each item, matching the recorded
   // `payer` and `priced in` were registered first and adopted after the negative control failed
   // both. `retry budget` cleared the control and was refused anyway: a currency with no payer, and
   // this item asks for both, which is why altframes is still failing.
-  assert.deepEqual(row("001", "retry_cost").passing.sort(), ["001-first-run", "001-seed2"]);
+  // Three seeds, three passes, and the only miss is the run that changed the frames — so this is a
+  // frame-set dependency and not sample variance, which is the cleanest form E1b's supersession
+  // of E1a could take.
+  assert.deepEqual(row("001", "retry_cost").passing.sort(), ["001-first-run", "001-seed2", "001-seed3", "001-seed3-repeat"]);
   assert.deepEqual(row("001", "retry_cost").failing, ["001-altframes"]);
+  assert.deepEqual(row("001", "retry_target_questioned").passing.sort(), ["001-first-run", "001-seed2", "001-seed3", "001-seed3-repeat"]);
   // The frame-set gap that 004 is recorded as failing on.
   assert.deepEqual(row("004", "false_means").passing, []);
 
@@ -150,7 +171,7 @@ test("the gate catches an assertion that stops holding on a run it used to hold 
   const g = regressionGate(cfg, { fixturesDir: s.fixtures, recordedDir: s.recorded });
   assert.equal(g.regressions.length, 1);
   assert.equal(g.regressions[0]!.item, "human_cancel");
-  assert.deepEqual(g.regressions[0]!.now_failing.sort(), ["001-altframes", "001-first-run"]);
+  assert.deepEqual(g.regressions[0]!.now_failing.sort(), ["001-altframes", "001-first-run", "001-seed3", "001-seed3-repeat"]);
   assert.match(g.text, /^REGRESSION\s+001\/human_cancel/m);
 });
 

@@ -1,0 +1,83 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: ACTOR_CENSUS
+position: >-
+  Wrap the cron line itself in flock on a named lock file that records its holder and
+  ships with a documented one-command force-release, and judge every other option by
+  whether a tired on-call operator can see it and break it from a bare shell.
+reasoning: |
+  1. Who can act on this system.
+
+  - The developer at the keyboard: edits the crontab line, adds a lock, ships a new
+    script. Minutes, free, but needs a repo, a review and a deploy.
+  - The on-call operator: kills the running PID, comments out the cron entry, drains or
+    reboots the host. Seconds, free, at 3am, possibly with no repo access at all.
+  - The cron daemon: fires the next run on schedule whether or not the last one finished.
+    Instant, free, and completely indifferent. It is the mechanism of the overlap, not
+    its cause.
+  - The upstream service the Python script calls: answers slowly, rate-limits, stalls a
+    socket. Instant, free, no notice to anyone. This is almost certainly what turned a
+    job that used to fit inside its interval into one that does not.
+  - The downstream consumer of whatever the job writes: acts by being harmed - reads a
+    half-written table, a double-charged row, a duplicated email - and then escalates.
+  - Anyone who controls the job's input, including an attacker: enqueues a large backlog
+    or slows a dependency so runs pile up. Very cheap amplification; one slow run becomes
+    N concurrent runs and the host falls over.
+  - The person who pays: sees N copies burning CPU or API quota and can cancel the whole
+    job. Slow to act, but final.
+  - The host and its OOM killer: kills a run mid-flight and leaves behind whatever lock
+    or partial state that run was holding. Instant, free, and the reason a naive lock
+    file is worse than none.
+
+  2. Named versus omitted. The problem named three parties: "we" (the team that owns the
+  script), the script itself, and the cron scheduler. It left out the on-call operator,
+  the upstream dependency, the downstream consumer, the payer, the OOM killer, and anyone
+  who can influence the workload. Notice also that the problem treats the overlap as a
+  property of the system - "it has started overlapping with itself" - which is the
+  autonomy illusion. Something changed. Something with hands, or a dependency answered
+  slower than it used to.
+
+  3. Fastest and cheapest of the omitted. The upstream service acts faster than anyone,
+  but it can only cause the condition, never resolve it. The fastest and cheapest party
+  who can actually change the outcome while it is happening is the on-call operator:
+  seconds, zero cost, no branch, no review, no deploy. Every other fix has a deploy
+  cycle in front of it. The operator's kill is available right now, tonight, before any
+  design is chosen.
+
+  4. The design when the operator is primary control. The request was for "a few
+  different directions," and from inside this frame the directions are not really
+  flock versus a queue versus an idempotent job - they are a choice about who holds the
+  kill switch. So: put the concurrency control where the operator already is. flock on
+  the crontab line, so the mechanism is visible in the same place the schedule is, not
+  buried in the script. A holder record written next to the lock - pid, host, start time,
+  run id, current step - so "who has it and since when" is a cat away. Staleness decided
+  by pid liveness, not by age, because the OOM killer is a real actor. A loud log line
+  and a metric when a run is skipped, so a skip is an event rather than silence. And a
+  single documented command to force-release, written in the runbook, not inferred.
+  That design is worse on elegance than a job queue and better on the only axis that
+  matters at 3am: it can be understood and broken by the fastest controller in the census.
+forecloses:
+  - >-
+    Making the script reentrant and idempotent so overlapping runs are harmless - it is
+    the most elegant answer and it leaves the operator with nothing to look at, nothing
+    to turn off, and no signal that anything is wrong while the pile-up eats the host.
+  - >-
+    Moving the job to a hosted scheduler or job queue (Airflow, Celery beat, a Kubernetes
+    CronJob with concurrencyPolicy) as the first move - it relocates the kill switch into
+    a UI or API the person holding the pager may not have credentials for at 3am.
+  - >-
+    A timeout that silently kills or supersedes the previous run - auto-recovery converts
+    a visible incident into an invisible one and removes the operator from the loop
+    entirely.
+falsifier: >-
+  Search the last six months of pager history and shell history on that host for a single
+  human intervention during an overlap - a kill, a crontab edit, a page - and check
+  whether any alert on job runtime or concurrency exists at all. If nobody has ever
+  intervened and nothing would ever page them, there is no operator holding this system,
+  and the design should be optimized for the payer or the upstream instead.
+missing_actor: >-
+  The upstream service the Python script calls: it can extend any single run's duration
+  arbitrarily, for free, with no announcement and no change on your side, and that is the
+  most likely trigger for an overlap that "started" happening.
+confidence: medium
+```

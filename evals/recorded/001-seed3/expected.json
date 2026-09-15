@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from run 20260915013807-7e664e, the seed 3 dispatch of fixture 001. Driven by hand through `adhd run --phase`, not the kernel, so there is no os.json. Failing item: expect pruned_traps_include_any T1,T2,T3 \u2014 only T7 fired, on FRAME_BREAKER and ACTOR_CENSUS. All four must_surface items pass, including human_cancel and retry_cost, which the seed 2 recording lists as failing. Recorded as observed. This is the second attempt at seed 3: the first, 20260914223732-7e664e, aborted at critique under D30 with three of five artifacts unparseable, and D37 is the fix."
+}

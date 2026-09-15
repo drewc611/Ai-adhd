@@ -65,23 +65,31 @@ problem_hash: {{problem_hash}}
 pass: B
 clusters:
   - id: <short_snake_case_name>
-    action: <one sentence, what the asker would do>
+    action: "<one sentence, what the asker would do>"
     members: [<frame_id>, ...]
     singleton: <true|false>
-    strongest_objection: <paragraph, or null only if every member has a fired trap>
+    strongest_objection: "<paragraph>"   # or: strongest_objection: null, on one line, only if every member has a fired trap
 traps:
   <frame_id>:
-    T1: { fired: <bool>, evidence: <text> }
-    T2: { fired: <bool>, evidence: <text> }
-    T3: { fired: <bool>, evidence: <text> }
-    T4: { fired: <bool>, evidence: <text> }
-    T5: { fired: <bool>, evidence: <text> }
-    T6: { fired: <bool>, evidence: <text> }
-    T7: { fired: <bool>, evidence: <text> }
-    T8: { fired: <bool>, evidence: <text> }
+    T1: { fired: <bool>, evidence: "<text>" }
+    T2: { fired: <bool>, evidence: "<text>" }
+    T3: { fired: <bool>, evidence: "<text>" }
+    T4: { fired: <bool>, evidence: "<text>" }
+    T5: { fired: <bool>, evidence: "<text>" }
+    T6: { fired: <bool>, evidence: "<text>" }
+    T7: { fired: <bool>, evidence: "<text>" }
+    T8: { fired: <bool>, evidence: "<text>" }
 run_level:
-  T2_no_branch_attacked_assumption: { fired: <bool>, evidence: <text> }
-  T6_all_missing_actor_null: { fired: <bool>, evidence: <text> }
+  T2_no_branch_attacked_assumption: { fired: <bool>, evidence: "<text>" }
+  T6_all_missing_actor_null: { fired: <bool>, evidence: "<text>" }
 lint_verdicts:
-  - { frame: <frame_id>, trap: <Tn>, lint_said: <bool>, critic_says: <bool>, evidence: <text> }
+  - { frame: <frame_id>, trap: <Tn>, lint_said: <bool>, critic_says: <bool>, evidence: "<text>" }
 ```
+
+Every free-text value here is **quoted**, and that is not decoration. A value written bare inside
+a `{ }` flow mapping ends at the first `: ` in it, so `evidence: Rules out X: because Y` closes the
+mapping early and the whole pass is rejected. The branch contract solves this by folding its prose
+fields with `>-`; a folded scalar cannot sit inside a flow mapping, so here the quotes do the same
+job. Quote the value and you can write any sentence you like, colons included. A run has already
+been lost to exactly this in the branch contract.
+

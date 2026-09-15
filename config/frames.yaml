@@ -237,7 +237,11 @@ frames:
 
   - id: FIRST_PRINCIPLES
     name: First principles
-    axis: mechanism
+    # D35: its own axis, not `mechanism`. MECHANIC asks how the thing works; this frame refuses to
+    # look at how anything works and derives from what the solved problem requires. Those are
+    # opposite operations on the same subject, which is not one axis. Splitting cost nothing to
+    # comparability — `frame_hash` covers `axis`, and no recorded run contains this frame.
+    axis: derivation
     attacks: [T3, T1]
     tools: []
     stance: >

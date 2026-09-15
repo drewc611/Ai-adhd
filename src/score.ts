@@ -5,7 +5,7 @@ import { currentFrameId, type Config } from "./config.js";
 import type { DetectorRecord, PassA, PassB, TrapId } from "./schema.js";
 import type { BranchValidation } from "./validate.js";
 import type { LintHint } from "./lint.js";
-import { TRAP_IDS } from "./schema.js";
+import { TRAP_IDS, dimensionsAt } from "./schema.js";
 
 export interface FiredTrap {
   trap: TrapId;
@@ -88,8 +88,11 @@ export function forwardFrameIds(cfg: Config, score: ScoreResult): ScoreResult {
 }
 
 /** weighted mean, normalised to [0,1]. */
-export function passAScores(cfg: Config, passA: PassA, blindMap: Record<string, string>): Record<string, number> {
-  const dims = cfg.rubric.dimensions;
+export function passAScores(cfg: Config, passA: PassA, blindMap: Record<string, string>, rubricVersion?: number): Record<string, number> {
+  // D34: the dimension set is the run's, not the file's. A run scored under version 0 keeps
+  // `foreclosure` in both numerator and denominator; a version 1 run has neither. Passing the
+  // file's current version by default keeps every existing caller correct for a new run.
+  const dims = dimensionsAt(cfg.rubric.dimensions, rubricVersion ?? cfg.rubric.version);
   const max = cfg.rubric.scale.max;
   const denom = dims.reduce((s, d) => s + d.weight * max, 0);
   const out: Record<string, number> = {};
@@ -147,10 +150,16 @@ export function scoreRun(
   const clusters: ScoredCluster[] = passB.clusters.map((c) => {
     const survivors = c.members.filter((m) => byFrame.get(m)?.status === "survivor");
     const scored = survivors.map((m) => byFrame.get(m)!.pass_a).filter((x): x is number => x !== null);
-    const representative =
-      survivors.length === 0
-        ? null
-        : survivors.slice().sort((a, b) => (byFrame.get(b)!.pass_a ?? 0) - (byFrame.get(a)!.pass_a ?? 0))[0]!;
+    /*
+     * D40. The `localeCompare` fallback is not decoration. Without it the comparator returns 0 on a
+     * tie, `sort` is stable, and the frame that ships is whichever one the critic happened to list
+     * first in its cluster — a model's list ordering deciding what reaches the user, which D3's
+     * replayability does not cover. `learn.ts` has always fallen through to `localeCompare`, so
+     * before this the two paths named different winners for the same tie; `001-seed3-repeat`
+     * produced the corpus's first exact tie and that is how the disagreement surfaced.
+     */
+    const ordered = survivors.slice().sort((a, b) => (byFrame.get(b)!.pass_a ?? 0) - (byFrame.get(a)!.pass_a ?? 0) || a.localeCompare(b));
+    const representative = survivors.length === 0 ? null : ordered[0]!;
     return {
       id: c.id,
       action: c.action,
@@ -178,6 +187,17 @@ export function scoreRun(
   if (passB.run_level.T6_all_missing_actor_null.fired)
     notes.push(`T6 (run level): every branch left missing_actor null. ${passB.run_level.T6_all_missing_actor_null.evidence}`);
   for (const c of clusters) if (c.singleton && c.survivors.length) notes.push(`singleton ${c.members[0]} escalated to deepen, flagged unverified`);
+  /*
+   * An exact tie is not a close decision, it is no decision, and the alphabetical tiebreak above is
+   * arbitrary by construction. Saying so is the whole point: a reader who sees one frame in the
+   * recommendation should know when the rubric did not choose it.
+   */
+  for (const c of clusters) {
+    if (c.survivors.length < 2 || c.representative === null) continue;
+    const top = c.survivors.map((s) => byFrame.get(s)!.pass_a).filter((x): x is number => x !== null).sort((a, b) => b - a);
+    if (top.length >= 2 && top[0] === top[1])
+      notes.push(`${c.id}: the rubric did not separate this cluster. ${c.representative} ships because its id sorts first, not because it scored higher.`);
+  }
   if (!frames.some((f) => f.status === "survivor")) notes.push("every branch was pruned. Nothing to deepen.");
 
   return {

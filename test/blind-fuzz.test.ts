@@ -93,15 +93,21 @@ test("a label the problem itself uses is exempt however either side spells it", 
  * The guard against catastrophic backtracking in the label matcher. Exponential blowup here is
  * reachable by anyone who can put text in an artifact, so it is worth a test.
  *
- * Measured as a *minimum* over repeated trials, on inputs big enough to take milliseconds. The
- * previous version timed a single sample of a sub-millisecond call, and CI failed it at
- * `0.18ms -> 5.23ms` on code that had not changed — no `src/` file differed from the last green
- * run, and it passed twelve times out of twelve locally. A 0.18ms baseline on a shared runner is
- * not a measurement of anything.
+ * Measured as a *minimum over trials of CPU time*, on inputs big enough to take milliseconds. Three
+ * versions of this, and the first two were wrong the same way. The original timed a single sample of
+ * a sub-millisecond call and CI failed it at `0.18ms -> 5.23ms` on code that had not changed. The
+ * fix was a minimum over trials of wall clock, on the reasoning that scheduler noise only ever
+ * *adds* time, so the fastest trial is the closest estimate of what the algorithm costs.
  *
- * The minimum is the right statistic rather than the mean or the median: scheduler noise only ever
- * *adds* time, so the fastest trial is the closest estimate of what the algorithm actually costs,
- * and a runner under sustained load contaminates a median just as thoroughly as a mean.
+ * **The minimum does not save a ratio whose two terms take different amounts of time**, which is
+ * where that reasoning fails and where `lint.test.ts` — the same shape, the same bound — actually
+ * broke. In five trials the ~2ms measurement finds an uncontended window and the ~20ms one almost
+ * never does, so the minimum cleans the denominator far more than the numerator and the ratio
+ * inflates. Measured under four CPU hogs on four vCPUs: wall clock 28.6x against CPU time 7.7x, on a
+ * check whose idle figure is well under 10x.
+ *
+ * CPU time is the right instrument and always was. This is a claim about how much *work* an input
+ * causes, and `process.cpuUsage()` measures that; being descheduled does not add to it.
  */
 test("label matching is linear on adversarial input", () => {
   const grow = (n: number) => "Door" + "_".repeat(n) + "x ".repeat(n);
@@ -109,22 +115,33 @@ test("label matching is linear on adversarial input", () => {
     const text = grow(n);
     let best = Infinity;
     for (let i = 0; i < trials; i++) {
-      const t = process.hrtime.bigint();
+      const before = process.cpuUsage();
       checkBlind(text, LABELS, { problem: PROBLEM });
-      best = Math.min(best, Number(process.hrtime.bigint() - t) / 1e6);
+      const d = process.cpuUsage(before);
+      best = Math.min(best, (d.user + d.system) / 1000);
     }
     return best;
   };
-  fastest(8_000, 2); // warm the JIT, so the first measured trial is not compiling
-  const small = fastest(8_000);
+  fastest(4_000, 2); // warm the JIT, so the first measured trial is not compiling
+  const small = fastest(4_000);
   const large = fastest(32_000);
-  // 4x the input. Linear lands near 4x, quadratic near 16x, and exponential leaves the building.
-  // 20x is the same tolerance this test has always used, kept rather than tightened: the point is
-  // catching blowup, and a threshold that also has to be right about the constant factor is a
-  // threshold that fails for the wrong reason.
+  // **8x the input, not 4x, because the 4x version had no teeth.** The comment here used to reason
+  // that "linear lands near 4x, quadratic near 16x" and then set the bound at 20x, which accepts the
+  // quadratic case it names. Measured against a deliberately quadratic scan over the same text: at a
+  // 4x ratio this check runs 4.24x and the quadratic probe 14.97x, so a quadratic regression passed.
+  // At 8x the check runs 5.53x and the probe 63.77x.
+  //
+  // 30x sits between them. The same correction is in `lint.test.ts`, whose bound had the same hole —
+  // and so does the CPU-time measurement, because that test is where the wall-clock version was
+  // caught failing under load.
+  //
+  // Re-verified in CPU time, which is what these now measure: a true O(n^2) scan over the same text
+  // at an 8x size step runs **62.4x**, the check itself runs 7.7x under four CPU hogs on four vCPUs,
+  // and 30x sits between them with about 3x of headroom on each side. Switching instrument did not
+  // cost the bound its teeth, which was the thing to check before trusting it.
   assert.ok(
-    large < small * 20,
-    `4x the input took ${(large / small).toFixed(1)}x the time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
+    large < small * 30,
+    `8x the input took ${(large / small).toFixed(1)}x the CPU time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
   );
 });
 

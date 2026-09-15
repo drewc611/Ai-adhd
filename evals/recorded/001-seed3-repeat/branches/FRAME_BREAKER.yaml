@@ -1,0 +1,68 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: FRAME_BREAKER
+position: >-
+  Stop configuring timeouts per client and instead stamp one end-to-end deadline on each inbound
+  request at the edge, propagate the remaining budget with every outbound call, and compute each
+  per-attempt timeout from what is left of that budget.
+reasoning: |
+  1. The load-bearing assumption is that a timeout is a property of a client, expressed as a
+  constant, chosen once, in isolation. The phrasing "set on this HTTP client" already decides
+  that the unit of control is a config field on an object, and that the right value can be
+  derived from that dependency alone. That is what makes the question feel answerable. It is
+  also what makes every answer to it wrong in production, because the thing a user actually
+  experiences is the total time of a request that fans out across several hops, and no single
+  client knows how much of that total it is allowed to spend. Three services each with a
+  "reasonable" 5s timeout and two retries produce a 45s user-visible wait that nobody
+  configured and nobody predicted.
+
+  2. Unexamined, this assumption is convenient for several parties. It is convenient for the
+  owner of the downstream service, who never has to publish a latency target, because any
+  slowness is reframed as the caller's misconfiguration. It is convenient for whoever wrote the
+  client library's defaults, which are usually infinite or absurd, because the burden lands on
+  every caller instead of on the library. And it is convenient for the asker: editing one number
+  is a ten-minute change that closes a ticket, whereas the real work is threading a deadline
+  through the call graph and deciding what to do when the budget runs out. The assumption buys
+  the feeling of having addressed reliability without any of the cost.
+
+  3. If it is false, the question is actually about a latency budget and its enforcement. How
+  long is the user willing to wait for the whole operation? How is that budget divided among the
+  hops and the retries? How is the remaining budget communicated downstream, so a server can
+  refuse work it can no longer finish in time? And what happens on exhaustion: fail fast, serve
+  a degraded answer, shed load, trip a breaker? Those are product and architecture questions,
+  and the per-client number is only a derived quantity that falls out of them. Once the budget
+  exists, "what timeout" answers itself on every call, and it answers differently for the same
+  dependency depending on how much time the request has already burned.
+
+  4. Tomorrow: pick one user-facing entry point. Give it an explicit total deadline written in
+  the handler, not in a config file, chosen from what the caller will actually tolerate. Put the
+  absolute deadline in the request context and pass the remaining milliseconds on every outbound
+  call, as a deadline header and as a per-attempt timeout equal to the remaining budget minus a
+  small reserve. Make a retry legal only when the remaining budget covers another attempt. Then
+  log, for one week, every call that ran out of budget and which hop consumed it. That log is
+  what tells you which dependency to fix, which is the information the original question was
+  trying and failing to get at.
+forecloses:
+  - >-
+    Picking a static per-client constant like "connect 2s, read 10s" and treating reliability as
+    settled; under a budget the same client gets a different timeout on every call.
+  - >-
+    Fixed retry policies such as "three attempts with backoff" configured independently of the
+    caller's remaining time, since retries must now fit inside the budget or not happen at all.
+  - >-
+    Tuning each service's timeouts locally and in isolation; the budget is a cross-team contract
+    that has to be agreed at the edge and honored inward.
+falsifier: >-
+  Pull one week of traces for this client. If essentially no request chains more than one
+  outbound hop, retries are already bounded well inside what users tolerate, and the latency
+  distribution of that dependency is tight and stable, then a single static timeout captures
+  everything the budget would and the propagation machinery buys nothing. Cheaper still, grep
+  one incident review for a stall whose duration nobody had configured: if there isn't one,
+  I am probably solving a problem this system does not have.
+missing_actor: >-
+  The owner of the downstream service. The asker can only set timeouts; the downstream owner can
+  read the propagated deadline, cancel or shed work whose deadline has already passed, and
+  publish a latency target that makes the budget split negotiable rather than guessed. Without
+  them, a client timeout only abandons the request while the server keeps burning capacity on it.
+confidence: high
+```

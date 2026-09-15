@@ -1,7 +1,8 @@
+import { dimensionsAt } from "../src/schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { artifact, cfg, tmp, writeProblem } from "./helpers.js";
@@ -189,10 +190,17 @@ test("every non-interactive command offers --json", () => {
 test("validate --json reports the counts it prints as prose", () => {
   const r = run(["validate", "--json"]);
   assert.equal(r.code, 0, r.err);
-  const j = JSON.parse(r.out) as { ok: boolean; frames: number; dimensions: number };
+  const j = JSON.parse(r.out) as { ok: boolean; frames: number; dimensions: number; rubric_version: number; retired_dimensions: string[] };
   assert.equal(j.ok, true);
   assert.equal(j.frames, cfg.frames.frames.length);
-  assert.equal(j.dimensions, cfg.rubric.dimensions.length);
+  // D34: `dimensions` is what a new run is scored on, not how many are in the file. A retired one
+  // stays in the file so the runs scored with it remain readable, and reporting the file's length
+  // would overstate the rubric by exactly the dimensions nothing reads.
+  assert.equal(j.dimensions, dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).length);
+  assert.ok(j.dimensions < cfg.rubric.dimensions.length, "nothing is retired, so this test asserts nothing");
+  assert.equal(j.rubric_version, cfg.rubric.version);
+  assert.deepEqual(j.retired_dimensions, ["foreclosure"]);
+  assert.match(run(["validate"]).out, /8 rubric dimensions scored at rubric v1 \(1 retired: foreclosure\)/);
 });
 
 /** The exit code is the contract, so --json carries the verdict rather than replacing it. */
@@ -235,4 +243,42 @@ test("viewer --json reports what it wrote", () => {
   assert.ok(j.runs >= 9);
   assert.ok(j.bytes > 1000);
   assert.ok(existsSync(out));
+});
+
+/**
+ * `adhd replay` over every run and `adhd replay <dir>` over one of them report the same fact,
+ * and used to report it in two voices. A run listed in the baseline printed "drifted as the
+ * baseline records" with its reason from the first form, and a bare "DRIFTED" from the second,
+ * while exiting 0 either way. A reader checking one run got an alarm and a success code
+ * together with nothing to tell them which to believe.
+ */
+test("a run whose drift the baseline explains reads the same whether you ask about one run or all of them", () => {
+  const one = run(["replay", "evals/recorded/001-first-run"]);
+  assert.equal(one.code, 0, "baseline-explained drift is not a failure");
+  assert.match(one.out, /drifted as the baseline records/);
+  assert.ok(!/DRIFTED/.test(one.out), "the alarming spelling is for unexplained drift only");
+  // And the reason itself reaches the reader, not just the fact that a reason exists.
+  assert.match(one.out, /before three renderer changes/);
+
+  const all = run(["replay"]);
+  assert.match(all.out, /001-first-run\s+drifted as the baseline records/);
+});
+
+test("a run that matches its recording says so, and one whose drift is unexplained still alarms", () => {
+  const clean = run(["replay", "evals/recorded/001-altframes"]);
+  assert.equal(clean.code, 0);
+  assert.match(clean.out, /001-altframes: same/);
+
+  // Copy a clean run, break its recording, and check the unexplained case is unchanged: it is
+  // the whole point of the distinction that one of the two still shouts.
+  const dir = tmp();
+  const dst = join(dir, "001-altframes");
+  cpSync(join(cfg.root, "evals", "recorded", "001-altframes"), dst, { recursive: true });
+  const synth = join(dst, "synthesis.md");
+  const lines = readFileSync(synth, "utf8").split("\n");
+  lines[3] = "a line no renderer would produce";
+  writeFileSync(synth, lines.join("\n"));
+  const broken = run(["replay", dst]);
+  assert.notEqual(broken.code, 0, "unexplained drift is a failure");
+  assert.match(broken.out, /DRIFTED, first differs at line 4/);
 });

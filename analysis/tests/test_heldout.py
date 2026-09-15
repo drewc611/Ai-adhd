@@ -12,10 +12,25 @@ in the held-out half is out of vocabulary.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
+
+def _load_script(name: str):
+    """Import `analysis/scripts/<name>.py` by path, unambiguously. See the note at its use."""
+    import importlib.util
+    import sys
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
 
 from adhd_analysis.text.budget import Budget
 from adhd_analysis.text.corpora import Library, Source
@@ -434,12 +449,18 @@ def test_the_shipped_frozen_set_holds_out_no_document_a_commit_can_rewrite():
     The first cut of `analysis/heldout.json` put `docs/ARCHITECTURE.md` and `README.md` in the set,
     and those are rewritten whenever a decision is recorded — so writing one would have moved the
     next perplexity for a reason that has nothing to do with the model, silently, because the
-    fingerprint is over names. Repository prose stays in the training half, where mutating text is
-    harmless.
+    fingerprint is over names.
+
+    This docstring used to end "Repository prose stays in the training half, where mutating text is
+    harmless." **E8 measured that wrong** — writing up its result moved a retrain of its own four cells
+    by up to 4,807 n-grams and gave each cell a different corpus digest — so D26 keeps mutable text out
+    of the training read too, and the set of mutable sources now lives in `corpora.yaml` rather than in
+    a literal repeated across three files.
     """
     spec = json.loads((ROOT / "analysis" / "heldout.json").read_text())
     assert spec["documents"], "the shipped frozen set is empty"
-    mutable = {"repo-docs", "repo-prompts", "repo-readme"}
+    mutable = Library.load(ROOT / "analysis" / "corpora.yaml").mutable_names()
+    assert mutable, "the manifest marks nothing mutable, so this test proves nothing"
     offenders = [n for n in spec["documents"] if n.split("/")[0] in mutable]
     assert not offenders, f"the frozen set holds documents this repository rewrites: {offenders}"
     assert len(spec["fingerprint"]) == 16
@@ -625,3 +646,107 @@ def test_in_vocabulary_only_refuses_any_vocabulary_difference(tmp_path):
     # The same tenth of a point is tolerated on all targets, where the effect is continuous.
     allt = evaluate(model, held, Budget.smoke())
     assert comparable_heldout(allt, replace(allt, oov_rate=allt.oov_rate + 0.001)) is None
+
+
+def test_the_scoring_script_releases_each_model_before_loading_the_next(tmp_path, monkeypatch):
+    """Scoring several large models in one invocation used to hold two at once.
+
+    Rebinding the loop variable frees the previous model only *after* the next one is built, so the peak
+    is the sum of two. Backlog 82's re-measurement asked for four models in one call — cell A at 32.1M
+    n-grams beside the shipped model at 40.2M — and the cgroup killed it at 13.9GB mid-load, with no
+    traceback and an empty JSON file. That reads like a scoring failure rather than an allocation one,
+    which is the expensive part.
+
+    Asserted with a weak reference rather than by measuring memory: a test that needs 14GB is a test
+    nobody runs.
+    """
+    import weakref
+
+    # Loaded by path, not as `scripts.score_heldout`. There are two `scripts/` directories in this
+    # checkout — `analysis/scripts/`, which holds this module, and the repository root's, which
+    # holds shell — and which one the bare import resolves to depends on where pytest was started.
+    # From `analysis/` it found the right one; from the repository root, which is how the build
+    # brief says to run the suite, it found the shell directory and raised ModuleNotFoundError in
+    # this one test. `test_fetch_and_genericity.py` already loads its script this way.
+    ss = _load_script("score_heldout")
+
+    lib = _library(tmp_path, n=20)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3,
+                min_count=1, budget=Budget.smoke())
+
+    alive: list[weakref.ref] = []
+    real_load = ss.load
+
+    def tracking_load(path):
+        model, kind = real_load(path)
+        # Every previously loaded model must already be gone by the time the next one is built.
+        still = [r for r in alive if r() is not None]
+        assert not still, f"{len(still)} model(s) still held while loading {path.name}"
+        alive.append(weakref.ref(model))
+        return model, kind
+
+    monkeypatch.setattr(ss, "load", tracking_load)
+    monkeypatch.setattr(ss.Library, "load", staticmethod(lambda _m: lib))
+    monkeypatch.setattr(ss.FrozenSplit, "load", classmethod(
+        lambda cls, base, path, *, side: SplitLibrary(lib, every=10, side=side)
+    ))
+
+    code = ss.main([str(rec.model_path), str(rec.model_path), "--json"])
+    assert code == 0
+    assert len(alive) == 2, "both models should have been loaded"
+    assert all(r() is None for r in alive), "a model outlived the loop"
+
+
+# ---- backlog 77: one target set, so the difference is modelling rather than coverage -------------
+
+
+def test_a_shared_vocabulary_makes_two_models_comparable_at_different_oov_rates(tmp_path):
+    """What `in_vocabulary_only` cannot do, and backlog 77 asked for anyway.
+
+    D17 measures 2.83x between a model that read 584 PEPs and one that read none, on the same 31
+    documents, with OOV going 1.36% to 2.96% across the pair. Part of that gap is vocabulary and part is
+    modelling, and the item proposed separating them by scoring both `in_vocabulary_only` — which is
+    exactly what D25 refuses, because there each model sums over *its own* in-vocabulary targets and the
+    two numbers are two tests on different text.
+
+    Handing both models one set of words fixes it: same targets, so the remaining difference is how well
+    each predicts them.
+    """
+    lib = _library(tmp_path, n=40)
+    train_side = SplitLibrary(lib, every=10, side="train")
+    held = SplitLibrary(lib, every=10, side="heldout")
+    rec = train(train_side, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    words = [w for w in model.vocab.stoi if not w.startswith("<")]
+    shared = frozenset(words[: len(words) // 2])
+
+    whole = evaluate(model, held, Budget.smoke())
+    part = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke(),
+                    shared_vocabulary=shared)
+
+    assert whole.restricted_to_types is None
+    assert part.restricted_to_types == len(shared)
+    # The restriction narrows what is summed, never what is read: the OOV rate is over the same text.
+    assert part.oov_rate == pytest.approx(whole.oov_rate)
+    assert part.tokens == whole.tokens
+    # Two scores restricted to one set are comparable however far apart their own OOV rates are.
+    far = replace(part, oov_rate=part.oov_rate + 0.2, perplexity=part.perplexity * 3)
+    assert comparable_heldout(part, far) is None
+    # And a restricted score beside an unrestricted one is not.
+    why = comparable_heldout(part, whole)
+    assert why is not None and "shared vocabulary" in why
+
+
+def test_a_restricted_score_still_counts_the_sentence_end(tmp_path):
+    """`</s>` is in every vocabulary, so it is never what a restriction is about. Dropping it would make
+    a restricted score depend on sentence lengths rather than on words."""
+    lib = _library(tmp_path, n=20)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3,
+                 min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    empty = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke(),
+                     shared_vocabulary=frozenset())
+    # Every real word excluded leaves exactly the sentence ends, so there is still something to score.
+    assert empty.restricted_to_types == 0
+    assert math.isfinite(empty.perplexity) and empty.perplexity > 0

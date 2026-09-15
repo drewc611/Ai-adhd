@@ -8,7 +8,7 @@
 # The critic is a model. It emits the scores. The scorer is code. It applies the weights,
 # the hard rules, and refuses to proceed on a missing record.
 
-version: 0
+version: 1
 
 scale:
   min: 0
@@ -27,7 +27,14 @@ dimensions:
       2: A clear position, more than one sentence or with a soft escape hatch.
       3: One sentence. Do X. No escape hatch.
 
+  # Retired in version 1 (D34). Kept here with its weight because seven recorded runs were scored
+  # with it and `validatePassA` rejects a dimension the rubric does not list, so deleting it made
+  # every one of them unreadable. Krippendorff's alpha -0.017, interval [-0.04, +0.00] on 96%
+  # exact agreement: a dimension whose interval spans chance is unmeasured, not weak. And the
+  # output contract already refuses an empty `forecloses`, so the validator enforces what this
+  # was scoring.
   - id: foreclosure
+    retired_in: 1
     weight: 2
     question: Does `forecloses` rule out things a reasonable person might otherwise do?
     anchors:

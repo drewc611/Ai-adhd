@@ -1,0 +1,129 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+position: >-
+  Set an aggressive default now — 2s connect, 5s per-attempt read, 10s total deadline, no
+  retries yet — ship it behind a config value you can change without a deploy, and spend the
+  first week reading the resulting latency histogram before you commit to any retry or
+  budget-propagation scheme.
+reasoning: |
+  1. Which moves can be undone in an afternoon, and which cannot be undone at all?
+
+  Two way doors, undoable in an afternoon: the numeric values themselves, if and only if they
+  live in config rather than in a compiled constant. Whether you set read at 5s or 3s is not a
+  decision, it is a dial. Also reversible: adding a timeout where there was none, turning
+  retries on or off, changing the number of attempts, adding a circuit breaker in front of the
+  call.
+
+  Nearly one way, weeks to unwind: the shape of the timeout, not its value. A single flat
+  "request timeout" versus separate connect / read / total-deadline budgets is a code shape, and
+  every caller's expectations grow around it. Same for where the timeout is decided — hardcoded
+  in the client, versus a deadline passed in by the caller. The moment retries exist on top of a
+  per-attempt timeout, your worst case latency is attempts times timeout, and every upstream
+  service is now sized against that number.
+
+  True one way doors, cannot be undone at all: making the call retried when it is not
+  idempotent. A retry on a POST that already succeeded but whose response was lost is a
+  duplicate charge, a duplicate order, a duplicate email. You cannot undo that with a config
+  change; the side effect is in the world. Second true one way door: publishing a timeout as a
+  contract — an SLA, a client library your customers embed, a documented "we respond within
+  Ns." Once outside parties depend on the number, raising it is a breaking promise and lowering
+  it breaks their code.
+
+  2. For each one way door, the cost of being wrong and the detection latency.
+
+  Retrying a non-idempotent call: cost is duplicated side effects, unbounded, and it lands on
+  customers rather than on you. Detection latency is the worst property of the whole system —
+  you find out from a support ticket or a reconciliation report, days to weeks later, and only
+  for the fraction of duplicates a human happened to notice. High cost, terrible latency.
+
+  Choosing the timeout shape (flat versus layered budget) and the decision site (client-internal
+  versus caller-supplied deadline): cost of being wrong is a refactor across every call site
+  plus a period where some paths have deadlines and others do not. Detection latency is one bad
+  incident — typically the first time a slow dependency eats your whole thread pool and you
+  discover you cannot express "I have 300ms left" to the layer below. Weeks to months.
+
+  Publishing the number as a contract: cost is a renegotiation with every consumer. Detection
+  latency is effectively never, because nobody reports that your timeout is wrong, they just
+  build around it.
+
+  Setting no timeout at all deserves naming here because it looks like deferring the decision
+  and is not. A missing timeout is an implicit infinite timeout, and infinite is a value — it is
+  the only value that can take the whole process down, because connections pile up until the
+  pool or the file descriptors are gone. Deferring is the most expensive commitment available.
+
+  3. What cheap reversible experiment would tell you which one way door to take?
+
+  For the retry door: do not experiment on production writes. The cheap experiment is a read of
+  the endpoint's own documentation and a single question to whoever owns it — does it accept an
+  idempotency key, and is a repeated call safe. Fifteen minutes. If the answer is yes, retries
+  are a two way door and you can dial them. If the answer is no or unknown, the door stays shut
+  until the key exists, and adding the key is itself a reversible move you make first.
+
+  For the shape door: ship the aggressive flat default and instrument it. You need the p50, p95,
+  p99 and p99.9 of the dependency's response time, plus the count of requests you cut off. Set
+  the timeout somewhere above p99 and watch what you kill. If the histogram is tight — p99
+  within a small multiple of p50 — a flat timeout is fine forever and the layered budget is
+  ceremony. If the histogram has a long fat tail, or if you discover your handler makes three
+  sequential downstream calls whose timeouts sum past your own caller's patience, you have
+  learned you need real deadline propagation, and you learned it from data instead of taste. One
+  week of traffic.
+
+  A second cheap experiment worth the hour: on a staging instance, point the client at a
+  deliberately black-holed address and watch what breaks. This tells you whether your connect
+  timeout is even being honored — DNS resolution and TLS handshake often sit outside the timeout
+  you think you set — and it tells you what the failure looks like to the user. Most timeout
+  bugs are not the number, they are the number applying to something other than what you
+  assumed.
+
+  4. What is the ordering?
+
+  First, today: set the aggressive default, in config, no retries. 2s connect, 5s read per
+  attempt, 10s hard total deadline. Aggressive rather than generous on purpose — a too-short
+  timeout fails loudly in minutes and you widen it, while a too-long timeout fails silently for
+  months and then takes the service down at peak. You want the error that reports itself.
+
+  Second, same day: the black-hole test, to confirm the timeout applies to the phase you think.
+
+  Third, this week: the histogram, plus the idempotency question answered in writing.
+
+  Fourth, only after the histogram: retries, with jittered backoff, capped so attempts times
+  per-attempt timeout stays under the total deadline, and only on connect failures and
+  idempotent verbs until an idempotency key exists.
+
+  Fifth, only if the histogram showed a fat tail or you found sequential fan-out: refactor to a
+  caller-supplied deadline.
+
+  Never, unless someone explicitly decides to: publish the number as a promise.
+forecloses:
+  - >-
+    Any retry policy shipping in this change — no retries at all go in until the idempotency
+    question is answered in writing, which rules out the common "3 retries with exponential
+    backoff" default that most HTTP client wrappers arrive with.
+  - >-
+    Deriving the timeout from the dependency's published SLA or from a number copied out of
+    another service's config, since the position commits to the dependency's own measured
+    histogram as the only input that decides the value.
+  - >-
+    A generous starting value chosen to avoid false failures — 30s or 60s, or the library
+    default — which is the move that keeps the decision comfortable and pushes detection of
+    being wrong out past the first traffic peak.
+  - >-
+    Refactoring now to caller-supplied deadlines and context propagation, which stays shut
+    until the histogram or a discovered sequential fan-out justifies it.
+falsifier: >-
+  One week of the latency histogram showing the dependency's p99.9 sitting above the 5s read
+  timeout while those slow responses are still useful to the caller — or a timeout-cut count
+  that is a non-trivial fraction of traffic rather than a handful of requests. Either
+  observation means the aggressive default is cutting off successful work rather than only
+  hanging work, and the sequencing was wrong to start aggressive. Equally falsifying and
+  cheaper: discovering in the black-hole test that the configured connect timeout does not
+  cover DNS or TLS, so the number in config was never the number in effect.
+missing_actor: >-
+  The team that owns the HTTP endpoint you are calling. They can tell you their own latency
+  distribution and whether the operation is idempotent, and they can add an idempotency key or
+  a server-side deadline header, which converts your hardest one way door into a dial. The
+  problem is framed as a client-side configuration choice, and half the decision lives on the
+  other end of the wire.
+confidence: medium
+```

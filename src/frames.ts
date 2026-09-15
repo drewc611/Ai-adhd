@@ -1,11 +1,13 @@
+import { readJsonIf } from "./read.js";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { unfence } from "./validate.js";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { currentFrameId, type Config } from "./config.js";
-import { DeepenArtifactSchema, PassBSchema, TRAP_IDS, type TrapId } from "./schema.js";
+import { DeepenArtifactSchema, PassBSchema, RecordedExpectationSchema, TRAP_IDS, type TrapId } from "./schema.js";
 import { forwardFrameIds, type ScoreResult } from "./score.js";
 import { frameHash } from "./hash.js";
+import { selectFrames } from "./compile.js";
 
 export function listFrames(cfg: Config, json = false): string {
   if (json) return JSON.stringify(cfg.frames.frames.map(({ id, name, axis, attacks, tools }) => ({ id, name, axis, attacks, tools })), null, 2);
@@ -65,10 +67,53 @@ export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals",
   return { pairs, flagged, runs, text: lines.join("\n") };
 }
 
+/**
+ * Which recorded runs are the same draw. A run whose `expected.json` names `replicate_of` is a
+ * deliberate repeat of that run, not a second observation of the library, so for anything shaped
+ * like "pruned in n of m" its group counts once (backlog 99).
+ *
+ * Returns run id -> draw id, where the draw id is the root of the replicate chain. A run naming a
+ * `replicate_of` that is not on disk is its own draw: a dangling reference should not silently
+ * merge two groups, and `doctor` reports it.
+ */
+export function recordedDraws(recordedDir: string): Map<string, string> {
+  const parent = new Map<string, string | undefined>();
+  if (existsSync(recordedDir))
+    for (const d of readdirSync(recordedDir).sort()) {
+      if (!statSync(join(recordedDir, d)).isDirectory()) continue;
+      const e = readJsonIf(join(recordedDir, d, "expected.json"), (v) => RecordedExpectationSchema.parse(v));
+      parent.set(d, e?.replicate_of);
+    }
+  const draws = new Map<string, string>();
+  for (const id of parent.keys()) {
+    const seen = new Set<string>([id]);
+    let root = id;
+    for (;;) {
+      const next = parent.get(root);
+      // Stop on absent, unknown, or a cycle. Each leaves the chain rooted where it stands.
+      if (!next || !parent.has(next) || seen.has(next)) break;
+      seen.add(next);
+      root = next;
+    }
+    draws.set(id, root);
+  }
+  return draws;
+}
+
 export interface FrameStat {
   frame: string;
   axis: string;
   runs: number;
+  /*
+   * The same three counts over draws rather than runs: a replicate group contributes one. Every
+   * rate in `docs/RETIREMENT.md` reads these, and `runs`/`pruned`/`recommended` stay as the count
+   * of artifacts actually produced, which is what reliability wants. See `recordedDraws`.
+   */
+  draws: number;
+  draws_pruned: number;
+  draws_recommended: number;
+  /** Draws whose members disagreed about this frame. A rate over these is hiding a coin flip. */
+  split_draws: string[];
   pruned: number;
   survived: number;
   /** Survived the trap sweep, then folded under its objection. */
@@ -102,6 +147,21 @@ export function frameStats(
   const trapFires = new Map<TrapId, number>();
   let runs = 0;
 
+  const drawOf = recordedDraws(recordedDir);
+  // frame -> draw -> what that draw's members saw. Collapsed after the run loop, because a draw's
+  // verdict is not known until every member of it has been read.
+  const perDraw = new Map<string, Map<string, { runs: string[]; pruned: number; recommended: number }>>();
+  const observe = (frame: string, run: string, pruned: boolean, recommended: boolean) => {
+    const draw = drawOf.get(run) ?? run;
+    if (!perDraw.has(frame)) perDraw.set(frame, new Map());
+    const d = perDraw.get(frame)!;
+    const e = d.get(draw) ?? { runs: [], pruned: 0, recommended: 0 };
+    e.runs.push(run);
+    if (pruned) e.pruned++;
+    if (recommended) e.recommended++;
+    d.set(draw, e);
+  };
+
   const get = (frame: string) => {
     let s = by.get(frame);
     if (!s) {
@@ -109,6 +169,10 @@ export function frameStats(
         frame,
         axis: axisOf.get(frame) ?? "(not in library)",
         runs: 0,
+        draws: 0,
+        draws_pruned: 0,
+        draws_recommended: 0,
+        split_draws: [],
         pruned: 0,
         survived: 0,
         folded: 0,
@@ -133,7 +197,7 @@ export function frameStats(
       if (!existsSync(scorePath)) continue;
       let score: ScoreResult;
       try {
-        score = forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult);
+        score = forwardFrameIds(cfg, readJsonIf<ScoreResult>(scorePath)!);
       } catch {
         continue;
       }
@@ -181,9 +245,37 @@ export function frameStats(
         if (v === "fold") s.folded++;
         else if (v === "defend") s.defended++;
         if (f.frame === holder) s.recommended++;
+        observe(f.frame, d, f.status === "pruned", f.frame === holder);
       }
       for (const c of score.clusters) if (c.singleton && c.members[0]) get(c.members[0]).singleton++;
     }
+  }
+
+  /*
+   * Collapse to draws. Both retirement criteria that read a rate are unanimity claims — "pruned in
+   * every appearance", "held the recommendation zero times" — so a draw counts as pruned only if
+   * every member pruned, and as having held the recommendation if any member did. That keeps each
+   * predicate meaning exactly what it meant over runs.
+   *
+   * What the collapse actually moves is the denominator and the five-run floor, and that is the
+   * whole of backlog 99: `LEDGER` met criterion 3 at "0 of 5" where two of the five were fixture
+   * 001 at seed 3 declining to pick it twice, and crossed the floor on the same duplicate.
+   *
+   * A draw whose members disagree is recorded as split rather than averaged. It is a frame the
+   * corpus has watched survive and be pruned on identical input, which is a fact about the critic
+   * and belongs beside any decision made from these counts.
+   */
+  for (const [frame, draws] of perDraw) {
+    const s = by.get(frame);
+    if (!s) continue;
+    s.draws = draws.size;
+    for (const [draw, e] of draws) {
+      if (e.pruned === e.runs.length) s.draws_pruned++;
+      if (e.recommended > 0) s.draws_recommended++;
+      const split = (e.pruned > 0 && e.pruned < e.runs.length) || (e.recommended > 0 && e.recommended < e.runs.length);
+      if (split) s.split_draws.push(draw);
+    }
+    s.split_draws.sort();
   }
 
   const frames: FrameStat[] = [...by.values()]
@@ -191,18 +283,29 @@ export function frameStats(
     .sort((a, b) => b.runs - a.runs || b.pruned / (b.runs || 1) - a.pruned / (a.runs || 1) || a.frame.localeCompare(b.frame));
   const traps: TrapStat[] = TRAP_IDS.map((t) => ({ trap: t, fired: trapFires.get(t) ?? 0, frames: [...(trapCounts.get(t) ?? [])].sort() }));
 
-  const lines = [`frame stats over ${runs} recorded run(s) with score.json`];
+  const drawCount = new Set([...drawOf.entries()].filter(([id]) => by.size && existsSync(join(recordedDir, id, "score.json"))).map(([, draw]) => draw)).size;
+  const lines = [
+    drawCount && drawCount !== runs
+      ? `frame stats over ${runs} recorded run(s) with score.json, ${drawCount} distinct draw(s)`
+      : `frame stats over ${runs} recorded run(s) with score.json`,
+  ];
   if (!frames.length) {
     lines.push("no scored runs yet. Record runs to populate this.");
     return { frames, traps, runs, text: lines.join("\n") };
   }
   lines.push("");
-  lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  pruned  folded  rec  meanA  traps`);
+  lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  draws  pruned  folded  rec  meanA  traps`);
   for (const f of frames) {
     const t = TRAP_IDS.filter((x) => f.traps[x]).map((x) => `${x}x${f.traps[x]}`).join(",") || "-";
     lines.push(
-      `${f.frame.padEnd(17)} ${f.axis.padEnd(15)} ${String(f.runs).padStart(4)}  ${String(f.pruned).padStart(6)}  ${String(f.folded).padStart(6)}  ${String(f.recommended).padStart(3)}  ${(f.mean_pass_a ?? 0).toFixed(2).padStart(5)}  ${t}`,
+      `${f.frame.padEnd(17)} ${f.axis.padEnd(15)} ${String(f.runs).padStart(4)}  ${String(f.draws).padStart(5)}  ${String(f.pruned).padStart(6)}  ${String(f.folded).padStart(6)}  ${String(f.recommended).padStart(3)}  ${(f.mean_pass_a ?? 0).toFixed(2).padStart(5)}  ${t}`,
     );
+  }
+  const split = frames.filter((f) => f.split_draws.length);
+  if (split.length) {
+    lines.push("");
+    lines.push("draws whose members disagreed, on identical input:");
+    for (const f of split) lines.push(`  ${f.frame.padEnd(17)} ${f.split_draws.join(", ")}`);
   }
   lines.push("");
   lines.push("detectors:");
@@ -268,6 +371,21 @@ function summarise(cfg: Config, dir: string): RunSummary {
 }
 
 /**
+ * Two sources move pass A on artifacts nobody touched, and the floor is the larger of them.
+ *
+ * Item 4 re-ran fixture 001 at seed 3 with byte-identical briefs and the same dispatch, and the
+ * largest move on any frame was 0.0476 (`evals/recorded/001-seed3-repeat`). E11 then held the
+ * artifacts of both runs completely fixed and scored each a second time, and a critic swap alone
+ * moved a frame by 0.0952 — twice the whole replicate's maximum, with the same mean. Any real
+ * comparison between two runs carries a different session *and* a different critic, so the floor
+ * is 0.0952 rounded up, not 0.0476.
+ *
+ * Raising it withdraws a reading: `014-seed14`'s 0.0625, which E10 took as the wide path
+ * separating its frames better, does not clear this at all.
+ */
+export const PASS_A_NOISE_FLOOR = 0.1;
+
+/**
  * Two runs of the same fixture, side by side. The question this answers is the one the repo
  * cannot currently answer at all: when a finding appears, is it the frame set or the seed?
  * A frame that survives at one seed and is pruned at another is a fact about the seed.
@@ -277,7 +395,7 @@ export function diffRuns(cfg: Config, dirA: string, dirB: string): RunDiff {
   const b = summarise(cfg, dirB);
   const hash = (d: string) => {
     const p = join(d, "plan.json");
-    return existsSync(p) ? ((JSON.parse(readFileSync(p, "utf8")) as { problem_hash?: string }).problem_hash ?? null) : null;
+    return readJsonIf<{ problem_hash?: string }>(p)?.problem_hash ?? null;
   };
   const same_problem = hash(dirA) !== null && hash(dirA) === hash(dirB);
 
@@ -337,9 +455,15 @@ export function diffRuns(cfg: Config, dirA: string, dirB: string): RunDiff {
     lines.push("", "pass A moved (>= 0.01):");
     for (const m of pass_a_moved.slice(0, 12)) lines.push(`  ${m.frame.padEnd(17)} ${m.a.toFixed(2)} -> ${m.b.toFixed(2)}  ${m.delta > 0 ? "+" : ""}${m.delta.toFixed(2)}`);
     const biggest = Math.max(...pass_a_moved.map((m) => Math.abs(m.delta)));
+    /* The floor is 0.10, and both halves of it are measured: 0.0476 from re-running fixture 001 at
+       seed 3 with byte-identical briefs (item 4), 0.0952 from swapping the critic on fixed
+       artifacts (E11). Two runs differ in both at once. Below the floor, a move is the session and
+       the critic, not the thing being compared. */
     lines.push(
-      `  Largest move ${biggest.toFixed(2)} on an unchanged artifact-producing frame. Until the`,
-      "  run-to-run noise floor is measured, a move this size cannot be called signal.",
+      `  Largest move ${biggest.toFixed(2)} on an unchanged artifact-producing frame.`,
+      biggest < PASS_A_NOISE_FLOOR
+        ? `  That is inside the ${PASS_A_NOISE_FLOOR} run-to-run noise floor, so it is not signal.`
+        : `  That clears the ${PASS_A_NOISE_FLOOR} run-to-run noise floor, so it is not just the session.`,
     );
   }
   lines.push("", "recommendation:", `  ${a.id}: ${a.recommendation.slice(0, 160)}`, `  ${b.id}: ${b.recommendation.slice(0, 160)}`);
@@ -512,11 +636,24 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
       }
     }
 
+  /*
+   * Every rate here is over draws, not runs (backlog 99). A recorded replicate is the same problem
+   * at the same seed answered twice on purpose, and counting it as a second appearance both shrinks
+   * the evidence a criterion needs and moves the five-appearance floor on a duplicate. `runs` is
+   * still carried and still printed, because how many artifacts a frame has produced is a real
+   * number and the two are worth seeing side by side.
+   */
+  const drawTotal = new Set(
+    [...recordedDraws(recordedDir).entries()].filter(([id]) => existsSync(join(recordedDir, id, "score.json"))).map(([, draw]) => draw),
+  ).size;
+
   const frames: FrameHealth[] = cfg.frames.frames.map((f) => {
     const s = statOf.get(f.id);
     const runs = s?.runs ?? 0;
-    const pruned = s?.pruned ?? 0;
-    const recommended = s?.recommended ?? 0;
+    const draws = s?.draws ?? 0;
+    const pruned = s?.draws_pruned ?? 0;
+    const recommended = s?.draws_recommended ?? 0;
+    const splits = s?.split_draws ?? [];
 
     const partners = ortho.flagged.filter((p) => p.a === f.id || p.b === f.id);
     const deadTraps = f.attacks.filter((t) => (firedEver.get(t) ?? 0) === 0);
@@ -531,10 +668,20 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
       },
       {
         id: 2,
-        met: runs > 0 && pruned === runs,
-        detail: runs === 0 ? "never dispatched" : `pruned in ${pruned}/${runs}`,
+        met: draws > 0 && pruned === draws,
+        detail:
+          draws === 0
+            ? "never dispatched"
+            : `pruned in ${pruned}/${draws} draw(s)${draws === runs ? "" : `, over ${runs} run(s)`}${splits.length ? `; split on ${splits.join(", ")}` : ""}`,
       },
-      { id: 3, met: runs > 0 && recommended === 0, detail: runs === 0 ? "never dispatched" : `held the recommendation ${recommended}/${runs}` },
+      {
+        id: 3,
+        met: draws > 0 && recommended === 0,
+        detail:
+          draws === 0
+            ? "never dispatched"
+            : `held the recommendation ${recommended}/${draws} draw(s)${draws === runs ? "" : `, over ${runs} run(s)`}`,
+      },
       {
         id: 4,
         met: deadTraps.length === f.attacks.length,
@@ -545,13 +692,13 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
       },
       {
         id: 5,
-        met: runs === 0 && stats.runs >= RETIREMENT_FLOOR && classes.size >= 2,
-        detail: runs > 0 ? `dispatched ${runs} time(s)` : `never dispatched across ${stats.runs} run(s) in ${classes.size} problem class(es)`,
+        met: draws === 0 && drawTotal >= RETIREMENT_FLOOR && classes.size >= 2,
+        detail: draws > 0 ? `dispatched in ${draws} draw(s)` : `never dispatched across ${drawTotal} draw(s) in ${classes.size} problem class(es)`,
       },
     ];
 
     const met = criteria.filter((c) => c.met).length;
-    const atFloor = runs >= RETIREMENT_FLOOR;
+    const atFloor = draws >= RETIREMENT_FLOOR;
     return {
       frame: f.id,
       axis: f.axis,
@@ -569,7 +716,11 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
   });
 
   const candidates = frames.filter((f) => f.candidate);
-  const lines = [`frame health over ${stats.runs} recorded run(s) in ${classes.size} problem class(es), against docs/RETIREMENT.md`];
+  const lines = [
+    `frame health over ${drawTotal} distinct draw(s) from ${stats.runs} recorded run(s) in ${classes.size} problem class(es), against docs/RETIREMENT.md`,
+    "Every rate and the appearance floor are over draws: a recorded replicate of a run is not a",
+    "second appearance (backlog 99). The runs column is what was actually produced.",
+  ];
   lines.push("");
   lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  met  criteria         standing`);
   for (const f of [...frames].sort((a, b) => b.met - a.met || b.runs - a.runs || a.frame.localeCompare(b.frame))) {
@@ -713,4 +864,252 @@ export function frameDrift(cfg: Config, recordedDir = join(cfg.root, "evals", "r
     );
   else if (rows.some((r) => r.changed === false)) lines.push("Every stamped branch ran under the definition the library still carries.");
   return { rows, changed, unknown, text: lines.join("\n") };
+}
+
+// ---- the forbidden lists, and how much of them anything actually checks -------------------------
+
+export interface ForbiddenEntry {
+  frame: string;
+  text: string;
+  /** The literal phrases this entry can be checked by, or empty when it names no checkable phrase. */
+  probes: string[];
+  fired: number;
+  examples: string[];
+}
+
+export interface ForbiddenReport {
+  entries: ForbiddenEntry[];
+  artifacts: number;
+  checkable: number;
+  violated: number;
+  text: string;
+}
+
+/**
+ * Every phrase a forbidden entry puts in quotes, which is the only part of it a machine can check.
+ *
+ * The lists are prose written at a model — "any sentence that would fit unchanged into an answer to a
+ * different problem" is a real rule and nothing in this repository can test it. What *is* testable is
+ * the part an entry quotes, because quoting is how these entries name a literal: `any sentence
+ * beginning with "in general" or "typically"`.
+ */
+export function forbiddenProbes(text: string): string[] {
+  // The upper bound was 40 and silently dropped a real rule: FRAME_BREAKER forbids ending with "it
+  // depends on whether the assumption holds", which is 42 characters. A cap that quietly reclassifies
+  // a checkable rule as unenforceable is worse than no cap, because the report then *undercounts* what
+  // the repository could be testing — the exact number this audit exists to produce. 200 is past the
+  // longest entry in the library, so the bound is on runaway quoting rather than on real phrases.
+  return [...text.matchAll(/["“]([^"”]{2,200})["”]/g)].map((m) => m[1]!.trim()).filter(Boolean);
+}
+
+/**
+ * Which `forbidden` entries have ever been violated in a recorded run — backlog 21.
+ *
+ * The headline is not the violations. It is how many entries have no mechanical form at all: those are
+ * instructions to a model that this repository states and never checks, which is the same shape as the
+ * rule D13 wrote down and lost, and as `cut_heldout.py`'s conclusion that D26 had to correct. Counting
+ * them is the point; a list of three fired probes would not be.
+ */
+export function forbiddenAudit(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): ForbiddenReport {
+  const entries: ForbiddenEntry[] = cfg.frames.frames.flatMap((f) =>
+    (f.forbidden ?? []).map((text: string) => ({ frame: f.id, text, probes: forbiddenProbes(text), fired: 0, examples: [] as string[] })),
+  );
+
+  let artifacts = 0;
+  if (existsSync(recordedDir))
+    for (const id of readdirSync(recordedDir).sort()) {
+      const dir = join(recordedDir, id);
+      if (!statSync(dir).isDirectory()) continue;
+      const branches = join(dir, "branches");
+      if (!existsSync(branches)) continue;
+      for (const file of readdirSync(branches)) {
+        if (!file.endsWith(".yaml")) continue;
+        const writer = file.slice(0, -".yaml".length);
+        const body = readFileSync(join(branches, file), "utf8");
+        artifacts++;
+        // Only against the frame that was told the rule. A forbidden entry binds its own branch, so a
+        // phrase in someone else's artifact is not a violation of it.
+        for (const e of entries.filter((x) => x.frame === writer))
+          for (const probe of e.probes) {
+            const hits = [...body.matchAll(new RegExp(`\\b${pattern(probe)}\\b`, "gi"))];
+            if (!hits.length) continue;
+            e.fired += hits.length;
+            if (e.examples.length < 3) e.examples.push(`${id}/${writer}: "${hits[0]![0]}"`);
+          }
+      }
+    }
+
+  const checkable = entries.filter((e) => e.probes.length).length;
+  const violated = entries.filter((e) => e.fired > 0).length;
+  const lines = [
+    `forbidden-list audit over ${artifacts} recorded artifact(s)`,
+    "",
+    `${entries.length} entries across ${cfg.frames.frames.length} frames. ${checkable} name a phrase that can be`,
+    `checked mechanically; ${entries.length - checkable} do not, and nothing in this repository tests those.`,
+    "",
+  ];
+  if (violated) {
+    lines.push("violated in a recorded run:", "");
+    for (const e of entries.filter((x) => x.fired > 0).sort((a, b) => b.fired - a.fired)) {
+      lines.push(`  ${e.frame}: ${e.fired} hit(s)`);
+      lines.push(`    ${e.text}`);
+      for (const ex of e.examples) lines.push(`      ${ex}`);
+    }
+    lines.push("");
+  } else {
+    lines.push(`no checkable entry has ever fired. That is ${checkable} probe(s) over ${artifacts} artifact(s),`, "which is prevention or is too little evidence, and this report cannot tell you which.", "");
+  }
+  lines.push("entries with no mechanical form, which are guidance and not rules:", "");
+  for (const e of entries.filter((x) => !x.probes.length)) lines.push(`  ${e.frame}: ${e.text}`);
+  return { entries, artifacts, checkable, violated, text: lines.join("\n") };
+}
+
+export interface ReachStat {
+  frame: string;
+  axis: string;
+  /** `class@n` combinations that dispatched it, over the sampled seeds. */
+  at_default: string[];
+  at_any_n: string[];
+  /** Frames on this frame's axis that sit in a class's primary list, blocking it there. */
+  blocked_by: string[];
+}
+
+export interface ReachReport {
+  frames: ReachStat[];
+  unreachable_at_default: string[];
+  unreachable_at_all: string[];
+  /**
+   * Unreachable at default `n` by construction rather than by not turning up in the sample: in no
+   * class's primary list, and no class's default `n` reaches past its primary list. No seed count
+   * could contradict this, which is a different and much stronger claim than the rest of the report.
+   */
+  proved_unreachable: string[];
+  seeds: number;
+  text: string;
+}
+
+/**
+ * Can routing dispatch this frame at all? (Backlog 19.)
+ *
+ * `--stats` and `--axes` count what recorded runs did, and a frame absent from both is either
+ * unlucky or unreachable. They cannot tell you which, and the difference decides everything: an
+ * unlucky frame needs a fixture, an unreachable one is carrying its axis in the library and
+ * contributing nothing to any run anyone will start.
+ *
+ * So this asks routing rather than the corpus. Every run class at its own default `n`, plus the
+ * floor and the hard cap, over `seeds` seeded shuffles, using `selectFrames` itself — the real
+ * selector with the real D6 axis rule, not a re-implementation of it that could agree with a bug.
+ *
+ * A frame is reachable at default `n` if some class dispatches it without anyone passing an
+ * explicit `n` or an explicit frame list. That is the only bar that matters for a fixture, because
+ * a fixture states a class and lets routing choose.
+ *
+ * Sampling, not proof: a frame reachable on one seed in ten thousand would be reported reachable
+ * here and is not reachable in any useful sense. The seed count is in the output so the claim can
+ * be read for what it is.
+ */
+export function frameReach(cfg: Config, seeds = 400): ReachReport {
+  const d = cfg.routing.defaults;
+  type RunClass = Extract<Config["routing"]["classes"][string], { action: "run" }>;
+  const runClasses = Object.entries(cfg.routing.classes)
+    .filter(([, c]) => c.action === "run")
+    .map(([id, c]) => ({ id, cls: c as RunClass }));
+
+  const defaultN = (c: RunClass) => c.n ?? Math.min(d.max_branches, c.frames.length);
+  const hit = new Map<string, { dflt: Set<string>; any: Set<string> }>();
+  for (const f of cfg.frames.frames) hit.set(f.id, { dflt: new Set(), any: new Set() });
+
+  for (const { id: pc, cls } of runClasses) {
+    const dn = defaultN(cls);
+    for (const n of new Set([dn, d.min_branches, d.hard_cap])) {
+      for (let seed = 1; seed <= seeds; seed++) {
+        let picked;
+        try {
+          picked = selectFrames(cfg, { problem_class: pc, n }, seed);
+        } catch {
+          continue; // n outside this class's reach; not a reachability fact about any frame
+        }
+        for (const f of picked.frames) {
+          const h = hit.get(f.id)!;
+          h.any.add(`${pc}@${n}`);
+          if (n === dn) h.dflt.add(`${pc}@${n}`);
+        }
+      }
+    }
+  }
+
+  // What stands in a frame's way: a same-axis frame in a class's primary list is drawn before any
+  // alternate can be, so it takes the axis every time.
+  const primaryAxisHolders = (frame: { id: string; axis: string }) => {
+    const blockers = new Set<string>();
+    for (const { cls } of runClasses)
+      for (const id of cls.frames) {
+        const other = cfg.frameById.get(id);
+        if (other && other.id !== frame.id && other.axis === frame.axis) blockers.add(other.id);
+      }
+    return [...blockers].sort();
+  };
+
+  const frames: ReachStat[] = cfg.frames.frames.map((f) => ({
+    frame: f.id,
+    axis: f.axis,
+    at_default: [...hit.get(f.id)!.dflt].sort(),
+    at_any_n: [...hit.get(f.id)!.any].sort(),
+    blocked_by: primaryAxisHolders(f),
+  }));
+
+  const unreachable_at_default = frames.filter((f) => f.at_default.length === 0).map((f) => f.frame);
+  const unreachable_at_all = frames.filter((f) => f.at_any_n.length === 0).map((f) => f.frame);
+
+  // Sampling establishes unreachability weakly: a frame reachable on one seed in ten thousand reads
+  // as unreachable at any seed count you can afford. For one shape of frame the answer is structural
+  // and needs no seeds at all. Alternates are appended after the primary list, so a class whose
+  // default `n` is at most the length of its primary list never reaches an alternate — and a frame
+  // in no primary list is then unreachable at default `n` by construction, for every seed there is.
+  const drawsOnlyFromPrimary = runClasses.every(({ cls }) => defaultN(cls) <= cls.frames.length);
+  const inNoPrimary = new Set(
+    cfg.frames.frames
+      .filter((f) => !runClasses.some(({ cls }) => cls.frames.includes(f.id)))
+      .map((f) => f.id),
+  );
+  const proved = drawsOnlyFromPrimary ? unreachable_at_default.filter((id) => inNoPrimary.has(id)) : [];
+
+  const lines = [
+    `frame reach over ${runClasses.length} run class(es) and ${seeds} seeds each, asking routing rather than the corpus`,
+    "",
+    `${"frame".padEnd(18)} ${"axis".padEnd(15)} at that class's default n`,
+  ];
+  for (const f of frames)
+    lines.push(`${f.frame.padEnd(18)} ${f.axis.padEnd(15)} ${f.at_default.length ? f.at_default.join(", ") : "UNREACHABLE"}`);
+  lines.push("");
+  if (!unreachable_at_default.length) lines.push("Every frame is reachable at some class's default n. A frame missing from --stats is unlucky, not unreachable.");
+  for (const id of unreachable_at_default) {
+    const f = frames.find((x) => x.frame === id)!;
+    lines.push(
+      `${id} is never dispatched at any class's default n. ` +
+        (f.at_any_n.length
+          ? `It appears only at ${f.at_any_n.join(", ")}, which needs an explicit n in the decision.`
+          : "No n reaches it at all.") +
+        (f.blocked_by.length ? ` Its axis (${f.axis}) is held in a primary list by ${f.blocked_by.join(", ")}, and a primary is drawn before any alternate.` : ""),
+    );
+  }
+  if (unreachable_at_default.length)
+    lines.push(
+      "A fixture states a class and lets routing choose, so a frame unreachable at default n cannot have one. " +
+        "Whether that is a routing fix or a retirement is a decision, not a count: see docs/RETIREMENT.md and D6.",
+    );
+  if (proved.length)
+    lines.push(
+      `${proved.join(", ")}: proved, not sampled. Every run class draws its default n entirely from its primary list ` +
+        `(n <= primary length for all ${runClasses.length}), alternates are appended after it, and ${proved.length === 1 ? "this frame is" : "these frames are"} ` +
+        `in no primary list. No seed reaches ${proved.length === 1 ? "it" : "them"} at default n, and no seed count would show otherwise.`,
+    );
+  const sampledOnly = unreachable_at_default.filter((id) => !proved.includes(id));
+  lines.push(
+    sampledOnly.length || !unreachable_at_default.length
+      ? `Otherwise sampled, not proved. ${seeds} seeds per combination; a frame reachable on one seed in ten thousand would read as reachable here.`
+      : `Reachability above is sampled at ${seeds} seeds per combination; the unreachability is not.`,
+  );
+
+  return { frames, unreachable_at_default, unreachable_at_all, proved_unreachable: proved, seeds, text: lines.join("\n") };
 }

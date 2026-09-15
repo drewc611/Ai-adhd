@@ -1,0 +1,19 @@
+{
+  "tokens": 270696,
+  "wall": "2162s from compile, host-bound",
+  "reported_tasks": 4,
+  "of_tasks": 9,
+  "by_phase": {
+    "critique_a_and_b": 103539,
+    "deepen": 167157
+  },
+  "by_frame": {
+    "ACTOR_CENSUS": 55621,
+    "MINIMALIST": 54957,
+    "DOOR_KEEPER": 56579
+  },
+  "unmeasured": "The five diverge tasks. They ran in the foreground and the harness reported no token count for them, so this total covers four of nine tasks and is not comparable to 001-seed3's 485,412. The by_frame entries here are deepen, not diverge.",
+  "spent_and_discarded": 56600,
+  "spent_and_discarded_note": "One deepen on FRAME_BREAKER, dispatched before D40 fixed the tiebreak. Under the old rule FRAME_BREAKER was the representative of propagated_deadline_budget because the critic listed it first; under D40 the exact tie goes to ACTOR_CENSUS. The deepen was re-run so the recording is internally consistent. The spend was real and is recorded here rather than dropped.",
+  "wall_note": "This run was driven across a context compaction and a mid-run code fix, so wall clock measures the host rather than the pipeline. 001-seed3's 1930s is the comparable figure for a run driven straight through."
+}

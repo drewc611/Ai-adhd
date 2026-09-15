@@ -1,0 +1,68 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence naming the exact change - flock -n plus two emitted numbers plus an alert threshold - with no fallback offered to the reader." }
+    falsifiability: { score: 3, evidence: "A week of existing log timestamps is free to pull, and a p95 above the interval is stated to overturn the position outright." }
+    specificity: { score: 3, evidence: "The argument turns on flock -n versus -w, the crontab line, and the interval-versus-runtime crossing, none of which transfer to another problem." }
+    assumption_attack: { score: 2, evidence: "It names the assumption that overlap is the disease and reframes it as evidence of runtime growth, but tests that claim only in the falsifier rather than in the body." }
+    reasoning_carries: { score: 3, evidence: "No authority, tool endorsement, or cited practice appears anywhere; the cost-and-payer chain stands on its own." }
+    actor_coverage: { score: 2, evidence: "The downstream consumer is named with a concrete action - state a freshness requirement in hours - though the recommendation is already fixed before that actor responds." }
+    reversibility: { score: 2, evidence: "It prices the flock wrapper as a few discardable lines against a migration with a maintenance contract, and uses that to order the two moves." }
+    substance: { score: 3, evidence: "Stripped flat, locking without telemetry converts a visible symptom into silent skipping, which is a real claim and not an angle." }
+  B:
+    committal: { score: 3, evidence: "One sentence with three named mechanisms - readable lock file, three heartbeats, a start-time disable flag - and no option returned to the reader." }
+    falsifiability: { score: 3, evidence: "Asking the current on-call to demonstrate a stop in five minutes costs nothing and, on failure, explicitly relocates the controls the position depends on." }
+    specificity: { score: 2, evidence: "The cron mail detail and the crontab-as-root point are load bearing, but the on-call readability argument would survive on almost any unattended job." }
+    assumption_attack: { score: 2, evidence: "It tests the premise that overlap is the defect and concludes invisibility is worse, but the recommendation would be the same either way." }
+    reasoning_carries: { score: 3, evidence: "The chain from pager symptom to file-touch controls to absence-alerting uses no borrowed authority at all." }
+    actor_coverage: { score: 2, evidence: "The datastore owner is named with a unique constraint or advisory lock to add, but the position stands without that party acting." }
+    reversibility: { score: 1, evidence: "It distinguishes what needs a deploy from what does not, which is about access at 3am rather than about which moves can be undone." }
+    substance: { score: 3, evidence: "Flattened to make the guard state readable and clearable by hand and make skipping loud, the claim survives losing the 3am framing." }
+  C:
+    committal: { score: 3, evidence: "One sentence with a date and a payload - run id, timestamps, item count - and an explicit refusal to pick a mechanism." }
+    falsifiability: { score: 3, evidence: "One grep of two weeks of cron mail either shows a growth curve or a single hang, and the hang case concedes that a lock is the whole fix." }
+    specificity: { score: 2, evidence: "The watermark and bounded-batch argument bends around this job's unbounded work against a fixed interval, but would read the same for any growing batch job." }
+    assumption_attack: { score: 3, evidence: "It names the load-bearing assumption that this is a concurrency problem, argues the runtime crossed the interval instead, and the whole recommendation follows from that reversal." }
+    reasoning_carries: { score: 3, evidence: "No citations or tool authority appear; the case rests on the claim that every menu item destroys the measurement." }
+    actor_coverage: { score: 3, evidence: "The unnamed output consumer is given a specific action - state a freshness requirement in hours - and the position concedes that half the menu collapses depending on the answer." }
+    reversibility: { score: 1, evidence: "It sequences instrumentation before batching but never distinguishes which of those moves can be undone and which cannot." }
+    substance: { score: 2, evidence: "Flattened to measure the runtime before choosing a mechanism, it remains true but close to generic advice, with the bounded-batch point doing the real work." }
+  D:
+    committal: { score: 3, evidence: "One sentence that commits to flock plus logging today and to staying on cron, with the unless clause functioning as a stated decision rule rather than a hedge." }
+    falsifiability: { score: 3, evidence: "A pgrep across the hosts carrying the crontab costs seconds and, if the entry lives on two machines, the first step of the position is void." }
+    specificity: { score: 3, evidence: "The three-worlds separation, the p95-against-half-the-interval threshold, and the two-machine lockfile check are unusable outside this exact setup." }
+    assumption_attack: { score: 3, evidence: "It identifies the single-host assumption the question smuggled in, tests it mechanically, and makes the ordering of timeout versus lock depend on the result." }
+    reasoning_carries: { score: 3, evidence: "Detection-latency and cost-of-being-wrong reasoning is constructed from the problem itself with no appeal to any authority." }
+    actor_coverage: { score: 2, evidence: "The datastore owner is named with a unique constraint to add, but that action is an alternative repair rather than something the position rests on." }
+    reversibility: { score: 3, evidence: "The undoable and not-undoable inventory is the spine of the answer, and the today, day-fourteen, then-commit sequence is built directly on it." }
+    substance: { score: 3, evidence: "Flattened to lock and measure for two weeks, then let the duration distribution decide the orchestrator question, the claim is unchanged and still worth making." }
+  E:
+    committal: { score: 3, evidence: "One sentence specifying an flock-guarded idempotent resumable entrypoint with a PID-and-start-time lock file, with no alternative offered." }
+    falsifiability: { score: 3, evidence: "Thirty runs of timestamps is cheap, and a median already over the interval is said to make the position wrong and hand the problem to the rewrite it forecloses." }
+    specificity: { score: 2, evidence: "The lock file contents and crontab kill path are specific, but the actor enumeration including an attacker and a payer would read identically for any scheduled system." }
+    assumption_attack: { score: 2, evidence: "It catches the framing that the software started overlapping by itself and insists something with hands changed the runtime, but never tests which hands." }
+    reasoning_carries: { score: 3, evidence: "The who-acts-fastest chain uses no citations and no borrowed practice." }
+    actor_coverage: { score: 3, evidence: "The on-call human at a shell is named with kill and crontab actions, and the entire design of the position exists to serve that actor." }
+    reversibility: { score: 2, evidence: "Actions are ranked by cost and approval needed - seconds and free versus a deploy - and that ranking decides which move comes first." }
+    substance: { score: 3, evidence: "Flattened to make the job safe to kill mid-flight and safe to rerun by hand, the claim is the same one and still worth saying." }
+  F:
+    committal: { score: 3, evidence: "One sentence giving the exact crontab change plus the stderr message on failed acquire, with no escape hatch." }
+    falsifiability: { score: 3, evidence: "Fifty runs of timestamps from the existing mail spool costs nothing and the hang case is stated to move the fix to a timeout and wall-clock kill instead." }
+    specificity: { score: 3, evidence: "It turns on cron mailing about output rather than exit status and on flock -n printing nothing, which is meaningless for any other scheduler." }
+    assumption_attack: { score: 2, evidence: "It tests whether the overlap is new or original and shows the answer would differ, but leaves the question's own menu framing largely intact." }
+    reasoning_carries: { score: 3, evidence: "The argument is mechanism-level throughout, with no authority invoked to support the flock behaviour claim." }
+    actor_coverage: { score: 3, evidence: "The crontab mailbox owner is named with an action available today, and the falsifier the position depends on cannot be run without them." }
+    reversibility: { score: 1, evidence: "The one-shell-operator cost is contrasted with a rewrite in the forecloses list, but nothing is ordered by whether it can be undone." }
+    substance: { score: 3, evidence: "Flattened to use flock but make the skipped run produce output so it can be counted, the claim survives and corrects a real defect in the obvious fix." }
+  G:
+    committal: { score: 3, evidence: "One sentence, but it stacks leases, idempotence, process-group timeout, and staleness paging into a single directive with no hedge." }
+    falsifiability: { score: 2, evidence: "The double-run diff against restored production data in staging is relevant and decisive, but restoring a data copy is a real cost compared with reading existing logs." }
+    specificity: { score: 2, evidence: "The NFS, staging-pointing-at-prod, and DST instances are concrete, yet the underlying catalogue of lock failure modes would attach to any lock anywhere." }
+    assumption_attack: { score: 3, evidence: "It enumerates the four assumptions the obvious lock makes, breaks each with a concrete violation, and derives the design from what survives all three." }
+    reasoning_carries: { score: 3, evidence: "Every failure mode is argued mechanically with no appeal to a tool vendor, standard, or named practice." }
+    actor_coverage: { score: 3, evidence: "The engineer who runs the script by hand is named as the likely source of the overlap and the only one who can kill a wedged run, and the idempotence requirement follows from that." }
+    reversibility: { score: 0, evidence: "It proposes the most invasive change of the set - claim rows, per-unit identity, restructured work - without ever distinguishing what could be backed out." }
+    substance: { score: 3, evidence: "Flattened to put correctness in the work rather than in the lock, the claim is the same and is the strongest version of that argument here." }
+```

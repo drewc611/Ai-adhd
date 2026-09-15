@@ -13,10 +13,32 @@ export class RunAbort extends Error {
   }
 }
 
+/**
+ * The echoed hash is not the one the brief carried. Aborts the run, always.
+ *
+ * Two different failures reach here and they used to read identically. A branch that echoed a
+ * *different* hash paraphrased the problem, which is the drift this check exists for. A branch
+ * that echoed *no* hash — an empty artifact, prose, a document of the wrong shape — established
+ * nothing about drift at all; it failed the contract, and the reader sent looking for a compiler
+ * bug by the word "paraphrase" is being sent the wrong way. `String(got)` flattened both into
+ * "got undefined", so the most specific accusation the system can make was also its most common
+ * one, which is how a guarantee stops meaning anything.
+ *
+ * Both still abort. Only the diagnosis changed, and it now says which of the two happened.
+ */
 export class HashMismatch extends RunAbort {
-  constructor(public readonly expected: string, public readonly got: string, public readonly where: string) {
-    super(`problem_hash mismatch in ${where}: expected ${expected}, got ${got}. Paraphrase drift. Run invalidated.`, "HASH_MISMATCH");
+  public readonly got: string;
+  constructor(public readonly expected: string, got: unknown, public readonly where: string) {
+    const absent = typeof got !== "string";
+    super(
+      absent
+        ? `problem_hash missing in ${where}: expected ${expected}, the artifact carried ${got === undefined ? "no problem_hash field" : `${typeof got} ${JSON.stringify(got)}`}. ` +
+          `Contract failure, not paraphrase drift: nothing here says the problem was restated. Run invalidated.`
+        : `problem_hash mismatch in ${where}: expected ${expected}, got ${got}. Paraphrase drift. Run invalidated.`,
+      "HASH_MISMATCH",
+    );
     this.name = "HashMismatch";
+    this.got = String(got);
   }
 }
 

@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from run 20260915080958-bad9dc, E10 cell two: fixture 014 at seed 1, which drops DOOR_KEEPER and FRAME_BREAKER and adds MECHANIC and MINIMALIST. Same four of five pre-registered must_surface items hold as at seed 14, and the same one misses: not_a_lock_problem. That it misses identically under a frame set that swapped two frames each way is the E10 result -- the item is carried by no frame in either run, while the other four are carried by five to seven of seven in both, so this pair cannot separate a frame-set effect from anything else. See docs/EXPERIMENTS.md under E10. Recorded as observed; no pattern was widened after the fact, per E3's rule."
+}

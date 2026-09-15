@@ -1,0 +1,3 @@
+We run background jobs on a cron that shells out to a Python script, and it has started
+overlapping with itself. I want to see a few different directions before we commit to one. What
+are the options?

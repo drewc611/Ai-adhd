@@ -1,0 +1,68 @@
+# The last run class with no fixture. Backlog 9.
+#
+# `api_surface` is in config/routing.yaml and has never had a fixture, so nothing has ever checked
+# that routing sends an API-shape question anywhere sensible, and no recorded run can be scored
+# against it. This is the fixture; the run it needs does not exist yet and the harness reports that
+# as "no recorded runs" rather than as a pass.
+id: "011"
+name: retry-api-surface
+problem_class: api_surface
+seed: 11
+prompt: |
+  We are adding retries to our client library. Should `send()` take a `retries: number`, a
+  `RetryPolicy` object, or neither — with retries configured once when the client is constructed?
+
+why: |
+  The linear answer to an API question is a preference dressed as a principle: "take an options
+  object, it is more extensible". That answer is available without reading the question and would
+  be the same for any three-way API choice, which is what makes it worth a fixture.
+
+  What an API question actually turns on is who is holding the call site. A `retries: number` is
+  readable at the call site and unreadable six months later when someone needs backoff. A
+  `RetryPolicy` is the reverse. Configuring once at construction moves the decision away from the
+  call site entirely, which is right when retries are a property of the service and wrong when they
+  are a property of the request. None of that is reachable by asking which is more extensible.
+
+  The assertions below are what a run must surface to have read the question rather than the genre.
+
+must_surface:
+  - id: call_site_reader
+    trap: T4
+    description: Someone reads this call six months later. The API's job is to tell them what it does.
+    any_of:
+      - "call site"
+      - "read(s|ing)? (the|this) call"
+      - "six months"
+      - "reader"
+  - id: whose_property
+    trap: T2
+    description: >
+      Whether retrying is a property of the service or of the individual request decides where the
+      configuration belongs. A run that never asks this is choosing a shape by taste.
+    any_of:
+      - "propert(y|ies) of the (service|request|client)"
+      - "per[- ]request"
+      - "per[- ]client"
+      - "same for every (call|request)"
+  - id: what_it_forecloses
+    trap: T7
+    description: Each shape closes a door. A number cannot grow a backoff; a policy object cannot be read at a glance.
+    any_of:
+      - "backoff"
+      - "jitter"
+      - "cannot (later|then) add"
+      - "forecloses?"
+
+must_not:
+  - id: extensibility_alone
+    description: >
+      "An options object is more extensible" is the linear answer and is true of every API question
+      ever asked. Saying it is allowed; saying only it is not, so the recommendation has to carry real
+      words beyond the phrase rather than resting on it.
+    check: min_words_outside
+    scope: recommendation
+    pattern: "(more )?extensib(le|ility)|future[- ]proof"
+    min_words: 40
+
+expect:
+  pruned_min: 1

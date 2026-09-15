@@ -1,0 +1,79 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: DOOR_KEEPER
+position: >-
+  Wrap the cron line in flock -n today and log every run's pid, start, end, duration and exit
+  code, then commit to staying on cron with a hard timeout and a watchdog kill unless two weeks
+  of that log show p95 runtime climbing past half the interval with no hang present.
+reasoning: |
+  1. What is reversible, what is not.
+
+  Undoable in an afternoon: wrapping the crontab entry in `flock -n`, adding a one-line
+  start/end/duration/exit log, widening or narrowing the cron interval, adding a timeout to
+  whatever the script blocks on, adding a watchdog that kills a run past N minutes, alerting
+  when a run is skipped because the lock was held. Each of these is one line of shell or a few
+  lines of Python; a crontab edit and a revert puts you exactly back.
+
+  Not undoable: adopting a job orchestrator (Celery, Airflow, Temporal, a k8s CronJob plus a
+  queue), because within a quarter the other jobs follow it there and the cron path is deleted;
+  deleting or merging the rows the overlapping runs have already double-written; and redefining
+  what a run covers, from "everything since the last success" to a fixed window, because past
+  outputs stop being comparable to new ones.
+
+  2. Cost of being wrong, and how long until you know.
+
+  Orchestrator migration. Cost of being wrong: a quarter of engineering plus a permanent
+  operations surface you now own, and if the real cause is one run hanging forever on a socket
+  with no timeout, the orchestrator inherits the hang and you have bought nothing. Detection
+  latency: two to six months, and this is the dangerous part, because the migration itself
+  looks like progress the entire time. You find out when the same overlap appears on the new
+  platform.
+
+  Cleaning up the double-written data. Cost of being wrong: unrecoverable deletion if the dedupe
+  key is wrong. Detection latency: months, or never, because nobody diffs a table against a
+  backup that has already aged out.
+
+  Redefining the run window. Cost of being wrong: every historical number is now on different
+  semantics. Detection latency: the next time someone compares this period to last.
+
+  3. The cheap reversible experiment.
+
+  `flock -n` on the crontab line plus one log line per run. Two weeks of that separates three
+  worlds that are indistinguishable from outside today: runtime has crept past the interval,
+  which is capacity; one run hangs forever, which is a missing timeout, and flock makes it
+  obvious immediately because you get "lock held, skipped" every single interval instead of
+  occasionally; or it overlaps only on certain days, which is a workload spike and argues for
+  sharding, not for a platform. Nothing about the orchestrator question can be answered before
+  you know which of the three it is, and finding out costs an afternoon.
+
+  4. Ordering.
+
+  Today: flock -n, duration logging, alert on two consecutive skips. Same day, and it is free:
+  `pgrep -af` the script on every host that carries this crontab, because if the entry exists
+  on two machines a local lockfile is theatre. Day fourteen: read the duration distribution.
+  Then commit. If p95 sits under half the interval and the overlaps were hangs, add the timeout
+  and the watchdog kill, keep cron, and close the orchestrator conversation. Only if p95 is
+  genuinely climbing toward the interval with no hang present do you walk through the
+  orchestrator door, and you walk through it holding a growth curve rather than a preference.
+forecloses:
+  - >-
+    Migrating to a job queue or workflow orchestrator now, which is the answer most teams reach
+    for first and the one this position refuses until there is duration data to justify it.
+  - >-
+    Accepting concurrency and making the script parallel-safe and idempotent instead of
+    serializing it. That is a legitimate direction and flock rules it out for now.
+  - >-
+    Widening the cron interval as the fix, which makes the symptom disappear while the runtime
+    drift that caused it keeps growing unmeasured.
+falsifier: >-
+  Run `pgrep -af <script>` on every host whose crontab carries this entry. If the entry lives on
+  more than one machine, a local flock locks nothing and this position is wrong on its first
+  step. Equally: if the oldest live process is already several intervals old, the job is hanging
+  rather than running long, and serializing it converts intermittent overlap into a permanent
+  stall, so the timeout must come before the lock rather than after it.
+missing_actor: >-
+  The owner of the datastore the script writes to, who can add a unique constraint or an upsert
+  key that makes a double write impossible at the storage layer, which fixes the actual damage
+  from overlap without any scheduler change at all.
+confidence: high
+```

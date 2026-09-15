@@ -150,16 +150,57 @@ test("ordinary problem statements do not trip the injection warning", () => {
   for (const c of clean) assert.deepEqual(lintProblemInjection(c), [], `false positive on: ${c}`);
 });
 
+/**
+ * Measured as a *minimum over trials of CPU time*, not wall clock.
+ *
+ * Wall clock was the first two attempts and both were wrong in the same way. The original took one
+ * sample at n=500 where the work is sub-millisecond; it failed at "4x the input took 20.6x the time"
+ * on a machine training an LSTM in another process. The fix was a minimum over trials, reasoning
+ * that "contention can only make a measurement slower, never faster, so a minimum removes it from
+ * both sides".
+ *
+ * **That reasoning is wrong when the two measurements have different durations, and this test proved
+ * it.** Reproduced under four CPU hogs on four vCPUs: the short measurement (~2ms) finds an
+ * uncontended window within five trials and the long one (~20ms) almost never does, so the minimum
+ * cleans up the denominator far more than the numerator and the *ratio inflates*. Measured under
+ * identical load: wall clock 28.6x against CPU time 7.7x, where the idle figure is 9.93x. It failed
+ * a real run at 41.2x.
+ *
+ * CPU time is the right instrument anyway. A ReDoS test is a claim about how much *work* an input
+ * causes, and `process.cpuUsage()` measures exactly that — being descheduled does not add to it.
+ */
 test("the injection check stays linear on adversarial input", () => {
   const grow = (n: number) => "All " + "approach ".repeat(n) + " should " + "x ".repeat(n) + " agree";
-  const time = (n: number) => {
+  const fastest = (n: number, trials = 5) => {
     const text = grow(n);
-    const t = process.hrtime.bigint();
-    lintProblemInjection(text);
-    return Number(process.hrtime.bigint() - t) / 1e6;
+    let best = Infinity;
+    for (let i = 0; i < trials; i++) {
+      const before = process.cpuUsage();
+      lintProblemInjection(text);
+      const d = process.cpuUsage(before);
+      best = Math.min(best, (d.user + d.system) / 1000);
+    }
+    return best;
   };
-  time(500);
-  const small = Math.max(time(500), 0.01);
-  const large = time(2000);
-  assert.ok(large < small * 20, `4x the input took ${(large / small).toFixed(1)}x the time`);
+  fastest(4_000, 2); // warm the JIT, so the first measured trial is not compiling
+  const small = fastest(4_000);
+  const large = fastest(32_000);
+  // **8x the input, not 4x, and the reason is that the old bound had no teeth.** Measured on this
+  // machine: at a 4x ratio the linter runs 3.80x and a deliberately quadratic scan over the same text
+  // runs 16.32x — *under* the 20x bound this test used to assert. So it caught exponential blowup and
+  // waved quadratic through, which is the shape a ReDoS actually takes.
+  //
+  // At 8x the two separate cleanly: the linter runs 9.93x and the quadratic probe 68.41x. 30x sits
+  // between them with about 3x of headroom on each side, so it fails on real blowup and not on a
+  // constant factor. In CPU time the linter holds that figure under heavy contention (7.7x measured
+  // with four hogs on four vCPUs), which is what makes the bound mean something on a shared machine.
+  //
+  // Re-verified in CPU time, which is what these now measure: a true O(n^2) scan over the same text
+  // at an 8x size step runs **62.4x**, the check itself runs 7.7x under four CPU hogs on four vCPUs,
+  // and 30x sits between them with about 3x of headroom on each side. Switching instrument did not
+  // cost the bound its teeth, which was the thing to check before trusting it.
+  assert.ok(
+    large < small * 30,
+    `8x the input took ${(large / small).toFixed(1)}x the CPU time (${small.toFixed(2)}ms -> ${large.toFixed(2)}ms)`,
+  );
 });

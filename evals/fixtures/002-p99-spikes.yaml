@@ -46,8 +46,11 @@ must_surface:
   - id: or_so_noticed
     trap: T1
     description: The imprecision in "40 minutes or so" is treated as evidence.
+    # `or so` was here and is gone: the prompt says "every 40 minutes or so", so any branch quoting
+    # the question satisfied an assertion meant to check the imprecision is *treated as evidence*.
+    # Removing it moves no recorded outcome — `002-first-run` matched both `or so` and `drift`, and
+    # `002-kernel-enduser` matched `jitter` — so the four that remain are the four doing the work.
     any_of:
-      - "or so"
       - "jitter"
       - "drift"
       - "exactly 40"

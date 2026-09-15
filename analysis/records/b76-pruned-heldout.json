@@ -1,0 +1,109 @@
+{
+  "budget": {
+    "counts": {
+      "ceilings": {
+        "max_ngrams": 12000000,
+        "max_rss_mb": 13500,
+        "max_seconds": 4500.0,
+        "max_tokens": 90000000
+      },
+      "checks": 3209,
+      "peak_rss_mb": 5223,
+      "seconds": 408.32,
+      "stopped_because": null,
+      "tokens": 64347232
+    },
+    "vocabulary": {
+      "ceilings": {
+        "max_ngrams": 12000000,
+        "max_rss_mb": 13500,
+        "max_seconds": 4500.0,
+        "max_tokens": 90000000
+      },
+      "checks": 3209,
+      "peak_rss_mb": 5223,
+      "seconds": 408.45,
+      "stopped_because": null,
+      "tokens": 64347232
+    }
+  },
+  "corpus_fingerprint": "de7c24b2218ad055",
+  "discounts": [
+    [
+      0.4716,
+      1.3405,
+      1.9279
+    ],
+    [
+      0.7145,
+      1.1294,
+      1.4345
+    ],
+    [
+      0.8159,
+      1.1794,
+      1.4251
+    ],
+    [
+      0.6985,
+      1.3284,
+      1.4971
+    ]
+  ],
+  "documents": 7322,
+  "min_count": 3,
+  "model": "models/b76b-pruned.kn.gz",
+  "ngrams": 16412030,
+  "oov_rate": 0.00392,
+  "order": 4,
+  "prunes": 2,
+  "python": "3.11.15",
+  "seconds": 408.32,
+  "sentences": 2781296,
+  "sources": [
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 11785368,
+      "files": 615,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "pep",
+      "path": "analysis/corpora/pep",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "tokens_seen": 64347232,
+  "vocab_size": 148114,
+  "vocab_truncated": {
+    "tokens": 0,
+    "types": 0
+  },
+  "vocabulary_covers_counts": true,
+  "vocabulary_fingerprint": "de7c24b2218ad055"
+}

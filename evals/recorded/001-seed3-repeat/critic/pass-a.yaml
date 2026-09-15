@@ -1,0 +1,50 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence, one imperative verb, one number, and an explicit 'change nothing else' that removes every escape hatch." }
+    falsifiability: { score: 3, evidence: "Two cheap checks — a week of existing latency logs and a grep for a retry wrapper — each of which would directly invalidate the single-number move." }
+    specificity: { score: 2, evidence: "The argument bends around HTTP-client particulars (connect versus read, retry multiplication, streaming-byte idle timers) but would survive being pointed at a different client." }
+    assumption_attack: { score: 2, evidence: "It names and rejects the question's implicit framing that this is a tuning problem, arguing it is a hang problem, but asserts that reframe rather than testing it." }
+    reasoning_carries: { score: 3, evidence: "No authorities, no citations, and no appeals to convention; the chain from unbounded-wait to single-bound stands on its own." }
+    actor_coverage: { score: 2, evidence: "The server operator is named with a concrete action — publish a latency expectation — but the ten-second position is taken without them." }
+    reversibility: { score: 2, evidence: "It orders the work by holding back the expensive split until a named signal appears, and treats bounded-and-wrong as recoverable, but never frames the distinction explicitly." }
+    substance: { score: 3, evidence: "Flattened to 'put one ten-second total deadline on it and stop there', the claim is the same and still worth making." }
+  B:
+    committal: { score: 2, evidence: "It is grammatically one sentence but bundles three numbers plus a trailing rationale clause, and 'at least a second shorter' leaves the reader deriving the value." }
+    falsifiability: { score: 3, evidence: "Reading the entry point to see whether any caller is waiting takes ten minutes and, if it is a batch job, the entire inherited-deadline position collapses." }
+    specificity: { score: 2, evidence: "The cost accounting is tied to connection pools, retry layers and caller deadlines, but nothing in it depends on which client this is." }
+    assumption_attack: { score: 3, evidence: "It attacks the assumption that the timeout derives from the dependency's latency, substitutes the inherited deadline, and the recommended numbers follow from that substitution." }
+    reasoning_carries: { score: 3, evidence: "The twenty-seven-requests amplification argument and the queueing argument are derived in place with no authority invoked." }
+    actor_coverage: { score: 2, evidence: "The dependency's operators are named with real actions — publish a histogram, return 429 with Retry-After — but the position is derived from the upstream caller, not from them." }
+    reversibility: { score: 1, evidence: "It compares costs (an afternoon of plumbing versus endless tuning sessions) but never separates moves that can be undone from ones that cannot." }
+    substance: { score: 2, evidence: "Flattened to 'subtract from the caller's deadline and cap retries' it still holds, though the who-pays-the-bill framing carried much of the persuasion." }
+  C:
+    committal: { score: 3, evidence: "One sentence with three chained imperatives — stamp, propagate, compute — and an explicit 'stop' on the alternative." }
+    falsifiability: { score: 3, evidence: "Grepping one incident review for an unconfigured stall is nearly free and the stated absence of such a stall would retire the whole proposal." }
+    specificity: { score: 2, evidence: "It quotes and dismantles the question's own phrasing, but the budget argument would apply unchanged to any fan-out call path." }
+    assumption_attack: { score: 3, evidence: "It names the load-bearing assumption — that a timeout is a constant belonging to a client — shows whom it is convenient for, and derives the answer from its falsity." }
+    reasoning_carries: { score: 3, evidence: "The 45-second worked example and the convenience analysis are self-contained; no citation or authority appears anywhere." }
+    actor_coverage: { score: 3, evidence: "The downstream owner can read the propagated deadline and shed expired work, and without that the position degrades to abandoning requests the server keeps executing." }
+    reversibility: { score: 1, evidence: "It contrasts a ten-minute config edit with threading a deadline through the call graph as effort, not as reversibility, and the ordering is not built on that distinction." }
+    substance: { score: 3, evidence: "Stated flatly as 'timeouts should be derived from a propagated request budget, not configured per client', it is the same claim and a contestable one." }
+  D:
+    committal: { score: 3, evidence: "Four concrete numbers, an explicit no-retries decision, and a named follow-on commitment, all in one sentence with no hedge." }
+    falsifiability: { score: 3, evidence: "A p99.9 above five seconds or a visible rise in timeout-error rate is a cheap read off graphs the change itself installs, and it kills the five-second value." }
+    specificity: { score: 2, evidence: "The one-way-door inventory is anchored in this call's wire format, pool and call signatures, but transfers to any client without modification." }
+    assumption_attack: { score: 3, evidence: "It identifies that the question treats the decision as a choice of integers, shows the integers are the cheapest part, and the recommendation follows from that inversion." }
+    reasoning_carries: { score: 3, evidence: "The hours-versus-months detection-latency argument is constructed from first principles with no external authority leaned on." }
+    actor_coverage: { score: 3, evidence: "The downstream team holds the idempotency-key storage, and the position's refusal to enable retries today depends directly on their not yet honoring one." }
+    reversibility: { score: 3, evidence: "The entire answer is a sequence ordered by which doors swing both ways, with the two-way moves taken today and the one-way ones deferred behind measurement." }
+    substance: { score: 3, evidence: "Flattened to 'ship conservative numbers with no retries now and buy deadline propagation and idempotency before retries', the claim survives intact." }
+  E:
+    committal: { score: 3, evidence: "One sentence that says where every timeout comes from and demotes static values to a ceiling, with no option returned to the reader." }
+    falsifiability: { score: 3, evidence: "One day of access logs, an abandonment count under one percent and a p99 far below the ingress limit would show no fast actor is pressing and retire the plumbing." }
+    specificity: { score: 2, evidence: "The per-phase reasoning, slow-loris case and ingress idle-timeout ceiling are HTTP-shaped, but the actor enumeration would run the same against any system." }
+    assumption_attack: { score: 3, evidence: "It shows the question names exactly one actor, finds the fastest omitted one, and the whole design follows from making that actor the control." }
+    reasoning_carries: { score: 3, evidence: "Every step, including the claim that a single total timeout is what the slow-response attacker walks through, is argued rather than cited." }
+    actor_coverage: { score: 3, evidence: "The caller who closes the tab acts in milliseconds at zero cost, and the position exists precisely because that actor holds the pool slot hostage." }
+    reversibility: { score: 1, evidence: "It notes only in passing that a runtime-tunable value changes in seconds while a compiled constant needs a deploy, and never orders the recommendations by that." }
+    substance: { score: 3, evidence: "Flattened to 'let the waiting caller's deadline set the timeout and cancel on disconnect', it remains a real and arguable claim." }
+```

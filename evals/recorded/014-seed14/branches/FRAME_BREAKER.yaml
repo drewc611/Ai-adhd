@@ -1,0 +1,62 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: FRAME_BREAKER
+position: >-
+  Ship a one-line instrumentation change tomorrow that makes every run emit a run id, start
+  and end timestamp, and the count of items it processed, and treat the overlap as the alarm
+  you now measure rather than the fault you pick a mechanism for.
+reasoning: |
+  1. The load bearing assumption is that overlapping runs are a concurrency problem, so the
+  solution shape is "choose a mutual exclusion or scheduling mechanism from a menu" — flock,
+  a lock row, a singleton flag, a queue, a longer interval. That is what "what are the
+  options" presupposes. But overlap is not a defect in the scheduler. The cron interval did
+  not change; the job's runtime crossed it. Something about the work grew, or one run stopped
+  finishing. Every item on that menu is a way of not finding out which. A lock converts
+  visible overlap into invisible skipping, and a skipped run is a run whose backlog rolls
+  into the next one — the curve keeps going, it just stops being legible. You will get the
+  same page back in six weeks with less information than you have today.
+
+  2. Whoever owns the script benefits most. Framing this as an infrastructure choice turns it
+  into a half-day chore with a clean close, instead of an investigation into what the job
+  actually does and why its input volume moved. The upstream team that quietly tripled the
+  row count benefits too, because nobody goes looking for them. And the asker benefits in the
+  short run: comparing three architectures feels like engineering, while admitting that
+  nobody can currently say how long the job takes or how many records it touched last Tuesday
+  does not.
+
+  3. If the assumption is false, the real question is: what is the runtime curve, and what is
+  the bound on work per run? Overlap is the first observable symptom of an unbounded job
+  racing a fixed interval. The decision you are actually facing is whether each run does a
+  bounded amount of work — a watermark, a page size, a cap — or an unbounded amount that
+  scales with accumulated data. That decision is not on the menu you asked for, and none of
+  the menu items answer it.
+
+  4. Tomorrow: add structured logging to the script's entry and exit — run id, start time, end
+  time, wall duration, and the count of whatever unit it processes — and backfill what you
+  can from existing cron mail or stdout capture. Run it for a week and plot duration against
+  item count. Then bound the batch so a run is sized to finish inside the interval, with
+  leftovers picked up by the next run from a stored watermark. That single change makes
+  overlap structurally impossible and tells you what broke, which no lock will.
+forecloses:
+  - >-
+    Adding flock or a pid-file guard and closing the ticket, which is the cheapest and most
+    likely path and the one this position explicitly rules out taking first.
+  - >-
+    Migrating to Celery, Airflow, or a managed job runner now — a rewrite chosen before anyone
+    knows the runtime curve, which inherits the unbounded work and hits the same wall later
+    with more moving parts.
+  - >-
+    Lengthening the cron interval to buy headroom, which trades a visible symptom for a slower
+    version of the same collision.
+falsifier: >-
+  Pull the last two weeks of the job's stdout or cron mail and look at per-run durations. If
+  they are flat and comfortably under the interval, with a single outlier run that hung, then
+  this is not a growth problem — it is one stuck run blocked on a call with no timeout, and a
+  lock plus a socket timeout genuinely is the entire fix. That check costs one grep.
+missing_actor: >-
+  Nobody who consumes the job's output is named. Find the person or downstream system that
+  notices when a run is skipped and get them to state a freshness requirement in hours. If
+  skipping is harmless, half the option menu collapses; if it is not, the backlog is the real
+  problem and a lock is actively dangerous.
+confidence: medium
+```

@@ -56,8 +56,37 @@ def main(argv: list[str] | None = None) -> int:
     # run of this script reported 65.8 with `TRUNCATED` beside it. The cgroup on this machine kills at
     # 13,943MB, so this is close to the largest ceiling that is still a ceiling rather than a crash.
     ap.add_argument("--max-rss-mb", type=int, default=13_200)
+    ap.add_argument(
+        "--in-vocabulary-only",
+        action="store_true",
+        help="drop out-of-vocabulary targets from the sum, leaving contexts alone. Separates how many "
+        "words a model lacks from how well it predicts the ones it has. `comparable_heldout` refuses to "
+        "rank two models scored this way at different OOV rates, because each summed over its own "
+        "target set, so expect refusals rather than ratios on a mixed-vocabulary set.",
+    )
+    ap.add_argument(
+        "--shared-vocabulary",
+        type=Path,
+        default=None,
+        metavar="MODEL",
+        help="score every model only on targets that are in this model's vocabulary, whatever each "
+        "model's own vocabulary is. Both then sum over the same targets and are comparable at "
+        "different OOV rates, which --in-vocabulary-only is not. `evaluate` has taken this since "
+        "backlog 77 and nothing on the command line could reach it, so the one comparison it exists "
+        "for — two models differing only in vocabulary — was unreachable from a shell. E9 is that "
+        "comparison: cells B and D differ in nothing but 8,192 types against 148,114, which is exactly "
+        "what makes their all-targets perplexities incomparable.",
+    )
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
+
+    shared = None
+    if args.shared_vocabulary is not None:
+        sv, _sk = load(args.shared_vocabulary)
+        shared = frozenset(sv.vocab.itos)
+        del sv
+        if not args.json:
+            print(f"scoring only targets in {args.shared_vocabulary.name}: {len(shared):,} types")
 
     base = Library.load(args.manifest)
     scored: list[tuple[str, str, object]] = []
@@ -67,10 +96,23 @@ def main(argv: list[str] | None = None) -> int:
         # A fresh budget per model. Sharing one scores the second model on whatever the first left,
         # which is how `compare_orders` once reported a truncated 37.55 beside a complete 25.65.
         b = Budget(max_tokens=args.max_tokens, max_seconds=args.max_seconds, max_rss_mb=args.max_rss_mb)
-        out = evaluate(model, held, b)
+        out = evaluate(model, held, b, in_vocabulary_only=args.in_vocabulary_only, shared_vocabulary=shared)
         scored.append((path.name, kind, out))
         if not args.json:
             print(f"{path.name:28} {kind:11} {out}")
+        # Released before the next `load()`, and this line is load-bearing. Rebinding `model` on the
+        # next iteration frees the old one only *after* the new one is built, so scoring several large
+        # models in one invocation holds two at once at the moment of peak. It does not survive that:
+        # cell A at 32.1M n-grams beside the shipped model at 40.2M was killed by the cgroup at 13.9GB
+        # mid-load, with no traceback and an empty JSON file, which reads like a scoring failure rather
+        # than an allocation one.
+        #
+        # The resident-set ceiling cannot help here. It is advisory and polled inside `evaluate`, so it
+        # governs scoring and not loading, and the process dies before the first check.
+        #
+        # `oov_slope.py` already did this. This script did not, and four models is the first time anyone
+        # asked it to hold two large ones.
+        del model
 
     refusals = []
     for (na, _ka, a), (nb, _kb, bb) in combinations(scored, 2):

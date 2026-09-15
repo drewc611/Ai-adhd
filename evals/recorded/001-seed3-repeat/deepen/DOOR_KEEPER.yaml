@@ -1,0 +1,68 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+verdict: defend
+response: |
+  The objection lands one clean hit and three glancing ones. The hit changes the answer; the
+  others do not overturn it.
+
+  The hit: one retry on an idempotent GET. The objection is right, and it is right using my own
+  rule against me. I priced retries by their worst instance - a duplicate charge - and then
+  applied that price to every method, including the ones where the duplicate-side-effect
+  argument is definitionally empty. A retry on a GET is a flag. Turning it on costs minutes,
+  turning it off costs minutes, and the failure it absorbs - one transient reset or one slow
+  instance - is the single most common failure this client will actually see. By my own
+  sequencing that is a two-way door and it should have gone in the first afternoon. Worse, my
+  own numbers already made room for it: a 10s total deadline over a 5s per-attempt read is a
+  budget with exactly one spare attempt in it. I built the structure for a retry and then
+  banned the retry. So the carve-out goes in, with the conditions that are actually load-
+  bearing for reads: idempotent methods only, one attempt, jitter, a retry budget around ten
+  percent, and the retry must fit inside the total deadline rather than restart it. What
+  survives unchanged is the ban on retrying non-idempotent calls before an idempotency key
+  exists, because there the cost is a duplicate write that surfaces as a customer complaint
+  weeks later, and that asymmetry is real.
+
+  That hit also shrinks the idempotency-key demand, correctly. "Every non-GET call" was
+  over-scoped. The commitment is only owed on the non-GET calls you intend to retry, and only
+  when that set is non-empty. If it is empty, the work is not needed and I was demanding a
+  cross-team wire-format negotiation for nothing.
+
+  Where the objection misses. First, "the evidence for those failures is their long detection
+  latency, which is another way of saying none has been observed here." That inverts the frame.
+  An unpaid cost is not a small cost; long detection latency is the reason to buy information
+  early, not a discount. And I did not ask for faith - I named the experiment that converts it
+  into local evidence in an afternoon: point the client at a server that accepts connections
+  and never answers, and watch the pool. If the pool drains and recovers with no deadline
+  propagation, my structural work is unbought and my falsifier already says so. The objection
+  treats "not yet observed" as a verdict when a half-day test settles it.
+
+  Second, the charge that I break my own rule by prescribing three numbers from taste. Partly
+  fair, and the fair part is behavioral rather than logical. My defence is that some bound
+  beats none and a config value is a dial - that holds. The objection's real point is that the
+  dial never gets turned once the pain stops, which welds a two-way door shut through
+  inattention. That is a cost I did not price, and the fix is already half in the plan: the
+  histogram ships in the same change as the numbers, so the revisit is triggered by data rather
+  than by memory. I will make it explicit - the deliverable of day one is the measurement, the
+  numbers are placeholders that carry a dated review, and if the histogram is not in the same
+  commit as the timeouts then the objection is simply correct and the numbers are permanent.
+
+  Third, the unpriced cost of holding retries back for a quarter. Conceded for reads, which is
+  the hit above. Not conceded for writes, where the thing you absorb is an error message and
+  the thing you risk is a duplicate charge.
+revised_position: >-
+  Set a 2s connect timeout, a 5s per-attempt read timeout and a 10s total deadline as dated
+  placeholders shipped in the same commit as the latency histogram and the hung-server staging
+  test, enable one jittered retry inside that deadline on idempotent methods today, and defer
+  retries on writes behind deadline propagation plus idempotency keys scoped only to the
+  non-GET calls you actually intend to retry.
+revised_falsifier: >-
+  Any of: one week of the histogram shows p99.9 of successful responses above 5s, or the
+  timeout-error rate rises visibly after the change, either of which means the read timeout was
+  set by taste and is cutting off responses that would have succeeded; the staging hung-server
+  test shows the pool drains and recovers cleanly with no deadline propagation, which means the
+  structural work I front-loaded buys nothing; or the GET retry, once enabled, measurably
+  multiplies load on the dependency during a brownout without improving user-visible success
+  rate, which would mean the carve-out I just conceded is wrong and the blanket ban was right
+  for reasons of amplification rather than side effects.
+confidence: medium
+```

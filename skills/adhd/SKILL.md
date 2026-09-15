@@ -33,6 +33,56 @@ Ask them to confirm the text is exactly what they meant and that they want to sp
 subagents on it. Do not spawn anything until they say yes. If they say no, stop. Nothing has
 been spent. `--yes` on the compile call skips this for scripted use.
 
+## 1b. Check the launch permit before spending anything
+
+Spawn one `adhd-branch` subagent whose entire prompt is:
+
+```
+Diagnostic probe. Do not use any tool. Reply with the single word OK and nothing else.
+```
+
+If it returns OK, continue at step 2 as written. If the host refuses the spawn, read the refusal:
+it names which declared tools it could not resolve, and that decides what you do next. Nothing has
+been spent yet either way.
+
+### The fallback ladder, when the permit does not resolve (D38)
+
+The three isolated agents declare `TodoWrite, TaskList` and the grant is whichever the host
+resolves. A host that resolves neither cannot launch them. That is real, not hypothetical: a Claude
+Code remote session recognises `TaskList` but will not grant it to a subagent, and does not
+recognise `TodoWrite` at all.
+
+**Do not reach for `general-purpose`.** It carries `Read`, `Glob` and `Grep`, so a branch dispatched
+that way can open its siblings' artifacts in the run directory. "Branches never see siblings" is the
+non-negotiable the whole architecture rests on, and every run recorded before D38 was dispatched
+this way, which is why that guarantee has never been exercised as designed.
+
+Use this instead, and say which rung you used in the message you hand back with the synthesis:
+
+1. **`adhd-branch` / `adhd-deepen`** — the permit resolved. Nothing further to do.
+2. **`adhd-branch-search` for branches and for deepen** — the permit resolved nowhere. Its grant is
+   `WebSearch` and `WebFetch`, neither of which can reach the local filesystem, so sibling isolation
+   holds by capability. The cost is stance purity, not isolation: a frame whose `tools` is `[]` is
+   now dispatched to an agent that *could* search, and D4's reason for withholding search is that a
+   branch which goes looking has left its frame. The brief still tells it that it has no tools and
+   must not look for more. Disclose the substitution; do not hide it in a footnote.
+3. **Stop and tell the user.** If neither rung is available, the run cannot preserve isolation and
+   is not worth spending. Say so at the gate.
+
+**If you used rung 2, run `adhd traps <artifact>` on every branch artifact before the critique
+phase and keep the output.** Rung 2 hands a branch `WebSearch` and `WebFetch` and the brief tells it
+not to look; whether it obeyed is not something the token counter can answer, because that counter
+reports a bare count and never names the tool. T3 is the citation trap and its detector is exactly
+"remove every citation, does a chain of reasoning remain" — which is the question rung 2 raises,
+pointed at the dispatch instead of at the reasoning. A branch that searched and leaned on what it
+found fires T3 and the existing hard rule prunes it. A branch that searched and did not lean on it
+reads the same as one that never searched, and that is the honest limit. Backlog 97.
+
+The critic is the exception and does not need a rung. It is meant to see every artifact — the host
+pastes them into its prompt — and pass A is blinded by *redaction*, not by tool grants. So a
+filesystem-capable agent is harmless for the critic and `general-purpose` is acceptable there. The
+rule binds branches and deepen passes, which must never learn what a sibling said.
+
 ## 2. Diverge
 
 For every brief listed in `plan.json`, in the order listed (already shuffled), spawn one

@@ -1,0 +1,71 @@
+# A fixture designed to produce scatter. Backlog 12.
+#
+# Same reasoning as 012, opposite failure. `config/critic-rubric.yaml` fires scatter when n >= 3
+# and no cluster reaches two members: five branches, five actions, nothing shared. It has never
+# fired on a recorded run either, so the refusal it is supposed to trigger — return the ambiguity
+# rather than pick a winner from five singletons — has never been exercised on a real pack.
+#
+# The run does not exist yet. The harness reports that as "no recorded runs", not as a pass.
+id: "013"
+name: several-problems
+problem_class: design_decision
+seed: 13
+prompt: |
+  We have six months of runway. Our only backend engineer has told me she is interviewing
+  elsewhere. Our largest customer is 40% of revenue and their contract renews in four months. The
+  product works but onboarding takes three weeks of our time per customer. What should we do next
+  quarter?
+
+why: |
+  This is four problems wearing one question, and they share no constraint. Each stance should
+  find a different one and answer it, because each one genuinely is the most important thing from
+  where that stance stands:
+
+  - cost prices the three weeks of onboarding per customer and automates it
+  - actors finds the engineer, who is an actor with an exit and a notice period
+  - adversary finds the customer concentration and the renewal date
+  - reversibility finds that runway is the only clock that cannot be stopped
+  - scope finds that "next quarter" is the wrong unit for any of the above
+
+  Five actions with nothing in common, no cluster of two, and the system should say so rather than
+  pick the one that scored best. A recommendation here would be a lie about a problem that has not
+  been decomposed, and picking a winner from five singletons is precisely the failure the scatter
+  rule exists to refuse.
+
+  **The dangerous outcome is not scatter, it is a confident recommendation.** Divergence machinery
+  on an undecomposed problem produces five good answers to five different questions, and the
+  scorer has no way to know they are not five answers to one. Without the scatter rule the highest
+  pass A total ships as "the recommendation" and the other four go to the singleton section, where
+  they read as also-rans rather than as the evidence that the question was never one question.
+
+  What this fixture cannot do is guarantee scatter. Two frames may converge on the engineer —
+  everything else is downstream of having nobody to build with — and then there is a cluster of
+  two and this fixture fails. That failure is worth more than the pass: it would mean a problem
+  built to have no shared constraint has one anyway, which is a real finding about how much
+  convergence the frame library produces on its own.
+
+must_surface:
+  - id: more_than_one_problem
+    trap: T4
+    description: >
+      The question is several questions. A run that answers it as one has accepted a framing the
+      asker did not examine, whatever answer it then gives.
+    any_of:
+      - "(four|several|multiple|more than one) (separate |distinct |different )?(problems|questions|decisions)"
+      - "(these|they) are not one (problem|question|decision)"
+      - "different (problems|questions) "
+      - "decompos"
+  - id: the_clock_that_runs_out
+    trap: T7
+    description: >
+      Runway is the only constraint here with a hard edge; the others are bad and survivable. A run
+      that treats all four as equally urgent has not ordered anything.
+    any_of:
+      - "run(s|ning)? out of (money|cash|runway|time)"
+      - "(only|one) (clock|deadline|constraint) that (cannot|can not|can't)"
+      - "(cannot|can not|can't) be (stopped|paused|extended|renegotiated)"
+      - "(before|by) (the )?(money|cash|runway) (runs out|is gone)"
+      - "(hard|immovable|fixed) (deadline|stop|edge)"
+
+expect:
+  scatter: true

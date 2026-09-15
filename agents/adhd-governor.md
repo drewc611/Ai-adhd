@@ -99,9 +99,23 @@ Kneser-Ney does most of its work on, and it corrupts the discount estimates that
 
 **Both of those are memorisation scores and D16 says why.** Each model trained on the whole manifest
 and was then scored on one document in twenty of it, so 2.9x is a ratio between two numbers that
-measure nothing about unseen text. Pruning's real cost is probably larger, since a pruned model has
-less of the tail to memorise *and* less to generalise from, but that is an argument. **Do not quote
-2.9x as measured.** Backlog 76 re-measures it on one split.
+measure nothing about unseen text.
+
+**Re-measured in D29 and the real cost is 1.355x, not 2.9x.** Two models differing in nothing but the
+n-gram ceiling, same corpus digest, same 64,347,232 tokens, same 148,114 types, same frozen held-out
+set: unpruned **25.815**, pruned to 40.8% of its n-grams **34.973**. `comparable_heldout` accepts the
+pair and their out-of-vocabulary rates are identical to every digit, because pruning drops n-grams
+and not types.
+
+**The argument this paragraph used to make was wrong.** It reasoned that the real cost was probably
+*larger* than 2.9x, since a pruned model has less of the tail to memorise and less to generalise
+from. It is less than half of it. The deleted singletons are n-grams seen exactly once in training,
+and on a memorisation test those are precisely the ones the score asks about — so deleting them looks
+catastrophic. On text the model has never seen, a singleton was mostly not going to recur anyway. The
+2.9x measured the memorisation, which is what D16 said those numbers were.
+
+**Quote 1.355x, and quote it as the cost on held-out text.** 2.9x is superseded, not merely
+unmeasured.
 
 **Read the OOV rate before the perplexity.** A held-out OOV near 0.15% on this corpus means the model
 saw the text; the honest figure is about 0.79%. That tell was printed beside every one of these

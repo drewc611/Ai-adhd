@@ -1,0 +1,72 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: LEDGER
+position: >-
+  Set one hard total deadline per request, inherited from the caller as an explicit budget and
+  spent down across attempts (roughly 1s connect, read timeout at the dependency's measured p99
+  times three, total strictly under the remaining inherited budget), with at most one retry and
+  only on idempotent calls, and fail immediately when the remaining budget is smaller than one
+  attempt.
+reasoning: |
+  1. What the obvious answer costs. The obvious answer is a comfortable per-stage timeout with
+  a few retries: 30s connect, 60s read, three tries with backoff. Nobody bills the asker for
+  that, which is why it looks free. It is not. The currency is concurrency: every in-flight
+  request holds a connection pool slot, a socket, a thread or task, and its buffers for the
+  whole window. 60s times three retries is up to three minutes of held capacity per doomed
+  request. The second currency is load on the dependency, because retries multiply request
+  volume by three at exactly the moment the dependency is already failing. The third is human
+  sleep. The bill lands not at configuration time but during the dependency's next brownout,
+  when the pool exhausts, latency goes vertical, and the pager fires.
+
+  2. Which cost is invisible from where the asker stands. The asker is standing inside one
+  process, looking at one client. Three things are invisible from there. First, their caller's
+  deadline: if the caller gives up at 5s and this client is willing to wait 60s, then for 55
+  seconds the service is burning capacity producing an answer that no one is left to read, and
+  the payer is every other request queued behind it. Second, the retry amplification, which is
+  paid entirely by the team that owns the dependency, who see traffic triple during their own
+  incident and get blamed for the collapse that the client's retry policy caused. Third, the
+  conversion of a fast failure into a slow one: a long timeout does not buy success, it buys a
+  slower version of the same failure, and the end user pays that in 60 seconds of spinner
+  followed by an error anyway. User trust is spent whether or not the request succeeds.
+
+  3. The cheapest option that still resolves the pain. The pain in the question is "I do not
+  know what numbers to put here." The cheapest resolution is to stop choosing numbers and
+  start inheriting a deadline. Take a budget from the caller (a deadline header, or the
+  server's own request deadline), subtract what the rest of the handler needs, and give the
+  client what is left. Derive the read timeout from the dependency's observed p99 rather than
+  from how long the asker is willing to sit there, cap retries at one, and refuse to start an
+  attempt that cannot finish inside the remaining budget. This costs no new infrastructure and
+  one afternoon of plumbing a deadline through the call path.
+
+  4. What that option costs instead, and is the trade explicit. It costs two things and both
+  should be said out loud. It costs the asker an uncomfortable number of cancelled requests
+  that would have succeeded had they waited: tail-latency work gets killed, and the payer is
+  the user of the slow-but-legitimate request, in failed operations. It also costs coordination,
+  because a deadline only propagates if the caller sends one and the dependency honours it,
+  which means asking two other teams for something. That is the explicit trade: pay a bounded,
+  visible, measurable failure rate on the slow tail, instead of an unbounded, invisible
+  capacity bill charged to everyone downstream during the next incident.
+forecloses:
+  - >-
+    Forecloses the generous-and-resilient default of three retries with exponential backoff on
+    long per-stage timeouts, which is a retry storm with good intentions.
+  - >-
+    Forecloses leaving library defaults in place (many clients default to no read timeout at
+    all), and forecloses picking round numbers like 30s by feel without the dependency's
+    latency histogram.
+  - >-
+    Forecloses tuning this client in isolation: under this position the number is not the
+    client's to choose, it is a share of a budget that arrives from outside.
+falsifier: >-
+  Take one hour of production logs and count requests this client cancelled that the dependency
+  logged as completing successfully. If that count is more than a handful, the dependency's
+  latency is fat-tailed or bimodal (a batch or report endpoint where 30s is a legitimate
+  success), a p99-derived deadline is destroying good work, and this position is wrong for that
+  route.
+missing_actor: >-
+  The team that owns the service being called. They can publish a latency SLO and enforce a
+  server-side deadline with load shedding, which turns the client timeout from a guess into a
+  confirmation and stops the retry bill landing on them silently. The caller upstream is the
+  other unnamed actor, and their action is to send a deadline at all.
+confidence: high
+```

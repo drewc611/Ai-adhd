@@ -1,0 +1,68 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence naming the exact flag and the exact instrument to watch, with no hedge handing the choice back." }
+    falsifiability: { score: 3, evidence: "Reading modification timestamps on existing outputs for a month is cheap, needs no new instrumentation, and the artifact says plainly which result kills the position." }
+    specificity: { score: 3, evidence: "The entire argument hangs on the word 'started' and on cron already capturing stdout, so it would be unusable for a job that always overlapped." }
+    assumption_attack: { score: 3, evidence: "It attacks the question's assumption that overlap is the problem, concludes overlap is the readout, and the position follows directly from that inversion." }
+    reasoning_carries: { score: 3, evidence: "No authority, tool documentation, or citation is invoked anywhere; the chain is entirely from the problem text and mechanism." }
+    actor_coverage: { score: 3, evidence: "Names the holder of the cron mail sink with a concrete handover of dated run durations, and the position's alerting requirement depends on that sink being read." }
+    reversibility: { score: 2, evidence: "It forecloses migrations as destroying the record and prefers the cheapest instrument, which orders the options but never states the reversible-versus-committed distinction as such." }
+    substance: { score: 3, evidence: "Flattened to 'add a non-blocking lock, alert on refusals, count skips as a runtime-growth metric', it is still the same actionable claim." }
+  B:
+    committal: { score: 2, evidence: "One sentence but a three-part program, and the reasoning's closing caveat about money or mail hands part of the decision back." }
+    falsifiability: { score: 3, evidence: "Running two copies against a staging datastore and diffing rows is concrete and would void the lease entirely, with an even cheaper scheduler check offered alongside." }
+    specificity: { score: 2, evidence: "The reasoning bends around crontab copies, /var/lock and cron mail, but the core distributed-lock argument would transplant to any lockfile question." }
+    assumption_attack: { score: 3, evidence: "It enumerates four assumptions the obvious answer makes about the world, breaks each with a concrete scenario, and the recommendation changes as a result." }
+    reasoning_carries: { score: 3, evidence: "No citations or named authorities appear; the failure modes are derived, not borrowed." }
+    actor_coverage: { score: 2, evidence: "The datastore owner is named with a real action, but the artifact states the fix helps regardless of which locking scheme is chosen, so the position does not rest on them." }
+    reversibility: { score: 1, evidence: "It ranks failures by cost to cause and cost to recover, which touches the idea, but never orders the recommendations by how reversible they are." }
+    substance: { score: 3, evidence: "Flattened to 'move the lock into the database with a TTL, make writes idempotent and keyed, alarm on staleness', it remains a substantive engineering claim." }
+  C:
+    committal: { score: 3, evidence: "One sentence naming the mechanism, the holder record, the force-release command, and the test to judge alternatives by." }
+    falsifiability: { score: 3, evidence: "Searching six months of pager and shell history for any human intervention is cheap and the artifact concedes the design should change target if none exists." }
+    specificity: { score: 2, evidence: "The actor census is a portable procedure, but its entries are drawn from this job's cron daemon, OOM killer and upstream dependency, so the reasoning bends around the problem." }
+    assumption_attack: { score: 2, evidence: "It names the autonomy illusion in 'it has started overlapping with itself' and the omitted parties, but the test of whether an operator exists is deferred to the falsifier rather than performed." }
+    reasoning_carries: { score: 3, evidence: "No authority is cited anywhere; the argument runs on who can act, how fast, and at what cost." }
+    actor_coverage: { score: 1, evidence: "The upstream service is named, but the artifact itself says it can only cause the condition and never resolve it, so there is no action it can take and the position rests on the operator instead." }
+    reversibility: { score: 2, evidence: "It separates seconds-and-free operator moves from anything with a deploy cycle in front of it, and uses that ranking to order the options." }
+    substance: { score: 3, evidence: "Flattened to 'use a lock whose holder is inspectable and manually breakable, and choose by operability', the claim survives without the 3am framing." }
+  D:
+    committal: { score: 3, evidence: "One sentence, delete the cron entry and supervise the script with a kill timeout, with no escape hatch." }
+    falsifiability: { score: 3, evidence: "Reading start times of the currently overlapping copies costs minutes and the artifact names the exact finding that would replace the supervisor with a socket timeout." }
+    specificity: { score: 2, evidence: "The component trace is tied to cron forking a shell and a Python interpreter holding pooled connections, though the arrival-versus-service-rate argument would survive transplant." }
+    assumption_attack: { score: 2, evidence: "It tests the assumption that a lock fixes overlap and shows a lock only discards arrivals, but the deeper assumption that arrivals outrun service is asserted rather than tested inside the reasoning." }
+    reasoning_carries: { score: 3, evidence: "Entirely mechanism: forks, descriptors, transactions and rates, with nothing borrowed from an authority." }
+    actor_coverage: { score: 3, evidence: "The init system administrator is named with a specific install action, and the position cannot be executed without them." }
+    reversibility: { score: 1, evidence: "It notes only that a supervisor leaks no state needing manual clearing, and never weighs its own deletion of the cron entry against cheaper undoable moves." }
+    substance: { score: 3, evidence: "Flattened to 'stop scheduling by clock and start the next run only when the last one exits, with a timeout', it is the same claim and still worth making." }
+  E:
+    committal: { score: 3, evidence: "One sentence, wrap it in flock -n and change nothing else, with the refusal to do more being itself the position." }
+    falsifiability: { score: 3, evidence: "Two checks that take under ten minutes, whether the skipped run had unique work and whether a second host runs the same entry, each of which would void the position." }
+    specificity: { score: 2, evidence: "The minimal-intervention argument would transplant, but the flock-releases-on-descriptor-death point and the cron-interval threshold are load bearing here." }
+    assumption_attack: { score: 2, evidence: "It tests the question's premise that a survey of directions is needed and concludes it is premature until the skip count moves, though the premise about what actually broke is assumed." }
+    reasoning_carries: { score: 3, evidence: "No citation or authority; the kernel-releases-the-descriptor point is argued from mechanism." }
+    actor_coverage: { score: 2, evidence: "The cron mailbox owner is named with a real action of dating the runtime creep, and the observation that nobody reads it is a finding, but the position stands without them." }
+    reversibility: { score: 3, evidence: "The position is explicitly a sequence: a change reversible by deleting eight characters now, with a named counter threshold that triggers the expensive move later." }
+    substance: { score: 3, evidence: "Flattened to 'add a non-blocking lock, do nothing else, revisit when skips cluster', it is the same claim and still worth saying." }
+  F:
+    committal: { score: 3, evidence: "One sentence with three concrete actions, the lock, the counter, and the alert threshold, and no hedge." }
+    falsifiability: { score: 3, evidence: "Computing p95 duration from 24 hours of existing logs is cheap and the artifact names the exact threshold that makes serialisation the wrong answer." }
+    specificity: { score: 2, evidence: "The cost-accounting frame is portable and some passages are generic about fashionable schedulers, but the cron interval and the flock exit code carry real weight." }
+    assumption_attack: { score: 2, evidence: "It names and prices the question's own assumption that surveying is free, but the load-bearing question of whether runtime is permanently past the interval is only tested in the falsifier." }
+    reasoning_carries: { score: 3, evidence: "No authority is invoked; the argument is carried by who pays which cost and when." }
+    actor_coverage: { score: 2, evidence: "The datastore or API owner is named with a server-side constraint or advisory lock they can add, but the flock-plus-counter position does not depend on them acting." }
+    reversibility: { score: 2, evidence: "It argues for a cheap reversible stop-the-bleeding move before the architecture conversation and notes the fix is one deleted line, using that to order the options." }
+    substance: { score: 3, evidence: "Flattened to 'add a non-blocking lock and a skip counter with an alert on two in a row', the claim is unchanged and still worth making." }
+  G:
+    committal: { score: 3, evidence: "One sentence specifying the lease, where it lives, what the responder can do to it, and what to page on." }
+    falsifiability: { score: 3, evidence: "Reading the last three pages for this job, and checking whether on-call even has write credentials, are both cheap and the artifact concedes the position is wrong if either lands badly." }
+    specificity: { score: 2, evidence: "The reasoning bends around this job's 02:00 run and nine copies in ps, but most of the on-call operability argument would apply to any scheduled job." }
+    assumption_attack: { score: 2, evidence: "It names the question's framing as a choice of locking primitive and reframes it as a recovery-path problem, though the test of whether a pager holder exists is left to the falsifier." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities; the chain runs from what a responder can see and do at 3am." }
+    actor_coverage: { score: 3, evidence: "The on-call rotation is named with a concrete rehearsal action against a healthy system, and the artifact says the design fails outright if they cannot perform it." }
+    reversibility: { score: 2, evidence: "It separates a kill switch that is a data change from one that is a code change and a deploy, and uses that to rule out the scheduler migration." }
+    substance: { score: 3, evidence: "Flattened to 'hold the lock somewhere externally inspectable and breakable and alert on run duration rather than on damage', the claim survives the loss of the 3am framing." }
+```

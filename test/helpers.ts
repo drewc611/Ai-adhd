@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { loadConfig, type Config } from "../src/config.js";
-import { TRAP_IDS, type BranchArtifact, type PassA, type PassB } from "../src/schema.js";
+import { TRAP_IDS, dimensionsAt, type BranchArtifact, type PassA, type PassB } from "../src/schema.js";
 
 export const cfg: Config = loadConfig();
 
@@ -34,11 +34,16 @@ export function artifact(frame: string, hash: string, over: Partial<BranchArtifa
 
 export const yaml = (o: unknown) => stringify(o);
 
-export function passA(hash: string, letters: string[], score = 2): PassA {
+/**
+ * A pass A pack of the shape a critic would return today, which since D34 means the dimensions in
+ * force at the rubric's current version and not every dimension in the file. Pass `version` to
+ * build the pack an older run would have produced.
+ */
+export function passA(hash: string, letters: string[], score = 2, version = cfg.rubric.version): PassA {
   const scores: PassA["scores"] = {};
   for (const L of letters) {
     scores[L] = {};
-    for (const d of cfg.rubric.dimensions) scores[L]![d.id] = { score, evidence: `evidence for ${L}.${d.id}` };
+    for (const d of dimensionsAt(cfg.rubric.dimensions, version)) scores[L]![d.id] = { score, evidence: `evidence for ${L}.${d.id}` };
   }
   return { problem_hash: hash, pass: "A", scores };
 }

@@ -1,0 +1,214 @@
+{
+  "n": 7,
+  "frames": [
+    {
+      "frame": "NIGHT_OPERATOR",
+      "status": "pruned",
+      "cluster": "operator_readable_guard",
+      "pass_a": 0.8095238095238095,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "Everything is sorted by whether a control works without a deploy or root, which is about access at 3am; no recommendation carries a cost of being wrong or a time to find out, and nothing is ordered by what can be backed out."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Make the script guard itself at runtime: take a named lock that writes its holder's host, PID and start time somewhere the on-call can read and clear, emit start/finish/skipped heartbeats to a dead-man's-switch monitor, and re-read a disable flag on every start.",
+      "forecloses": [
+        "Delegating concurrency to the scheduler or an orchestrator — Kubernetes CronJob with concurrencyPolicy: Forbid, systemd timers, Airflow max_active_runs. The guard's state then lives in a control plane the on-call may not be able to read or clear from a shell, and when the platform is the thing that is sick, the guard is sick with it.",
+        "Fixing it by changing the schedule: longer interval, staggered starts, or optimising the script so runs finish inside the window. That is prevention only, it holds until the first run that is slow for a reason nobody predicted, and it leaves the 3am recovery path exactly as bare as it is today.",
+        "Making the job idempotent so concurrent copies are harmless and letting them all run. Reentrancy is a good property to have underneath, but as the answer it deletes the signal: the job is now taking longer than its interval and nobody will ever be told."
+      ],
+      "falsifier": "Ask the current on-call, not the author, to show you in five minutes how they would stop this job right now. If they cannot get a shell or a config write on the host the cron fires from — because it is an ephemeral container, a locked-down box, or an account only the build pipeline holds — then a file-based lock and a touch-a-flag kill switch are unreachable at 3am and this position is wrong; the controls have to move to wherever that person actually has access.",
+      "missing_actor": "The owner of the downstream datastore the job writes to — a DBA or the team on the other side of those writes, never named in the problem. They can add a unique constraint or a session-level advisory lock so that a second concurrent run fails fast and loudly at the database instead of corrupting quietly, which is the one line of defence that does not depend on the script behaving or on anyone having noticed the overlap at all."
+    },
+    {
+      "frame": "SABOTEUR",
+      "status": "pruned",
+      "cluster": "leased_idempotent_units",
+      "pass_a": 0.8095238095238095,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "It proposes the most invasive change in the run - per-unit identity, a claim table, restructured work - with no cost of being wrong, no detection latency and no statement of what could be backed out, while its own limits section covers failure modes rather than reversibility."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Make each unit of work idempotent and claimed under an expiring lease, wrap every invocation in a hard wall-clock timeout that kills the whole process group, and page on the age of the last successful completion rather than on a non-zero exit code, treating any lock as an optimization and never as the correctness mechanism.",
+      "forecloses": [
+        "Shipping flock or a PID file as the fix and stopping there, which also forecloses keeping the script as an opaque all-at-once batch with no per-unit boundary, since the leases require the work to be divisible and named.",
+        "Solving the overlap by tuning timing, that is, lengthening the cron interval, staggering schedules, or adding a sleep, since this position treats concurrent runs as normal and safe rather than as something to be scheduled away.",
+        "Reaching for a distributed lock service such as Redis or ZooKeeper as the answer, which trades the problem for a new dependency that can lie about lock ownership during a partition and still leaves the underlying work unsafe to repeat."
+      ],
+      "falsifier": "Run the script twice back to back over the same input window in staging against a restored copy of production data, and diff the resulting rows and outbound side effects against a single run. If the second run is a no-op and the script's p99 wall-clock runtime over the last month of logs is comfortably under the cron period, then the overlap is only a resource collision with no correctness consequence, plain flock is sufficient, and this position is overbuilt.",
+      "missing_actor": "The on-call engineer who runs the script by hand during an incident. The problem describes cron as the only caller, but a human invoking python script.py directly from a shell bypasses any wrapper-level lock, runs under a different user, path and environment, and is the most likely source of the very overlap being investigated. That same person is also the only one who can kill a wedged run, so any design has to make hand-invocation safe rather than forbidden."
+    },
+    {
+      "frame": "PARTICULARIST",
+      "status": "survivor",
+      "cluster": "lock_then_measure",
+      "pass_a": 0.9047619047619048,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Put the cron command behind `flock -n` and give the failed-acquire path an explicit stderr message, so the overlap stops on the next tick and every skipped run becomes cron mail you can count.",
+      "forecloses": [
+        "Lengthening the cron interval as the first move. Without the duration history, any new interval is a guess, and stretching it hides the growth that produced the overlap.",
+        "Moving the job onto a queue, a worker system, or a timer unit with its own concurrency control before the skip count exists. That is a rewrite justified by a number nobody has yet.",
+        "Taking the lock inside the Python script. The script's own runtime is the thing under suspicion, so the skip decision and its logging must not depend on that process starting, importing, and reaching its locking code."
+      ],
+      "falsifier": "Pull start and end timestamps for the last ~50 runs from the script's log or the crontab owner's mail spool. If run durations are flat and the overlap traces to one run that never exited - a network call with no timeout, a held database connection - then this is a hang, not a runtime trend, `flock -n` would let that wedged process block every successor, and the correct layer is a timeout on the call plus a wall-clock kill, not a lock.",
+      "missing_actor": "Whoever owns the mailbox the crontab runs as. Cron has been mailing that address the output of every run since this started, so that person can produce the run history the falsifier needs today, without adding a single line of instrumentation."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "instrument_only_then_bound_the_batch",
+      "pass_a": 0.8333333333333334,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "It recommends redefining a run behind a stored watermark with no cost of being wrong and no detection latency, which is the one move here that changes run semantics irreversibly, and it treats a week of continued overlap while measuring as free."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Ship a one-line instrumentation change tomorrow that makes every run emit a run id, start and end timestamp, and the count of items it processed, and treat the overlap as the alarm you now measure rather than the fault you pick a mechanism for.",
+      "forecloses": [
+        "Adding flock or a pid-file guard and closing the ticket, which is the cheapest and most likely path and the one this position explicitly rules out taking first.",
+        "Migrating to Celery, Airflow, or a managed job runner now — a rewrite chosen before anyone knows the runtime curve, which inherits the unbounded work and hits the same wall later with more moving parts.",
+        "Lengthening the cron interval to buy headroom, which trades a visible symptom for a slower version of the same collision."
+      ],
+      "falsifier": "Pull the last two weeks of the job's stdout or cron mail and look at per-run durations. If they are flat and comfortably under the interval, with a single outlier run that hung, then this is not a growth problem — it is one stuck run blocked on a call with no timeout, and a lock plus a socket timeout genuinely is the entire fix. That check costs one grep.",
+      "missing_actor": "Nobody who consumes the job's output is named. Find the person or downstream system that notices when a run is skipped and get them to state a freshness requirement in hours. If skipping is harmless, half the option menu collapses; if it is not, the backlog is the real problem and a lock is actively dangerous."
+    },
+    {
+      "frame": "LEDGER",
+      "status": "survivor",
+      "cluster": "lock_then_measure",
+      "pass_a": 0.9047619047619048,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Wrap the existing cron line in `flock -n` and, in the same change, emit two numbers per run - run duration and skipped-because-locked - with an alert that fires when duration exceeds half the cron interval, before choosing any scheduler.",
+      "forecloses": [
+        "Migrating to a distributed scheduler or job queue now - Airflow, Celery, Temporal, a managed workflow service - as the first move. This position says that decision has to be bought with runtime data, not with the overlap incident.",
+        "Any queueing form of the lock (`flock -w`, or a scheduler's Replace/Allow concurrency policy), which trades overlap for an unbounded backlog and hands the bill to the host and the recovery window.",
+        "Making the script idempotent and letting the copies run concurrently. That is real engineering work spent to make the symptom survivable while leaving the growing runtime entirely unmeasured.",
+        "Shortening or lengthening the cron interval as the fix. Retuning the interval without measuring duration is guessing at a number that is already observable."
+      ],
+      "falsifier": "Pull one week of the job's actual run durations from existing logs (timestamps on first and last log line will do). If p95 duration already exceeds the cron interval, this position is wrong - locking would mean the job is permanently skipping rather than occasionally skipping, and the real bill is capacity or partitioning, not concurrency control. The second cheap check that would falsify it: if the script already takes a row-level or per-item lock, or writes idempotently, then the overlap is harmless noise and adding a lock buys nothing while removing the parallelism that was keeping up.",
+      "missing_actor": "The downstream consumer of this job's output - the dashboard, the report, the API, or the customer reading the number. They were not named in the problem and they are the party actually paying for staleness. Their available action is to state a freshness requirement in hours, which turns \"is it acceptable to skip a run?\" from an engineering guess into an arithmetic check and settles the scheduler question without a debate."
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "status": "survivor",
+      "cluster": "lock_then_measure",
+      "pass_a": 0.9761904761904762,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Wrap the cron line in flock -n today and log every run's pid, start, end, duration and exit code, then commit to staying on cron with a hard timeout and a watchdog kill unless two weeks of that log show p95 runtime climbing past half the interval with no hang present.",
+      "forecloses": [
+        "Migrating to a job queue or workflow orchestrator now, which is the answer most teams reach for first and the one this position refuses until there is duration data to justify it.",
+        "Accepting concurrency and making the script parallel-safe and idempotent instead of serializing it. That is a legitimate direction and flock rules it out for now.",
+        "Widening the cron interval as the fix, which makes the symptom disappear while the runtime drift that caused it keeps growing unmeasured."
+      ],
+      "falsifier": "Run `pgrep -af <script>` on every host whose crontab carries this entry. If the entry lives on more than one machine, a local flock locks nothing and this position is wrong on its first step. Equally: if the oldest live process is already several intervals old, the job is hanging rather than running long, and serializing it converts intermittent overlap into a permanent stall, so the timeout must come before the lock rather than after it.",
+      "missing_actor": "The owner of the datastore the script writes to, who can add a unique constraint or an upsert key that makes a double write impossible at the storage layer, which fixes the actual damage from overlap without any scheduler change at all."
+    },
+    {
+      "frame": "ACTOR_CENSUS",
+      "status": "survivor",
+      "cluster": "operator_readable_guard",
+      "pass_a": 0.8571428571428571,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Wrap the script in an flock-guarded, idempotent, resumable single-run entrypoint whose lock file records the holder's PID and start time, so the on-call human can see who holds the job and kill or rerun it by hand at any instant.",
+      "forecloses": [
+        "Rules out the queue-and-worker-pool rewrite (Celery, RQ, a managed job runner) as the first move: it replaces a five-line change with new infrastructure, and it removes the shell-level kill-and-rerun the on-call human currently relies on.",
+        "Rules out treating overlap as acceptable and making the job concurrency-safe by sharding work across simultaneous runs; that path makes every future incident require reasoning about N live copies instead of one.",
+        "Rules out fixing this by widening the cron interval or adding jitter, which hides the symptom until runtime grows again and tells the human nothing when it does."
+      ],
+      "falsifier": "Pull start and end timestamps for the last thirty runs. If median runtime already exceeds the cron interval as a steady condition rather than an occasional spike, then a lock converts overlap into permanent silent skipping, the job never runs to completion again, and this position is wrong - the real problem is throughput and belongs in the queue rewrite this position forecloses. A second cheap check: if nobody has shell access to the host (immutable container, managed scheduler), the actor this position is built around does not exist and the whole design collapses.",
+      "missing_actor": "The on-call human at a shell: can SIGKILL a running copy or comment out the crontab line within seconds, at zero cost and with no deploy or review, and does it invisibly unless the job records who holds the lock and when they took it."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "lock_then_measure",
+      "action": "Edit the crontab line to wrap the existing command in flock -n today, and in the same change start recording per-run duration and every skipped-because-locked event so the bigger scheduler decision is made later from that record.",
+      "members": [
+        "LEDGER",
+        "DOOR_KEEPER",
+        "PARTICULARIST"
+      ],
+      "survivors": [
+        "LEDGER",
+        "DOOR_KEEPER",
+        "PARTICULARIST"
+      ],
+      "singleton": false,
+      "strongest_objection": "The ordering is backwards in the one case that costs the most. If the overlap is caused by a run that hangs rather than a run that is merely slow, flock -n does not serialize anything - it hands the lock to a process that will never exit, and every subsequent tick is skipped forever. The telemetry proposed alongside it is blind to exactly that: an alert on run duration and a count of skips both depend on runs starting and finishing, and a wedged holder produces no duration at all, while a skip counter climbing steadily looks identical to a guard doing its job. That means the first thing installed should be a hard wall-clock timeout that kills the process group and an alarm on the age of the last successful completion, with the lock second; done in the stated order, the change converts a loud, visible failure into a quiet one and the alarm that would have caught it is the alarm that was not built. Two further gaps: serializing future runs repairs none of the rows already double-written, so if the work is not idempotent there is damage on disk that no amount of later measurement will surface; and a lock file is only mutual exclusion if there is exactly one host and one local filesystem honouring it - if the same crontab entry exists on a second machine, or the lock path sits on a network filesystem, the change buys nothing while the duration graph reports that everything is fine.",
+      "representative": "DOOR_KEEPER",
+      "mean_pass_a": 0.9285714285714285
+    },
+    {
+      "id": "operator_readable_guard",
+      "action": "Rebuild the job's entrypoint so a single run is guarded by a lock whose file names its holder, skipping is loud rather than silent, and a human at a shell can read the state, kill the run, and rerun it by hand without a deploy.",
+      "members": [
+        "NIGHT_OPERATOR",
+        "ACTOR_CENSUS"
+      ],
+      "survivors": [
+        "ACTOR_CENSUS"
+      ],
+      "singleton": false,
+      "strongest_objection": "The proposal quietly contains two different changes with wildly different prices, and it argues for the cheap one while assuming the expensive one. Writing PID and start time into a lock file and making a skipped run log loudly is genuinely a handful of lines. Making each unit of work commit individually, idempotently and resumably so a killed run loses nothing and a rerun redoes nothing is a rewrite of the script's core loop, and it is asserted rather than costed - which matters because the same argument is used to reject other approaches on the grounds that they are expensive infrastructure work. Worse, the two halves undercut each other: if every unit really is committed idempotently and resumably, a second concurrent copy is no longer dangerous, and the exclusive lock the position is named for stops being a correctness mechanism and becomes at most a resource optimisation. Then there is what the design does not touch. Overlap appeared because runtime crossed the interval; a guard makes the crossing survivable and legible at 3am but records nothing about the trend, so the same incident returns with a longer runtime and a better bedside manner. And the whole design rests on a person with a shell on the host that fires the cron. On an ephemeral container, a managed scheduler, or a box only a build pipeline can log into, that actor does not exist, and every control chosen here - cat the lock file, touch a flag, SIGKILL the copy - is unreachable at the moment it is needed.",
+      "representative": "ACTOR_CENSUS",
+      "mean_pass_a": 0.8571428571428571
+    },
+    {
+      "id": "instrument_only_then_bound_the_batch",
+      "action": "Change nothing about concurrency now, add structured start and end logging with a run id and an item count, run it for a week, plot duration against volume, then cap the work per run behind a stored watermark.",
+      "members": [
+        "FRAME_BREAKER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "leased_idempotent_units",
+      "action": "Restructure the work into named units claimed under expiring leases in a claim table, make processing a unit twice equal to processing it once, wrap every invocation in a timeout that kills the process group, and alert on the age of the last completion instead of on exit codes.",
+      "members": [
+        "SABOTEUR"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "All seven attacked the question's frame, and three attacked it head-on: that overlap is a concurrency-mechanism choice rather than evidence that runtime crossed the interval, that a lock answer presumes a single host and filesystem, and that the request for a menu of directions is itself the expensive move."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every branch supplied a non-null missing_actor with an action - the downstream consumer stating a freshness requirement in hours, the datastore owner adding a unique constraint, the mailbox owner producing run history today, and the on-call human who can kill or hand-run the job."
+    },
+    "notes": []
+  },
+  "proceed": true,
+  "rubric_version": 1
+}

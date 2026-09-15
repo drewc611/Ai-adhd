@@ -1,0 +1,78 @@
+# A fixture designed to produce a monoculture. Backlog 11.
+#
+# The monoculture detector has only ever fired in unit tests: no recorded run has one, so the
+# behaviour that is supposed to happen on a converged run — refuse to deepen, render what exists,
+# tell the user to re-run with a different frame set — has never been seen on a real pack. This is
+# the problem meant to produce one. The run does not exist yet and the harness reports that as "no
+# recorded runs" rather than as a pass.
+#
+# Getting this fixture wrong in the obvious way would make it useless. A problem with one correct
+# answer routes to `single_correct_answer` and is declined before any branch spawns (fixture 007),
+# so a monoculture fixture cannot be a problem with a right answer. It has to be a real design
+# decision where the stances happen to converge, which is a different and rarer thing.
+id: "012"
+name: one-obvious-answer
+problem_class: design_decision
+seed: 12
+prompt: |
+  Our on-call rotation is one engineer. She has been the only person on it for fourteen months.
+  Pages wake her about twice a week. We have budget this quarter for a better paging tool with
+  smarter routing and escalation policies. Should we buy it?
+
+why: |
+  Every frame should land in the same place, and the place is not the one the question asks about.
+  Cost prices fourteen months of interrupted sleep against a licence fee. Actors finds that the
+  rotation has one member and the tool routes between people who do not exist. Reversibility finds
+  that buying the tool is the reversible move and is therefore the one that feels safe, which is
+  why it is being considered. Scope finds the smallest change is a second person, not software.
+  Adversary finds that the failure mode is her leaving.
+
+  Five stances, one action: the rotation needs people before it needs routing. If that is what the
+  run produces, one cluster holds four or five of five branches and the detector fires at the 0.8
+  threshold in `config/critic-rubric.yaml`.
+
+  **A monoculture here is the system working, and that is the whole point of the fixture.** The
+  answer is not wrong. What is wrong is reporting it as corroboration across five independent
+  axes, because the axes did not reach it independently — the problem admitted one action and divergence
+  bought nothing. T1 is agreement that would have been reached anyway, and a run that presents
+  five-way agreement as its strongest signal is exactly the failure this repository is named for.
+  So the required output is the refusal: do not deepen, say the frames were not orthogonal for
+  this problem or that the problem admits one action, and hand the user the pruned block anyway.
+
+  `pruned_min` is deliberately not set. The argument above says convergence here *is* T1, which
+  tempts an assertion that at least one frame is pruned — but run-level monoculture and per-frame
+  T1 are two different findings, and a critic can record the first without firing the second on any
+  individual branch. Asserting both would let this fixture fail for a reason that has nothing to do
+  with what it tests. Whether T1 also fires per frame is a question the run will answer, and a more
+  interesting one for being left open.
+
+  What this fixture cannot do is guarantee a monoculture. A frame may find a real second axis —
+  Adversary might land on "she leaves and nobody else can take a page", which is a different
+  action — and then the run is an ordinary one and this fixture fails. That failure would be worth
+  more than the pass: it would mean five stances are harder to converge than this reasoning
+  assumes, which is a claim about the library nothing has tested.
+
+must_surface:
+  - id: nobody_to_route_to
+    trap: T6
+    description: >
+      A tool that routes and escalates needs somebody to route to. The run has to draw that
+      inference, not restate the roster: "the rotation is one engineer" is in the prompt and
+      every branch can echo it, so the assertion is on what follows from it.
+    any_of:
+      - "(nobody|no one|no-one|nothing) to (route|escalate|page|hand off|hand)"
+      - "(route|escalate)s? to (nobody|no one|herself|the same person)"
+      - "escalat\\w* (path|policy|policies|to) (with|has|have) (no|only one)"
+      - "second (person|engineer|responder)"
+      - "add(ing)? (a|another|people|someone) to the rotation"
+  - id: the_person_leaves
+    trap: T6
+    description: She is an actor with an exit. Fourteen months at two pages a week has a failure mode.
+    any_of:
+      - "(she|they) (will |may |might |could )?(leave|quit|burn out|burns out)"
+      - "attrition"
+      - "resign"
+      - "burnout"
+
+expect:
+  monoculture: true

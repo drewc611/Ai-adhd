@@ -46,7 +46,12 @@ must_surface:
       - "\\bone[- ]?way"
       - "irreversib"
       - "(can't|cannot|can not|hard to|expensive to) (easily )?(undo|reverse|go back|put back|merge back)"
-      - "reversib"
+      # `\breversib`, not `reversib`. The bare form matches inside *ir*reversible, so one pattern
+      # covered both a two-way door and a one-way one — opposites, in an assertion about which is
+      # which. The boundary separates them: "irreversible" has a word character before `reversib`
+      # and "reversible" does not. It also stops this alternative shadowing `irreversib` above,
+      # which is what `adhd lint` was pointing at.
+      - "\\breversib"
       - "point of no return"
       - "\\btwo[- ]?way door"
       - "(un)?merg(e|ing) (them|the services|services) back"

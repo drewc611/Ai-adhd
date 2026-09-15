@@ -3,30 +3,41 @@
   "passing": {
     "001/human_cancel": [
       "001-altframes",
-      "001-first-run"
+      "001-first-run",
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/no_verdict": [
       "001-altframes",
       "001-first-run",
-      "001-seed2"
+      "001-seed2",
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/retry_cost": [
       "001-first-run",
-      "001-seed2"
+      "001-seed2",
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/retry_target_questioned": [
       "001-first-run",
-      "001-seed2"
+      "001-seed2",
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/trap_named": [
       "001-altframes",
       "001-first-run",
-      "001-seed2"
+      "001-seed2",
+      "001-seed3"
     ],
     "001/triple_only": [
       "001-altframes",
       "001-first-run",
-      "001-seed2"
+      "001-seed2",
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "002/cheap_first": [
       "002-first-run",
@@ -96,6 +107,31 @@
     ],
     "004/who_reads": [
       "004-kernel-naming"
+    ],
+    "011/call_site_reader": [],
+    "011/extensibility_alone": [],
+    "011/what_it_forecloses": [],
+    "011/whose_property": [],
+    "012/nobody_to_route_to": [],
+    "012/the_person_leaves": [],
+    "013/more_than_one_problem": [],
+    "013/the_clock_that_runs_out": [],
+    "014/not_a_lock_problem": [],
+    "014/the_half_finished_run": [
+      "014-seed1",
+      "014-seed14"
+    ],
+    "014/the_skipped_work": [
+      "014-seed1",
+      "014-seed14"
+    ],
+    "014/who_notices": [
+      "014-seed1",
+      "014-seed14"
+    ],
+    "014/why_it_started": [
+      "014-seed1",
+      "014-seed14"
     ]
   }
 }

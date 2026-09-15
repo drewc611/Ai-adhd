@@ -1,6 +1,7 @@
+import { dimensionsAt } from "../src/schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { cfg, tmp } from "./helpers.js";
@@ -391,28 +392,39 @@ test("the recorded corpus rollup reads every second scoring on disk", () => {
   assert.ok(r.cells >= 225);
   assert.ok(r.exact > 0.7, `pooled exact agreement was ${r.exact}`);
   assert.equal(r.within_one, 1, "no cell in the corpus disagreed by more than one point");
+  const artifacts = r.runs.reduce((s, x) => s + x.report.artifacts, 0);
+  const retired = new Set(cfg.rubric.dimensions.filter((d) => d.retired_in !== undefined).map((d) => d.id));
   assert.ok(
-    r.by_dimension.every((d) => d.n === r.runs.reduce((s, x) => s + x.report.artifacts, 0)),
-    "every dimension should be scored on every artifact",
+    r.by_dimension.filter((d) => !retired.has(d.dimension)).every((d) => d.n === artifacts),
+    "every live dimension should be scored on every artifact",
   );
+  // A retired dimension is scored on the runs that predate its retirement and no others, so its
+  // cell count is lower on purpose. Pooling it at full weight would be reading dead marks.
+  for (const d of r.by_dimension.filter((d) => retired.has(d.dimension)))
+    assert.ok(d.n > 0 && d.n < artifacts, `${d.dimension} is retired and should be scored on some runs but not all, got ${d.n}/${artifacts}`);
   // The two dimensions the correlation report finds pinned at the ceiling are also the two the
   // critics agree on most. They agree because almost every artifact gets a 3.
-  const worst = r.by_dimension[0]!;
   const best = r.by_dimension.slice(-2).map((d) => d.dimension);
   assert.deepEqual(new Set(best), new Set(["foreclosure", "reasoning_carries"]));
-  assert.equal(worst.dimension, "specificity", "the highest weighted dimension has the worst agreement");
-  // One run in the corpus would have sent a different position to deepen. This is the finding
-  // the tool exists to catch, and it is recorded rather than smoothed over.
-  assert.deepEqual(r.runs_with_changed_representative, ["002-kernel-enduser"]);
+  // The two heaviest-disagreement dimensions are the two that ask what the artifact actually
+  // said. `specificity` is the highest weighted dimension in the rubric and `substance` is the
+  // one E11's second critic moved most; which of the two sits at the bottom has changed with the
+  // corpus and is not worth pinning, but both being there is.
+  assert.deepEqual(new Set(r.by_dimension.slice(0, 2).map((d) => d.dimension)), new Set(["substance", "specificity"]));
+  // Two runs in the corpus would have sent a different position to deepen. This is the finding
+  // the tool exists to catch, and it is recorded rather than smoothed over. `001-seed3-repeat` is
+  // the D40 exact tie: the rubric did not separate that cluster, so a second critic broke it the
+  // other way.
+  assert.deepEqual(r.runs_with_changed_representative, ["001-seed3-repeat", "002-kernel-enduser"]);
 });
 
-test("every recorded run's ranking moved between critics and only one outcome did", () => {
+test("every recorded run's ranking moved between critics and two outcomes did", () => {
   const r = interRaterCorpus(cfg);
   assert.ok(
     r.runs.every((x) => x.report.ranking_changed),
-    "all five rankings changed",
+    "every ranking changed",
   );
-  assert.equal(r.runs.filter((x) => x.report.representative_changes.length).length, 1);
+  assert.equal(r.runs.filter((x) => x.report.representative_changes.length).length, 2);
 });
 
 /** Write pass-a.raterN.yaml beside a run's shipped scoring. */
@@ -547,15 +559,39 @@ test("a margin of exactly one anchor point is flagged despite float representati
  * from the runner up by two anchor points or fewer out of 48. A no-flip result on decisions that
  * narrow is not evidence the rubric is decisive.
  */
-test("every contested decision in the corpus is settled inside two anchor points", () => {
+test("most contested decisions are near-ties, one is an exact tie, and the wide path separates better", () => {
+  // This pinned "every contested decision is settled inside two anchor points", which reframed the
+  // 0-flip sensitivity result as narrowness rather than stability. `001-seed3` broke it, in the
+  // direction that makes the rubric look better. `001-seed3-repeat` then added the other end, a
+  // margin of exactly 0 — not a narrow decision but no decision — and the two runs are the same
+  // pack at the same seed, so one scored pack produced the corpus's clearest separation and its
+  // replicate produced its only tie. That is D40 and it is the sharpest illustration of item 4.
+  //
+  // E10's two n=7 runs then said something the n=5 corpus could not: at seven branches the winning
+  // margins are 0.0625 and 0.1042, both above the two-anchor-point line, where five of the six
+  // five-branch decisions sit at or under it. Two runs is not a rate and the obvious mechanism —
+  // more branches means more chances for one to be clearly best — is not tested here. It is
+  // recorded as the first evidence that the narrowness is partly a property of n.
   const r = weightSensitivity(cfg);
-  assert.equal(r.margins.length, 4);
-  const step = 1 / cfg.rubric.dimensions.reduce((sum, d) => sum + d.weight * cfg.rubric.scale.max, 0);
-  assert.ok(
-    r.margins.every((m) => m.margin <= step * 2 + 1e-9),
-    `widest margin was ${Math.max(...r.margins.map((m) => m.margin))}`,
-  );
-  assert.match(r.text, /they are close enough that any of them could ship/);
+  assert.ok(r.margins.length >= 8, `the corpus lost contested decisions: ${r.margins.length}`);
+  const step = 1 / dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).reduce((sum, d) => sum + d.weight * cfg.rubric.scale.max, 0);
+  const near = r.margins.filter((m) => m.margin <= step * 2 + 1e-9);
+  const wide = r.margins.filter((m) => m.margin > step * 2 + 1e-9);
+  assert.ok(near.length > wide.length, "near-ties no longer outnumber decided ones; the writeup's framing has flipped");
+
+  const exact = r.margins.filter((m) => m.margin === 0);
+  assert.equal(exact.length, 1, "the corpus has exactly one decision the rubric did not make");
+  assert.equal(exact[0]!.run, "001-seed3-repeat");
+  assert.match(r.text, /exact tie, broken alphabetically/);
+
+  // Every wide decision has to be named in the writeup with its margin, so the exception list
+  // cannot quietly grow while the paragraph still reads as one case.
+  const doc = readFileSync(join(cfg.root, "docs", "WRITEUP.md"), "utf8");
+  for (const m of wide) assert.ok(doc.includes(m.run), `${m.run} is settled by ${(m.margin / step).toFixed(1)} anchor points and the writeup does not name it`);
+
+  // Still no flips, which is the claim this sits next to and does not overturn.
+  assert.match(r.text, /No representative changed under any single-dimension move/);
+  assert.match(r.text, new RegExp(`${near.length} of ${r.margins.length} contested decisions were settled by two anchor points or fewer`));
 });
 
 /** The four-critic panel on the pack that split. Pinned because D8 quotes it. */

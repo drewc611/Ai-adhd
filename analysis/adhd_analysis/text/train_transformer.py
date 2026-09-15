@@ -15,6 +15,8 @@ and a perplexity from a run that saw a twentieth of the training side has to say
 
 from __future__ import annotations
 
+import hashlib
+
 import json
 import math
 import sys
@@ -28,6 +30,7 @@ import numpy as np
 
 from .budget import Budget
 from .corpora import Library
+from .selection import add_library_arguments, training_library
 from .corpusread import sentence_tokens
 from .tokenize import BOS, EOS, Vocab
 from .transformer import Adam, Transformer, TransformerConfig, array_batches
@@ -58,6 +61,29 @@ class TransformerRecord:
     vocab_truncated_types: int
     vocab_truncated_tokens: int
     split: dict | None
+    #: Identity of the token stream the vocabulary pass read, and of the one the training array was
+    #: built from. Same mechanism as `TrainingRecord.corpus_fingerprint` and for the same reason: this
+    #: repository's own docs are corpus sources, so editing a document changes what a cell trained on
+    #: and nothing used to notice.
+    #:
+    #: Unlike the n-gram trainer, these two are **expected to differ** here. The corpus pass stops at
+    #: `max_train_tokens` while the vocabulary pass runs to its own ceiling, and the array carries a
+    #: BOS and an EOS per sentence that the vocabulary pass does not — measured at 8.3% on the E6
+    #: corpus, 18,343,512 array slots against 20,000,029 real tokens. So there is no equality check
+    #: here; the two digests are recorded to identify the two reads, not to compare them.
+    vocabulary_fingerprint: str
+    corpus_fingerprint: str
+    #: What the optimiser was told to do. The record carried `config` — the model's shape — and nothing
+    #: about the run, so two cells with identical shapes and identical corpora could differ in learning
+    #: rate, batch size, warmup, seed or epoch count with nothing on either record to show it. The same
+    #: defect `corpus_fingerprint` fixes on the data side: a figure is only re-derivable if everything
+    #: that decided it is written down. E6's cell B and E7's cell C were both run on the CLI defaults,
+    #: which is why they are comparable, and neither record says so.
+    optimiser: dict
+    #: The true cross-entropy on the final batch, when training used a sampled softmax, and None when
+    #: it did not. E9 registered this: a sampled softmax is an estimator, and the gap between what it
+    #: reports and what the model actually costs is the first thing to doubt if the cell disappoints.
+    full_loss_on_last_batch: float | None
     #: Why training stopped: a budget ceiling, or "epochs" when it ran the schedule out.
     stopped_because: str
     budget_vocabulary: dict
@@ -114,6 +140,7 @@ def train_transformer(
     seed: int = 0,
     max_train_tokens: int | None = None,
     progress: int = 0,
+    n_samples: int = 0,
 ) -> TransformerRecord:
     """`progress`, in steps, writes a line to stderr every that many. Zero is silent.
 
@@ -132,9 +159,11 @@ def train_transformer(
     b2 = b1.restart()
     b3 = b2.restart()
 
+    d1, d2 = hashlib.sha256(), hashlib.sha256()
+
     freq: Counter[str] = Counter()
     n_sentences = 0
-    for ts in sentence_tokens(library, b1):
+    for ts in sentence_tokens(library, b1, d1):
         freq.update(ts)
         n_sentences += 1
     if not freq:
@@ -151,7 +180,7 @@ def train_transformer(
     bos, eos = vocab.stoi[BOS], vocab.stoi[EOS]
     flat: list[int] = []
     cap = max_train_tokens
-    for ts in sentence_tokens(library, b2):
+    for ts in sentence_tokens(library, b2, d2):
         flat.append(bos)
         flat.extend(vocab.encode(ts))
         flat.append(eos)
@@ -171,13 +200,26 @@ def train_transformer(
     per_step = batch_size * cfg.context
     total_steps = max(1, int(epochs * ids.size / per_step))
 
+    # E9. Zero means the full softmax, which is every cell before D and stays the default: a training
+    # loss that quietly changed under models that never asked for it would make every earlier figure
+    # incomparable with itself. Above zero, `loss_and_grads_sampled` is used and the record says so.
+    sampler_rng = np.random.default_rng(seed + 1)
+    if n_samples and not hasattr(model, "loss_and_grads_sampled"):
+        raise ValueError(f"{type(model).__name__} has no sampled softmax; E9 is the transformer's cell")
+
     losses: list[float] = []
+    last_batch: tuple[np.ndarray, np.ndarray] | None = None
     steps = 0
     stopped = "epochs"
     b3.touch()
     while steps < total_steps:
         for x, y in array_batches(ids, cfg.context, batch_size):
-            loss, grads = model.loss_and_grads(x, y)
+            loss, grads = (
+                model.loss_and_grads_sampled(x, y, n_samples=n_samples, rng=sampler_rng)
+                if n_samples
+                else model.loss_and_grads(x, y)
+            )
+            last_batch = (x, y)
             opt.lr = cosine_schedule(steps, total_steps, lr, warmup)
             opt.step(model.params, grads)
             losses.append(loss)
@@ -220,6 +262,17 @@ def train_transformer(
                 else None
             ),
             "sources": library.describe(),
+            "vocabulary_fingerprint": d1.hexdigest()[:16],
+            "corpus_fingerprint": d2.hexdigest()[:16],
+            "optimiser": {
+                "n_samples": n_samples,
+                "lr": lr,
+                "batch_size": batch_size,
+                "warmup": warmup,
+                "seed": seed,
+                "epochs_requested": epochs,
+                "max_train_tokens": max_train_tokens,
+            },
             "steps": steps,
             "tokens_seen": steps * per_step,
             "stopped_because": stopped,
@@ -227,6 +280,13 @@ def train_transformer(
         }
     )
     path = model.save(out)
+
+    # E9's fixed reading: "the sampled-softmax gap is reported, not assumed away." The last batch is
+    # scored both ways, so the gap between what the estimator reported and what the model actually
+    # costs is on the record rather than inferred from the perplexity afterwards.
+    full_on_last_batch: float | None = None
+    if n_samples and last_batch is not None:
+        full_on_last_batch = model.full_loss(*last_batch)
 
     chunk = max(1, len(losses) // 10)
     curve = [float(np.mean(losses[i : i + chunk])) for i in range(0, len(losses), chunk)]
@@ -247,6 +307,10 @@ def train_transformer(
         vocab_truncated_types=vocab.truncated_types,
         vocab_truncated_tokens=vocab.truncated_tokens,
         split=model.meta["split"],
+        vocabulary_fingerprint=model.meta["vocabulary_fingerprint"],
+        corpus_fingerprint=model.meta["corpus_fingerprint"],
+        optimiser=model.meta["optimiser"],
+        full_loss_on_last_batch=full_on_last_batch,
         stopped_because=stopped,
         budget_vocabulary=b1.report(),
         budget_corpus=b2.report(),
@@ -276,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         "corpora.yaml. Nothing is downloaded, no pretrained weights are loaded and no model is called: "
         "every parameter comes from the corpus this manifest names.",
     )
-    ap.add_argument("--manifest", default="corpora.yaml")
+    add_library_arguments(ap)
     ap.add_argument("--out", default="models/background.tf.gz")
     ap.add_argument("--vocab-size", type=int, default=8192, help="the softmax is d_model x this, and "
                     "every token's loss touches all of it, so this is a shape constraint and not a rail")
@@ -296,13 +360,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-tokens", type=int, default=None)
     ap.add_argument("--max-seconds", type=float, default=None)
     ap.add_argument("--max-rss-mb", type=int, default=None)
-    ap.add_argument("--held-out-file", default=None, metavar="PATH",
-                    help="train on everything except the documents named in this frozen set")
-    ap.add_argument("--held-out-every", type=int, default=None, metavar="N",
-                    help="train on all but every Nth document")
     ap.add_argument("--progress", type=int, default=200, metavar="STEPS",
                     help="write a progress line to stderr every STEPS steps; 0 for silence. An epoch "
                     "here is hours, and a silent run is indistinguishable from a hung one")
+    ap.add_argument(
+        "--n-samples",
+        type=int,
+        default=0,
+        help="train with a sampled softmax over this many shared negatives instead of the full one. "
+        "0, the default, is the full softmax every cell before E9 used. Above zero this changes the "
+        "loss the model optimises and is what makes the n-gram's 148,114-type vocabulary affordable; "
+        "scoring is unaffected and stays the full normalised distribution. See E9.",
+    )
     ap.add_argument("--record", default=None, help="write the training record here as JSON")
     args = ap.parse_args(argv)
 
@@ -319,15 +388,7 @@ def main(argv: list[str] | None = None) -> int:
         if val is not None:
             setattr(b, attr, val)
 
-    library = Library.load(args.manifest)
-    if args.held_out_file is not None:
-        from .evaluate import FrozenSplit
-
-        library = FrozenSplit.load(library, args.held_out_file, side="train")
-    elif args.held_out_every is not None:
-        from .evaluate import SplitLibrary
-
-        library = SplitLibrary(library, every=args.held_out_every, side="train")
+    library = training_library(args)
     rec = train_transformer(
         library,
         args.out,
@@ -340,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         max_train_tokens=args.max_train_tokens,
         progress=args.progress,
+        n_samples=args.n_samples,
     )
     if args.record:
         Path(args.record).parent.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,72 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MINIMALIST
+position: >-
+  Set one total-request deadline of 10 seconds on this client and change nothing else.
+reasoning: |
+  1. The pain. Nobody types this question out of curiosity about timeout theory. Either
+  something already hung, or someone noticed the client has no timeout at all and got a
+  cold feeling about it. In most languages the default is "wait forever," and waiting
+  forever is the only failure mode here that is genuinely unbounded: a thread parked on a
+  socket that will never answer, a queue behind it filling, a process that looks alive and
+  does nothing. Every other timeout complaint is a tuning complaint. This one is a hang.
+  So the pain is: this call can never come back.
+
+  2. The smallest intervention. One number, one place. A deadline on the whole request,
+  set to 10 seconds. Not a connect timeout plus a read timeout plus a write timeout plus
+  an idle timeout, because the asker cannot yet say which of those is being exceeded, and
+  four numbers chosen without evidence are four numbers that will be wrong in different
+  directions. One outer bound converts "never returns" into "returns an error," and an
+  error is something the surrounding code already knows how to be bad at. That is the
+  entire win. Ten seconds is not a tuned value and I will not pretend it is; it is
+  comfortably above any healthy response this client has ever produced and comfortably
+  below the point where a human or a caller upstream has given up anyway.
+
+  3. What it leaves unfixed. Plenty, deliberately. It does not distinguish a dead host
+  from a slow one, so a connection that will never establish still burns the full ten
+  seconds instead of failing in one. It does nothing about retries, and if there is a
+  retry loop around this call the worst case is now ten seconds times the retry count,
+  which is worse than it sounds. It does not protect against a server that streams a byte
+  every nine seconds forever if the deadline is implemented as an idle timer rather than a
+  wall-clock deadline. It does not cancel the work on the server side. It has no
+  per-endpoint differentiation, so a slow report endpoint and a fast health check get the
+  same bound. All of this is acceptable right now because none of it can hang the process,
+  and hanging was the pain. Bounded and wrong is a different category of problem from
+  unbounded.
+
+  4. When the larger fix becomes necessary, and how you would know. When the logs start
+  showing timeouts on requests that were going to succeed. That is the signal, and it is a
+  specific one: a deadline error at ~10s for a call that the server's own logs show
+  completing in 12. The moment that pair appears, the single number is costing real
+  successes and you have earned the right to split it: a short connect timeout, a longer
+  read, per-endpoint values, maybe a budget propagated from the caller. Until that pair
+  appears, every additional knob is a guess dressed as diligence. The second signal is a
+  latency histogram with a fat tail near the bound, which tells you the same thing earlier.
+  Both require data the asker does not have yet, which is why the answer is one number and
+  not a policy.
+forecloses:
+  - >-
+    A layered timeout scheme (separate connect, TLS handshake, read, write, and idle
+    values) chosen before any measurement exists to justify the split.
+  - >-
+    Per-endpoint or per-dependency timeout budgets derived from latency SLOs, along with
+    the configuration surface and the ownership question that comes with them.
+  - >-
+    Adding a retry policy, circuit breaker, or bulkhead in the same change, on the theory
+    that timeouts and resilience belong together.
+falsifier: >-
+  Look at the existing latency data for this client, whatever exists, even one week of
+  logs. If the p99 for any endpoint it calls is already above 10 seconds in normal healthy
+  operation, the single bound will cut off successful work on day one and the number is
+  wrong before it ships. Equally cheap and equally fatal: grep the call site for a retry
+  wrapper. If this call sits inside a retry of 3 with no overall budget, a 10s deadline
+  creates a 30s worst case and the single-number move is not the smallest safe change.
+missing_actor: >-
+  Whoever operates the server on the other end. They hold the only numbers that make any
+  timeout defensible (real p99, whether the endpoint has its own internal deadline, and
+  whether it keeps working after the client disconnects) and they can publish a latency
+  expectation, which turns this question from a guess into a lookup. The problem is
+  written as though the HTTP client is the only party with a say in how long a request
+  takes; it is the party with the least information about it.
+confidence: medium
+```

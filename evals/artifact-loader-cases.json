@@ -1,0 +1,50 @@
+{
+  "why": "Shared cases for the artifact loader. A branch returns its artifact as its final message and the host writes that message unedited, so an artifact may or may not arrive wrapped in a markdown fence. Two implementations read it: `unfence` in src/validate.ts and `unfence`/`load_artifact` in analysis/adhd_analysis/corpus.py. They ran in separate CI jobs with nothing comparing them, and they disagreed: the TypeScript side scans for a closing fence at the start of a line, the Python side used rfind and would have cut at a backtick run inside a value. The first fenced recording (001-seed3) broke the Python suite outright while all TypeScript tests stayed green. This file is the contract both sides assert against, so neither can drift again without a test failing. Backlog 96.",
+  "cases": [
+    {
+      "name": "plain, no fence at all",
+      "text": "position: do the thing\nconfidence: high\n",
+      "unfenced": "position: do the thing\nconfidence: high\n"
+    },
+    {
+      "name": "fenced with a yaml info string",
+      "text": "```yaml\nposition: do the thing\n```",
+      "unfenced": "position: do the thing"
+    },
+    {
+      "name": "fenced with no info string",
+      "text": "```\nposition: do the thing\n```",
+      "unfenced": "position: do the thing"
+    },
+    {
+      "name": "prose before the fence, which a chatty branch adds",
+      "text": "Here is my artifact:\n\n```yaml\nposition: do the thing\n```",
+      "unfenced": "position: do the thing"
+    },
+    {
+      "name": "prose after the closing fence",
+      "text": "```yaml\nposition: do the thing\n```\n\nHope that helps.",
+      "unfenced": "position: do the thing"
+    },
+    {
+      "name": "unterminated fence is left alone, so the parser reports the real problem",
+      "text": "```yaml\nposition: do the thing\n",
+      "unfenced": "```yaml\nposition: do the thing\n"
+    },
+    {
+      "name": "a backtick run inside a value is not a closing fence, because it is not at line start",
+      "text": "```yaml\nposition: use ``` for code\nconfidence: low\n```",
+      "unfenced": "position: use ``` for code\nconfidence: low"
+    },
+    {
+      "name": "the seed 3 failure: a colon inside a folded value survives unfencing",
+      "text": "```yaml\nfalsifier: >-\n  Instrument it. Cheaper still: read one incident report.\n```",
+      "unfenced": "falsifier: >-\n  Instrument it. Cheaper still: read one incident report."
+    },
+    {
+      "name": "multi-line body keeps its interior blank lines",
+      "text": "```yaml\na: 1\n\nb: 2\n```",
+      "unfenced": "a: 1\n\nb: 2"
+    }
+  ]
+}

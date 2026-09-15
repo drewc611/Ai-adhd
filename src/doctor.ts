@@ -13,8 +13,10 @@ import { join } from "node:path";
 import { STAGE_AGENT, STAGE_TOOLS } from "./super/index.js";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
-import { TRAP_IDS } from "./schema.js";
+import { RecordedExpectationSchema, TRAP_IDS } from "./schema.js";
+import { frameReach, recordedDraws } from "./frames.js";
 import { auditFixtures } from "./eval.js";
+import { readJsonIf } from "./read.js";
 
 export type Severity = "error" | "warn";
 
@@ -241,6 +243,75 @@ function checkRouting(cfg: Config): Finding[] {
       out.push({ severity: "warn", check: "routing", message: `class ${id} wants ${n} branches from ${c.frames.length} primary frames, so ${n - c.frames.length} come from alternates on every run of this class` });
   }
   for (const f of cfg.frames.frames) if (!reachable.has(f.id)) out.push({ severity: "warn", check: "routing", message: `${f.id} is named by no class, primary or alternate, so no problem can route to it` });
+
+  // Being named is weaker than being reachable, and the difference is a whole frame. The check
+  // above passes any frame appearing in some class's `alternates`, but a class whose default `n` is
+  // at most the length of its primary list never draws an alternate at all — so a frame that is
+  // only ever an alternate is named six times and dispatched never. `FIRST_PRINCIPLES` was in that
+  // position and `--stats` could only report it as having no runs, which is what bad luck also looks
+  // like. This asks the real selector instead.
+  //
+  // A fixture states a class and lets routing choose, so an unreachable frame cannot have one, and a
+  // run that never dispatches it cannot produce evidence for or against keeping it. That is a
+  // decision rather than a defect, which is why this warns and names where the decision lives.
+  const reach = frameReach(cfg);
+  for (const id of reach.unreachable_at_default) {
+    if (!reachable.has(id)) continue; // already reported above, for a blunter reason
+    const f = reach.frames.find((x) => x.frame === id)!;
+    const named = Object.values(cfg.routing.classes).filter((c) => c.action === "run" && c.alternates.includes(id)).length;
+    out.push({
+      severity: "warn",
+      check: "routing",
+      message:
+        `${id} is an alternate in ${named} class(es) and primary in none, so no class dispatches it at its default n` +
+        (reach.proved_unreachable.includes(id) ? " — by construction, not by sampling" : ` in ${reach.seeds} seeded shuffles`) +
+        (f.blocked_by.length ? `; ${f.blocked_by.join(", ")} hold${f.blocked_by.length === 1 ? "s" : ""} its axis (${f.axis}) in the primary lists` : "") +
+        ". Route it or retire it: see docs/RETIREMENT.md and `adhd frames --reach`",
+    });
+  }
+  return out;
+}
+
+/**
+ * What an overlay changed, reported rather than assumed (D33).
+ *
+ * A merge nobody can see is the failure mode the item warned about: the loaded library is one file
+ * plus another and every report downstream speaks as though it were one file. `loadConfig` already
+ * refuses a merge that breaks a cross-check, so this is not validation — it is the line that tells a
+ * reader of `adhd frames` or `adhd why` which definitions they are reading.
+ */
+function checkOverlay(cfg: Config): Finding[] {
+  const o = cfg.overlay;
+  if (!o) return [];
+  const out: Finding[] = [
+    {
+      severity: "warn",
+      check: "overlay",
+      message:
+        `${o.path} (${o.hash}) is applied: ` +
+        [
+          o.replaced_frames.length ? `${o.replaced_frames.length} frame(s) replaced (${o.replaced_frames.join(", ")})` : null,
+          o.added_frames.length ? `${o.added_frames.length} added (${o.added_frames.join(", ")})` : null,
+          o.replaced_classes.length ? `${o.replaced_classes.length} routing class(es) replaced (${o.replaced_classes.join(", ")})` : null,
+          o.added_classes.length ? `${o.added_classes.length} class(es) added (${o.added_classes.join(", ")})` : null,
+          o.replaced_dimensions.length ? `${o.replaced_dimensions.length} rubric dimension(s) replaced (${o.replaced_dimensions.join(", ")})` : null,
+        ]
+          .filter(Boolean)
+          .join("; ") +
+        ". Every frame_hash below is the merged definition, and a recorded run carries this overlay hash so it can be traced back.",
+    },
+  ];
+  // A replaced frame keeps its id and changes its `frame_hash`, which is exactly what `--drift`
+  // reports as "the definition has changed since". That reading is right about the definition and
+  // wrong about the cause, so it is worth saying once here rather than leaving a reader to infer it.
+  if (o.replaced_frames.length)
+    out.push({
+      severity: "warn",
+      check: "overlay",
+      message:
+        `\`adhd frames --drift\` will report ${o.replaced_frames.join(", ")} as changed for any run recorded under a different library. ` +
+        "That is the definition genuinely differing, not a rewrite of history: compare the plan's overlay hash before concluding a frame was edited.",
+    });
   return out;
 }
 
@@ -260,6 +331,23 @@ function checkCorpus(cfg: Config): Finding[] {
     for (const b of plan.branches ?? [])
       if (!existsSync(join(run, b.artifact_path)))
         out.push({ severity: "warn", check: "corpus", message: `${d} planned ${b.frame} and ${b.artifact_path} is absent; that branch returned nothing, which is not the same as scoring badly` });
+  }
+
+  /*
+   * A `replicate_of` pointing at nothing is silent otherwise: `recordedDraws` leaves the run as its
+   * own draw, so the rates go back to counting it twice and the report reads the same as before the
+   * field was added. That is exactly the state backlog 99 exists to prevent, so it is an error.
+   */
+  const draws = recordedDraws(dir);
+  for (const d of readdirSync(dir).sort()) {
+    if (!statSync(join(dir, d)).isDirectory()) continue;
+    const e = readJsonIf(join(dir, d, "expected.json"), (v) => RecordedExpectationSchema.parse(v));
+    const target = e?.replicate_of;
+    if (!target) continue;
+    if (!existsSync(join(dir, target)))
+      out.push({ severity: "error", check: "corpus", message: `${d} declares replicate_of ${target} and no such recorded run exists, so it is counted as an independent draw` });
+    else if (draws.get(d) === d)
+      out.push({ severity: "error", check: "corpus", message: `${d} declares replicate_of ${target} and did not resolve to a draw; the chain is circular` });
   }
   return out;
 }
@@ -326,6 +414,7 @@ const CHECKS: { name: string; run: (cfg: Config) => Finding[] }[] = [
   { name: "routing against the library", run: checkRouting },
   { name: "recorded corpus shape", run: checkCorpus },
   { name: "fixture assertions", run: checkFixtureAssertions },
+  { name: "config overlay", run: checkOverlay },
 ];
 
 export function doctor(cfg: Config): DoctorReport {
