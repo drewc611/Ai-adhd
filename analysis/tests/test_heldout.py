@@ -768,9 +768,41 @@ def test_every_model_class_satisfies_the_background_protocol(tmp_path):
     from adhd_analysis.text.ngram import KneserNey
     from adhd_analysis.text.transformer import Transformer
 
+    from collections import Counter
+
+    from adhd_analysis.text.lstm import LSTMConfig
+    from adhd_analysis.text.tokenize import Vocab
+    from adhd_analysis.text.transformer import TransformerConfig
+
     for cls in (KneserNey, Transformer, LSTM):
         for method in ("logprob_terms", "surprisal", "describe"):
             assert callable(getattr(cls, method, None)), f"{cls.__name__} has no {method}"
+
+    # Callable is not the same as working, and asserting only the former is how `describe` shipped
+    # calling `self.n_params` on a Transformer that has `self.params`. Each method is exercised on a
+    # real instance. Random weights are fine: what is under test is the surface, not the training.
+    words = "the timeout should be set to thirty seconds and then retried".split()
+    vocab = Vocab.build(Counter(words * 3), min_count=1)
+
+    lib = _library(tmp_path, n=20)
+    rec = train(lib, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    instances = [
+        KneserNey.load(rec.model_path),
+        Transformer(TransformerConfig(vocab_size=len(vocab), d_model=16, n_heads=2, n_layers=1, context=16), vocab),
+        LSTM(LSTMConfig(vocab_size=len(vocab), d_model=16, n_layers=1), vocab),
+    ]
+    for m in instances:
+        name = type(m).__name__
+        described = m.describe()
+        assert isinstance(described, str) and len(described) > 20, f"{name}.describe() returned {described!r}"
+        assert str(len(m.vocab)) in described.replace(",", ""), f"{name}.describe() does not state its vocabulary size"
+
+        probe = m.vocab.encode(words)
+        bits = m.surprisal(list(probe))
+        assert len(bits) == len(probe), f"{name}.surprisal gave {len(bits)} figures for {len(probe)} tokens"
+        assert all(b == b and b >= 0 for b in bits), f"{name}.surprisal returned a NaN or a negative"
+
+
 
 
 def test_surprisal_agrees_with_logprob_terms_on_the_model_that_has_both(tmp_path):

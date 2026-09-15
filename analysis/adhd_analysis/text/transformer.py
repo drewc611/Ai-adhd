@@ -487,7 +487,8 @@ class Transformer:
         c = self.config
         return (
             f"Decoder-only transformer, d_model {c.d_model}, {c.n_layers} layers, {c.n_heads} heads, "
-            f"context {c.context}, vocabulary {len(self.vocab):,}, {self.n_params:,} parameters"
+            f"context {c.context}, vocabulary {len(self.vocab):,}, "
+            f"{sum(a.size for a in self.params.values()):,} parameters"
         )
 
     def logprob_terms(self, ids: Iterable[int]) -> list[tuple[float, bool]]:

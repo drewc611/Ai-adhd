@@ -248,7 +248,10 @@ class LSTM:
     def describe(self) -> str:
         """One line naming the model class and its shape, for a report that takes any of them."""
         c = self.config
-        return f"LSTM, hidden {c.hidden}, {getattr(c, 'n_layers', 1)} layer(s), vocabulary {len(self.vocab):,}"
+        return (
+            f"LSTM, d_model {c.d_model}, {c.n_layers} layer(s), vocabulary {len(self.vocab):,}, "
+            f"{sum(a.size for a in self.params.values()):,} parameters"
+        )
 
     def logprob_terms(self, ids: Iterable[int]) -> list[tuple[float, bool]]:
         """Per-position natural log probability and whether the target is a real word.
