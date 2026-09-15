@@ -45,8 +45,15 @@ problem_hash: {{problem_hash}}
 pass: A
 scores:
   <letter>:
-    <dimension_id>: { score: <0-3>, evidence: <one sentence> }
+    <dimension_id>: { score: <0-3>, evidence: "<one sentence>" }
     ...
 ```
+
+Every free-text value here is **quoted**, and that is not decoration. A value written bare inside
+a `{ }` flow mapping ends at the first `: ` in it, so `evidence: Rules out X: because Y` closes the
+mapping early and the whole pass is rejected. The branch contract solves this by folding its prose
+fields with `>-`; a folded scalar cannot sit inside a flow mapping, so here the quotes do the same
+job. Quote the value and you can write any sentence you like, colons included. A run has already
+been lost to exactly this in the branch contract.
 
 Every letter must have every dimension. A missing cell rejects the whole pass.

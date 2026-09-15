@@ -599,8 +599,19 @@ yet enough to know whether they work.
     **Already built and found open by the audit in item 83: `npm run demo` runs `scripts/demo.sh`. It is
     honest about the one thing it cannot do — D2 means the package never calls a model, so a demo cannot
     produce a run, and what it shows is everything either side of that boundary.**
-54. **Plugin agents exercised as plugin agents.** Every recorded run so far used
-    general-purpose subagents; the shipped agent definitions are untested in their real role.
+54. ~~**Plugin agents exercised as plugin agents.** Every recorded run so far used
+    general-purpose subagents; the shipped agent definitions are untested in their real role.~~
+    **Done, on rung 2 of D38's ladder.** Three branches of run `20260915065417-7e664e` were dispatched
+    as `adhd-branch-search` — a shipped plugin agent, declaring its own grant, launching under its own
+    definition — and returned three valid artifacts with zero contract violations at critique. That is
+    the first time in the project that a branch ran on an agent whose grant **cannot reach a sibling
+    artifact**, which is the property the item was really about: `general-purpose` carries `Read`, and
+    every earlier run used it.
+
+    Not fully closed by this, and the remainder is item 93: `adhd-branch`, `adhd-critic` and
+    `adhd-deepen` themselves still cannot launch in this host, because it resolves neither name in
+    their permit. Rung 1 is unexercised. What changed is that the isolation guarantee no longer
+    depends on rung 1 existing.
 
 ## 9. Hygiene, done
 
@@ -1128,12 +1139,21 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     conditional on the frame having had tools, which is a different dimension wearing the same id.
     D35 changes the arithmetic slightly in its favour: `strategy` now dispatches six frames and
     `PRIOR_ART` is one of them, so the one frame with a tool grant appears more often than it did.
-93. **Verify that `TodoWrite` resolves as a launch permit.** D36 is reasoning rather than a
-    measurement, because agent definitions load at session start and the session that changed the
-    permit could not test the change. One probe spawn in a fresh session settles it, and step 1b of
-    the run procedure does exactly that before any spend — so the next real run answers this whether
-    or not anyone sets out to. Record what it says either way: a permit that does not resolve is the
-    same failure D36 exists to fix, one name later.
+93. **Verify that a launch permit resolves, and which one.** D36 guessed `TodoWrite` and the next
+    session measured it: this host refuses with **"unrecognized [TodoWrite]"**, where `TaskList` had
+    been "recognized but matched no tools in this session". Two names, two different failures, both on
+    reasoning rather than measurement. D38 is the correction — the permit is now the pair
+    `TodoWrite, TaskList`, so a host with either can launch the three agents.
+
+    **Still open, and narrower than it was.** No host has yet been observed resolving *either* name for
+    a subagent, so rung 1 of D38's ladder is unexercised and `adhd-branch`, `adhd-critic` and
+    `adhd-deepen` have never launched anywhere. What is no longer blocked is the isolation guarantee,
+    which rung 2 now carries (item 54). Settling this needs a host that resolves one of the pair;
+    step 1b of the run procedure probes for it before any spend, so the next run answers it either way.
+    If neither name ever resolves anywhere, the honest conclusion is that a zero-capability subagent is
+    not a thing this ecosystem supports, and the three agent files are a fiction that rung 2 quietly
+    replaces.
+
 94. ~~**Re-run seed 3 under the folded contract.** The abort that produced items 87 through 91 spent
     262,788 tokens and scored nothing. D37 removes the cause, so the run item 3 asks for is available
     again, and item 91 is the argument for spending it on a fixture routed to `enumerate_options`
@@ -1146,7 +1166,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     it. D37 is demonstrated rather than argued. Item 91 is still the argument for the
     `enumerate_options` run, which has not happened.
 
-95. **The critic contract has the defect D37 just fixed in the branch contract.** `prompts/critic-pass-a.md`
+95. ~~**The critic contract has the defect D37 just fixed in the branch contract.** `prompts/critic-pass-a.md`
     shows each cell as `{ score: <0-3>, evidence: <one sentence> }`, a flow mapping with the evidence
     unquoted, so an evidence string containing `: ` closes the mapping early and the pass is rejected
     — the same failure that cost run `20260914223732-7e664e`, one contract over. Pass B is the same
@@ -1164,7 +1184,17 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     is what the branch contract rejected as "asking harder is not a mechanism" — the difference here
     is that quoting inside `{ }` is the only option the syntax leaves, so the argument that beat it
     there does not apply. Worth doing before the next real run, and it is a contract change, so it
-    wants a D-number.
+    wants a D-number.~~
+    **Fixed, and the fix differs by contract because the syntax does.** `critic-pass-a.md` and
+    `critic-pass-b.md` put their free text inside `{ }` flow mappings, where a folded scalar is not
+    legal, so every free-text placeholder there is now **quoted** and the contract says why. The
+    argument that beat quoting in the branch contract — "asking harder is not a mechanism" — does not
+    carry here, because the syntax leaves no third option. `deepen.md` is ordinary block context, so
+    `revised_position` and `revised_falsifier` **fold** with `>-` like the branch contract's, with
+    `revised_position: null` on one line for the fold verdict, since a folded scalar cannot be null.
+
+    Two tests pin it, including the null path through the real validator, because that is the shape
+    most likely to break: a fold that cannot report a fold would be a silent loss.
 
 96. **The Python analysis could not read a fenced artifact and the TypeScript side could.** A branch
     returns its artifact as its final message and the host writes that message unedited, so an
@@ -1180,6 +1210,21 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     through both would have caught this before a run did. Worth building; it is the same shape as
     the `comparable_heldout` and `comparable_training` guards, which exist because a claim that
     nothing checks is a claim that drifts.
+
+97. **The subagent token counter does not say which tool was used, and a claim now rests on it.** D38's
+    cost is stance purity: a plain branch dispatched on rung 2 holds `WebSearch` and `WebFetch` and is
+    told in its brief not to look for anything. Whether it obeys is the difference between a cost in
+    principle and a cost in fact, and the only instrument available is `tool_uses`, which reports a
+    bare count. All three rung-2 branches reported 1. So did five branches dispatched as
+    `general-purpose`, and a bare diagnostic probe reported 0, so the count is not simply the hand-back
+    and something is being called.
+
+    Nothing in reach distinguishes "searched the web" from "wrote a checklist". Until it does, D38's
+    stance-purity cost is unmeasured in both directions, and item 90's correction is the precedent for
+    how that goes wrong: a count read as a finding twice, once each way. The cheap partial answer is a
+    lint over rung-2 artifacts for the shape of borrowed material — a cited URL, a named product, a
+    date the brief never carried — which is T3's detector pointed at the dispatch rather than the
+    reasoning. That would catch the case that matters without needing a better counter.
 
 ## Not doing, and why
 

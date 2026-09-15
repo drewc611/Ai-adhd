@@ -4,7 +4,8 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { cfg } from "./helpers.js";
 import { renderBranchBrief } from "../src/compile.js";
-import { validateBranchArtifact } from "../src/validate.js";
+import { parse as parseYaml } from "yaml";
+import { validateBranchArtifact, validateDeepen } from "../src/validate.js";
 import { RunAbort } from "../src/errors.js";
 
 /**
@@ -226,4 +227,65 @@ test("not one unquoted value in any recorded run contains a colon-space, which i
   // contributed no plain ones. If a later run adds plain values, D37 stopped reaching the briefs.
   assert.equal(folded, 15, "the folded count moved without this comment moving with it");
   assert.deepEqual(offenders, [], "a recorded artifact now carries the backlog 87 defect unquoted, so the luck has run out");
+});
+
+/**
+ * Backlog 95, and the same defect one contract over.
+ *
+ * `prompts/critic-pass-a.md` and `critic-pass-b.md` put their free text inside `{ }` flow mappings,
+ * where a folded scalar is not legal, so the fix there is quoting rather than `>-`. `prompts/deepen.md`
+ * uses ordinary block context, so its two prose fields fold like the branch contract's.
+ *
+ * Neither had ever fired, because every critic in the corpus quoted its evidence unprompted — the
+ * same luck D37 found in the branch artifacts, and the same reason not to keep relying on it.
+ */
+test("the critic contracts quote their free text, because a folded scalar cannot sit in a flow mapping", () => {
+  const passA = readFileSync(join(cfg.root, "prompts", "critic-pass-a.md"), "utf8");
+  const passB = readFileSync(join(cfg.root, "prompts", "critic-pass-b.md"), "utf8");
+  assert.match(passA, /evidence: "<one sentence>"/, "pass A's evidence placeholder is unquoted again");
+  assert.match(passB, /T1: \{ fired: <bool>, evidence: "<text>" \}/, "pass B's trap evidence is unquoted again");
+  assert.match(passB, /action: "<one sentence, what the asker would do>"/);
+  assert.match(passB, /strongest_objection: "<paragraph>"/);
+  for (const doc of [passA, passB]) assert.match(doc, /ends at the first `: ` in it/, "the contract does not say why");
+
+  // And a flow mapping really does break on a bare colon, which is the premise.
+  assert.throws(() => parseYaml("x: { score: 2, evidence: Rules out X: because Y }"));
+  assert.deepEqual(parseYaml('x: { score: 2, evidence: "Rules out X: because Y" }'), {
+    x: { score: 2, evidence: "Rules out X: because Y" },
+  });
+});
+
+test("the deepen contract folds its prose fields and keeps the null path on one line", () => {
+  const doc = readFileSync(join(cfg.root, "prompts", "deepen.md"), "utf8");
+  assert.match(doc, /^response: \|$/m, "response was always a block scalar");
+  for (const f of ["revised_position", "revised_falsifier"]) {
+    assert.match(doc, new RegExp(`^${f}: >-$`, "m"), `${f} is not folded, so a colon in it loses the artifact`);
+  }
+  assert.match(doc, /`revised_position: null` on one line/, "the fold has no null path, and a fold cannot be null");
+
+  // The shapes the contract now asks for, through the real validator. A colon in a folded value is
+  // ordinary text, and the null path still parses as null rather than the four-character string.
+  const folded = [
+    "```yaml",
+    `problem_hash: ${HASH}`,
+    "frame: LEDGER",
+    "verdict: defend",
+    "response: |",
+    "  The objection is right about sequencing: it is wrong about what the position needs.",
+    "revised_position: >-",
+    "  Set one deadline locally today: propagation is a later upgrade, never a precondition.",
+    "revised_falsifier: >-",
+    "  Plot completion durations per route. Cheaper still: read the proxy's own timeout.",
+    "confidence: medium",
+    "```",
+  ].join("\n");
+  const r = validateDeepen(folded, HASH, "LEDGER");
+  assert.match(r.revised_position!, /^Set one deadline locally today: propagation/);
+  assert.match(r.revised_falsifier!, /Cheaper still: read the proxy's own timeout\.$/);
+
+  const folded_null = folded
+    .replace("revised_position: >-\n  Set one deadline locally today: propagation is a later upgrade, never a precondition.", "revised_position: null")
+    .replace("verdict: defend", "verdict: fold");
+  const n = validateDeepen(folded_null, HASH, "LEDGER");
+  assert.equal(n.revised_position, null, "the null path broke, so a fold cannot report a fold");
 });

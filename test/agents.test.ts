@@ -33,17 +33,24 @@ const NETWORK = ["WebSearch", "WebFetch"];
  * reach other tasks, and any MCP tool reaches whatever its server does. "Branches never see
  * siblings" is a CLAUDE.md non-negotiable, so a new grant has to be argued for here first.
  *
- * TodoWrite is the launch permit from D4 as amended by D36: the host refuses to launch an agent
- * with zero tools, so an isolated agent has to carry one, and this is the least it can carry. It
- * writes the spawned agent's own checklist. It reads nothing, so unlike `TaskList` — which was the
- * permit until D36 and could in principle list a sibling's tasks — there is no question left about
- * what it shows a branch inside a running dispatch. D4 called that the one isolation claim in the
- * design that was argued rather than demonstrated; the permit that raised it is gone.
+ * The launch permit from D4, as amended by D36 and D38: the host refuses to launch an agent with no
+ * tools, so an isolated agent has to carry one, and these are the least it can carry. `TodoWrite`
+ * writes the spawned agent's own checklist and reads nothing. `TaskList` is read only and was the
+ * permit until D36.
+ *
+ * Two names rather than one because a single name has now failed twice, in two different ways, and
+ * the grant is the union of whichever the host resolves. `TaskList` is recognised but not grantable
+ * to a subagent in a Claude Code remote session; `TodoWrite` is not recognised there at all. Listing
+ * both means a host that has either one can launch these agents, and both are inert, so the union is
+ * inert wherever it lands.
+ *
+ * A host that resolves neither cannot launch them, which is not hypothetical — see D38 for the
+ * fallback, and for why it is `adhd-branch-search` rather than `general-purpose`.
  */
 const PERMITTED: Record<string, string[]> = {
-  "adhd-branch.md": ["TodoWrite"],
-  "adhd-critic.md": ["TodoWrite"],
-  "adhd-deepen.md": ["TodoWrite"],
+  "adhd-branch.md": ["TaskList", "TodoWrite"],
+  "adhd-critic.md": ["TaskList", "TodoWrite"],
+  "adhd-deepen.md": ["TaskList", "TodoWrite"],
   "adhd-branch-search.md": ["WebFetch", "WebSearch"],
 };
 

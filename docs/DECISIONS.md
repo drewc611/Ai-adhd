@@ -3089,11 +3089,18 @@ network and spawns nothing — and because it reads nothing, D4's open question 
 moving: there is no sibling state for it to show. That is the improvement, and it is the reason to
 prefer it over any permit chosen only for being inert.
 
-**This is not verified, and the reason is worth writing down.** Agent definitions are read at session
-start, so editing `agents/adhd-branch.md` mid-session has no effect: after the change the refusal
-still named `TaskList`. So the claim that `TodoWrite` resolves where `TaskList` does not is reasoning,
-not a measurement, and the first session to dispatch a branch will settle it. What is verified is the
-failure this replaces.
+**This was not verified when it was written, it has since been measured, and it was wrong.** Agent
+definitions are read at session start, so editing `agents/adhd-branch.md` mid-session had no effect:
+after the change the refusal still named `TaskList`. The next session read the new definition and
+refused differently — **"unrecognized [TodoWrite]"** where `TaskList` had been "recognized but matched
+no tools in this session". So this host knows the name `TaskList` and will not grant it to a subagent,
+and does not know `TodoWrite` at all. Picking a single replacement on reasoning failed for the second
+time, in a second way.
+
+D38 is the correction: two candidate names rather than one, and a fallback ladder for the host that
+resolves neither, which is the case here. The argument for `TodoWrite` over `TaskList` still stands on
+its merits — it reads nothing, so it retires D4's open question rather than moving it — and it is now
+one of two rather than the only one.
 
 What carries the cost meanwhile is a precondition, not a hope. `skills/adhd/SKILL.md` gains step 1b:
 before diverge, spawn one `adhd-branch` whose whole prompt asks for the word OK. If the host refuses,
@@ -3151,3 +3158,60 @@ matter of punctuation.
 The abort message that fired was correct and useless to the branch that caused it, so the contract
 now carries the reason in the brief itself — and writing that sentence tripped the isolation guard,
 because the first draft said "three of five branches" and a brief may never carry the branch count.
+
+---
+
+## D38. The permit is a pair, and the fallback is the web agent, never general-purpose
+
+D36 replaced one launch permit with another on reasoning and was wrong, the same way D4's original
+choice was wrong: a single tool name that the host has to resolve is a single point of failure, and it
+has now failed twice in two different ways. `TaskList` is recognised in a Claude Code remote session
+and not grantable to a subagent; `TodoWrite` is not recognised there at all.
+
+Measuring what *is* grantable settled the design. Every agent in this plugin that launches here holds
+grants from `{Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch}`, and every agent that does
+not hold a task-management grant. So in this host **the grantable set is exactly the tools D4
+forbids** — which sounds like a dead end and is not, because the tools are not equally dangerous.
+
+**Decision:** the permit is `TodoWrite, TaskList`, and a host that resolves neither falls back to
+`adhd-branch-search`. Resolved 2026-09-15.
+
+The grant is the union of whichever names the host resolves. Both are inert, so the union is inert
+wherever it lands, and a host with either one can launch the three isolated agents. That is the whole
+of the permit change.
+
+**The fallback is the part that matters, and it turns on an inversion.** The non-negotiable is that
+branches never see siblings. Rank the grantable tools against *that* rule rather than against D4's
+tool-purity rule and the order reverses:
+
+- `Read`, `Glob`, `Grep` reach the run directory, where a sibling's artifact is a file. They break it.
+- `WebSearch` and `WebFetch` cannot reach the local filesystem at all. They do not.
+- `general-purpose`, which **every one of the twelve recorded runs used**, carries `Read`. It breaks it.
+
+So dispatching a plain branch as `adhd-branch-search` is *strictly safer on the rule the architecture
+rests on* than what every recorded run has done. The cost is stance purity, which is a real D4 concern
+and a lesser one: a frame whose `tools` is `[]` reaches an agent that could search, and D4's reason for
+withholding search is that a branch which goes looking has left its frame. The brief still tells it it
+has no tools. The substitution is disclosed with the synthesis rather than buried.
+
+`skills/adhd/SKILL.md` carries the ladder: the permit if it resolves, `adhd-branch-search` for branches
+and deepen if it does not, and stop and tell the user if neither is available. `general-purpose` is
+named as the thing not to reach for.
+
+**The critic is exempt and this is where D4 over-generalised.** D4 gave all three agents the same grant
+because all three "should have no tools", but the critic is *meant* to see every artifact — the host
+pastes them into its prompt — and pass A is blinded by redaction, not by tool grants. A
+filesystem-capable agent is therefore harmless for the critic. The rule binds branches and deepen
+passes, which must never learn what a sibling said, and it never bound the critic at all.
+
+**Verified, for the first time in the project.** Three branches of run `20260915065417-7e664e` were
+dispatched on rung 2 as `adhd-branch-search`, launched, and returned three valid artifacts with zero
+contract violations at critique. Item 54 asked for the plugin agents to be exercised as plugin agents;
+this is that, through a documented rung, on an agent whose grant cannot reach a sibling artifact.
+
+**One thing the run did not settle.** Each of the three reported `tool_uses: 1`, and the counter does
+not say which tool, so whether any of them actually searched is unknown. Branches dispatched as
+`general-purpose` reported 1 as well, and a bare diagnostic probe reported 0, so the count is not
+simply the hand-back. Whether rung 2 costs stance purity in practice or only in principle needs a
+counter that names the tool, and nothing here has one. Recorded as open rather than assumed either
+way.
