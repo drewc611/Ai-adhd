@@ -1,0 +1,65 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MINIMALIST
+verdict: defend
+response: |
+  The objection lands on the prose and glances off the move. Taking its four conditions in
+  order of how much damage each actually does.
+
+  The retry case is the one the objection calls decisive and it is the one that inverts.
+  "One bound becomes that bound times the attempt count and the worst case gets longer, not
+  shorter" is only true against a baseline that was already finite. It was not. With no
+  timeout, attempt one never returns, so attempts two and three never happen; the retry
+  wrapper is decorative and the thread is parked forever. The honest comparison is thirty
+  seconds and an error against never. Thirty seconds is worse than ten and better than
+  infinity, and the position's whole claim is that bounded-and-badly-tuned is a different
+  category from unbounded, not a smaller quantity of the same thing. What the retry case
+  genuinely buys is a reason to check the call site before shipping, which is why it was
+  already the second half of the falsifier.
+
+  The p99 objection is correct and is not new: it is the first half of the same falsifier,
+  written before the objection arrived. What the objection is entitled to is the rhetoric, not
+  the position. "Comfortably above any healthy response this client has ever produced" asserts
+  knowledge of a distribution the same answer says is absent, and that sentence should not have
+  been written. The repair is not a layered scheme; it is that the number stops being ten and
+  starts being "ten unless five minutes with whatever dashboard or log already exists says
+  otherwise," with the check as a ship gate rather than a research project. If that check
+  cannot be performed at all, the bound goes to sixty rather than to nothing, because an
+  availability regression is recoverable by editing one number on the morning it appears and a
+  hung pool is recoverable by restarting the process, repeatedly, at night.
+
+  The idle-timer point is the objection's real win and it costs something. The position filed
+  it under acceptable-unfixed, and that was a misfiling: a deadline implemented as an idle
+  timer does not bound the request, so under the trickle case the change delivers none of the
+  pain relief it was sold on. That is not a limitation of the intervention, it is the
+  intervention failing to occur. So wall-clock stops being a preference and becomes the
+  content of the position — total elapsed from request start, not time since last byte — and
+  confirming which one the library gives you is part of the one-line change, not a later
+  refinement. It is still one number and one place.
+
+  Connect folded into the total is a tuning complaint wearing a correctness costume. Paying
+  ten seconds to discover a host is gone is slow; it is not a hang, it does not park anything
+  unboundedly, and it is exactly the kind of cost the position says is acceptable until data
+  says otherwise. Splitting it is cheap, yes, but "cheap" is how a layered scheme starts, and
+  the second number is the one that needs a value nobody has.
+
+  On the server continuing to execute: conceded and never contested. The resource the position
+  claims to protect is the caller's thread and pool slot, which is fully protected. Server-side
+  cancellation requires the missing actor already named, and no client-side change of any size
+  delivers it.
+revised_position: >-
+  Set one wall-clock deadline covering the entire request - ten seconds, or whatever sits above
+  the observed maximum if five minutes with the existing logs can produce one - confirm the
+  library implements it as elapsed-since-start rather than an idle timer, and change nothing
+  else.
+revised_falsifier: >-
+  Three checks, all cheap enough to do before merging, any one of which kills the single-number
+  move. First, existing latency data for this client: if any endpoint's healthy p99 is already
+  near or above the bound, the number is wrong before it ships. Second, grep the call site for a
+  retry wrapper: if one exists, the bound still beats a hang but it needs an overall budget
+  rather than a per-attempt value, so the change is no longer one line. Third, and newly
+  load-bearing, read the library's own documentation for the option being set: if it resets on
+  each byte received rather than measuring from request start, it is an idle timer, it does not
+  bound a trickling server, and the intervention has not happened at all.
+confidence: medium
+```

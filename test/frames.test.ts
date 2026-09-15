@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, orthogonality, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
+import { PASS_A_NOISE_FLOOR, RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, orthogonality, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
 import { frameHash } from "../src/hash.js";
 import { compile, selectFrames } from "../src/compile.js";
 import { loadFixtures } from "../src/eval.js";
@@ -285,10 +285,13 @@ test("the retirement policy's stated standing matches what the tooling reports",
   const stats = frameStats(cfg);
   const by = new Map(stats.frames.map((f) => [f.frame, f]));
 
-  // "Nothing meets the bar. Every frame is under the five-run floor except FRAME_BREAKER."
-  assert.match(doc, /Nothing meets the bar/);
-  const atOrOverFloor = stats.frames.filter((f) => f.runs >= 5).map((f) => f.frame);
-  assert.deepEqual(atOrOverFloor, ["FRAME_BREAKER"], "the doc names FRAME_BREAKER as the only frame at the floor");
+  // Every frame at or past the five-run floor has to be named, whichever frames those are. The
+  // set was ["FRAME_BREAKER"] for eight runs and grew at nine; hard-coding it made the guard
+  // assert the corpus rather than the doc.
+  const atOrOverFloor = stats.frames.filter((f) => f.runs >= 5).map((f) => f.frame).sort();
+  assert.ok(atOrOverFloor.length > 0, "no frame is at the floor, so this asserts nothing");
+  for (const f of atOrOverFloor) assert.match(doc, new RegExp(`\`${f}\``), `${f} is at the five-run floor and the standing section does not name it`);
+  assert.match(doc, new RegExp(`as of ${["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve"][stats.runs] ?? String(stats.runs)} runs`), "the standing heading names a different run count than the corpus holds");
 
   // The SUPPLICANT exemption, which is the whole point of the section it sits in.
   const endUser = by.get("SUPPLICANT")!;
@@ -352,8 +355,20 @@ test("the five-run floor is what stops a coin flip retiring a frame", () => {
     if (f.runs >= RETIREMENT_FLOOR || f.criteria[4]!.met) assert.equal(f.candidate, true);
     else assert.equal(f.candidate, false, `${f.frame} is a candidate on ${f.runs} run(s), under the ${RETIREMENT_FLOOR}-run floor`);
   }
-  assert.deepEqual(h.candidates, [], "a frame meets the bar and docs/RETIREMENT.md's standing section has not been rewritten");
-  assert.match(h.text, new RegExp(`No frame meets the bar: two criteria across at least ${RETIREMENT_FLOOR} dispatched runs`));
+  /*
+   * A candidate is not a failure — retirement is the owner's call and nothing fires automatically.
+   * What would be a failure is a candidate the standing section has not argued about, because then
+   * the doc says "nothing meets the bar" while the tooling says otherwise. So: every candidate must
+   * be named there, and the section must stand it down in writing rather than by omission.
+   */
+  const doc = readFileSync(join(cfg.root, "docs", "RETIREMENT.md"), "utf8");
+  const standing = doc.slice(doc.indexOf("## Current standing"));
+  for (const c of h.candidates) {
+    assert.match(standing, new RegExp(`\`${c.frame}\``), `${c.frame} meets the bar and the standing section does not name it`);
+    assert.match(standing, /[Ww]atch, do not act|not being acted on/, `${c.frame} is a candidate and nothing in the standing section stands it down`);
+  }
+  if (h.candidates.length === 0) assert.match(h.text, new RegExp(`No frame meets the bar: two criteria across at least ${RETIREMENT_FLOOR} dispatched runs`));
+  else assert.doesNotMatch(standing, /^Nothing meets the bar/m, "a frame meets the bar and the standing section still opens by saying none does");
 });
 
 test("criteria 2 and 3 always carry the pruned-block exemption, because SUPPLICANT is why they exist", () => {
@@ -671,4 +686,40 @@ test("every fixture names a class routing can actually run, or one it declines o
     // A run fixture's class must be able to dispatch at least one frame, or it can never record.
     assert.ok(cls.frames.some((f) => reachable.has(f)), `fixture ${fx.id}'s class ${fx.problem_class} dispatches no reachable frame`);
   }
+});
+
+/*
+ * The pass A noise floor is a published number (docs/EXPERIMENTS.md, E1a; backlog 4) and it has
+ * exactly one piece of evidence: two runs of fixture 001 at seed 3 with byte-identical briefs and
+ * the same dispatch. A constant that drifts away from the pair it was measured on is the failure
+ * mode `comparable_heldout` exists to prevent on the analysis side, so it is guarded the same way.
+ */
+test("PASS_A_NOISE_FLOOR still covers the pair it was measured on", () => {
+  const a = join(cfg.root, "evals", "recorded", "001-seed3");
+  const b = join(cfg.root, "evals", "recorded", "001-seed3-repeat");
+  const d = diffRuns(cfg, a, b);
+  assert.equal(d.only_a.length, 0, "the pair must share a frame set or it measures the frame set, not the session");
+  assert.equal(d.only_b.length, 0);
+  assert.equal(d.a.seed, d.b.seed, "the pair must share a seed or it measures the seed, not the session");
+  const biggest = Math.max(...d.pass_a_moved.map((m) => Math.abs(m.delta)), 0);
+  assert.ok(biggest > 0, "a floor measured on a pair that did not move is not a measurement");
+  assert.ok(
+    biggest <= PASS_A_NOISE_FLOOR,
+    `the floor is ${PASS_A_NOISE_FLOOR} and its own evidence now moves ${biggest.toFixed(4)}; re-measure or raise it`,
+  );
+});
+
+/*
+ * The finding item 4 exists to record: pass A held and the trap sweep did not. If a later edit to
+ * either recording flattens that contrast, the E1a write-up is describing runs that no longer exist.
+ */
+test("the same-seed pair still shows a stable pass A and an unstable trap sweep", () => {
+  const d = diffRuns(cfg, join(cfg.root, "evals", "recorded", "001-seed3"), join(cfg.root, "evals", "recorded", "001-seed3-repeat"));
+  const firedA = d.a.frames.flatMap((f) => f.fired);
+  const firedB = d.b.frames.flatMap((f) => f.fired);
+  assert.deepEqual(firedB, [], "the repeat fired no detector; that is the finding");
+  assert.ok(firedA.length >= 2, "001-seed3 fired at least twice; that is the other half of the finding");
+  assert.equal(d.b.frames.filter((f) => f.status === "pruned").length, 0);
+  assert.equal(d.a.frames.filter((f) => f.status === "pruned").length, 2);
+  assert.notEqual(d.a.recommendation, d.b.recommendation, "the recommendation changed hands with the seed held");
 });

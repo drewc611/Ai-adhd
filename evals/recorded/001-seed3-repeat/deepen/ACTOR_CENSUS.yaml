@@ -1,0 +1,57 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: ACTOR_CENSUS
+verdict: defend
+response: |
+  The objection is right about ordering and right about the header, and wrong that those two
+  concessions take the position with them. Taken in turn.
+
+  Ordering. Conceded without reservation. An unbounded call is the only failure here that
+  takes the process down rather than degrading it, the fix is a per-phase ceiling set under
+  the ingress idle limit, and it is an afternoon's work with no coordination cost. Nothing in
+  the census argues for deferring it; the census argues about what the ceiling cannot do, and
+  you cannot say what a thing cannot do before it exists. The position stated the deadline as
+  the mechanism and the constants as a fallback, which reads as sequencing when it was meant
+  as precedence. That was a real defect and it is corrected below.
+
+  The header. Also largely conceded, and it is the sharpest thing in the objection. A
+  deadline in a header is a request to a party who has no obligation to read it, and a Java
+  thread-per-request service or a PHP-FPM worker will run the handler to completion after
+  your client has hung up. Paying a cross-team refactor for a hint is a bad trade and the
+  position did not separate that cost from the rest.
+
+  What the objection does not reach, and this is the whole of the defence: the expensive half
+  and the collectible half are not the same work, and the objection prices the cheap one at
+  the cost of the expensive one. Cancelling the outbound call when the caller's connection
+  drops is local. It crosses no team boundary, needs no cooperation from the upstream server,
+  and in every mainstream runtime the cancellation signal already exists at the entry point
+  and is already being dropped on the floor - Go's request Context, ASP.NET's RequestAborted,
+  Node's abort signal on the request. The work is passing into the client call an object the
+  handler is already holding. That is not a call-graph refactor and it is not on anyone
+  else's roadmap; it is a parameter that the HTTP client library already accepts and that
+  nobody passed. A ceiling cannot substitute for it, because a request bounded at thirty
+  seconds still holds its pool slot for the twenty-nine seconds after the caller left.
+
+  And the capacity-not-availability distinction does not survive contact with a pool. Slots
+  held by callers who are gone are returned to live callers as errors, and those callers
+  retry, which takes more slots. That is the standard saturation cascade and it presents as
+  an outage, not as a cost line. Bounding the call converts unbounded hang into bounded
+  saturation, which is a large improvement and not a complete one.
+
+  The cron. Correct, and it narrows the claim rather than refuting it. Where no one is
+  waiting there is no deadline to decrement and a constant is the answer, chosen from the
+  job's own budget. What the census still buys at that entry point is the knowledge that the
+  constant is now the entire defence, so it must be per-phase - a single total timeout is the
+  one a byte-at-a-time response walks straight through - and it must sit under whatever the
+  scheduler or the ingress will tolerate.
+
+  What the objection cost the position: the deadline is no longer the mechanism with
+  constants as fallback. Constants are the floor of the design, cancellation is the cheap
+  next step that collects most of the caller's effect, and header propagation is a contingent
+  third step that has to name the upstream that honors it before it is worth funding.
+revised_position: >-
+  Set per-phase static ceilings under the ingress idle limit first and today since that removes the only unbounded failure; then wire the caller's disconnect signal - which the runtime already provides at the entry point - through to the outbound call so an abandoned request stops holding its pool slot; and propagate an explicit deadline header only across hops you own or have confirmed will cancel on it, with entry points that have no waiter, such as cron and batch, correctly answered by a constant.
+revised_falsifier: >-
+  The ceiling stage needs no evidence and should not wait for any. For the cancellation stage, count over one day of access logs the fraction of requests that ended with the client already gone and the peak share of connection pool slots held by such requests; under roughly 1% abandoned with the pool never approaching saturation, the wiring is not worth doing. For the propagation stage, test one upstream directly - cut the connection mid-request and check whether their handler stops - and if it does not, the header is unfunded regardless of what the abandonment numbers say.
+confidence: medium
+```

@@ -1,0 +1,82 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: ACTOR_CENSUS
+position: >-
+  Derive every timeout on this client from a deadline that arrives with the request and is
+  decremented as it travels, and keep static per-call timeouts only as a hard ceiling.
+reasoning: |
+  1. Who can act on this system. At least six, each with a concrete action:
+
+     - The caller (the browser tab, the mobile app, the upstream service calling you): can
+       abandon the request at any instant by closing the connection, hitting stop, or
+       navigating away. Costs nothing, takes milliseconds, happens on every request.
+     - The load balancer / ingress / scheduler: cuts the connection at its own fixed idle
+       deadline (commonly 30s or 60s) and kills the pod when a liveness probe misses. Acts
+       in seconds, costs nothing, and never consults your client's timeout value.
+     - The upstream service owner: ships a release that doubles p99, turns on rate limiting,
+       or changes their own server-side timeout. Minutes to days, moderate cost, no notice
+       to you.
+     - The attacker: opens slow-loris connections or trickles a response body one byte at a
+       time to pin your connection pool. Free, instant, trivially parallel, and defeats any
+       timeout that only covers connect or only covers headers.
+     - The operator on call: edits a config value or restarts the process. Seconds if the
+       value is runtime-tunable, a full deploy cycle if it is a compiled constant.
+     - The human at the keyboard (you): changes the number in code. Minutes to hours, gated
+       by review and deploy.
+     - The person who pays: sets the instance count and pool size that decide how many
+       simultaneous slow calls you can absorb. Quarterly, expensive, slow.
+     - The network and the OS: drop packets silently, leaving a dead socket that hangs for
+       minutes until TCP keepalive notices. Free, involuntary, not an actor with intent but
+       with hands on the outcome all the same.
+
+  2. Named versus omitted. The problem statement names exactly one actor: "I", the person at
+     the keyboard choosing a number. The upstream service is implied by "HTTP client" but
+     given no agency. Everyone else is absent: the caller, the load balancer, the operator,
+     the attacker, the payer, the network.
+
+  3. Fastest and cheapest of the omitted. The caller. Abandoning a request costs them one
+     click and zero dollars, it happens in milliseconds, and it happens on a meaningful
+     fraction of all real traffic. The load balancer is a close second and is worse in one
+     respect: it acts on a schedule you did not set and cannot see. The attacker is equally
+     fast and cheap but requires intent, so the caller is the one who acts constantly.
+
+  4. The design when the caller is the primary control. A timeout stops being a property of
+     the client and becomes a property of the request. The deadline is set at the edge by
+     whoever is actually waiting, carried through the call chain (a context, a
+     grpc-timeout-style header, an X-Request-Deadline), and each outbound call gets whatever
+     budget remains minus a margin for the response trip. Two consequences follow directly.
+     First, caller disconnect must cancel the in-flight upstream call rather than letting it
+     run to completion into a dead socket, because the pool slot is the scarce resource, not
+     the wall clock. Second, your ceiling has to sit under the load balancer's idle timeout,
+     or the LB kills the connection first and your carefully chosen number never executes.
+     Static values still exist, but as a safety ceiling for the case where no deadline
+     arrived, and they have to be per-phase (connect, TLS, response headers, read of each
+     body chunk, total) because a single total timeout is what the slow-response attacker
+     walks through. The concrete numbers people want (connect 1s, TLS 2s, headers at the
+     upstream p99 plus margin, body read stall 5s, total at the LB limit minus one second)
+     are defaults for the unclaimed case, not the mechanism.
+forecloses:
+  - >-
+    A single global timeout constant on the client shared by every call site: once the budget
+    travels with the request, the health check and the report export cannot use the same
+    number, and the constant becomes unreachable dead configuration.
+  - >-
+    An independently configured retry policy: retries must fit inside the deadline that is
+    left, which rules out the usual three-attempts-with-backoff block that quietly multiplies
+    the caller's wait by four.
+  - >-
+    Treating the load balancer and upstream server timeouts as somebody else's setting: the
+    client ceiling is now derived from them, so changing either without changing this is a
+    breaking change.
+falsifier: >-
+  Pull one day of access logs and count requests that ended with the client already gone,
+  plus the p99 of upstream latency against the ingress idle timeout. If under roughly 1% of
+  requests are abandoned, and p99 sits far below the ingress limit, then no fast actor is
+  actually pressing on this system and a per-phase static timeout is the right answer; the
+  deadline plumbing would be cost with no observable return.
+missing_actor: >-
+  The caller who walks away. They close the tab or hit stop in milliseconds at zero cost, and
+  a client configured only with static timeouts keeps holding the pool slot and the upstream
+  connection for the full duration of a request nobody is waiting on any more.
+confidence: medium
+```

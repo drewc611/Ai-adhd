@@ -4,23 +4,27 @@
     "001/human_cancel": [
       "001-altframes",
       "001-first-run",
-      "001-seed3"
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/no_verdict": [
       "001-altframes",
       "001-first-run",
       "001-seed2",
-      "001-seed3"
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/retry_cost": [
       "001-first-run",
       "001-seed2",
-      "001-seed3"
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/retry_target_questioned": [
       "001-first-run",
       "001-seed2",
-      "001-seed3"
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "001/trap_named": [
       "001-altframes",
@@ -32,7 +36,8 @@
       "001-altframes",
       "001-first-run",
       "001-seed2",
-      "001-seed3"
+      "001-seed3",
+      "001-seed3-repeat"
     ],
     "002/cheap_first": [
       "002-first-run",

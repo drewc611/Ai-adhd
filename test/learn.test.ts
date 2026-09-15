@@ -548,21 +548,31 @@ test("a margin of exactly one anchor point is flagged despite float representati
  * from the runner up by two anchor points or fewer out of 48. A no-flip result on decisions that
  * narrow is not evidence the rubric is decisive.
  */
-test("four of five contested decisions are near-ties, and the fifth is the first that is not", () => {
+test("five of six contested decisions are near-ties, one is an exact tie, and one is decided", () => {
   // This pinned "every contested decision is settled inside two anchor points", which reframed the
   // 0-flip sensitivity result as narrowness rather than stability. `001-seed3` breaks it, and in the
   // direction that makes the rubric look better: DOOR_KEEPER over MINIMALIST by 0.1042, which is
   // four to five anchor points depending on which dimension set you price them in, against four
   // earlier decisions at one or two. So the reframing holds for the corpus and no longer for every
   // member of it, and that distinction is the point of keeping the count.
+  //
+  // `001-seed3-repeat` then added the other end: a margin of exactly 0, which is not a narrow
+  // decision but no decision, and the two runs are the same pack at the same seed. One scored pack
+  // produced the corpus's clearest separation and its replicate produced its only tie. That is D40,
+  // and it is the sharpest single illustration of what backlog item 4 measured.
   const r = weightSensitivity(cfg);
-  assert.equal(r.margins.length, 5);
+  assert.equal(r.margins.length, 6);
   // The denominator is the dimensions actually scored, not every dimension in the file. Since D34
   // retired one, `cfg.rubric.dimensions` overstates the total weight and makes the step smaller
   // than any real anchor point on a version 1 run, which would quietly loosen this bound.
   const step = 1 / dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).reduce((sum, d) => sum + d.weight * cfg.rubric.scale.max, 0);
   const near = r.margins.filter((m) => m.margin <= step * 2 + 1e-9);
-  assert.equal(near.length, 4, `expected four near-ties, got ${r.margins.map((m) => m.margin.toFixed(4)).join(", ")}`);
+  assert.equal(near.length, 5, `expected five near-ties, got ${r.margins.map((m) => m.margin.toFixed(4)).join(", ")}`);
+
+  const exact = r.margins.filter((m) => m.margin === 0);
+  assert.equal(exact.length, 1, "the corpus has exactly one decision the rubric did not make");
+  assert.equal(exact[0]!.run, "001-seed3-repeat");
+  assert.match(r.text, /exact tie, broken alphabetically/);
 
   const wide = r.margins.filter((m) => m.margin > step * 2 + 1e-9);
   assert.equal(wide.length, 1);
@@ -571,7 +581,7 @@ test("four of five contested decisions are near-ties, and the fifth is the first
 
   // Still no flips, which is the claim this sits next to and does not overturn.
   assert.match(r.text, /No representative changed under any single-dimension move/);
-  assert.match(r.text, /4 of 5 contested decisions were settled by two anchor points or fewer/);
+  assert.match(r.text, /5 of 6 contested decisions were settled by two anchor points or fewer/);
 });
 
 /** The four-critic panel on the pack that split. Pinned because D8 quotes it. */

@@ -181,6 +181,79 @@ found the thing; the critic threw it away.
 - The D8 agreement figures stand, because those compared two critics on one fixed pack. This
   varies the pack. They measure different things and neither rescues the other.
 
+### E1a completed by the same-seed repeat, 2026-09-15
+
+Recorded as `evals/recorded/001-seed3-repeat`, run `20260915071403-7e664e`. Backlog item 4: fixture
+001 at seed 3 a second time, with everything the compiler reads held fixed. All five briefs were
+confirmed byte-identical to `001-seed3`'s before dispatch, and branches, critic and deepen were
+dispatched the same way, so the only variable is the session.
+
+**E1a was never a seed experiment.** It varied the seed and the session at once and attributed the
+whole difference to the seed. Hold the seed and the same thing happens:
+
+| comparison | seed | pruned, before | pruned, after |
+|---|---|---|---|
+| seed 1 → seed 2 | changed | 2 of 5 | 4 of 5 |
+| seed 3 → this run | **held** | 2 of 5 | **0 of 5** |
+
+Same magnitude of swing, in the opposite direction, with the seed constant. Nothing E1a observed
+needs the seed to explain it, and on fixture 001 the seed cannot vary the frame set anyway, so what
+is left for it to change is dispatch order. Every sentence in the E1a results above that reads a
+difference as a seed effect should be read as a session effect instead. The readings themselves
+survive — `human_cancel` really does hold on three of four draws, `retry_cost` really is a property
+of `LEDGER` and `ACTOR_CENSUS` being dispatched — because those are counts over draws, and a draw is
+a session whether or not the seed also moved.
+
+**The floor, in numbers.** Two quantities move very differently and the pipeline treats them alike.
+
+| quantity | movement across the repeat |
+|---|---|
+| pass A per frame | `ACTOR_CENSUS` +0.048, `DOOR_KEEPER` −0.024, `LEDGER` −0.024, `FRAME_BREAKER` 0, `MINIMALIST` 0 |
+| detectors fired | T7 twice → **none at all** |
+| clusters | 2 → 3 |
+| prune set | `{ACTOR_CENSUS, FRAME_BREAKER}` → `{}` |
+| recommendation holder | `DOOR_KEEPER` → `FRAME_BREAKER` |
+
+**Pass A is the stable part.** Mean absolute move 0.019, largest 0.048, two of five frames identical
+to four decimal places. A gap of 0.05 between two frames in one run is at the floor and means
+nothing; `DOOR_KEEPER` over `MINIMALIST` at 0.104 in `001-seed3` is twice the floor and is the first
+scored decision in the corpus that clears it. `adhd diff` has printed "until the run-to-run noise
+floor is measured, a move this size cannot be called signal" since it was built. It is measured now,
+and the threshold is roughly 0.05.
+
+**The trap sweep is the unstable part, and it is the part that prunes.** Identical artifacts,
+identical detector text, identical rubric: one critic fired T7 twice and the other fired nothing.
+This is not a scoring wobble, it is a binary that decides whether a branch reaches the user. Three of
+this run's four failed fixture assertions are one event — with nothing pruned, `pruned_min`,
+`pruned_traps_include_any` and `trap_named` all have nothing to read.
+
+So the pruned block, which `CLAUDE.md` requires always ships and which the seed-3 amendment above
+called "the strongest corroboration anywhere in the corpus, removed entirely on T7", is the least
+reproducible output the system has. Both readings stand: the block is where the interesting material
+is, *and* whether any given branch appears in it is close to a coin flip at n=1. Those are
+compatible and both are uncomfortable.
+
+**What survived untouched.** The blind letter mapping, as the shared seed should give. The
+three-member cluster `{FRAME_BREAKER, ACTOR_CENSUS, LEDGER}`, which reproduced exactly under a
+different name. And the branch positions themselves — `DOOR_KEEPER` returned "2s connect, 5s
+per-attempt read, 10s total deadline, no retries" almost verbatim from a separate context window.
+**Divergence reproduces; adjudication does not.** That is the opposite of where the design put its
+risk, which was all on isolation.
+
+**Consequences.**
+
+- Any claim resting on a single run's prune set is a claim about one draw of a coin. That includes
+  every per-frame prune rate in `frames --stats`, which the seed-3 amendment already flagged, and it
+  now has a mechanism rather than a suspicion.
+- `docs/RETIREMENT.md`'s five-run floor is not enough for a prune-rate claim and was never meant to
+  carry one. Retirement reads reach and orthogonality, not prune rate, which is the right design for
+  the reason just measured.
+- Pass A differences under 0.05 are noise. Two of the four contested decisions `docs/WRITEUP.md`
+  describes as "close enough that any of them could ship" are under that, so the phrase is not
+  modesty, it is accurate.
+- The D8 critic-agreement figures are untouched: they held the pack fixed and varied the critic,
+  which is the same experiment from the other side and gets the same answer.
+
 ### E1b result, 2026-09-07
 
 Recorded as `evals/recorded/001-altframes`, also as failing. Same problem, same hash,

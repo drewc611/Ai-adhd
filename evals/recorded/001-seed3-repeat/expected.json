@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from run 20260915071403-7e664e, backlog item 4: fixture 001 at seed 3 again, everything held fixed. All five briefs are byte-identical to 001-seed3 and the dispatch matched it, so the only variable is the session. Failing items: expect pruned_min 1, expect pruned_traps_include_any T1,T2,T3, and must_surface trap_named, all three for the same reason -- the critic fired no detector at all and pruned nothing, where the same pack at the same seed had T7 fire twice. All four must_surface content items pass, exactly as in 001-seed3. Recorded as observed."
+}

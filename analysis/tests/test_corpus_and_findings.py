@@ -49,7 +49,37 @@ def test_frame_ids_are_forwarded_so_a_rename_is_not_a_tenth_frame(corpus):
 def test_negative_controls_are_not_loaded_as_runs(corpus):
     """A control is a hand-written answer with no plan and no score, not a run."""
     assert not any(a.run.endswith("-linear-cot") for a in corpus.artifacts)
-    assert len(corpus.runs) == 8, "001-seed3 is the eighth; the four -linear-cot controls are still excluded"
+    assert len(corpus.runs) == 9, "001-seed3-repeat is the ninth; the four -linear-cot controls are still excluded"
+
+
+def test_the_ninth_run_is_a_replicate_and_the_corpus_cannot_tell(corpus):
+    """Backlog 99, pinned so the gap is visible from the analysis side too.
+
+    `001-seed3-repeat` is `001-seed3` at the same seed with byte-identical briefs. For reliability
+    work that is exactly what is wanted -- more scorings of the same pack -- and every function in
+    this package treats it correctly. For any *rate over runs* it is one draw counted twice, and
+    nothing here knows the difference. This test exists so the next person to compute a per-frame
+    rate over `corpus.runs` finds the caveat rather than the number.
+
+    What makes the pair a replicate is the frame set and the problem, not the prose: the branches
+    are separate model samples and their positions differ, which is the whole reason the pair was
+    run.
+    """
+    assert "001-seed3" in corpus.runs and "001-seed3-repeat" in corpus.runs
+    frames = lambda run: {a.frame for a in corpus.artifacts if a.run == run}
+    assert frames("001-seed3") == frames("001-seed3-repeat"), (
+        "a replicate that dispatched a different frame set is not a replicate"
+    )
+    assert len(frames("001-seed3")) == 5
+    words = lambda run: {a.frame: a.words for a in corpus.artifacts if a.run == run}
+    first, second = words("001-seed3"), words("001-seed3-repeat")
+    assert any(first[f] != second[f] for f in first), (
+        "every artifact reproduced to the word, which would mean the pair is one sample and not two"
+    )
+    # And the finding the pair exists to carry: the trap sweep did not reproduce.
+    fired = lambda run: sorted(t for a in corpus.artifacts if a.run == run for t in a.fired)
+    assert fired("001-seed3-repeat") == [], "the repeat fired no detector on any frame"
+    assert len(fired("001-seed3")) >= 2, "001-seed3 fired at least twice on the same pack"
 
 
 def test_foreclosure_agrees_almost_always_and_measures_nothing(corpus):

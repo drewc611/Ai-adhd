@@ -13,9 +13,9 @@
 <p align="center">
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-479-2ea44f" alt="479 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-244-2ea44f" alt="244 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D39%20resolved-0969da" alt="D1 through D39 resolved"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-481-2ea44f" alt="481 TypeScript tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-245-2ea44f" alt="245 Python tests"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D40%20resolved-0969da" alt="D1 through D40 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -77,27 +77,27 @@ What it never surfaces:
 That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
 the whole system. If a run only returns the timeout triple, the run failed.
 
-**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the four real
-recorded runs of this fixture, every one of its four `must_surface` items has missed at least once
-except the one that asks least.
+**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the five real
+recorded runs of this fixture, every one of its four `must_surface` items has now missed at least
+once, including the one that asks least.
 
-| assertion | seed 1 | seed 2 | seed 3 | alt frames | rate |
-|---|---|---|---|---|---|
-| the human who can cancel | ok | **miss** | ok | ok | 3/4 |
-| the retry target questioned | ok | ok | ok | **miss** | 3/4 |
-| who pays for the retry | ok | ok | ok | **miss** | 3/4 |
-| a trap named | ok | ok | ok | ok | 4/4 |
+| assertion | seed 1 | seed 2 | seed 3 | seed 3 again | alt frames | rate |
+|---|---|---|---|---|---|---|
+| the human who can cancel | ok | **miss** | ok | ok | ok | 4/5 |
+| the retry target questioned | ok | ok | ok | ok | **miss** | 4/5 |
+| who pays for the retry | ok | ok | ok | ok | **miss** | 4/5 |
+| a trap named | ok | ok | ok | **miss** | ok | 4/5 |
 
 **The four assertions have different dependencies, and seed 3 makes the split clean.** The two
-retry items hold on all three seeds and miss only when the frames change, which is a frame-set
+retry items hold on every seed and miss only when the frames change, which is a frame-set
 dependency: `LEDGER` and `ACTOR_CENSUS` carry them and `alt frames` dispatches neither. *The human
 who can cancel* does the opposite — it holds under a different frame set and missed one reseed out
-of three, which is sample variance, and seed 2 was the unlucky draw rather than seed 1 the lucky one.
+of four, which is sample variance, and seed 2 was the unlucky draw rather than seed 1 the lucky one.
 An earlier version of this paragraph read the seed-2 misses as "one sample, not the frame library"
 for both items; that was right about one and wrong about the other, and it took two more runs to
 separate them.
 
-E3 is why *who pays for the retry* reads 3/4 rather than 2/4. It had missed at seed 2 only because
+E3 is why *who pays for the retry* reads 4/5 rather than 3/5. It had missed at seed 2 only because
 the assertion's patterns recognised seed 1's wording: `LEDGER` priced retries as a share of traffic
 and the critic's own detector output named the payer, while the regexes wanted "pays for" and got
 "payer". Widening a pattern after seeing which runs failed is the move this repo refuses, so E3
@@ -105,16 +105,24 @@ registered the candidates and the adoption rule first and let the negative contr
 three were adopted. The third, `retry budget`, cleared the control and was refused anyway: it matches
 a currency with no payer, and this item asks for both.
 
+**The fourth column is the one to read.** *Seed 3 again* is fixture 001 run a second time at seed 3
+with briefs byte-identical to the first, so the only thing that changed is the session. It is the
+only column in the table that isolates anything, and *a trap named* — the assertion that asks almost
+nothing, any `T[1-8]` anywhere in the pruned block — is what it broke. That run's critic fired no
+detector on any branch and pruned nobody, where the identical pack had fired T7 twice. Three of that
+run's failed assertions are that single event, because an empty pruned block has nothing for any of
+them to read.
+
 **What fails at seed 3 is not a `must_surface` item at all.** It is the structural expectation that
 the pruned block names one of T1, T2 or T3. Only T7 fired, on `FRAME_BREAKER` and `ACTOR_CENSUS`.
-That expectation has now held on exactly one run out of four — the one it was written against — which
+That expectation has now held on exactly one run out of five — the one it was written against — which
 makes it the seed-1 artifact this table was originally reaching for, and the assertion most worth
 re-reading before the next run.
 
 The audit reports these rates rather than leaving them to prose, and a `sometimes` verdict is not a
-pattern to loosen: it says nothing in the dispatched set reliably asks that question. The only
-assertion that holds everywhere is `trap_named`, which asks almost nothing — any `T[1-8]` anywhere in
-the pruned block. `docs/EXPERIMENTS.md` registered both experiments before they ran.
+pattern to loosen: it says nothing in the dispatched set reliably asks that question. Nothing on this
+fixture holds everywhere any more. `docs/EXPERIMENTS.md` registered both experiments before they ran,
+and E1a now carries the same-seed repeat that produced the fourth column.
 
 ## When to reach for it
 
@@ -292,7 +300,7 @@ docs/       architecture, traps, decisions, experiments, superagent, manifest, p
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       479 tests over all of it
+test/       481 tests over all of it
 analysis/   Python: reliability, bootstrap intervals, two language models trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 agents/     four run subagents, five mission subagents, the trainer and its governor
@@ -434,7 +442,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D39 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D40 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing

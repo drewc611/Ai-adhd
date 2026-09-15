@@ -48,8 +48,26 @@ yet enough to know whether they work.
    **Read it with item 89 in hand**: a reseed of this fixture cannot change its frame set, so the
    frame-set column is one run. The experiment the item's title describes still wants
    `enumerate_options`, which is item 91.
-4. **Same fixture, same seed, different day.** Run-to-run variance with everything fixed.
-   Establishes the noise floor against which every other comparison is read.
+4. ~~**Same fixture, same seed, different day.** Run-to-run variance with everything fixed.
+   Establishes the noise floor against which every other comparison is read.~~
+   **Run and recorded as `evals/recorded/001-seed3-repeat`. All five briefs byte-identical to
+   `001-seed3`, same dispatch, so the only variable is the session. Two quantities, two answers.**
+
+   **Pass A is stable.** Mean absolute move 0.019 across the five frames, largest 0.048, two
+   unchanged to four decimal places. So a pass A gap under **0.05** is noise, which retires the
+   hedge `adhd diff` had been printing since it was built.
+
+   **The trap sweep is not stable, and it is the part that prunes.** Identical artifacts and
+   identical detector text: one critic fired T7 twice and pruned two of five, the other fired
+   nothing and pruned none. Clusters went 2 to 3, the recommendation changed hands, and three of
+   the four failed fixture assertions are that one event.
+
+   The consequence for E1a is larger than the item asked for: E1a varied seed and session together
+   and read the difference as a seed effect, and the same swing happens with the seed held. Full
+   write-up in `docs/EXPERIMENTS.md` under "E1a completed by the same-seed repeat". What reproduced
+   untouched was the blind letter mapping, the three-member cluster, and the branch positions
+   themselves, one of them almost verbatim. **Divergence reproduces; adjudication does not**, which
+   is the opposite of where the design put its risk.
 5. ~~**Critic self-consistency.** Score one artifact pack twice with two fresh critics and
    report per-dimension agreement. The rubric is only as good as its inter-rater reliability
    and nobody has measured it.~~
@@ -1284,6 +1302,25 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     lifts clear, it was thin evidence and the rubric keeps a dimension that scores the thing the
     output contract is built around. Do not retire it on the current interval; D39's whole finding is
     that a ceiling rate is not evidence of that.
+
+99. **The corpus counts a deliberate replicate as an independent run, and a retirement criterion just
+    moved on one.** `001-seed3-repeat` is fixture 001 at seed 3 with briefs byte-identical to
+    `001-seed3`'s. It exists to measure the noise floor (item 4) and it is the right thing to have
+    recorded. But `frames --health` counts nine runs where there are eight distinct problem-and-seed
+    draws, and at nine `LEDGER` became the first frame ever to meet the retirement bar: criterion 3
+    reads "held the recommendation 0 of 5" where two of those five are the same problem declining to
+    pick it twice.
+
+    `docs/RETIREMENT.md` stands `LEDGER` down by hand and says why, so nothing is being acted on
+    wrongly today. What is missing is a way for the counter to know. The obvious shape is a field on
+    a recorded run naming the run it replicates, with `frames --stats`, `frames --health` and
+    `learn` collapsing a replicate group to one draw for rate criteria while still counting every
+    artifact for reliability, where more samples of the same pack is exactly what is wanted. Those
+    two treatments genuinely differ, which is why this is not a one-line filter.
+
+    Until it exists, every rate in `frames --health` is over runs rather than over draws, and the
+    gap is one run wide. It will widen: item 4 is the kind of experiment worth repeating, and each
+    repeat makes the denominator less honest. **Resolve before any frame is retired on a rate.**
 
 ## Not doing, and why
 

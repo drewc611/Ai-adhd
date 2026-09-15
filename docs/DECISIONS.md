@@ -3274,3 +3274,37 @@ passing; nothing acted on it because item 60 had named the wrong second dimensio
 backlog 98, and it is a harder case than `foreclosure` was, because 0.402 is a point estimate worth
 something and the interval is wide rather than pinned at zero. That difference is a corpus-size
 problem, not a rubric problem, and the honest move is more runs before a retirement.
+
+## D40. An exact pass A tie ships the alphabetically first frame, and says so
+
+**The decision.** When two survivors in a cluster hold the same pass A score, the representative is
+the one whose frame id sorts first, and `score.json` carries a run-level note saying the rubric did
+not separate them. Previously `src/score.ts` left the comparator at 0 on a tie; `Array#sort` is
+stable, so the frame that shipped was whichever one the critic happened to list first in its cluster.
+
+**What made it visible.** `001-seed3-repeat` produced the corpus's first exact tie: `ACTOR_CENSUS`
+and `FRAME_BREAKER` both at 0.8810 in `propagated_deadline_budget`. Eight prior runs never tied, so
+the behaviour had never been exercised.
+
+**The two code paths already disagreed, which is how this is a defect and not a preference.**
+`src/learn.ts` has always ranked with `|| x.localeCompare(y)` and its comment says plainly that an
+exact tie "is not a close decision, it is no decision". So `adhd learn --sensitivity` reported
+`ACTOR_CENSUS over FRAME_BREAKER  0.0000` for a run whose synthesis had shipped `FRAME_BREAKER`. One
+of the two had to be wrong about what the system does.
+
+**Alphabetical wins because the alternative is not deterministic in the sense D3 means.** A critic's
+ordering of members inside a cluster is model output. Deriving the shipped recommendation from it
+makes the run's most visible field depend on a list order that the seed does not fix and that nothing
+validates. Alphabetical is equally arbitrary and entirely determined by the frame library, so a
+replay reproduces it.
+
+**The note is the part that matters more than the rule.** Either tiebreak is arbitrary; what was
+wrong was doing it silently. The note names the cluster, names the frame that shipped, and says it
+shipped because its id sorts first rather than because it scored higher. A reader who takes the
+recommendation on trust should be told when the rubric abstained, which is the same reason the pruned
+block always ships.
+
+**What was not done.** `001-seed3-repeat`'s deepen was re-run under the fixed rule so the recording
+is internally consistent: the representative, the deepen brief and the deepen artifact all name the
+same frame. The earlier `FRAME_BREAKER` deepen artifact is not in the recording. Nothing else in the
+corpus changes, because no other run has a tie to break.

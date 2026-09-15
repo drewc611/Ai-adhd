@@ -407,9 +407,9 @@ test("the writeup's numbers are the numbers the corpus has now", () => {
   // Recorded runs, and the subset carrying a score.
   const recorded = readdirSync(join(cfg.root, "evals", "recorded")).filter((d) => statSync(join(cfg.root, "evals", "recorded", d)).isDirectory());
   const scored = recorded.filter((d) => existsSync(join(cfg.root, "evals", "recorded", d, "score.json")));
-  assert.match(doc, new RegExp(`# What ${["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][recorded.length] ?? recorded.length} runs show`),
-    `the title should say ${recorded.length}`);
-  assert.ok(doc.includes(`${["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][scored.length] ?? scored.length} with a \`score.json\``), `${scored.length} runs carry a score.json`);
+  const word = (n: number) => ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"][n] ?? String(n);
+  assert.match(doc, new RegExp(`# What ${word(recorded.length)} runs show`), `the title should say ${recorded.length}`);
+  assert.ok(doc.includes(`${word(scored.length)} with a \`score.json\``), `${scored.length} runs carry a score.json`);
 
   // The test count it quotes for the mechanics claim.
   const tests = readdirSync(join(cfg.root, "test")).filter((f) => f.endsWith(".test.ts"))

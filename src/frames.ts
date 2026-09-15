@@ -269,6 +269,13 @@ function summarise(cfg: Config, dir: string): RunSummary {
 }
 
 /**
+ * The largest pass A move observed between two runs of fixture 001 at seed 3 with byte-identical
+ * briefs and the same dispatch was 0.048 (backlog item 4, `evals/recorded/001-seed3-repeat`).
+ * A move smaller than this is the session, whatever else differs between the runs.
+ */
+export const PASS_A_NOISE_FLOOR = 0.05;
+
+/**
  * Two runs of the same fixture, side by side. The question this answers is the one the repo
  * cannot currently answer at all: when a finding appears, is it the frame set or the seed?
  * A frame that survives at one seed and is pruned at another is a fact about the seed.
@@ -338,9 +345,14 @@ export function diffRuns(cfg: Config, dirA: string, dirB: string): RunDiff {
     lines.push("", "pass A moved (>= 0.01):");
     for (const m of pass_a_moved.slice(0, 12)) lines.push(`  ${m.frame.padEnd(17)} ${m.a.toFixed(2)} -> ${m.b.toFixed(2)}  ${m.delta > 0 ? "+" : ""}${m.delta.toFixed(2)}`);
     const biggest = Math.max(...pass_a_moved.map((m) => Math.abs(m.delta)));
+    /* The floor is 0.05: backlog item 4 re-ran fixture 001 at seed 3 with byte-identical briefs
+       and the same dispatch, and pass A moved by at most 0.048 on any frame. See E1a in
+       docs/EXPERIMENTS.md. Below that, a move is the session, not the thing being compared. */
     lines.push(
-      `  Largest move ${biggest.toFixed(2)} on an unchanged artifact-producing frame. Until the`,
-      "  run-to-run noise floor is measured, a move this size cannot be called signal.",
+      `  Largest move ${biggest.toFixed(2)} on an unchanged artifact-producing frame.`,
+      biggest < PASS_A_NOISE_FLOOR
+        ? `  That is inside the ${PASS_A_NOISE_FLOOR} run-to-run noise floor, so it is not signal.`
+        : `  That clears the ${PASS_A_NOISE_FLOOR} run-to-run noise floor, so it is not just the session.`,
     );
   }
   lines.push("", "recommendation:", `  ${a.id}: ${a.recommendation.slice(0, 160)}`, `  ${b.id}: ${b.recommendation.slice(0, 160)}`);
