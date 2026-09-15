@@ -33,24 +33,31 @@ const NETWORK = ["WebSearch", "WebFetch"];
  * reach other tasks, and any MCP tool reaches whatever its server does. "Branches never see
  * siblings" is a CLAUDE.md non-negotiable, so a new grant has to be argued for here first.
  *
- * The launch permit from D4, as amended by D36 and D38: the host refuses to launch an agent with no
- * tools, so an isolated agent has to carry one, and these are the least it can carry. `TodoWrite`
- * writes the spawned agent's own checklist and reads nothing. `TaskList` is read only and was the
- * permit until D36.
+ * The launch permit, D4 as amended by D36, D38 and now D41: the host refuses to launch an agent
+ * with no tools, so an isolated agent has to carry one, and the permit has to satisfy two things
+ * at once. It must not reach what another agent in the run wrote, and it must actually resolve.
  *
- * Two names rather than one because a single name has now failed twice, in two different ways, and
- * the grant is the union of whichever the host resolves. `TaskList` is recognised but not grantable
- * to a subagent in a Claude Code remote session; `TodoWrite` is not recognised there at all. Listing
- * both means a host that has either one can launch these agents, and both are inert, so the union is
- * inert wherever it lands.
+ * `TodoWrite` and `TaskList` satisfied the first and failed the second, and the failure was total:
+ * this host answers "unrecognized [TodoWrite]; recognized but matched no tools in this session
+ * [TaskList]" and refuses the spawn. D36 and D38 knew, and accepted a fallback to
+ * `adhd-branch-search`. What that costs was never priced: the fallback swaps the *system prompt*
+ * too, so `adhd-critic.md` — "run every detector mechanically, eight records per branch, no gaps" —
+ * has never executed in any recorded run. A critic scoring without its own instructions is the
+ * most economical explanation on offer for item 4's finding that the trap sweep does not reproduce
+ * while divergence does.
  *
- * A host that resolves neither cannot launch them, which is not hypothetical — see D38 for the
- * fallback, and for why it is `adhd-branch-search` rather than `general-purpose`.
+ * So the permit is the web pair for all four. It resolves — `adhd-branch-search` has spawned on
+ * exactly this list — and it cannot open a sibling's artifact, which is the guarantee CLAUDE.md
+ * calls non-negotiable. The property given up is narrower and is named rather than hidden: a frame
+ * with no `tools` grant is now dispatched to an agent that *could* search. The brief tells it not
+ * to, and T3, the citation trap, is the mechanical detector for a branch that did. That is the same
+ * trade D38 wrote down as rung 2 of its fallback ladder; D41 promotes it into the definitions so
+ * rung 1 resolves and the ladder goes away.
  */
 const PERMITTED: Record<string, string[]> = {
-  "adhd-branch.md": ["TaskList", "TodoWrite"],
-  "adhd-critic.md": ["TaskList", "TodoWrite"],
-  "adhd-deepen.md": ["TaskList", "TodoWrite"],
+  "adhd-branch.md": ["WebFetch", "WebSearch"],
+  "adhd-critic.md": ["WebFetch", "WebSearch"],
+  "adhd-deepen.md": ["WebFetch", "WebSearch"],
   "adhd-branch-search.md": ["WebFetch", "WebSearch"],
 };
 
@@ -106,15 +113,40 @@ test("every agent grants exactly the tools it is permitted, and nothing else", (
   }
 });
 
-/** The two categories that matter most, named separately so a failure says which line was crossed. */
-test("no run agent carries a filesystem tool, and only the search agent carries network", () => {
+/**
+ * The line that actually matters, and the one that does not.
+ *
+ * Filesystem access is the one to hold: it is the only channel by which one isolated agent can
+ * read what another wrote, and "branches never see siblings" is the CLAUDE.md non-negotiable.
+ * Network access is not that channel — nothing in a run is published — so D41 spends it to buy a
+ * permit that launches. Keeping the old rule would have kept a cleaner-looking allowlist and three
+ * agents that cannot start.
+ */
+test("no run agent carries a filesystem tool, and every permit is one that resolves", () => {
   const dir = join(cfg.root, "agents");
   for (const f of Object.keys(PERMITTED)) {
     const t = tools(frontmatter(join(dir, f)));
     for (const bad of FILESYSTEM) assert.ok(!t.includes(bad), `${f} grants ${bad}: a channel to sibling artifacts`);
-    const net = t.filter((x) => NETWORK.includes(x));
-    if (f === "adhd-branch-search.md") assert.deepEqual(net.sort(), ["WebFetch", "WebSearch"]);
-    else assert.deepEqual(net, [], `${f} grants network tools`);
+    assert.ok(t.length > 0, `${f}: the host refuses to launch an agent with zero tools`);
+    assert.deepEqual(
+      t.filter((x) => !NETWORK.includes(x)),
+      [],
+      `${f} grants a permit outside the web pair. D41: a permit must both resolve and reach nothing the run wrote, and no other name is known to do both`,
+    );
+  }
+});
+
+/**
+ * The regression that matters more than the allowlist. `TodoWrite` and `TaskList` are the two
+ * names that shipped, looked inert, passed every check, and could not launch. Naming them keeps a
+ * future edit from reaching for the same class of tool because it reads as harmless.
+ */
+test("the two permits that silently failed to launch never come back", () => {
+  const dir = join(cfg.root, "agents");
+  for (const f of Object.keys(PERMITTED)) {
+    const t = tools(frontmatter(join(dir, f)));
+    for (const dead of ["TodoWrite", "TaskList"])
+      assert.ok(!t.includes(dead), `${f} grants ${dead}, which does not resolve in a Claude Code remote session. The agent would not start and the dispatch would silently fall back to another agent's system prompt`);
   }
 });
 

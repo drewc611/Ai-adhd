@@ -54,29 +54,23 @@ recognise `TodoWrite` at all.
 
 **Do not reach for `general-purpose`.** It carries `Read`, `Glob` and `Grep`, so a branch dispatched
 that way can open its siblings' artifacts in the run directory. "Branches never see siblings" is the
-non-negotiable the whole architecture rests on, and every run recorded before D38 was dispatched
+non-negotiable the whole architecture rests on, and every run recorded before D41 was dispatched
 this way, which is why that guarantee has never been exercised as designed.
 
-Use this instead, and say which rung you used in the message you hand back with the synthesis:
+Spawn the agent the plan names and nothing else. Under D41 all four isolated agents carry the same
+permit, `WebSearch` and `WebFetch`: it resolves, and neither tool can reach the local filesystem, so
+sibling isolation holds by capability. If a spawn is still refused, stop and tell the user. A run
+that cannot preserve isolation is not worth spending, and substituting `general-purpose` to get one
+finished produces a recording that looks like every other one and is not.
 
-1. **`adhd-branch` / `adhd-deepen`** — the permit resolved. Nothing further to do.
-2. **`adhd-branch-search` for branches and for deepen** — the permit resolved nowhere. Its grant is
-   `WebSearch` and `WebFetch`, neither of which can reach the local filesystem, so sibling isolation
-   holds by capability. The cost is stance purity, not isolation: a frame whose `tools` is `[]` is
-   now dispatched to an agent that *could* search, and D4's reason for withholding search is that a
-   branch which goes looking has left its frame. The brief still tells it that it has no tools and
-   must not look for more. Disclose the substitution; do not hide it in a footnote.
-3. **Stop and tell the user.** If neither rung is available, the run cannot preserve isolation and
-   is not worth spending. Say so at the gate.
-
-**If you used rung 2, run `adhd traps <artifact>` on every branch artifact before the critique
-phase and keep the output.** Rung 2 hands a branch `WebSearch` and `WebFetch` and the brief tells it
-not to look; whether it obeyed is not something the token counter can answer, because that counter
-reports a bare count and never names the tool. T3 is the citation trap and its detector is exactly
-"remove every citation, does a chain of reasoning remain" — which is the question rung 2 raises,
-pointed at the dispatch instead of at the reasoning. A branch that searched and leaned on what it
-found fires T3 and the existing hard rule prunes it. A branch that searched and did not lean on it
-reads the same as one that never searched, and that is the honest limit. Backlog 97.
+**Run `adhd traps <artifact>` on every branch artifact before the critique phase and keep the
+output.** Every branch now carries `WebSearch` and `WebFetch` and its brief tells it not to look;
+whether it obeyed is not something the token counter can answer, because that counter reports a bare
+count and never names the tool. T3 is the citation trap and its detector is exactly "remove every
+citation, does a chain of reasoning remain" — which is the question the permit raises, pointed at the
+dispatch instead of at the reasoning. A branch that searched and leaned on what it found fires T3 and
+the existing hard rule prunes it. A branch that searched and did not lean on it reads the same as one
+that never searched, and that is the honest limit. Backlog 97.
 
 The critic is the exception and does not need a rung. It is meant to see every artifact — the host
 pastes them into its prompt — and pass A is blinded by *redaction*, not by tool grants. So a

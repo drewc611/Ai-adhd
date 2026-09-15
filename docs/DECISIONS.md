@@ -3315,3 +3315,59 @@ block always ships.
 is internally consistent: the representative, the deepen brief and the deepen artifact all name the
 same frame. The earlier `FRAME_BREAKER` deepen artifact is not in the recording. Nothing else in the
 corpus changes, because no other run has a tie to break.
+
+## D41. The launch permit is the web pair, because a permit that cannot launch is not a permit
+
+**Decision:** `adhd-branch`, `adhd-critic` and `adhd-deepen` grant `WebSearch` and `WebFetch`,
+identical to `adhd-branch-search`. D38's fallback ladder is deleted. Resolved 2026-09-15.
+
+D4 withheld tools from the isolated agents. D36 found the host refuses to launch an agent with zero
+tools and chose `TodoWrite` as the smallest inert permit. D38 could not test it, because agent
+definitions load at session start, and added `TaskList` alongside on the theory that a host
+resolving either one could launch.
+
+**Neither resolves, and the spawn is refused outright.** Asked to launch `adhd-branch`, this host
+answers: `unrecognized [TodoWrite]; recognized but matched no tools in this session [TaskList]`.
+Not degraded — refused. The three agents that are the architecture have never started.
+
+**What the fallback actually cost, which nobody priced.** D38's answer was to dispatch to
+`adhd-branch-search` instead, and for branches that is close to harmless: the brief is the whole
+input either way and the two bodies say nearly the same thing. For the critic it is not. A subagent
+type selects a *system prompt*, so dispatching the critique phase to `adhd-branch-search` runs the
+branch instructions — "reason from inside the frame, return the YAML" — with the critic's brief
+pasted in as a user message. `agents/adhd-critic.md` says something quite different: score blind,
+do not infer the frame, and *run every detector mechanically, for every branch and every trap,
+eight records per branch, no gaps, a gap rejects the pass*. **None of that has been in force in any
+of the fifteen recorded runs.**
+
+That is the most economical explanation on offer for the finding backlog item 4 recorded as the
+repository's headline result. Divergence reproduced across an identical replay and adjudication did
+not: one critic fired T7 twice and pruned two of five, the other fired nothing and pruned none, on
+byte-identical artifacts. An instruction to sweep mechanically and reject gaps is exactly the thing
+whose absence produces that, and it was absent. The finding is not withdrawn — the two runs happened
+and the prune sets differ — but its cause is now a live hypothesis with a test, which is the first
+time it has had one.
+
+**Why the web pair rather than something cleaner.** The permit has to clear two bars at once: it
+must not reach what another agent in the run wrote, and it must resolve. Filesystem tools fail the
+first. Every other name tried fails the second. `WebSearch` and `WebFetch` clear both, and the
+evidence is direct rather than argued — `adhd-branch-search` spawns on exactly this list.
+
+**What is given up, stated rather than buried.** A frame whose `tools` grant is empty is now
+dispatched to an agent that *could* search. D4 withheld search because a branch that goes looking has
+left its frame, and that reason still holds; what changes is that the enforcement is no longer the
+capability. It is the brief, which tells the agent it has a permit and must not use it, and T3, the
+citation trap, whose detector asks whether a chain of reasoning survives removing every citation.
+This is precisely the trade D38 wrote down as rung 2 and then only reached for on failure. D41 says
+it is the design, because rung 1 was never available.
+
+**Isolation is unchanged, and that is the point.** "Branches never see siblings" is a CLAUDE.md
+non-negotiable and no web tool reaches a run directory. What this repository had before D41 was that
+guarantee held by an agent that could not start, with every recorded run falling back to
+`general-purpose` — which grants `Read`, `Glob` and `Grep`. The guarantee was weaker in practice than
+it now is on paper.
+
+**What catches this next time.** `adhd doctor` checks each isolated agent's permit against the list
+of names known to resolve, and errors on a permit outside it or on an empty one. `test/agents.test.ts`
+names `TodoWrite` and `TaskList` specifically, because both shipped, both read as inert, both passed
+every check in the repository, and neither could launch.

@@ -147,6 +147,16 @@ function checkPlugin(cfg: Config): Finding[] {
   return out;
 }
 
+/** The four agents a run dispatches to. None of them may reach what another one wrote. */
+const ISOLATED_AGENTS = ["adhd-branch", "adhd-branch-search", "adhd-critic", "adhd-deepen"] as const;
+
+/**
+ * Permits that both resolve in a Claude Code host and cannot read the run directory. This is the
+ * whole list, and it is short on purpose: every other tool name is either a filesystem tool or
+ * unproven to launch. `adhd-branch-search` has spawned on exactly this pair.
+ */
+const RESOLVING_PERMITS = ["WebSearch", "WebFetch"];
+
 /**
  * Do the agent definitions grant the tools the frames ask for?
  *
@@ -170,12 +180,41 @@ function checkToolGrants(cfg: Config): Finding[] {
         check: "tools",
         message: `${cfg.frames.frames.filter((f) => f.tools.includes(t)).map((f) => f.id).join(", ")} ask for ${t} and adhd-branch-search does not grant it; the branch would reason without it and look like a frame that chose not to search`,
       });
-  // The reverse: a filesystem tool anywhere in a branch agent would let a branch read a sibling.
-  for (const f of readdirSync(join(cfg.root, "agents")).filter((x) => x.startsWith("adhd-branch"))) {
-    const body = read(join(cfg.root, "agents", f)) ?? "";
-    for (const forbidden of ["Read", "Grep", "Glob", "Task", "Agent"])
-      if (new RegExp(`^\\s*tools:.*\\b${forbidden}\\b`, "m").test(body))
-        out.push({ severity: "error", check: "tools", message: `agents/${f} grants ${forbidden}; a branch that can read the run directory can read its siblings, which is the one thing the architecture prevents` });
+  for (const f of ISOLATED_AGENTS) {
+    const body = read(join(cfg.root, "agents", `${f}.md`)) ?? "";
+    if (!body) {
+      out.push({ severity: "error", check: "tools", message: `agents/${f}.md does not exist and a run dispatches to it` });
+      continue;
+    }
+    const declared = (/^\s*tools:\s*(.+)$/m.exec(body)?.[1] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+
+    // A filesystem tool would let one of these read what a sibling wrote.
+    for (const forbidden of ["Read", "Write", "Edit", "Grep", "Glob", "Bash", "Task", "Agent", "NotebookEdit"])
+      if (declared.includes(forbidden))
+        out.push({ severity: "error", check: "tools", message: `agents/${f}.md grants ${forbidden}; an isolated agent that can read the run directory can read its siblings, which is the one thing the architecture prevents` });
+
+    /*
+     * And the defect that shipped: a permit nobody checked would resolve. `adhd-branch`,
+     * `adhd-critic` and `adhd-deepen` all declared `TodoWrite, TaskList`, and this host answers
+     * "unrecognized [TodoWrite]; recognized but matched no tools in this session [TaskList]" and
+     * refuses the spawn. The three agents that *are* the architecture could not start, every
+     * recorded run fell back to `general-purpose` — which grants everything, including Read —
+     * and `doctor` printed no errors the whole time.
+     *
+     * The host will not launch an agent with zero tools, so isolation cannot be expressed as an
+     * empty list. It is expressed as a permit that resolves and reaches nothing the run wrote,
+     * which leaves exactly the web pair, plus the brief text telling the agent not to use it and
+     * detector T3 catching it if it does.
+     */
+    if (!declared.length)
+      out.push({ severity: "error", check: "tools", message: `agents/${f}.md declares no tools; the host refuses to launch an agent with none, so this agent cannot start at all` });
+    for (const t of declared)
+      if (!RESOLVING_PERMITS.includes(t))
+        out.push({
+          severity: "error",
+          check: "tools",
+          message: `agents/${f}.md declares ${t}, which is not a permit known to resolve. An isolated agent's tools must be a non-empty subset of ${RESOLVING_PERMITS.join(", ")}: anything else either reaches the run directory or fails to launch`,
+        });
   }
   return out;
 }
