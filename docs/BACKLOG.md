@@ -1215,7 +1215,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Two tests pin it, including the null path through the real validator, because that is the shape
     most likely to break: a fold that cannot report a fold would be a silent loss.
 
-96. **The Python analysis could not read a fenced artifact and the TypeScript side could.** A branch
+96. ~~**The Python analysis could not read a fenced artifact and the TypeScript side could.** A branch
     returns its artifact as its final message and the host writes that message unedited, so an
     artifact may arrive wrapped in a ```` ```yaml ```` fence. `src/validate.ts` has always stripped
     one. `adhd_analysis` did not, and `001-seed3` is the first recording to carry a fence, so the
@@ -1228,7 +1228,15 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     an artifact is, and nothing that fails when they disagree. A test that round-trips one artifact
     through both would have caught this before a run did. Worth building; it is the same shape as
     the `comparable_heldout` and `comparable_training` guards, which exist because a claim that
-    nothing checks is a claim that drifts.
+    nothing checks is a claim that drifts.~~
+    **Closed. The asymmetry now has a contract that fails when the two sides disagree.**
+    `evals/artifact-loader-cases.json` holds nine hand-written cases, and both suites assert against
+    it: `test/contract-prose.test.ts` for `unfence` in `src/validate.ts`, and
+    `analysis/tests/test_corpus_and_findings.py` for `unfence` in `analysis/adhd_analysis/corpus.py`.
+    Writing the cases found a second divergence nobody had hit yet: the Python side was closing the
+    fence with `rfind`, so a backtick run inside a value ended the artifact early. The TypeScript
+    side takes the first closing fence after the body starts, not the last. That case is now case 4,
+    and it is the reason the file exists rather than a docstring saying the two agree.
 
 97. ~~**The subagent token counter does not say which tool was used, and a claim now rests on it.** D38's
     cost is stance purity: a plain branch dispatched on rung 2 holds `WebSearch` and `WebFetch` and is
