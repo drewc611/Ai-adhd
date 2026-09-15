@@ -1,0 +1,128 @@
+{
+  "budget_corpus": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 5120,
+      "max_seconds": 2400.0,
+      "max_tokens": 40000000
+    },
+    "checks": 548,
+    "peak_rss_mb": 505,
+    "seconds": 1989.06,
+    "stopped_because": null,
+    "tokens": 11003860
+  },
+  "budget_training": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 5120,
+      "max_seconds": 2400.0,
+      "max_tokens": 40000000
+    },
+    "checks": 586,
+    "peak_rss_mb": 505,
+    "seconds": 1989.06,
+    "stopped_because": null,
+    "tokens": 11997184
+  },
+  "budget_vocabulary": {
+    "ceilings": {
+      "max_ngrams": 12000000,
+      "max_rss_mb": 5120,
+      "max_seconds": 2400.0,
+      "max_tokens": 40000000
+    },
+    "checks": 1995,
+    "peak_rss_mb": 505,
+    "seconds": 1989.21,
+    "stopped_because": "token ceiling: 40,000,000 >= 40,000,000",
+    "tokens": 40000000
+  },
+  "config": {
+    "context": 128,
+    "d_ff": 512,
+    "d_model": 128,
+    "init_std": 0.02,
+    "n_heads": 4,
+    "n_layers": 2,
+    "vocab_size": 8192
+  },
+  "corpus_fingerprint": "fe6d302c4a82d43b",
+  "documents": 7322,
+  "epochs_completed": 0.9997631671798044,
+  "final_loss": 4.15443464337963,
+  "full_loss_on_last_batch": null,
+  "loss_curve": [
+    6.427884308442677,
+    4.836564478808886,
+    4.633621834728816,
+    4.491443868777523,
+    4.305676683987657,
+    4.24025267117644,
+    4.25319032922183,
+    4.228777268161513,
+    4.1451221992299985,
+    4.165147093060899,
+    4.01379640897115
+  ],
+  "min_count": 3,
+  "model_path": "models/background.tf.gz",
+  "oov_rate": 0.0450178,
+  "optimiser": {
+    "batch_size": 32,
+    "epochs_requested": 1.0,
+    "lr": 0.0003,
+    "max_train_tokens": 12000000,
+    "n_samples": 0,
+    "seed": 0,
+    "warmup": 100
+  },
+  "seconds": 1989.0609539409998,
+  "sentences": 1782729,
+  "sources": [
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 11785368,
+      "files": 615,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "pep",
+      "path": "analysis/corpora/pep",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "steps": 2929,
+  "stopped_because": "epochs",
+  "tokens_seen": 11997184,
+  "train_tokens": 12000026,
+  "vocab_size": 8192,
+  "vocab_truncated_tokens": 1660093,
+  "vocab_truncated_types": 100381,
+  "vocabulary_fingerprint": "974095d096ea80af"
+}

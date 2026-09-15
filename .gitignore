@@ -9,7 +9,10 @@ __pycache__/
 .venv/
 .pytest_cache/
 *.egg-info/
-analysis/models/
+# Contents rather than the directory: git will not un-ignore a file inside an ignored directory,
+# so `analysis/models/` followed by a negation silently keeps ignoring the file and `git add`
+# reports nothing. The trailing `*` is what makes the negation below reachable.
+analysis/models/*
 # Except the one model that ships. A tool whose language scoring needs a 2.4GB local build is a
 # tool nobody can run from a clone, so a small transformer is committed and the large Kneser-Ney
 # models stay build artifacts. See analysis/README.md for the size/quality trade.

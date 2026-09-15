@@ -60,6 +60,38 @@ already reports max |r| = 0.51, so no two dimensions are redundant with each oth
 logistic regression on all nine and every coefficient is negative. That is one latent factor
 wearing nine names, and a pairwise correlation matrix has no column that could show it.
 
+## The model that ships
+
+`analysis/models/background.tf.gz`, 5.5 MB, committed. Everything else under `analysis/models/`
+is a build artifact and gitignored; the large Kneser-Ney models run to 70–163 MB and a tool whose
+language scoring needs a 2.4 GB local build is a tool nobody runs from a clone.
+
+| | |
+|---|---|
+| class | decoder-only transformer over numpy, written from scratch |
+| shape | d_model 128, 2 layers, 4 heads, context 128, 1,459,456 parameters |
+| vocabulary | 8,192 types, min_count 3, OOV rate 0.045 |
+| trained on | 7,322 documents: 6,330 RFCs, 615 PEPs, 323 EIPs, 54 ERCs |
+| seen | 11,997,184 tokens, 2,929 steps, one epoch, 33 minutes on one CPU |
+| final loss | 4.154 |
+| fingerprints | corpus `fe6d302c4a82d43b`, vocabulary `974095d096ea80af` |
+
+It is small because it is committed, and committed because a background model nobody can load is
+the state this repository was already in: the transformer was added in D20, gradient-checked, and
+then handed to nothing, because `genericity.py` was written against `KneserNey` and called methods
+a transformer does not have. Use it with:
+
+```
+cd analysis && python3 -m adhd_analysis --root .. --model models/background.tf.gz
+```
+
+**It is not the best model here and is not meant to be.** The shipped Kneser-Ney reaches held-out
+perplexity 25.82 on 64M tokens; this saw 12M and one epoch. What it is for is making the genericity
+section runnable from a clean checkout. Train a better one with
+`python3 -m adhd_analysis.text.train_transformer --help`, point `--model` at it, and the report
+names whichever model produced it — `describe()` carries the shape into the output so a figure can
+never be quoted without the model that made it.
+
 ## The model, and what it is not
 
 `signal.py` fits `sklearn.linear_model.LogisticRegression` on the nine blind pass A scores and

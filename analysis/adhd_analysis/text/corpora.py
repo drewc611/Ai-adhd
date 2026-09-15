@@ -148,13 +148,28 @@ class Library:
                 yield s.name, ident, doc
 
     def describe(self) -> list[dict]:
+        """What a training record says it was trained on.
+
+        Paths are relative to the repository whenever they are inside it. A record is checked in,
+        so an absolute path in one is both a leak of whoever trained it and a line that means
+        nothing on any other machine — `test_no_record_carries_an_absolute_path` fails the suite
+        over it. The in-repo sources were always written relative in `corpora.yaml` and so looked
+        fine; the fetched ones resolve under `analysis/corpora/` and did not, which stayed hidden
+        until a record trained on them was committed for the first time.
+        """
+        root = Path(__file__).resolve().parents[3]
         out = []
         for s in self.sources:
+            path = Path(s.path)
+            try:
+                shown = path.resolve().relative_to(root)
+            except ValueError:
+                shown = path  # genuinely outside the repository; record it as given
             files = list(s.files())
             out.append(
                 {
                     "name": s.name,
-                    "path": str(s.path),
+                    "path": str(shown),
                     "files": len(files),
                     "bytes": sum(f.stat().st_size for f in files),
                 }
