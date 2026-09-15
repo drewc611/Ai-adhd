@@ -1355,3 +1355,45 @@ on one frame — which means writing them against the frame library rather than 
 and that is the move this repo refuses for good reason. The alternative is the honest one: run the
 same seeds again and read *which frames appear*, not which assertions pass, since frame selection is
 deterministic from the seed and needs no assertion to observe. Item 91 stays open, restated.
+
+## E11. How much of the replicate's movement was the critic?
+
+**Registered 2026-09-15, before the second scorings. Backlog 98, downstream of item 4.**
+
+Item 4 re-ran fixture 001 at seed 3 with byte-identical briefs and found pass A moving by a mean
+of 0.019 and at most 0.048. That number is doubly confounded and the write-up did not say so
+plainly enough: the replicate has **different artifacts** (the branches were re-sampled) scored by
+a **different critic**. Both could be the whole story.
+
+D8 already measured the other half of the decomposition, on different packs: two critics on one
+fixed artifact set agree exactly on 79% of cells and within one point on 100%, and the ranking
+changed in every one of five runs. If that rate holds on this pair, the critic alone should
+account for most of a 0.019 mean move, and the branches will have produced material that is not
+just similar in position — as `DOOR_KEEPER`'s near-verbatim repeat already showed — but similar
+enough to score the same.
+
+**The cells.** A second, fresh critic scores the existing pass A packs of `001-seed3` and
+`001-seed3-repeat`, from the same `pass-a.brief.md` each run shipped on, written to
+`pass-a.rater2.yaml` beside the scoring the run used. Nothing is re-run and no branch is
+re-dispatched: the artifacts are fixed and only the scorer varies, which is the one comparison
+that isolates the critic.
+
+**Predictions, so the result can be wrong.**
+
+- **Within-pack across-critic exact agreement lands near 79%**, D8's pooled figure, on both packs.
+  If the wide spread of D8's per-run figures (69% to 89%) is really about the pack rather than the
+  corpus, these two — the same problem at the same seed — should land close to each other.
+- **The per-frame pass A totals move by at least as much across critics on one pack as they did
+  across the replicate.** That is the load-bearing prediction: it says the 0.019 is a critic
+  measurement and not a fact about the branches.
+- **The ranking changes in at least one of the two packs**, because it changed in five of five
+  runs under D8 and nothing here is different.
+
+**What would overturn it.** If within-pack across-critic movement is materially *smaller* than the
+replicate's 0.019, the branches genuinely diverged between sessions and item 4's floor is not a
+critic artefact. That is the more interesting outcome and the one the corroborating evidence
+argues against, which is why it is worth the two scorings.
+
+**Registered limits.** Two packs is not a rate, and both are the same problem, so nothing here
+generalises to other fixtures. Alpha is a corpus-level figure and 80 new cells against 225 will
+move `committal`'s interval without settling it; backlog 98 stays open on the terms it states.
