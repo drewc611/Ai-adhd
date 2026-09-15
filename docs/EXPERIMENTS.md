@@ -1458,3 +1458,54 @@ is **+0.562 on [+0.26, +0.85]**, clear of zero. The item had said the interval n
 runs; it does not, it narrows with double-scored packs, and going from eight scored runs to eleven
 moved it not at all while going from five double-scored packs to seven settled it. `foreclosure`,
 already retired, is now the only dimension whose interval spans zero.
+
+## E12. Does the trap sweep reproduce once the critic agent is actually in force?
+
+**Registered 2026-09-15, before any run. Downstream of D41 and of backlog item 4.**
+
+Item 4 is this repository's headline result: divergence reproduces and adjudication does not. Fixture
+001 at seed 3, re-run with byte-identical briefs, returned branch positions so close that
+`DOOR_KEEPER` repeated a timeout triple almost verbatim from a separate context window — and the
+critic fired T7 twice on one run and no detector at all on the other, pruning two of five against
+none of five.
+
+D41 found a cause that was not available when item 4 was written. A subagent type selects a system
+prompt, the permit on `adhd-critic` resolved nowhere, and D38's documented fallback dispatched the
+critique phase to `adhd-branch-search`. So the instructions in `agents/adhd-critic.md` — score blind,
+do not infer the frame, **run every detector mechanically, for every branch and every trap, eight
+records per branch, no gaps, a gap rejects the pass** — were not in force for any of the fifteen
+recorded runs. What ran instead was the branch system prompt with the critic's brief pasted in.
+
+An instruction to sweep mechanically and reject gaps is exactly the thing whose absence produces a
+sweep that fires twice on one pass and not at all on the next. That is a hypothesis, not a finding,
+and this is its test.
+
+**The cells.** Re-run fixture 001 at seed 3 twice more, on a host where `adhd-critic` launches, with
+everything else held as item 4 held it: same seed, same frame set, briefs confirmed byte-identical,
+same dispatch for the branches. The only change from item 4's pair is that the critique phase gets
+the critic agent rather than a substitute.
+
+**The readings, fixed now.**
+
+1. **Detector records per branch.** The contract asks for eight, one per trap, with evidence. Item
+   4's pair cannot be checked against this because the pass that would have enforced it never ran.
+   Under D41 a gap rejects the pass, so the first reading is whether the packs are even complete.
+2. **Prune-set agreement across the pair.** Item 4 went `{ACTOR_CENSUS, FRAME_BREAKER}` to `{}`. Any
+   overlap at all is movement toward reproducibility; identical prune sets would be the strong result.
+3. **Trap-sweep agreement, per trap, per branch.** Eight records times five branches is forty
+   comparisons per pair, against item 4's two-fired-versus-zero.
+4. **Pass A movement**, to check it stays inside the 0.10 noise floor E11 established, which would
+   say the critic change moved adjudication without moving scoring.
+
+**What would falsify the hypothesis.** A second pair that disagrees on the prune set as completely as
+item 4's did. That would mean the instructions were not what was missing, the sweep is unstable for
+some other reason, and D41 fixed a real defect that happens not to be this one. That outcome is
+worth as much as the confirming one and is the reason the readings are written down first.
+
+**What this cannot settle.** One pair is not a rate, exactly as item 4's was not. Two runs agreeing
+is consistent with a sweep that agrees four times in five, and nothing here distinguishes those.
+The honest ceiling on a confirming result is "the hypothesis survived its first test".
+
+**Cost.** Two runs of fixture 001 at n=5. `adhd cost` quotes the estimate at the D5 gate; the
+recorded runs of this fixture came in between 407k and 519k tokens each. Owner's call, for the same
+reason D5 exists.

@@ -45,12 +45,13 @@ If it returns OK, continue at step 2 as written. If the host refuses the spawn, 
 it names which declared tools it could not resolve, and that decides what you do next. Nothing has
 been spent yet either way.
 
-### The fallback ladder, when the permit does not resolve (D38)
+### If the spawn is refused (D41)
 
-The three isolated agents declare `TodoWrite, TaskList` and the grant is whichever the host
-resolves. A host that resolves neither cannot launch them. That is real, not hypothetical: a Claude
-Code remote session recognises `TaskList` but will not grant it to a subagent, and does not
-recognise `TodoWrite` at all.
+All four isolated agents declare `WebSearch, WebFetch`. That permit resolves and neither tool can
+reach the local filesystem, so sibling isolation holds by capability. The permit before D41 was
+`TodoWrite, TaskList`, and it resolved nowhere: a Claude Code remote session recognises `TaskList`
+but will not grant it to a subagent, and does not recognise `TodoWrite` at all, so the three agents
+it was declared on never launched anywhere.
 
 **Do not reach for `general-purpose`.** It carries `Read`, `Glob` and `Grep`, so a branch dispatched
 that way can open its siblings' artifacts in the run directory. "Branches never see siblings" is the

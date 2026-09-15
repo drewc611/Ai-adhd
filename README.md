@@ -170,7 +170,7 @@ bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when un
 assets/     the mark, the banner, the run explorer shell
 scripts/    demo.sh: what a clean checkout can show without a model
 evals/      fixtures with must_surface assertions, recorded runs, negative controls
-docs/       architecture, traps, decisions, experiments, backlog, retirement, writeup
+docs/       architecture, traps, decisions, experiments, backlog, retirement, writeup, superagent
 analysis/   Python: reliability statistics and two language models trained from scratch
 ```
 

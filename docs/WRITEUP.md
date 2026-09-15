@@ -125,6 +125,15 @@ prints it on every comparison rather than leaving the reader to remember. What i
 is the *other* half of item 4's finding: pass A reproduced across a replicate and the trap sweep did
 not, and the trap sweep is the half that prunes. One pair is not a rate.
 
+**And that half now has a competing explanation that is cheaper than "the critic is unstable".**
+D41 found that `agents/adhd-critic.md` has never executed. Its permit resolved nowhere, so the
+critique phase fell back to a different agent and therefore to a different system prompt, and the
+critic's own instruction — sweep every detector mechanically, eight records per branch, a gap
+rejects the pass — was absent from all fifteen recorded runs. A sweep run without it firing twice
+on one pass and not at all on the next is what you would predict. The two runs still happened and
+their prune sets still differ, so the finding stands; what does not stand is treating its cause as
+settled. E12 is registered with its readings fixed, including what would falsify it.
+
 Fifteen runs over five fixtures is an existence proof that the machinery runs and the controls lose.
 It is not evidence that the frame library picks better answers than one careful pass, and no
 sentence in this repository should be read as claiming it does.

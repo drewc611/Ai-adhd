@@ -1441,6 +1441,23 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Open because a re-read that succeeds is a command whose report was one read away from being
     wrong, and because two occurrences in one week is a rate.
 
+102. **Run E12: does the trap sweep reproduce with the critic agent actually in force?** (evidence,
+    owner's call on spend). D41 established that `agents/adhd-critic.md` has never executed — the
+    permit resolved nowhere and D38's fallback dispatched the critique phase to
+    `adhd-branch-search`, which is a different system prompt. The critic's own instruction to sweep
+    every detector mechanically and reject a pass with gaps was therefore absent from all fifteen
+    recorded runs.
+
+    That is the most economical explanation on offer for item 4's finding, which is the headline
+    result of this repository: divergence reproduced across an identical replay and adjudication did
+    not. `docs/EXPERIMENTS.md` registers E12 with its four readings fixed before any run, including
+    what would falsify the hypothesis rather than confirm it.
+
+    **Until E12 runs, item 4's finding stands and its cause does not.** The two runs happened and the
+    prune sets differ; what changed is that "the critic is unstable" now has a competing explanation
+    that is cheaper and testable, and the write-up should not be read as having ruled it out. Two
+    runs of fixture 001 at n=5, between 407k and 519k tokens each on the recorded evidence.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.
