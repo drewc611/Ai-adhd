@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { cfg } from "./helpers.js";
+import { renderBranchBrief } from "../src/compile.js";
 import { validateBranchArtifact } from "../src/validate.js";
 import { RunAbort } from "../src/errors.js";
 
@@ -98,15 +99,78 @@ test("the same three values parse when the field is a block scalar, which is wha
   }
 });
 
-test("`reasoning` is the one free-text field the contract folds, and the other three are why prose is fatal", () => {
+test("every prose field in the contract is folded, and the closed-vocabulary ones are not", () => {
+  // The fix for backlog 87. `>-` on a field means its value starts on the next line, where a `: `
+  // is ordinary text rather than the start of a nested mapping. `problem_hash`, `frame` and
+  // `confidence` stay plain because each is a closed vocabulary that cannot contain prose.
+  //
+  // `forecloses` items are folded for the same reason even though no recorded item has ever
+  // carried an internal `: ` — 104 recorded items and 15 from the seed 3 run, none of them risky.
+  // The class is closed here rather than the three instances that happened to fire.
   const contract = readFileSync(join(cfg.root, "prompts", "branch.md"), "utf8");
-  assert.match(contract, /^reasoning: \|$/m, "reasoning is no longer a block scalar; this test's premise is gone");
+  assert.match(contract, /^reasoning: \|$/m, "reasoning was always a block scalar");
   for (const f of ["position", "falsifier", "missing_actor"]) {
-    const m = new RegExp(`^${f}: (.*)$`, "m").exec(contract);
-    assert.ok(m, `${f} is missing from the output contract`);
-    // If a fix folds these, this assertion is the one to delete, deliberately and with the
-    // recorded runs' comparability argued in DECISIONS.md first.
-    assert.notEqual(m[1], "|", `${f} is now folded; backlog 87 was fixed and this test should say so`);
+    assert.match(contract, new RegExp(`^${f}: >-$`, "m"), `${f} is not folded, so a colon in it loses the run`);
+  }
+  assert.match(contract, /^ {2}- >-$/m, "forecloses items are not folded");
+  for (const f of ["problem_hash", "frame", "confidence"]) {
+    assert.ok(!new RegExp(`^${f}: >-$`, "m").test(contract), `${f} is a closed vocabulary and needs no folding`);
+  }
+  // `missing_actor` is the one nullable prose field, so the contract has to say how to write null:
+  // a folded scalar cannot be null, and "null" under `>-` is the four-character string.
+  assert.match(contract, /`missing_actor: null` on one line/);
+
+  // The brief a branch actually receives carries it, not just the template.
+  const brief = renderBranchBrief(cfg, "What timeouts should I set on this HTTP client?", HASH, cfg.frames.frames[0]!);
+  assert.match(brief, /^falsifier: >-$/m);
+});
+
+test("the fold changes what the contract asks for and not what the validator accepts", () => {
+  // This is what makes the fix free. Folding is a change to `prompts/branch.md`; `validate.ts` is
+  // untouched, so all 39 recorded artifacts — every one of them written under the plain contract —
+  // still parse and still validate. No migration, and no recorded run becomes unreadable, which is
+  // the cost that blocked backlog 60 when the same kind of change was tried on the rubric.
+  const plain = [
+    "```yaml",
+    `problem_hash: ${HASH}`,
+    "frame: LEDGER",
+    "position: Do the smallest thing that bounds the call.",
+    "reasoning: |",
+    "  From inside the frame: the human can cancel.",
+    "forecloses:",
+    "  - a fixed 30s timeout for every caller",
+    "falsifier: users never cancel within the first token timeout",
+    "missing_actor: the human watching the spinner, who can cancel",
+    "confidence: medium",
+    "```",
+  ].join("\n");
+  const r = validateBranchArtifact(plain, HASH, "LEDGER");
+  assert.equal(r.ok, true, r.ok ? "" : r.violations.join("; "));
+
+  // And the folded form validates to the same value, with the colon that used to be fatal in it.
+  const folded = [
+    "```yaml",
+    `problem_hash: ${HASH}`,
+    "frame: LEDGER",
+    "position: >-",
+    "  Do the smallest thing that bounds the call.",
+    "reasoning: |",
+    "  From inside the frame: the human can cancel.",
+    "forecloses:",
+    "  - >-",
+    "    a fixed 30s timeout for every caller",
+    "falsifier: >-",
+    "  Instrument the client for a week. Cheaper still: find one production incident report.",
+    "missing_actor: null",
+    "confidence: medium",
+    "```",
+  ].join("\n");
+  const f = validateBranchArtifact(folded, HASH, "LEDGER");
+  assert.equal(f.ok, true, f.ok ? "" : f.violations.join("; "));
+  if (f.ok) {
+    assert.equal(f.artifact.position, "Do the smallest thing that bounds the call.", "folding left a trailing newline");
+    assert.match(f.artifact.falsifier, /Cheaper still: find one production incident report\.$/);
+    assert.equal(f.artifact.missing_actor, null, "the null path broke");
   }
 });
 

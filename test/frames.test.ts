@@ -389,10 +389,16 @@ test("axis coverage names every axis in the library and marks the ones no run ha
   assert.ok(thin.length > 0, "the library has no thin axis, so the report asserts nothing");
   assert.match(a.text, /A run never carries two frames from one axis \(D6\)/);
 
-  // FIRST_PRINCIPLES has never been dispatched; its axis is shared with MECHANIC, which has.
+  // D35 split these apart. `mechanism` is MECHANIC alone and has been exercised; `derivation` is
+  // FIRST_PRINCIPLES alone and has not, because it only became reachable in the same decision and
+  // no run has happened since. The pair is what this assertion is for: an axis with a member no run
+  // has dispatched is a real gap, and it is now one axis rather than hidden inside a shared one.
   const mechanism = a.axes.find((x) => x.axis === "mechanism")!;
-  assert.deepEqual(mechanism.frames.sort(), ["FIRST_PRINCIPLES", "MECHANIC"]);
+  assert.deepEqual(mechanism.frames, ["MECHANIC"]);
   assert.deepEqual(mechanism.exercised, ["MECHANIC"]);
+  const derivation = a.axes.find((x) => x.axis === "derivation")!;
+  assert.deepEqual(derivation.frames, ["FIRST_PRINCIPLES"]);
+  assert.deepEqual(derivation.exercised, [], "FIRST_PRINCIPLES has run; this record is stale");
 });
 
 // ---- frame definition drift (catalogue 53) --------------------------------------------------
@@ -551,42 +557,76 @@ test("a frame in a class's primary list is reachable at that class's default n",
  * stale. It asserts the state, not that the state is right — whether to fix routing or retire the
  * frame is a decision, per docs/RETIREMENT.md and D6.
  */
-test("FIRST_PRINCIPLES cannot be dispatched at any class's default n, and nothing else is in that position", () => {
+test("every frame in the library is reachable at some class's default n", () => {
+  // This test used to pin the opposite, and that is the point of it. `--reach` was built for
+  // backlog 19 and found FIRST_PRINCIPLES dispatchable by no class at its default n: an alternate
+  // in six classes and primary in none. D35 gave it a primary slot in `strategy`, so the finding is
+  // spent and its inverse is now the thing worth guarding — a frame that becomes unreachable again,
+  // by a routing edit or an n that shrinks below a primary list, fails here.
   const r = frameReach(cfg, 400);
-  assert.deepEqual(r.unreachable_at_default, ["FIRST_PRINCIPLES"]);
+  assert.deepEqual(r.unreachable_at_default, []);
+  assert.deepEqual(r.proved_unreachable, []);
+  assert.match(r.text, /Every frame is reachable at some class's default n/);
+
+  // FIRST_PRINCIPLES specifically, because it is the one this cost a decision.
   const fp = r.frames.find((f) => f.frame === "FIRST_PRINCIPLES")!;
-  assert.deepEqual(fp.blocked_by, ["MECHANIC"]);
-  assert.ok(fp.at_any_n.length > 0, "it is reachable at some n");
-  assert.ok(fp.at_any_n.every((c) => c.endsWith("@9")), `only at the hard cap, got ${fp.at_any_n.join(",")}`);
-  // And it really is absent from every class's primary list, which is why.
-  for (const cls of Object.values(cfg.routing.classes))
-    if (cls.action === "run") assert.ok(!cls.frames.includes("FIRST_PRINCIPLES"));
+  assert.deepEqual(fp.at_default, ["strategy@6"]);
+  assert.deepEqual(fp.blocked_by, [], "nothing blocks it now that its axis is its own");
+  assert.equal(cfg.frameById.get("FIRST_PRINCIPLES")!.axis, "derivation");
+  const strategy = cfg.routing.classes.strategy!;
+  assert.equal(strategy.action, "run");
+  if (strategy.action === "run") {
+    assert.ok(strategy.frames.includes("FIRST_PRINCIPLES"), "it is a primary in strategy, which is what makes it reachable");
+    assert.equal(strategy.n, 6, "the slot was added without displacing a frame, so n moved with it");
+  }
+
+  // The axis split alone would not have done it, which is the part item 85 had wrong. Put it back
+  // on `mechanism` and it stays reachable, because a primary slot is what reachability rests on.
+  const onMechanism = {
+    ...cfg,
+    frames: { ...cfg.frames, frames: cfg.frames.frames.map((f) => (f.id === "FIRST_PRINCIPLES" ? { ...f, axis: "mechanism" } : f)) },
+  };
+  assert.deepEqual(frameReach(onMechanism as typeof cfg, 40).unreachable_at_default, [], "the slot, not the axis, is what makes it reachable");
 });
 
 /**
- * The claim above is stronger than a sample, and saying so matters: a frame reachable on one seed
- * in ten thousand reads as unreachable at any seed count you can afford, so "did not turn up in 400
- * shuffles" and "cannot turn up" are different claims that look identical in a report.
- *
- * This one is structural. Alternates are appended after the primary list, every run class's default
- * `n` is at most the length of its primary list, so no class reaches an alternate at default `n` at
- * all — and a frame in no primary list is unreachable there for every seed there is.
+ * The claim the previous version of this test made was stronger than a sample, and the machinery
+ * that makes that distinction is still worth its own test now that nothing in the shipped library
+ * is unreachable. A frame reachable on one seed in ten thousand reads as unreachable at any seed
+ * count you can afford, so "did not turn up in 400 shuffles" and "cannot turn up" are different
+ * claims that look identical in a report.
  */
-test("FIRST_PRINCIPLES is unreachable by construction, not by not turning up in the sample", () => {
-  // The two premises, checked rather than asserted.
-  for (const [pc, cls] of Object.entries(cfg.routing.classes)) {
+test("the proof of unreachability still works, shown on a library where a frame has no primary slot", () => {
+  // Take FIRST_PRINCIPLES back out of every primary list and the proof returns, with `strategy`
+  // back to five so its n is at or below its primary length again.
+  const demoted = {
+    ...cfg,
+    routing: {
+      ...cfg.routing,
+      classes: Object.fromEntries(
+        Object.entries(cfg.routing.classes).map(([k, c]) => [
+          k,
+          c.action === "run" && c.frames.includes("FIRST_PRINCIPLES")
+            ? { ...c, n: c.frames.length - 1, frames: c.frames.filter((f: string) => f !== "FIRST_PRINCIPLES") }
+            : c,
+        ]),
+      ),
+    },
+  } as typeof cfg;
+
+  // The two premises the proof rests on, checked rather than asserted.
+  for (const [pc, cls] of Object.entries(demoted.routing.classes)) {
     if (cls.action !== "run") continue;
-    const n = cls.n ?? Math.min(cfg.routing.defaults.max_branches, cls.frames.length);
+    const n: number = cls.n ?? Math.min(demoted.routing.defaults.max_branches, cls.frames.length);
     assert.ok(n <= cls.frames.length, `${pc} draws ${n} from a primary list of ${cls.frames.length}, so it reaches alternates`);
-    assert.ok(!cls.frames.includes("FIRST_PRINCIPLES"), `${pc} has FIRST_PRINCIPLES in its primary list`);
   }
-  assert.deepEqual(frameReach(cfg, 40).proved_unreachable, ["FIRST_PRINCIPLES"]);
+  assert.deepEqual(frameReach(demoted, 40).proved_unreachable, ["FIRST_PRINCIPLES"]);
 
   // One seed and forty give the same answer, because the answer does not come from the seeds.
-  assert.deepEqual(frameReach(cfg, 1).unreachable_at_default, frameReach(cfg, 40).unreachable_at_default);
+  assert.deepEqual(frameReach(demoted, 1).unreachable_at_default, frameReach(demoted, 40).unreachable_at_default);
 
   // And the report says which kind of claim it is making, where a reader sees it.
-  assert.match(frameReach(cfg, 40).text, /proved, not sampled/);
+  assert.match(frameReach(demoted, 40).text, /proved, not sampled/);
 });
 
 /**

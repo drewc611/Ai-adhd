@@ -5,7 +5,7 @@ import { currentFrameId, type Config } from "./config.js";
 import type { DetectorRecord, PassA, PassB, TrapId } from "./schema.js";
 import type { BranchValidation } from "./validate.js";
 import type { LintHint } from "./lint.js";
-import { TRAP_IDS } from "./schema.js";
+import { TRAP_IDS, dimensionsAt } from "./schema.js";
 
 export interface FiredTrap {
   trap: TrapId;
@@ -88,8 +88,11 @@ export function forwardFrameIds(cfg: Config, score: ScoreResult): ScoreResult {
 }
 
 /** weighted mean, normalised to [0,1]. */
-export function passAScores(cfg: Config, passA: PassA, blindMap: Record<string, string>): Record<string, number> {
-  const dims = cfg.rubric.dimensions;
+export function passAScores(cfg: Config, passA: PassA, blindMap: Record<string, string>, rubricVersion?: number): Record<string, number> {
+  // D34: the dimension set is the run's, not the file's. A run scored under version 0 keeps
+  // `foreclosure` in both numerator and denominator; a version 1 run has neither. Passing the
+  // file's current version by default keeps every existing caller correct for a new run.
+  const dims = dimensionsAt(cfg.rubric.dimensions, rubricVersion ?? cfg.rubric.version);
   const max = cfg.rubric.scale.max;
   const denom = dims.reduce((s, d) => s + d.weight * max, 0);
   const out: Record<string, number> = {};

@@ -13,9 +13,9 @@
 <p align="center">
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-475-2ea44f" alt="475 TypeScript tests"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-476-2ea44f" alt="476 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-242-2ea44f" alt="242 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D33%20resolved-0969da" alt="D1 through D33 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D37%20resolved-0969da" alt="D1 through D37 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -281,7 +281,7 @@ docs/       architecture, traps, decisions, experiments, superagent, manifest, p
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       475 tests over all of it
+test/       476 tests over all of it
 analysis/   Python: reliability, bootstrap intervals, two language models trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 agents/     four run subagents, five mission subagents, the trainer and its governor
@@ -423,7 +423,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D33 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D37 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing
@@ -552,9 +552,13 @@ A reader should start here rather than discover it.
   figure.
 - **`002-kernel-enduser` is not robust to who scored it.** Four critics split 2-2 on which
   position goes to deepen. Left that way on purpose.
-- **`TaskList` is the one isolation claim that is argued rather than demonstrated.** It is the
-  launch permit every isolated agent carries, and what it shows a branch inside a running
-  dispatch has never been observed. D4 says so.
+- **The launch permit is unverified in the opposite direction now.** `TaskList` was the permit and
+  the open question was what it shows a branch mid-dispatch; it turned out not to resolve at all in
+  one real host, so the three core agents could not be launched there. D36 makes the permit
+  `TodoWrite`, which reads nothing, and that retires the question rather than answering it. Whether
+  `TodoWrite` resolves where `TaskList` did not is reasoning and not a measurement — agent
+  definitions are read at session start, so it could not be tested in the session that changed it.
+  The run procedure probes it before diverge instead, so the failure costs one cheap subagent.
 - **The plugin agents have never run as plugin agents.** Every recorded run used general-purpose
   subagents, so the manifest and the tool grants are checked mechanically and never end to end.
 - **One fixture assertion is still satisfied by a negative control.** `003/reframe` matches on

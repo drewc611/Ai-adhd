@@ -144,6 +144,10 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
     seed,
     n,
     allow_wide: allowWide,
+    // D34: which rubric version this run will be scored under. Stamped here for the same reason
+    // `frame_hash` and `overlay` are: the run carries its own contract, so a later retirement
+    // cannot silently rescore it. Absent on every run recorded before D34, which read as 0.
+    rubric_version: cfg.rubric.version,
     // D33: which library produced this plan. Null on the shipped one. `frame_hash` already says what
     // each frame was, and this says where the definitions came from — the pair is what lets
     // `adhd frames --drift` tell "the definition changed since" apart from "that install runs an

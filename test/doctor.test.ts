@@ -214,27 +214,63 @@ test("doctor exits on errors and not on warnings, and a check that throws is rep
  * never. FIRST_PRINCIPLES sat in that gap, and `frames --stats` could only report it as having no
  * runs — which is also what bad luck looks like.
  */
-test("doctor reports a frame routing can never dispatch, and says why", () => {
+test("the shipped routing reaches every frame, and the check that says otherwise still says why", () => {
+  // This used to pin the warning. D35 gave FIRST_PRINCIPLES a primary slot in `strategy`, so the
+  // shipped library warns about nothing here and the assertion becomes its inverse: a routing edit
+  // that strands a frame again has to fail this test rather than pass it quietly.
   const r = doctor(cfg);
-  const w = r.findings.filter((f) => f.check === "routing" && /FIRST_PRINCIPLES/.test(f.message));
+  assert.deepEqual(
+    r.findings.filter((f) => f.check === "routing" && /dispatches it at its default n/.test(f.message)).map((f) => f.message),
+    [],
+  );
+  assert.equal(r.errors.length, 0);
+
+  // The message itself is still worth testing, because it is what a reader gets when this happens
+  // again. Demote it back out of every primary list and the whole explanation must come back.
+  const demoted = {
+    ...cfg,
+    routing: {
+      ...cfg.routing,
+      classes: Object.fromEntries(
+        Object.entries(cfg.routing.classes).map(([k, c]) => [
+          k,
+          c.action === "run" && c.frames.includes("FIRST_PRINCIPLES")
+            ? { ...c, n: c.frames.length - 1, frames: c.frames.filter((f: string) => f !== "FIRST_PRINCIPLES"), alternates: [...c.alternates, "FIRST_PRINCIPLES"] }
+            : c,
+        ]),
+      ),
+    },
+  } as typeof cfg;
+  const w = doctor(demoted).findings.filter((f) => f.check === "routing" && /FIRST_PRINCIPLES/.test(f.message));
   assert.equal(w.length, 1, "exactly one routing finding names the unreachable frame");
   assert.equal(w[0]!.severity, "warn", "it is a decision, not a defect, so it must not fail doctor");
-  assert.match(w[0]!.message, /alternate in 6 class\(es\) and primary in none/);
-  assert.match(w[0]!.message, /MECHANIC holds its axis \(mechanism\)/, "the reason has to be in the message");
+  assert.match(w[0]!.message, /primary in none/);
   assert.match(w[0]!.message, /by construction, not by sampling/, "the claim's strength is stated");
   assert.match(w[0]!.message, /RETIREMENT\.md/, "it names where the decision lives");
-  assert.equal(r.errors.length, 0, "an unreachable frame does not make the repository invalid");
+  assert.equal(doctor(demoted).errors.length, 0, "an unreachable frame does not make the repository invalid");
 });
 
 test("a frame no class names at all is still reported once, not twice", () => {
   // The blunter check already covers it; two warnings for one frame would read as two problems.
+  // Since D35 the frame has to be taken out of the primary lists as well as the alternates — an
+  // earlier version of this test removed it from alternates only, which no longer strands it.
   const stranded = {
     ...cfg,
     routing: {
       ...cfg.routing,
       classes: Object.fromEntries(
         Object.entries(cfg.routing.classes).map(([k, c]) =>
-          c.action === "run" ? [k, { ...c, alternates: c.alternates.filter((a) => a !== "FIRST_PRINCIPLES") }] : [k, c],
+          c.action === "run"
+            ? [
+                k,
+                {
+                  ...c,
+                  n: c.frames.includes("FIRST_PRINCIPLES") ? c.frames.length - 1 : c.n,
+                  frames: c.frames.filter((f: string) => f !== "FIRST_PRINCIPLES"),
+                  alternates: c.alternates.filter((a) => a !== "FIRST_PRINCIPLES"),
+                },
+              ]
+            : [k, c],
         ),
       ),
     },

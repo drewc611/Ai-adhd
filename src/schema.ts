@@ -103,9 +103,28 @@ export const DimensionSchema = z
     weight: z.number().positive(),
     question: z.string().min(1),
     anchors: z.record(z.string(), z.string()),
+    /**
+     * The rubric version this dimension stopped being scored in (D34). A run scored under an
+     * earlier version still includes it; the critic is no longer asked for it.
+     *
+     * Retiring rather than deleting is what keeps the recorded corpus readable. `validatePassA`
+     * rejects a dimension the rubric does not list, so deleting `foreclosure` outright made all
+     * seven recorded runs unreadable — not merely non-comparable — and took `replay`, `learn`,
+     * `why` and the viewer down with them. The dimension stays in the file, with its weight, as
+     * the record of what version 0 asked.
+     */
+    retired_in: z.number().int().positive().optional(),
   })
   .strict();
 export type Dimension = z.infer<typeof DimensionSchema>;
+
+/**
+ * The dimensions in force at a given rubric version. A run is scored with the set its own
+ * version declared, never with whatever the file says today.
+ */
+export function dimensionsAt(dimensions: Dimension[], version: number): Dimension[] {
+  return dimensions.filter((d) => d.retired_in === undefined || version < d.retired_in);
+}
 
 export const HardRulesSchema = z
   .object({
@@ -244,6 +263,12 @@ export const PlanSchema = z
     seed: z.number().int(),
     n: z.number().int(),
     allow_wide: z.boolean(),
+    /**
+     * The rubric version this run is scored under (D34). Optional, and absent means 0: every run
+     * recorded before the rubric had a second version ran under version 0, and a missing field
+     * says so as clearly as an explicit 0 would.
+     */
+    rubric_version: z.number().int().nonnegative().optional(),
     /**
      * Which library produced this plan, or null for the shipped one (D33). Optional so every run
      * recorded before overlays existed still validates — those ran on the shipped library and a

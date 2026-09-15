@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
-import { PlanSchema, type BranchArtifact, type DeepenArtifact, type Plan } from "./schema.js";
+import { PlanSchema, dimensionsAt, type BranchArtifact, type DeepenArtifact, type Plan } from "./schema.js";
 import { compile, letterFor, previewText } from "./compile.js";
 import {
   checkBlind,
@@ -139,8 +139,13 @@ function renderDetectors(trapsDoc: string): string {
   return out.join("\n");
 }
 
+/**
+ * The critic is asked only for the dimensions in force now (D34). A retired one is still in the
+ * rubric file, because seven recorded runs were scored with it, and asking a fresh critic to score
+ * it would put a dimension nothing reads back into new artifacts.
+ */
 function renderRubric(cfg: Config): string {
-  return cfg.rubric.dimensions
+  return dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version)
     .map((d) => {
       const anchors = Object.entries(d.anchors)
         .sort(([a], [b]) => Number(a) - Number(b))
@@ -225,8 +230,10 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
 
   const blindMap = JSON.parse(rd(join(criticDir, "blind-map.json"))) as Record<string, string>;
   const letters = Object.keys(blindMap);
-  const passA = validatePassA(rd(passAPath), plan.problem_hash, letters, cfg.rubric.dimensions.map((d) => d.id));
-  const scoresByFrame = passAScores(cfg, passA, blindMap);
+  const rubricVersion = plan.rubric_version ?? 0;
+  const runDims = dimensionsAt(cfg.rubric.dimensions, rubricVersion);
+  const passA = validatePassA(rd(passAPath), plan.problem_hash, letters, runDims.map((d) => d.id));
+  const scoresByFrame = passAScores(cfg, passA, blindMap, rubricVersion);
 
   // State 2: build pass B brief.
   if (!existsSync(passBPath)) {
@@ -252,7 +259,7 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
     wr(briefPath, brief);
     return {
       text: [
-        `pass A validated: ${letters.length} letters x ${cfg.rubric.dimensions.length} dimensions.`,
+        `pass A validated: ${letters.length} letters x ${runDims.length} dimensions.`,
         `pass B brief written (unblind).`,
         `next: send ${briefPath} to the SAME critic subagent; write its final message to ${passBPath}; then --phase deepen.`,
       ].join("\n"),
@@ -276,10 +283,16 @@ export function computeScore(cfg: Config, runDir: string): { plan: Plan; score: 
   const { branches } = loadBranches(runDir, plan);
   const valid = validArtifacts(branches);
   const blindMap = JSON.parse(rd(join(criticDir, "blind-map.json"))) as Record<string, string>;
-  const passA = validatePassA(rd(join(criticDir, "pass-a.yaml")), plan.problem_hash, Object.keys(blindMap), cfg.rubric.dimensions.map((d) => d.id));
+  const synthVersion = plan.rubric_version ?? 0;
+  const passA = validatePassA(
+    rd(join(criticDir, "pass-a.yaml")),
+    plan.problem_hash,
+    Object.keys(blindMap),
+    dimensionsAt(cfg.rubric.dimensions, synthVersion).map((d) => d.id),
+  );
   const passB = validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame), cfg.rubric.hard_rules.min_evidence_words_on_fire);
   const lints = existsSync(join(criticDir, "lints.json")) ? (JSON.parse(rd(join(criticDir, "lints.json"))) as LintHint[]) : collectLints(branches);
-  const score = scoreRun(cfg, branches, passAScores(cfg, passA, blindMap), passB, lints);
+  const score = scoreRun(cfg, branches, passAScores(cfg, passA, blindMap, synthVersion), passB, lints);
   wr(join(runDir, "score.json"), JSON.stringify(score, null, 2) + "\n");
   return { plan, score, branches };
 }

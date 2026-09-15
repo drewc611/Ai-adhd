@@ -197,7 +197,7 @@ yet enough to know whether they work.
     stale. A fourth checks every fixture names a class that can dispatch something.
 
     Left open as item 85, because it is a decision.
-85. **What to do about `FIRST_PRINCIPLES`** (owner's call). `adhd frames --reach` establishes that
+85. ~~**What to do about `FIRST_PRINCIPLES`** (owner's call). `adhd frames --reach` establishes that
     no class dispatches it at its default `n`. Three ways out and they are not equivalent.
 
     Make it primary somewhere — but the only class whose primary list has room on the `mechanism`
@@ -229,7 +229,17 @@ yet enough to know whether they work.
     comparability cost is zero. What it cannot have is D6's orthogonality check, which needs the two
     frames to have co-occurred and they never have. So the split is a judgment about the stance text
     with no data behind it, and making FIRST_PRINCIPLES *reachable* is a separate decision that
-    still costs what option one costs: a primary slot, taken from a frame currently earning it.
+    still costs what option one costs: a primary slot, taken from a frame currently earning it.~~
+    **Resolved as D35, and neither of the first two options was the answer on its own.** The axis
+    is split — `derivation`, because MECHANIC asks how the thing works and this frame refuses to look
+    at how anything works — and that fixed nothing, because the frame was unreachable for sitting in
+    no primary list rather than for sharing an axis. It is now a sixth primary in `strategy` at
+    `n: 6`, displacing nothing: `PRIOR_ART` was the obvious frame to demote and is protected by
+    RETIREMENT.md's five-run floor and its pruned-but-asking exemption, so demoting it would have
+    destroyed the evidence needed to judge it. The bill is spend instead — a `strategy` run is six
+    branches and the D5 preview quotes about 624,000 tokens. `adhd frames --reach` now reads "every
+    frame is reachable at some class's default n".
+
 20. **Probe ordering experiment.** Do the numbered probes change the answer if reordered?
 21. ~~**Forbidden-list audit.** Which `forbidden` entries have ever been violated in a real run?~~
     **Built as `adhd frames --forbidden`, and the answer to the question asked is one: MECHANIC forbids
@@ -293,7 +303,7 @@ yet enough to know whether they work.
 29. ~~**Detector output quality check.** Some evidence strings are one clause. Set a floor and
     reject pass B if a fired trap's evidence is under N words.~~
    **Built. Floor set from data: real fired evidence runs 29 to 50 words.**
-60. **Rewrite the two ceiling dimensions (v1 rubric).** `foreclosure`'s anchor 0 is half
+60. ~~**Rewrite the two ceiling dimensions (v1 rubric).** `foreclosure`'s anchor 0 is half
     unreachable because the output contract already rejects an empty `forecloses`; scale it
     from the contract's floor upward. `reasoning_carries` reads a near-constant 3 because
     twelve of thirteen frames have no web tools, so drop it or make it conditional on the
@@ -324,7 +334,16 @@ yet enough to know whether they work.
     not quite what happened; split the rubric into versioned files and validate against the run's
     recorded version, which is honest and duplicates 140 lines per version; or store the dimension
     list in each run's own record, which is the most correct — a run carries its own contract — and
-    leaves the seven already-recorded runs with nothing to validate against.
+    leaves the seven already-recorded runs with nothing to validate against.~~
+    **Half done as D34, and the half that landed is not quite what was asked.** `foreclosure` is
+    **retired** rather than deleted — `retired_in: 1` in the rubric, excluded from scoring and from
+    the critic brief, still accepted in the pass A files of the runs that were scored with it. The
+    item priced deletion as non-comparability and it was unreadability: `validatePassA` rejects a
+    dimension the current rubric does not list, so all seven recorded runs stopped being readable
+    and thirteen tests failed across `replay`, `learn`, the rubric linter and the corpus rollup.
+    Every run now carries `rubric_version` in its plan and is scored with the dimension set that
+    version declared, so a later retirement cannot rescore the archive. `reasoning_carries` is
+    untouched; the item's other half is open and item 92 carries it.
 
 ## 5. Kernel (D7)
 
@@ -975,7 +994,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     `score_heldout.py` held two models at once and was OOM-killed, and two ReDoS bounds let quadratic
     blowup through. All three surfaced only because the run actually ran.**
 
-87. **The output contract cannot hold prose in its plain-scalar fields, and under D30 that ends a
+87. ~~**The output contract cannot hold prose in its plain-scalar fields, and under D30 that ends a
     run.** Three of the five branches in run `20260914223732-7e664e` returned YAML that will not
     parse, all for the same reason: `falsifier` and `missing_actor` are specified as plain scalars
     and each branch wrote a second `: ` inside the value. DOOR_KEEPER wrote "A second, equally cheap
@@ -1014,8 +1033,14 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     the three fields leniently in `validate.ts`, which keeps every recorded run comparable and puts
     a YAML-shaped guess in the validator, which is how a parser stops being a contract. The middle
     option is the weakest: it is what the contract already implies and three branches out of five
-    did not do it.
-88. **`TaskList` is not a launch permit in every host, and in at least one it is not a launch permit
+    did not do it.~~
+    **Resolved as D37: every prose field is folded with `>-`.** `position`, `falsifier`,
+    `missing_actor` and the `forecloses` items; `problem_hash`, `frame` and `confidence` stay plain
+    because each is a closed vocabulary. The fix is free because it changes what the contract asks
+    for and not what the validator accepts, so all 39 recorded artifacts still parse and nothing
+    needs migrating — the opposite of what the same shape of change did to the rubric in D34.
+
+88. ~~**`TaskList` is not a launch permit in every host, and in at least one it is not a launch permit
     at all.** D4 grants `adhd-branch`, `adhd-critic` and `adhd-deepen` exactly one tool, `TaskList`,
     on the reasoning that the host refuses to launch an agent with zero tools. Attempting to spawn
     `adhd-branch` in a Claude Code remote session refuses with "would be spawned with zero tools —
@@ -1035,7 +1060,15 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     every host the plugin ships to and this repository can observe one. `ListAgents` is the worst
     candidate available and worth naming as such: it resolves, it is read-only, it touches no file —
     and it enumerates sibling agents, which is the one thing the architecture exists to prevent.
-    Any permit chosen on D4's stated criteria alone can be that.
+    Any permit chosen on D4's stated criteria alone can be that.~~
+    **Resolved as D36: the permit is `TodoWrite`, and the run procedure probes it before diverge.**
+    `TodoWrite` reads nothing, so D4's open question about what the permit shows a branch mid-dispatch
+    is retired rather than answered. It is not verified: agent definitions are read at session start,
+    so the session that made the change could not test it — after the edit the refusal still named
+    `TaskList`. What is verified is the failure it replaces. `skills/adhd/SKILL.md` step 1b spawns one
+    probe agent before any spend, so a host where the permit does not resolve stops the run at the
+    gate with a message naming D4 and D36 instead of a row of refusals after the plan was approved.
+
 89. **A reseed of fixture 001 cannot change its frame set, so item 3 measures less than it reads
     like it does.** `design_decision` lists exactly five primary frames and `n` resolves to five, so
     every seed selects all of them and the shuffle only permutes dispatch order. Seed 1 ran
@@ -1068,6 +1101,26 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     against the 001 reseeds, which measure branch sampling at a fixed frame set and are worth having
     under that description; it is an argument that the description in item 3 belongs to a different
     class, and that `docs/EXPERIMENTS.md` should say which of the two E1a measured.
+
+92. **`reasoning_carries`, the other half of item 60.** It reads a near-constant 3 because twelve of
+    thirteen frames have no web tools, so the dimension is measuring the D4 allowlist rather than the
+    reasoning. D34 retired `foreclosure` and left this one alone, and the mechanism D34 built is what
+    this needs: `retired_in: 2` and a rubric version bump would cost nothing to the archive now.
+    What it wants first is the decision the item posed and nobody has answered — drop it, or make it
+    conditional on the frame having had tools, which is a different dimension wearing the same id.
+    D35 changes the arithmetic slightly in its favour: `strategy` now dispatches six frames and
+    `PRIOR_ART` is one of them, so the one frame with a tool grant appears more often than it did.
+93. **Verify that `TodoWrite` resolves as a launch permit.** D36 is reasoning rather than a
+    measurement, because agent definitions load at session start and the session that changed the
+    permit could not test the change. One probe spawn in a fresh session settles it, and step 1b of
+    the run procedure does exactly that before any spend — so the next real run answers this whether
+    or not anyone sets out to. Record what it says either way: a permit that does not resolve is the
+    same failure D36 exists to fix, one name later.
+94. **Re-run seed 3 under the folded contract.** The abort that produced items 87 through 91 spent
+    262,788 tokens and scored nothing. D37 removes the cause, so the run item 3 asks for is available
+    again, and item 91 is the argument for spending it on a fixture routed to `enumerate_options`
+    instead — that is the only class where a reseed changes the frame set, and 001 is not it. Either
+    way it is spend, so it is the owner's call under D5.
 
 ## Not doing, and why
 

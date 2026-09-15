@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { dimensionsAt } from "./schema.js";
 import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase, type Phase } from "./run.js";
 import { trapsReport } from "./traps.js";
@@ -615,14 +616,24 @@ program
   .action((o: { json?: boolean }) => {
     try {
       const cfg = loadConfig(program.opts().root, program.opts().overlay);
+      // D34: a retired dimension is still in the file, because the runs scored with it have to stay
+      // readable, so a bare count would overstate what a new run is scored on. Both numbers, and
+      // the retired one named, because "9 dimensions" and "8 scored" are different facts.
+      const live = dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version);
+      const retired = cfg.rubric.dimensions.filter((d) => !live.includes(d)).map((d) => d.id);
       const summary = {
         ok: true,
         frames: cfg.frames.frames.length,
         classes: Object.keys(cfg.routing.classes).length,
-        dimensions: cfg.rubric.dimensions.length,
+        dimensions: live.length,
+        rubric_version: cfg.rubric.version,
+        retired_dimensions: retired,
       };
       if (o.json) return void console.log(JSON.stringify(summary, null, 2));
-      console.log(`ok: ${summary.frames} frames, ${summary.classes} classes, ${summary.dimensions} rubric dimensions`);
+      console.log(
+        `ok: ${summary.frames} frames, ${summary.classes} classes, ${summary.dimensions} rubric dimensions scored at rubric v${summary.rubric_version}` +
+          (retired.length ? ` (${retired.length} retired: ${retired.join(", ")})` : ""),
+      );
     } catch (e) {
       fail(e);
     }

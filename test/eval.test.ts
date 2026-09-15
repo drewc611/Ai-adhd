@@ -402,8 +402,13 @@ test("distinct_axes fails a plan carrying two frames from one axis", () => {
   // Name two same-axis frames explicitly. The compiler's own axis rule drops the second, so the
   // plan comes back short — which `branches_expected` catches and is the honest outcome: the
   // selector refuses to build the plan this assertion is guarding against, and that is D6 working.
-  const sameAxis = cfg.frames.frames.filter((f) => f.axis === "mechanism").map((f) => f.id);
-  assert.ok(sameAxis.length >= 2, "two frames share the mechanism axis");
+  // Not `mechanism` any more: D35 moved FIRST_PRINCIPLES to `derivation`, leaving MECHANIC alone
+  // there. Pick whichever axis actually has two members rather than naming one, so this test keeps
+  // testing the axis rule instead of a particular pair.
+  const byAxis = new Map<string, string[]>();
+  for (const f of cfg.frames.frames) byAxis.set(f.axis, [...(byAxis.get(f.axis) ?? []), f.id]);
+  const sameAxis = [...byAxis.values()].find((ids) => ids.length >= 2)!;
+  assert.ok(sameAxis, "no axis in the library has two frames, so D6 has nothing to enforce");
   writeFileSync(join(dir, "014-queue-options.yaml"), stringify({ ...fx, expect: { ...fx.expect, branches_expected: sameAxis.length } }));
   const r = runEval(cfg, { fixturesDir: dir }).pairs.find((p) => p.fixture === "014")!;
   assert.equal(r.outcome, "fail", "asking for a count routing cannot fill is a failure, not a silent short plan");

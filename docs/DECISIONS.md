@@ -103,18 +103,21 @@ brief needs. The brief also states its grant so a mismatch is visible.
 
 One wrinkle, found against the Claude Code docs after the first real run: the host refuses to
 launch an agent with zero tools, and `tools: []` is treated as zero. So `adhd-branch`,
-`adhd-critic`, and `adhd-deepen` carry exactly one tool, `TaskList`, which is read only,
-touches no file, reaches no network, and spawns nothing. It is a launch permit, not a
-capability.
+`adhd-critic`, and `adhd-deepen` carry exactly one tool as a launch permit, not a capability.
 
-**The launch permit rests on an untested claim, and this is the honest statement of it.** Read
-only, no file, no network and no spawn are all true and none of them is the question. The
-non-negotiable is that branches never see siblings, and what `TaskList` returns inside a running
-ADHD dispatch has never been observed. An attempt to check it from a subagent in this repository
-returned "tool unavailable", which settles nothing: that subagent was not a plugin agent
-declaring the grant. Until a real plugin run reports what it sees, treat this as the one
-isolation claim in the design that is argued rather than demonstrated. If it turns out to leak,
-the fix is a different launch permit, not a weaker rule.
+**That permit was `TaskList` and is `TodoWrite` since D36.** Read the amendment there: the old
+permit did not resolve at all in one real host, so the three agents could not be launched, and the
+claim below about what it might show a branch is now moot rather than open.
+
+**The launch permit rested on an untested claim, and D36 resolved it by removing the claim.** What
+follows is the statement as it stood, kept because the reasoning is what produced the fix: read
+only, no file, no network and no spawn were all true of `TaskList` and none of them was the
+question. The non-negotiable is that branches never see siblings, and what `TaskList` returns
+inside a running ADHD dispatch was never observed. An attempt to check it from a subagent in this
+repository returned "tool unavailable", which settled nothing: that subagent was not a plugin
+agent declaring the grant. The closing line was "if it turns out to leak, the fix is a different
+launch permit, not a weaker rule", and D36 is that fix, arrived at from the neighbouring failure
+— the permit did not leak, it did not load.
 
 `test/agents.test.ts` checks the grants as an **allowlist**, not a denylist. It was a denylist,
 naming filesystem and network tools, which left every tool nobody had thought of passing
@@ -1036,7 +1039,7 @@ The command allowlist matches the whole command string. Prefix matching on `npm 
 directions, and it failed immediately on the code that had just been written.
 
 `review` was mapped to `adhd-critic` and `diverge` to `adhd-branch`. Both are run agents whose
-grant is fixed by D4 at `TaskList` and nothing else, so the stage grants either had to be empty or
+grant is fixed by D4 at a single launch permit and nothing else, so the stage grants either had to be empty or
 had to widen an agent whose emptiness is the point. Fixed by giving `review` its own agent and
 `diverge` none.
 
@@ -2989,3 +2992,162 @@ An overlay that edits the rubric without moving `version` is **refused**. `score
 `rubric_version`, and two installs writing the same version over different weights makes every
 cross-install pass A total look comparable when it is not. The check fires only on a genuine change,
 so restating the rubric unchanged is allowed.
+
+---
+
+## D34. A retired rubric dimension, and the version a run is scored under
+
+Backlog 60 asked for `foreclosure` to be dropped. Its evidence is strong: Krippendorff's alpha
+-0.017 with a 95% interval of [-0.04, +0.00] on 96% exact agreement, so the dimension is unmeasured
+rather than weak, and the output contract already refuses an empty `forecloses`, so the validator
+enforces what the dimension was scoring.
+
+**Decision:** retire it rather than delete it, and score every run under the rubric version it
+declares. Resolved 2026-09-15.
+
+Deleting it was tried first and reverted, because the cost the item recorded was not the cost.
+`validatePassA` rejects any dimension the current rubric does not list, so removing `foreclosure`
+did not make the seven recorded runs *non-comparable* — it made them **unreadable**. Thirteen tests
+failed across `replay`, `learn`, the rubric linter and the corpus rollup, and `adhd why` and the
+viewer went down with them. A rubric edit that silently destroys the archive is not a rubric edit.
+
+So the dimension stays in `config/critic-rubric.yaml`, with its weight, carrying `retired_in: 1`,
+and `dimensionsAt(dimensions, version)` is what everything asks for. A run scored at version 0 keeps
+`foreclosure` in numerator and denominator; a version 1 run has neither, and the critic is never
+asked for it. `plan.json` stamps `rubric_version` at compile for the same reason it stamps
+`frame_hash` and `overlay` (D33): the run carries its own contract, so a later retirement cannot
+rescore it. A plan without the field reads as 0, which every run recorded before today is.
+
+`adhd validate` now says "8 rubric dimensions scored at rubric v1 (1 retired: foreclosure)", because
+"9 dimensions" and "8 scored" are different facts and the bare count overstated the rubric by
+exactly the dimensions nothing reads.
+
+**What this does not do.** It does not drop the dimension, which is what the item asked for, and the
+difference is worth stating: the file still contains it and a reader still meets it. The nearest
+honest thing to dropping it was retiring it, and the reason is that seven runs were scored with it.
+`reasoning_carries` — the other half of item 60, near-constant at 3 because twelve of thirteen
+frames have no web tools — is untouched and the item stays open for it.
+
+---
+
+## D35. FIRST_PRINCIPLES gets its own axis and a primary slot
+
+Backlog 85, three ways out, and the one chosen turned out not to be one of them.
+
+**Decision:** split the axis, and add the frame to `strategy`'s primary list with `n: 6`, displacing
+nothing. Resolved 2026-09-15.
+
+**The axis split was right and fixes nothing.** MECHANIC asks how the thing works; FIRST_PRINCIPLES
+refuses to look at how anything works and derives from what the solved problem requires. Those are
+opposite operations on one subject, which is not one axis, so `derivation` is now its own. The cost
+is zero: `frame_hash` covers `axis`, and no recorded run contains this frame.
+
+But the frame was never unreachable *because* of the axis. It was unreachable because it sat in no
+class's primary list, and every run class's `n` is at or below its primary length, so no seed ever
+draws an alternate. `adhd frames --reach` said exactly that in the sentence under its own table and
+the backlog item read the sentence above it. Split the axis and leave the rest alone and the frame is
+still dispatched by nothing. A test now pins that: put it back on `mechanism` and it stays reachable,
+because the slot is what reachability rests on.
+
+**Nothing was displaced to make room, and that was the expensive part of the choice.** The obvious
+frame to demote was `PRIOR_ART`: pruned in both its appearances, the lowest mean pass A in the
+corpus at 0.68, and the only frame that has ever fired T3 — which is the trap FIRST_PRINCIPLES
+attacks, so the swap would have read as principled. It is also the wrong move.
+`docs/RETIREMENT.md` sets a five-run floor and exempts a frame that asks the question nobody else
+asks even when pruned; `PRIOR_ART` has two appearances, so demoting it would have destroyed the
+evidence needed to judge it, using the thinness of that evidence as the reason. So the slot is
+additive and the bill is paid in spend: a `strategy` run is six branches, the D5 preview quotes
+about 624,000 tokens against 520,000, and `strategy` is the only class that pays it.
+
+It goes in `strategy` because `PRIOR_ART` is primary there and is the T3 offender, and the frame that
+attacks a trap belongs in the same run as the trap, not in a different one. That co-occurrence is
+also the data D6's orthogonality check needs and has never had for this frame, which is the other
+thing a run of `strategy` now buys.
+
+---
+
+## D36. The launch permit is TodoWrite
+
+D4 gave the three zero-capability agents one tool, `TaskList`, so the host would launch them, and
+recorded the residual risk as the design's one isolation claim that was argued rather than
+demonstrated: what `TaskList` shows a branch inside a running dispatch had never been observed.
+
+The neighbouring failure arrived instead. In a Claude Code remote session, spawning `adhd-branch`
+is refused with "would be spawned with zero tools — refusing. Its tools list resolved to nothing:
+recognized but matched no tools in this session [TaskList]". The name is recognised and resolves to
+nothing, so the permit does not leak — it does not load, and the three core agents cannot be
+dispatched at all. Loading `TaskList` into the parent session first changes nothing; subagent grants
+resolve against a fixed set that excludes it. `adhd-branch-search` launches in the same session and
+reports exactly `WebSearch, WebFetch`, so this is specific to the one tool chosen because it does
+nothing.
+
+**Decision:** the permit is `TodoWrite`, and the run procedure probes it before spending. Resolved
+2026-09-15.
+
+`TodoWrite` writes the spawned agent's own checklist. It reads nothing, touches no file, reaches no
+network and spawns nothing — and because it reads nothing, D4's open question disappears rather than
+moving: there is no sibling state for it to show. That is the improvement, and it is the reason to
+prefer it over any permit chosen only for being inert.
+
+**This is not verified, and the reason is worth writing down.** Agent definitions are read at session
+start, so editing `agents/adhd-branch.md` mid-session has no effect: after the change the refusal
+still named `TaskList`. So the claim that `TodoWrite` resolves where `TaskList` does not is reasoning,
+not a measurement, and the first session to dispatch a branch will settle it. What is verified is the
+failure this replaces.
+
+What carries the cost meanwhile is a precondition, not a hope. `skills/adhd/SKILL.md` gains step 1b:
+before diverge, spawn one `adhd-branch` whose whole prompt asks for the word OK. If the host refuses,
+the run stops at the gate with nothing spent and the message names D4 and this decision. The step
+exists because a real run reached diverge on a host where the permit resolved to nothing and the only
+symptom was a row of identical refusals after the plan had been approved.
+
+It also says what not to do about it: substituting `general-purpose` is the user's call, never a
+silent workaround, because that agent carries the filesystem tools D4 refuses on the grounds that a
+branch which can read the run directory can read its siblings. Every recorded run was dispatched that
+way, which is disclosed in the README and is the standing exception rather than a precedent.
+
+---
+
+## D37. Prose fields in the branch contract are folded
+
+The seed 3 dispatch of fixture 001 aborted at critique with three of five artifacts unparseable, and
+one cause: `position`, `falsifier` and `missing_actor` were plain YAML scalars, so a value ending up
+with a second `: ` inside it parses as a nested mapping. "A second, equally cheap falsifier: the
+would-have-retried counter", "Cheaper still: find one production incident report", "Equally
+falsifying: if deadline-exceeded work is a rounding error". 262,788 tokens, nothing scored.
+
+Counting the archive says how eleven runs survived it. Across 39 branch artifacts there are 117
+values in those three fields. None is folded. 106 are bare plain scalars and **not one carries an
+internal `: `.** Eleven runs of coincidence. The other 11 are quoted and exactly one needed to be,
+so quoting is a habit 9% of values have rather than a property the contract secures — which is the
+sharpest evidence the contract is at fault, because it showed these fields as bare `<placeholder>`
+text and branches copy the shape they are shown.
+
+**Decision:** every prose field in the contract is folded with `>-`. Resolved 2026-09-15.
+
+`position`, `falsifier`, `missing_actor` and the `forecloses` items. `problem_hash`, `frame` and
+`confidence` stay plain because each is a closed vocabulary that cannot contain prose. `reasoning`
+was folded from the start and has never once failed to parse, which is the evidence: the folded field
+works and the unfolded ones survived on luck. `forecloses` items are folded too, though no recorded
+item has ever carried an internal `: ` — 104 recorded and 15 from seed 3, none risky — because
+closing the class costs nothing and closing three instances closes nothing.
+
+**The fix is free because it changes what the contract asks for and not what the validator accepts.**
+`src/validate.ts` is untouched, so all 39 recorded artifacts still parse and still validate, and no
+recorded run becomes unreadable. That is the opposite of what the same kind of change did to the
+rubric in D34, and the difference is which side of the contract moved.
+
+The two rejected options, and why. Requiring quoting is what the contract already implied, and three
+branches out of five did not do it; asking harder is not a mechanism. Parsing those fields leniently
+in the validator keeps every recorded run byte-comparable and puts a YAML-shaped guess where the
+contract is, which is the hole D30 closed — a run scored on a repaired artifact is scored under a
+rule its plan never declared.
+
+`missing_actor` is the one nullable prose field and a folded scalar cannot be null, so the contract
+says to write `missing_actor: null` on one line without the `>-`. D30 is unchanged: an artifact that
+will not parse still aborts the run. What changes is that the contract no longer makes that outcome a
+matter of punctuation.
+
+The abort message that fired was correct and useless to the branch that caused it, so the contract
+now carries the reason in the brief itself — and writing that sentence tripped the isolation guard,
+because the first draft said "three of five branches" and a brief may never carry the branch count.

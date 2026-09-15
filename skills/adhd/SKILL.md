@@ -33,6 +33,26 @@ Ask them to confirm the text is exactly what they meant and that they want to sp
 subagents on it. Do not spawn anything until they say yes. If they say no, stop. Nothing has
 been spent. `--yes` on the compile call skips this for scripted use.
 
+## 1b. Check the launch permit before spending anything
+
+Spawn one `adhd-branch` subagent whose entire prompt is:
+
+```
+Diagnostic probe. Do not use any tool. Reply with the single word OK and nothing else.
+```
+
+If it returns OK, continue. If the host refuses the spawn — "would be spawned with zero tools",
+or any message naming the agent's `tools` entry — stop and tell the user: the permit this host
+resolves is not the one `agents/adhd-branch.md` declares, so no branch can be dispatched, and
+nothing has been spent. D4 and D36 are where the permit is argued. Do not substitute
+`general-purpose` silently to get past it: that agent has filesystem tools, which D4 refuses
+because a branch that can read the run directory can read its siblings. Substituting is the
+user's call, and if they make it, say in the synthesis that the run was dispatched that way.
+
+This costs one cheap subagent and catches the failure before the expensive phase. It exists
+because a real run reached diverge on a host where the permit resolved to nothing, and the only
+symptom was five refusals in a row.
+
 ## 2. Diverge
 
 For every brief listed in `plan.json`, in the order listed (already shuffled), spawn one

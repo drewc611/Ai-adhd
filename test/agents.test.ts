@@ -33,14 +33,17 @@ const NETWORK = ["WebSearch", "WebFetch"];
  * reach other tasks, and any MCP tool reaches whatever its server does. "Branches never see
  * siblings" is a CLAUDE.md non-negotiable, so a new grant has to be argued for here first.
  *
- * TaskList is the launch permit from D4: Claude Code refuses to launch an agent with zero tools.
- * It is read only and reaches no file and no network. What it reveals about sibling tasks is
- * unverified; see D4. It is the one grant on this list that rests on an untested claim.
+ * TodoWrite is the launch permit from D4 as amended by D36: the host refuses to launch an agent
+ * with zero tools, so an isolated agent has to carry one, and this is the least it can carry. It
+ * writes the spawned agent's own checklist. It reads nothing, so unlike `TaskList` — which was the
+ * permit until D36 and could in principle list a sibling's tasks — there is no question left about
+ * what it shows a branch inside a running dispatch. D4 called that the one isolation claim in the
+ * design that was argued rather than demonstrated; the permit that raised it is gone.
  */
 const PERMITTED: Record<string, string[]> = {
-  "adhd-branch.md": ["TaskList"],
-  "adhd-critic.md": ["TaskList"],
-  "adhd-deepen.md": ["TaskList"],
+  "adhd-branch.md": ["TodoWrite"],
+  "adhd-critic.md": ["TodoWrite"],
+  "adhd-deepen.md": ["TodoWrite"],
   "adhd-branch-search.md": ["WebFetch", "WebSearch"],
 };
 

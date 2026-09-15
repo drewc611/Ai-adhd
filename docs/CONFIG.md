@@ -124,6 +124,7 @@ Read from `config/critic-rubric.yaml`.
 | `weight` | number | yes | — | > 0 |
 | `question` | string | yes | — | min length 1 |
 | `anchors` | map | yes | — | — |
+| `retired_in` | number | no | — | > 0 |
 
 ### Hard rules
 

@@ -1,3 +1,4 @@
+import { dimensionsAt } from "../src/schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -189,10 +190,17 @@ test("every non-interactive command offers --json", () => {
 test("validate --json reports the counts it prints as prose", () => {
   const r = run(["validate", "--json"]);
   assert.equal(r.code, 0, r.err);
-  const j = JSON.parse(r.out) as { ok: boolean; frames: number; dimensions: number };
+  const j = JSON.parse(r.out) as { ok: boolean; frames: number; dimensions: number; rubric_version: number; retired_dimensions: string[] };
   assert.equal(j.ok, true);
   assert.equal(j.frames, cfg.frames.frames.length);
-  assert.equal(j.dimensions, cfg.rubric.dimensions.length);
+  // D34: `dimensions` is what a new run is scored on, not how many are in the file. A retired one
+  // stays in the file so the runs scored with it remain readable, and reporting the file's length
+  // would overstate the rubric by exactly the dimensions nothing reads.
+  assert.equal(j.dimensions, dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).length);
+  assert.ok(j.dimensions < cfg.rubric.dimensions.length, "nothing is retired, so this test asserts nothing");
+  assert.equal(j.rubric_version, cfg.rubric.version);
+  assert.deepEqual(j.retired_dimensions, ["foreclosure"]);
+  assert.match(run(["validate"]).out, /8 rubric dimensions scored at rubric v1 \(1 retired: foreclosure\)/);
 });
 
 /** The exit code is the contract, so --json carries the verdict rather than replacing it. */
