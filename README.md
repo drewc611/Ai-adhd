@@ -8,13 +8,10 @@
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/codeql.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/maintenance.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/maintenance.yml/badge.svg?branch=main" alt="maintenance"></a>
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml/badge.svg?branch=main" alt="train"></a>
-</p>
-
-<p align="center">
-  <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-498-2ea44f" alt="498 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-246-2ea44f" alt="246 Python tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-244-2ea44f" alt="244 Python tests"></a>
   <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D41%20resolved-0969da" alt="D1 through D41 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
@@ -22,16 +19,19 @@
 
 # ADHD
 
-A reasoning architecture for Claude Code. Not a prompting technique.
+**Anchoring Defeat by Heterogeneous Divergence.** A reasoning architecture for Claude Code:
+one prompt, N isolated subagents under deliberately distorted frames, a blind critic that
+scores and prunes, then deepening on what survived.
+
+It is not a prompting technique. Nothing here calls a model.
 
 ## The problem
 
-Linear chain of thought anchors on whatever it says first. Tree of thought widens the
-search but every branch walks a single shared context, so the anchor propagates into
-the branches and the tree explores variations of one idea instead of several ideas.
-
-Self consistency and best of N have the same defect: sampling the same conditioned
-distribution N times gives you N draws from one basin.
+Linear chain of thought anchors on whatever it says first. Tree of thought widens the search,
+but every branch walks a single shared context, so the anchor propagates into the branches and
+the tree explores variations of one idea instead of several ideas. Self-consistency and
+best-of-N have the same defect: sampling one conditioned distribution N times gives N draws
+from one basin.
 
 ```mermaid
 flowchart LR
@@ -51,289 +51,67 @@ flowchart LR
   R2 ~~~ P2
 ```
 
-The dotted arrows go one way. A branch receives its brief and returns an artifact; it
-never learns that the others exist, how many there are, or what they said.
+The dotted arrows go one way. A branch receives its brief and returns an artifact. It never
+learns the others exist, how many there are, or what they said.
 
-ADHD treats this as an architecture problem. It spawns N isolated reasoning processes
-under deliberately distorted cognitive frames, with **zero shared context during
-divergence**, then runs a separate critic pass to score blind, cluster, prune traps,
-and deepen the survivors.
+## Why prompting cannot fix it
 
-## The motivating failure
+The isolation is real, not simulated. Branches run as separate Claude Code subagents, which is
+the one thing no in-context technique can give: a genuinely separate context window per branch.
+Telling one model to forget what it just wrote leaves the text in the window. A process
+boundary removes it.
 
-> Prompt: "What timeouts should I set on this HTTP client?"
+That constraint is the whole design, and it is why this repository has no API key, no provider
+SDK, and no billing surface. See [D2](docs/DECISIONS.md).
 
-Linear CoT answer: 15s to first token, 30s between tokens, 90s absolute, one auto retry.
-Cites Google SRE Book ch. 22. Sensible. The answer a senior engineer gives in 30 seconds.
+## The four phases
 
-What it never surfaces:
+| | phase | what happens |
+|---|---|---|
+| 01 | **compile** | Route the problem to a class, draw `n` frames one per axis, render one brief per branch. Print the plan and stop for confirmation. |
+| 02 | **critique** | Pass A scores every artifact blind, with frame labels hidden. Pass B unblinds, clusters, sweeps all eight traps mechanically, and names the strongest objection to each survivor. |
+| 03 | **deepen** | One fresh subagent per survivor, holding its own position and one objection. Defends or folds. Never sees a sibling. |
+| 04 | **synth** | Render the recommendation and the pruned block from the artifacts. No model writes it. |
 
-- The human is an actor in this system and can cancel. Nothing models the bail out path.
-- "Wait, then retry the same model" was accepted as the frame and never questioned. If it
-  stalled once, why is the same instance the right target for retry number two?
-- Who pays for the retry. Token cost of a retried long generation is not free.
-- No trap is named. The answer reads complete because it is fluent, not because it is done.
-
-That prompt ships as `evals/fixtures/001-http-timeouts.yaml`. It is the regression test for
-the whole system. If a run only returns the timeout triple, the run failed.
-
-**It does not pass reliably, and `adhd eval --audit` says how unreliably.** Across the five real
-recorded runs of this fixture, every one of its four `must_surface` items has now missed at least
-once, including the one that asks least.
-
-| assertion | seed 1 | seed 2 | seed 3 | seed 3 again | alt frames | rate |
-|---|---|---|---|---|---|---|
-| the human who can cancel | ok | **miss** | ok | ok | ok | 4/5 |
-| the retry target questioned | ok | ok | ok | ok | **miss** | 4/5 |
-| who pays for the retry | ok | ok | ok | ok | **miss** | 4/5 |
-| a trap named | ok | ok | ok | **miss** | ok | 4/5 |
-
-**The four assertions have different dependencies, and seed 3 makes the split clean.** The two
-retry items hold on every seed and miss only when the frames change, which is a frame-set
-dependency: `LEDGER` and `ACTOR_CENSUS` carry them and `alt frames` dispatches neither. *The human
-who can cancel* does the opposite — it holds under a different frame set and missed one reseed out
-of four, which is sample variance, and seed 2 was the unlucky draw rather than seed 1 the lucky one.
-An earlier version of this paragraph read the seed-2 misses as "one sample, not the frame library"
-for both items; that was right about one and wrong about the other, and it took two more runs to
-separate them.
-
-E3 is why *who pays for the retry* reads 4/5 rather than 3/5. It had missed at seed 2 only because
-the assertion's patterns recognised seed 1's wording: `LEDGER` priced retries as a share of traffic
-and the critic's own detector output named the payer, while the regexes wanted "pays for" and got
-"payer". Widening a pattern after seeing which runs failed is the move this repo refuses, so E3
-registered the candidates and the adoption rule first and let the negative control decide. Two of
-three were adopted. The third, `retry budget`, cleared the control and was refused anyway: it matches
-a currency with no payer, and this item asks for both.
-
-**The fourth column is the one to read.** *Seed 3 again* is fixture 001 run a second time at seed 3
-with briefs byte-identical to the first, so the only thing that changed is the session. It is the
-only column in the table that isolates anything, and *a trap named* — the assertion that asks almost
-nothing, any `T[1-8]` anywhere in the pruned block — is what it broke. That run's critic fired no
-detector on any branch and pruned nobody, where the identical pack had fired T7 twice. Three of that
-run's failed assertions are that single event, because an empty pruned block has nothing for any of
-them to read.
-
-**What fails at seed 3 is not a `must_surface` item at all.** It is the structural expectation that
-the pruned block names one of T1, T2 or T3. Only T7 fired, on `FRAME_BREAKER` and `ACTOR_CENSUS`.
-That expectation has now held on exactly one run out of five — the one it was written against — which
-makes it the seed-1 artifact this table was originally reaching for, and the assertion most worth
-re-reading before the next run.
-
-The audit reports these rates rather than leaving them to prose, and a `sometimes` verdict is not a
-pattern to loosen: it says nothing in the dispatched set reliably asks that question. Nothing on this
-fixture holds everywhere any more. `docs/EXPERIMENTS.md` registered both experiments before they ran,
-and E1a now carries the same-seed repeat that produced the fourth column.
-
-## When to reach for it
-
-Design decisions. Fuzzy debugging where the symptom does not name the cause. Naming.
-API surface design. Strategy. Any prompt of the shape "give me a few ways to...".
-
-Do **not** use it for factual lookup, mechanical refactors, or anything with one correct
-answer. It costs N times the tokens. Spend that only where the search space is the problem.
+Pruning happens before deepening, so tokens are only spent extending what survived. The user
+can stop between any two phases and keep everything produced so far.
 
 ## The frame library
 
-Thirteen frames on ten axes. Routing picks n of them for a problem class, one per axis, so a run
+Thirteen frames on eleven axes. Routing picks `n` for a problem class, one per axis, so a run
 cannot ask the same question twice under two names.
 
-```mermaid
-flowchart LR
-  subgraph one["axes with one frame — a single way in"]
-    direction TB
-    a1["particulars<br/><b>PARTICULARIST</b>"]
-    a2["frame_validity<br/><b>FRAME_BREAKER</b>"]
-    a3["cost<br/><b>LEDGER</b>"]
-    a4["reversibility<br/><b>DOOR_KEEPER</b>"]
-    a5["adversary<br/><b>SABOTEUR</b>"]
-    a6["scope<br/><b>MINIMALIST</b>"]
-    a7["precedent<br/><b>PRIOR_ART</b>"]
-  end
-  subgraph two["axes with two — routing picks one, never both"]
-    direction TB
-    b1["actors<br/><b>ACTOR_CENSUS</b> · <b>SUPPLICANT</b>"]
-    b2["mechanism<br/><b>MECHANIC</b> · <b>FIRST_PRINCIPLES</b>"]
-    b3["operation<br/><b>NIGHT_OPERATOR</b> · <b>SUCCESSOR</b>"]
-  end
-  a7 ~~~ b1
-```
+| axis | frame | attacks |
+|---|---|---|
+| particulars | `PARTICULARIST` | T1 |
+| frame_validity | `FRAME_BREAKER` | T2 |
+| cost | `LEDGER` | T1, T6 |
+| reversibility | `DOOR_KEEPER` | T7 |
+| adversary | `SABOTEUR` | T6, T7 |
+| scope | `MINIMALIST` | T1, T4, T5 |
+| precedent | `PRIOR_ART` | T2, T8 |
+| actors | `ACTOR_CENSUS` · `SUPPLICANT` | T6 / T1, T6 |
+| mechanism | `MECHANIC` | T3 |
+| derivation | `FIRST_PRINCIPLES` | T1, T3 |
+| operation | `NIGHT_OPERATOR` · `SUCCESSOR` | T6, T4 / T7, T4 |
 
-Each frame exists to defeat a named trap from `docs/TRAPS.md`. Drawing that as a graph shows
-where the library is thick and where it is one frame deep.
+Each frame exists to defeat a named trap in [`docs/TRAPS.md`](docs/TRAPS.md): T1 consensus,
+T2 frame accepted, T3 borrowed authority, T4 option list, T5 no verdict, T6 missing actor,
+T7 reversibility, T8 voice over content. A frame that agrees with the others earns nothing.
 
-```mermaid
-flowchart LR
-  PARTICULARIST --> T1
-  LEDGER --> T1
-  LEDGER --> T6
-  MINIMALIST --> T1
-  MINIMALIST --> T4
-  MINIMALIST --> T5
-  FIRST_PRINCIPLES --> T1
-  FIRST_PRINCIPLES --> T3
-  SUPPLICANT --> T1
-  SUPPLICANT --> T6
-  FRAME_BREAKER --> T2
-  PRIOR_ART --> T2
-  PRIOR_ART --> T8
-  ACTOR_CENSUS --> T6
-  SABOTEUR --> T6
-  SABOTEUR --> T7
-  NIGHT_OPERATOR --> T6
-  NIGHT_OPERATOR --> T4
-  DOOR_KEEPER --> T7
-  SUCCESSOR --> T7
-  SUCCESSOR --> T4
-  MECHANIC --> T3
-
-  T1["T1 consensus"]
-  T2["T2 frame accepted"]
-  T3["T3 borrowed authority<br/><b>never fired</b>"]
-  T4["T4 option list"]
-  T5["T5 no verdict<br/><b>never fired</b>"]
-  T6["T6 missing actor"]
-  T7["T7 reversibility"]
-  T8["T8 voice over content"]
-
-  classDef cold fill:#2A1D20,stroke:#F97B6B,color:#F97B6B
-  class T3,T5 cold
-```
-
-`T1` and `T6` have five attackers each; `T8` has one. The two in red have never fired in any
-recorded run, which is either prevention working or dead weight, and the counts cannot say
-which. `T5` is close to structurally unable to fire, because the output contract already demands
-a committal position. `docs/RETIREMENT.md` sets the bar for acting on any of it.
-
-## Execution model
-
-No API keys. No provider SDK. No billing surface of its own.
-
-Branches run as Claude Code subagents. Subagents already give what ADHD needs and what
-no in context technique can give: a genuinely separate context window per branch. The
-isolation is real, not simulated by an instruction to ignore prior text.
-
-The library and the MCP server never call a model. They compile plans, enforce the
-isolation contract, score outputs against the rubric, and run the eval harness. Inference
-is supplied by the host.
-
-```mermaid
-flowchart TB
-  P(["problem.txt, hashed byte for byte"]) --> C["compile: routing picks N frames on N distinct axes"]
-  C --> G{"D5 gate"}
-  G -->|"class declined"| X(["answer directly, no branches"])
-  G -->|"confirmed"| D
-  subgraph D["diverge &mdash; N context windows, no channel between them"]
-    direction LR
-    F1["LEDGER"] ~~~ F2["SABOTEUR"] ~~~ F3["DOOR_KEEPER"] ~~~ F4["SUPPLICANT"] ~~~ F5["FRAME_BREAKER"]
-  end
-  D --> A["critic pass A &mdash; <b>blind</b><br/>artifacts as letters, frame labels redacted"]
-  A --> B["critic pass B &mdash; unblind<br/>cluster by action, run all 8 trap detectors"]
-  B --> K["deepen: each cluster's representative<br/>against its strongest objection"]
-  K --> S(["synthesis"])
-  B -.->|"pruned, with trap ids and detector output"| S
-```
-
-Nothing is spent before the gate. The preview shows the problem verbatim with its hash and
-a token estimate, and the run does not start until a human agrees to it.
-
-### How pass A stays blind
-
-The critic scores the artifacts before it is allowed to know which frame wrote any of them. The
-map that would tell it is written to disk and kept out of the brief until pass A has returned.
-
-```mermaid
-flowchart LR
-  A["branch artifact<br/><code>frame: LEDGER</code>"] --> S{{"strip, redact, shuffle"}}
-  S -->|"the frame field is removed"| B["<b>Artifact C</b><br/>position, reasoning,<br/>forecloses, falsifier"]
-  S -.->|"kept out of the brief"| M[("blind-map.json<br/>C = LEDGER")]
-
-  B --> PA["critic, pass A<br/>scores 9 dimensions by letter<br/><i>cannot name what it is scoring</i>"]
-  PA --> R["scores keyed C, not LEDGER"]
-
-  R --> J{{"join on the map"}}
-  M -.-> J
-  J --> PB["critic, pass B<br/>now sees LEDGER<br/>clusters by action, runs 8 detectors"]
-```
-
-Redaction is not only the `frame` field. A branch writes "from inside the Door keeper stance"
-far more naturally than it writes `DOOR_KEEPER`, so every id and display name goes, in any
-casing and across any separator. A label the problem statement itself uses is exempt, because
-every branch is free to echo the problem and echoing it identifies nobody.
-
-### What reaches the user
-
-A pruned position is not a discarded one. Every path through the critic ends at the reader,
-which is why the pruned block is a non-negotiable rather than a debugging aid.
-
-```mermaid
-flowchart LR
-  A["one branch<br/>returns a position"] --> T{"any of the 8<br/>detectors fire?"}
-  T -->|"yes"| PR["<b>pruned block</b><br/>position, trap ids,<br/>detector output"]
-  T -->|"no"| CL{"clustered with<br/>another frame?"}
-  CL -->|"no"| SG["live singletons<br/><i>unverified</i>"]
-  CL -->|"yes"| RP{"cluster<br/>representative?"}
-  RP -->|"no"| CO["corroborated findings"]
-  RP -->|"yes"| DP{"survives its<br/>strongest objection?"}
-  DP -->|"folds"| FD["folded<br/><i>and what it should<br/>have been instead</i>"]
-  DP -->|"defends"| RC["<b>recommendation</b>"]
-
-  PR --> U(["the user reads all of it"])
-  SG --> U
-  CO --> U
-  FD --> U
-  RC --> U
-```
-
-`SUPPLICANT` (which ran as `END_USER`, before the rename in D6) is the case that justifies the rule. It has been pruned in both runs it appeared
-in, and it is also the frame that closed the who-is-hurt gap in `002-kernel-enduser`. The
-question reached the user through the pruned block, after the critic rejected the position
-carrying it.
-
-## Layout
-
-```
-config/     frames, routing, critic rubric      <- the actual IP
-prompts/    orchestrator, branch, critic, deepen, synthesis
-docs/       architecture, traps, decisions, experiments, superagent, manifest, provenance,
-            distribution, backlog, FAQ, frame authoring, failure gallery, worked example,
-            writeup
-evals/      fixtures with must_surface assertions, recorded runs and controls
-bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
-src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       498 tests over all of it
-analysis/   Python: reliability, bootstrap intervals, two language models trained from scratch
-skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
-agents/     four run subagents, five mission subagents, the trainer and its governor
-assets/     the mark, the banner, the run explorer shell
-scripts/    demo.sh: what a clean checkout can show without a model
-```
-
-Nothing under `src/` calls a model. It compiles briefs, enforces the isolation contract, scores
-what comes back, and refuses to proceed when a record is missing. Nothing under `analysis/` calls
-one either, and nothing under `src/` imports it: it reads the recorded corpus after the fact and
-writes text. Delete the directory and every run behaves identically.
-
-`analysis/` does train language models, and that is not a contradiction. Two classes: modified
-Kneser-Ney over a document library you point it at, built from counts in the standard library, and
-since D20 a decoder-only transformer whose only dependency is numpy. No weights are downloaded and
-none ship; every parameter in either comes from a corpus this repository can name. D9 draws the line
-and D10 applies it: a model that changes what a run outputs is banned, a model that describes what
-runs already output is a measuring instrument.
+Adding a frame requires the orthogonality check in [D6](docs/DECISIONS.md).
+[`docs/RETIREMENT.md`](docs/RETIREMENT.md) sets the bar for taking one out.
 
 ## Install
 
-As a Claude Code plugin, from the marketplace this repository is:
+As a Claude Code plugin:
 
 ```
 /plugin marketplace add drewc611/Ai-adhd
 /plugin install adhd@adhd
 ```
 
-The skill, the four run agents and the commands work immediately. The MCP server needs a build,
-because `dist/` is a build artifact; `bin/adhd-mcp.mjs` says so in a sentence rather than failing
-with a path inside the host's plugin cache.
-
-From a checkout, with everything built:
+From a checkout:
 
 ```
 git clone https://github.com/drewc611/Ai-adhd.git && cd Ai-adhd
@@ -341,315 +119,98 @@ npm install && npm run build
 claude plugin marketplace add .
 ```
 
-`docs/DISTRIBUTION.md` maps every other surface: npm, GitHub Packages, the official MCP Registry,
-PyPI, Zenodo, the MCP directories, and why the OpenAI app directory is blocked on architecture
-rather than on paperwork.
-
-The plugin registers the `/adhd` skill, the branch, critic, and deepen agents, and the MCP
-server. The MCP server can also be used on its own by any MCP host:
-
-```
-node dist/src/mcp.js           # stdio; the four commands plus the ten kernel verbs, 14 tools
-```
+The skill and the four run agents work immediately. The MCP server needs the build, because
+`dist/` is a build artifact.
 
 ## Quickstart
 
 ```
-npm install && npm test          # builds, then runs the contract tests and the eval harness
-node dist/src/cli.js wizard       # menus over every verb below; each screen prints the command it ran
-node dist/src/cli.js viewer       # one self-contained HTML page over every recorded run
-node dist/src/cli.js validate    # loads config/ and prompts/, runs the D6 static check
-node dist/src/cli.js frames      # the library
-node dist/src/cli.js eval        # replays evals/recorded/ against evals/fixtures/
-node dist/src/cli.js eval --audit            # which assertions the consensus answer also satisfies
-node dist/src/cli.js diff <runA> <runB>      # two runs of one fixture: what moved, and whether it was the seed
-node dist/src/cli.js why <run> <frame>      # everything that happened to one frame: pass A row, cluster, detectors, deepen
-node dist/src/cli.js frames --stats          # how each frame has behaved across recorded runs
-node dist/src/cli.js frames --orthogonality  # D6: which frames are duplicates in practice
-node dist/src/cli.js frames --collisions     # which frame names are also ordinary prose
-node dist/src/cli.js frames --health         # docs/RETIREMENT.md's bar, counted
-node dist/src/cli.js frames --axes           # frames per axis, and axes no run has exercised
-node dist/src/cli.js frames --drift          # runs that used a frame whose definition has changed since
-node dist/src/cli.js frames --reach          # can routing dispatch each frame at all? asks the selector, not the corpus
-node dist/src/cli.js cost                    # token spend per run, by phase and by frame, against the estimate
-node dist/src/cli.js os stats                # throughput, phase timing and lease expiry rate from the journal
-node dist/src/cli.js replay                  # re-render every recorded synthesis and report drift
-node dist/src/cli.js doctor                  # does config, prompts, agents, tool grants and the build agree
-node dist/src/cli.js lint [fixture]          # can a fixture's patterns compile, and can they fail
-node dist/src/cli.js eval --history          # which runs have ever held each assertion
-node dist/src/cli.js eval --gate             # fail when an assertion stops holding on a run it used to
-node dist/src/cli.js matrix                  # every assertion against every run of its fixture, as a grid
-node dist/src/cli.js export <run>            # one run as a single self-contained Markdown file
-node dist/src/cli.js open <run>              # what a run directory holds, and what its absences mean
-node dist/src/cli.js init <dir>              # scaffold config/ and prompts/ to extend, not start blank
-node dist/src/cli.js completions bash        # generated from the real command list
-node dist/src/cli.js schema-doc              # regenerate docs/CONFIG.md from the zod schemas
-node dist/src/cli.js os watch <run>          # redraw a run's status; one line per change when piped
-
-node dist/src/cli.js super plan --id m --goal g.txt --class deep   # the stage graph, then stop
-node dist/src/cli.js super confirm m         # nothing is claimable until this
-node dist/src/cli.js super claim m --worker w1               # the next stage, its agent, its brief
-node dist/src/cli.js super return m research --worker w1 --goal-hash <h>  # checked against the contract
-node dist/src/cli.js super status m          # what is ready, what is waiting, what was withheld
-node dist/src/cli.js super memory --audit    # what the isolation rule keeps out of a diverge brief
-node dist/src/cli.js super gateway m         # the thread, and every delivery the rule refused
-node dist/src/cli.js super sandbox m --diff  # what a build stage changed, before it reaches the tree
-npm run demo                                 # what a clean checkout can show without a model
-node dist/src/cli.js learn --sensitivity     # do the rubric weights change which position ships?
-node dist/src/cli.js learn --correlation     # do two dimensions measure the same thing?
-node dist/src/cli.js learn --run <dir> --agreement <passA.yaml>   # do two critics ship the same answer?
-node dist/src/cli.js learn --agreement-all   # the same, pooled over every run that has a second scoring
-node dist/src/cli.js learn --panel --run <dir>   # three or more critics on one pack: ambiguous rubric, or odd critic?
+npm install && npm test                    # build, contract tests, eval harness
+node dist/src/cli.js wizard                # menus over every verb; each screen prints what it ran
+node dist/src/cli.js validate              # do the three config files agree with each other
+node dist/src/cli.js doctor                # does this installation agree with itself
+node dist/src/cli.js frames --health       # how each frame has behaved across recorded runs
+node dist/src/cli.js viewer                # one self-contained HTML page over every recorded run
 ```
 
-`learn` reads the recorded runs and calls nothing. It is how the frame library, the rubric and
-the fixtures get changed on evidence rather than on taste. Current findings are in D8.
+To run one, use the skill: `/adhd <your problem>`. It captures your problem verbatim, shows
+you the plan and the token estimate, and spends nothing until you say yes.
 
-<details>
-<summary><b>Exit codes</b> — a script driving a run branches on these, so each means one thing</summary>
+## The four surfaces
 
-| code | meaning |
-|---|---|
-| 0 | ok |
-| 1 | a contract violation (`traps`), a failing eval, a flagged orthogonality pair, a `diff` of two different problems, or an unexpected error |
-| 2 | `ContractError`: an artifact broke the contract where the run needed it not to |
-| 3 | `RunAbort`: the run is over. A `problem_hash` mismatch is the usual cause. Also returned by `os claim` with nothing claimable and `os result` with no synthesis yet |
-| 4 | the repository is invalid: a missing or malformed file under `config/`, `prompts/` or `docs/` |
-| 5 | the command line is wrong. The repository is fine |
+- **CLI** — `adhd` for one-off runs from a terminal.
+- **Library** — pure functions over the YAML in `config/`, to call from your own code.
+- **MCP server** — `node dist/src/mcp.js`, the same verbs as stdio tools for any MCP host.
+- **Claude Code plugin** — the `/adhd` skill plus the branch, critic and deepen agents.
 
-</details>
+The four phases can also run unattended. `src/os.ts` is a kernel over run directories that owns
+state, leases, phase advancement, the D5 gate and cancellation, and never calls a model; hosts
+supply inference by claiming tasks and returning artifacts. The state machine and the syscall
+table are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/OS.md`](docs/OS.md).
 
-`wizard` needs a terminal and says so when piped, so it never blocks in CI. `viewer` inlines
-the run data rather than fetching it, so the page opens from disk with nothing to serve: pick a
-run and a frame and you get the blind pass A row with the critic's evidence, every detector that
-fired with the text that fired it, the cluster and its margin, and the deepen verdict. Filter by
-trap to see everything T1 caught across a run, or by status to read only what was pruned.
+## Reach for it when
 
-A run is four commands driven by the host (see `skills/adhd/SKILL.md`):
+A design decision has more than one defensible answer. A bug is fuzzy and the first theory
+keeps winning. You are naming something. You are shaping an API surface. Any prompt that
+starts "give me a few ways to".
+
+Do **not** use it for factual lookup, mechanical refactors, or anything with one correct
+answer. It costs N times the tokens. Spend that only where the search space is the problem.
+
+## Where things live
 
 ```
-adhd run --phase compile --problem problem.txt --decision '{"problem_class":"design_decision"}'
-adhd run --phase critique --run runs/<id>     # twice: pass A brief, then pass B brief
-adhd run --phase deepen   --run runs/<id>
-adhd run --phase synth    --run runs/<id>     # add --partial after a cancel
+config/     frames, routing, critic rubric        <- the actual IP
+prompts/    orchestrator, branch, critic, deepen, synthesis
+agents/     four run subagents, five mission subagents, the trainer and its governor
+skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
+src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
+test/       498 tests over all of it
+bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
+assets/     the mark, the banner, the run explorer shell
+scripts/    demo.sh: what a clean checkout can show without a model
+evals/      fixtures with must_surface assertions, recorded runs, negative controls
+docs/       architecture, traps, decisions, experiments, backlog, retirement, writeup
+analysis/   Python: reliability statistics and two language models trained from scratch
 ```
 
-The MCP server (`node dist/src/mcp.js`) exposes the same four as `adhd_run`, `adhd_traps`,
-`adhd_eval`, `adhd_frames`, plus the ten kernel verbs. Kernel tools take `root` (the repository
-holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate arguments; see
-`docs/OS.md`.
+Nothing under `src/` calls a model. Nothing under `analysis/` does either, and nothing under
+`src/` imports it: it reads the recorded corpus after the fact and writes text. Delete
+`analysis/` and every run behaves identically.
 
 ## Status
 
-Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D40 are resolved in `docs/DECISIONS.md`.
+Library, CLI, MCP server and plugin are implemented and tested against the contracts in
+`CLAUDE.md`. D1 through D41 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
-Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
-negative control per fixture that must fail, plus three decline fixtures that assert routing
-refuses a class rather than spending on it. Every real run has been scored a second time by a
-fresh blind critic: 79% exact over 225 cells, 100% within one point, and one run in five whose
-recommendation depends on which critic read it. Four critics on that pack split 2-2, and every
-contested decision in the corpus turns out to be settled inside two anchor points out of 48 (D8).
+Fifteen runs are recorded over five fixtures, with a linear chain-of-thought negative control
+per fixture that must fail, and three decline fixtures asserting that routing refuses a class
+rather than spending on it.
 
-`analysis/` also trains background language models from scratch on a document library — 6,330
-RFCs, 615 PEPs, 323 EIPs and 54 ERCs, no weights downloaded and none shipped. `docs/PROVENANCE.md`
-records every corpus's licence and why nothing is redistributed.
+**The honest reading of that corpus is in [`docs/WRITEUP.md`](docs/WRITEUP.md), and it is not
+flattering.** Three results decide how to read everything else:
 
-The shipped one is modified Kneser-Ney, order 4, standard library only: 64,419,427 tokens over the
-training side of a frozen split, 148,353 types, 40,305,629 4-grams, nothing pruned. **Held-out
-perplexity 25.82** on 366 frozen documents at 0.91% OOV, fingerprint `1446762140db7f1a`. Two earlier
-figures this file carried are corrected rather than beaten: 6.06 was a memorisation score (D16), and
-25.65 was measured under an ASCII-only tokenizer that truncated a fifth of the corpus, so a different
-tokenization makes it a different measurement rather than a worse one.
+- **Divergence reproduces. Adjudication does not.** The same fixture at the same seed with
+  byte-identical briefs: branch positions came back nearly verbatim from separate context
+  windows, and the critic fired T7 twice on one run and nothing at all on the other. The half
+  that prunes is the unstable half.
+- **Two critics scoring one pack rank it differently every time.** 81% exact agreement over
+  305 cells and seven double-scored packs; in two of them the shipped recommendation changed
+  with the critic.
+- **The pass A noise floor is 0.10**, and no contested decision in the corpus clears it by
+  more than a rounding error. A margin smaller than that is the session and the critic, not
+  the reasoning.
 
-There is a second model class since D20: a decoder-only transformer over numpy, written from scratch,
-with a hand-written backward pass that is gradient-checked against central differences. It stays
-inside D2 — no download, no key, no provider SDK — and it exists to make an assertion falsifiable that
-`ngram.py` had carried unmeasured, that a transformer from scratch needs 10^8 tokens and a GPU before
-it beats a well-smoothed n-gram.
-
-E6 measured it and the assertion holds. At a matched 8,192-word vocabulary on the same 20M tokens, the
-transformer scores **64.29** against Kneser-Ney's **30.95** — a **2.077x** loss, inside the 1.5x-to-3x
-band registered before the run.
-
-E7 then added an LSTM, to ask whether that loss was about attention or about neural language models at
-this scale. The answer is attention: the LSTM scores **154.81**, losing to the transformer by 2.408x
-and to the n-gram by 5.00x, and **the registered prediction put it between the two** — wrong by 2.6x,
-in the direction that narrows E6's conclusion rather than generalising it. Being neural is not the
-handicap; lacking attention is a further and larger one. D24 has the arithmetic. The shipped model is
-unchanged.
-
-E9 closed the hole both of those left. E6 matched the vocabularies by *capping the n-gram* to 8,192
-types, so every figure above is a comparison at a vocabulary neither model would have chosen, and
-nothing said whether the transformer's loss was the architecture or the cap. Sampled softmax makes
-148,114 types affordable, so cell D is the transformer at the n-gram's own vocabulary: it scores
-**142.41** against the shipped model's **25.82**, a **5.52x** loss, with `comparable_heldout` accepting
-the pair because both sit at 0.915101% out-of-vocabulary — identical to every digit, since both draw
-the same types on the same frozen set.
-
-**The cap was not the explanation.** At its own vocabulary the transformer loses by more, not less.
-The figure carries one asymmetry, stated with it everywhere: cell D read 18,341,790 tokens against the
-shipped model's 64,347,232, so this is a transformer on 3.5x less text losing by 5.5x, and whether it
-closes the gap on equal text is a 4.7-hour training run nobody has done.
-
-Every figure here is **post-D26**, re-measured once the repository's own prose came out of the corpus.
-D27 has the before and after: the shipped 25.82 reproduced to two decimals, E6's ratio moved 2.086x to
-**2.077x** and E7's 2.485x to **2.408x**, so nothing left its registered band. The re-measurement found
-three defects on the way — a trainer D26 had missed, a scorer that held two models at once, and two
-ReDoS bounds that let quadratic blowup through — and none of them were in the figures.
-
-Held-out perplexity is what says whether a training run improved anything, because vocabulary size,
-table size and wall clock all rise when a model gets worse. Two numbers from different held-out sets
-are two numbers about two tests, and `comparable_heldout` refuses five ways to be fooled by that: a
-truncated score beside a finished one, the same text tokenized differently, a missing or differing
-fingerprint, an in-vocabulary-only score beside an all-targets one, and a vocabulary gap too large for
-the scores to carry. Every one of those is a mistake this repository published or nearly published.
-
-That last threshold was a round percentage point until **E8 measured what a percentage point is worth**:
-four Kneser-Ney models differing only in vocabulary cap score **30.95 / 35.52 / 39.31 / 42.77** at
-**5.797% / 4.044% / 3.063% / 2.391%** held-out OOV, which is up to **5.1 perplexity points per point of
-OOV** and makes the old threshold 3.3x too loose.
-
-Three corrections came with it. Half the reason written beside the threshold was wrong — `<unk>` is
-cheaper than a real token at 5.8% OOV and dearer at 2.4%. **Writing the registration changed the corpus
-the registration was about**, because `docs/` was a corpus source, so **D26 took the repository's own
-prose out of every measurement**; models carry a `corpus_fingerprint` over their token stream and
-`comparable_training` refuses two models that did not read the same text. And the experiment's own
-pre-registered linearity test **does not discriminate** — its verdict flips across that 0.105% corpus
-change — so the threshold takes the worst measured slope as the conservative side of a coin toss. See
-D13, D16, D20, D25, D26 and `analysis/README.md`.
-
-That 79% is not 79% reliability, and `analysis/` is what says so. Corrected for chance,
-`foreclosure` scores Krippendorff's alpha of -0.017 with a 95% interval of [-0.04, +0.00] on 96%
-exact agreement, while `reversibility` scores +0.850 on 76%. The two rankings invert, because
-percent agreement ranks dimensions by how constant they are. `committal` and `foreclosure` have
-intervals containing zero, which at seven runs means unmeasured rather than weak. See
-`analysis/README.md` and D9.
-
-<details>
-<summary><b>What each recorded run found</b>, including the two recorded as failing</summary>
-
-- `evals/recorded/001-first-run/` passes fixture 001. The critic pruned LEDGER (T2, T7) and
-  MINIMALIST (T1, T2, T6); ACTOR_CENSUS and FRAME_BREAKER converged from different axes on
-  caller-owned deadlines and the cancel path; both survivors defended under objection.
-- `evals/recorded/002-first-run/` fails fixture 002 on one item and is recorded as such: no
-  branch in the fuzzy debugging frame set asked who the p99 tail lands on. The critic pruned
-  SABOTEUR (T1) and NIGHT_OPERATOR (T2); PARTICULARIST with MECHANIC and FRAME_BREAKER with
-  NIGHT_OPERATOR formed two clusters; both survivors defended and each withdrew a claim.
-
-- `evals/recorded/002-kernel-enduser/` passes fixture 002. Same prompt, SUPPLICANT swapped in
-  for NIGHT_OPERATOR through an explicit frame list, and the first run driven end to end by
-  the kernel: nine tasks claimed and returned by one worker, four automatic phase advances,
-  real token accounting. SUPPLICANT asked who is hurt and was pruned for it, so the question
-  reached the output through the pruned block. MECHANIC folded under objection.
-- `evals/recorded/003-kernel-strategy/` passes fixture 003 (strategy class, monolith rewrite),
-  driven by the kernel. All five frames refused the year-long rewrite; the critic pruned
-  PRIOR_ART (T1, T2) and FRAME_BREAKER (T1) for answers that would not change if the problem
-  did, and the two survivors each gave ground under objection. The run found three bugs in
-  the plumbing, listed in its `README.md`.
-- `evals/recorded/004-kernel-naming/` fails fixture 004 on one item and is recorded as
-  failing. The naming class was expected to produce a monoculture and did not: five frames,
-  four clusters, two positions that cannot both be acted on. Two folded under objection and
-  said what they should have been instead. Nobody asked what the flag's name asserts when it
-  is false, which is a frame-set gap, kept visible rather than patched out of the fixture.
-
-</details>
-
-Each run's `README.md` says how it was produced and what it did not surface.
-
-### What this cannot tell you yet
-
-A reader should start here rather than discover it.
-
-- **Fixture 001 has passed once, in the run it was written against.** Re-run at seed 2 with the
-  same five frames it misses two of its four assertions; run with four of five frames swapped it
-  misses two others. Different assertions turn out to have different dependencies, and the only
-  one robust across all three runs is the weakest one. `docs/EXPERIMENTS.md` has the table.
-- **Every per-frame rate here is a one-to-three-sample figure.** At least one of them moves:
-  `ACTOR_CENSUS` went from holding the recommendation to pruned on a reseed alone.
-- **Four critics on one pack, two on the rest.** 225 cells is a first corpus, not a reliability
-  figure.
-- **`002-kernel-enduser` is not robust to who scored it.** Four critics split 2-2 on which
-  position goes to deepen. Left that way on purpose.
-- **Two launch permits were picked on reasoning and both were wrong.** `TaskList` is recognised in a
-  Claude Code remote session and not grantable to a subagent; `TodoWrite` is not recognised there at
-  all. D38 stops guessing: the permit is the pair, so a host with either can launch the three agents,
-  and a host with neither falls back to `adhd-branch-search` rather than to `general-purpose` — which
-  is *safer* on the sibling rule, because the web pair cannot read a file and `Read` can. The
-  remaining gap is that no host has been seen resolving either name, so rung 1 is still untested.
-- **Rung 1 of the dispatch ladder has never run anywhere.** `adhd-branch`, `adhd-critic` and
-  `adhd-deepen` declare `TodoWrite, TaskList` and no observed host resolves either for a subagent, so
-  those three agent files remain untested in their real role (D36, D38, backlog 93). What *has* run is
-  rung 2: three branches dispatched as `adhd-branch-search`, a shipped plugin agent launching under its
-  own definition, whose grant cannot reach a sibling artifact. That is the property that matters, and
-  every run recorded before it used `general-purpose`, which carries `Read`.
-- **One fixture assertion is still satisfied by a negative control.** `003/reframe` matches on
-  deploy-pain vocabulary, which the real run uses as a reframe and the consensus answer uses as a
-  selling point. Separating them needs a run that has not happened; writing a pattern against the
-  two texts already read is how a harness gets tuned until it always passes. Three others were
-  flagged with it and are resolved, one of them a regex defect rather than a judgment.
-
-## As an agent operating system
-
-The four phases can run unattended. `src/os.ts` is a kernel over run directories: it owns
-state, leases, phase advancement, the D5 gate, and cancellation, and it never calls a model.
-
-```mermaid
-stateDiagram-v2
-  [*] --> awaiting_confirm: submit
-  awaiting_confirm --> cancelled: cancel, nothing spent
-  awaiting_confirm --> running: confirm
-
-  state "running" as running {
-    [*] --> diverge
-    diverge --> critique_a: every branch returned
-    critique_a --> critique_b: blind scores in
-    critique_b --> deepen: clusters and trap sweep in
-  }
-
-  running --> done: every survivor answered
-  running --> done_run_level: monoculture or scatter
-  running --> cancelled: cancel, at any point
-  running --> aborted: hash mismatch, third lease expiry, contract violation
-
-  done --> [*]
-  done_run_level --> [*]
-  cancelled --> [*]
-  aborted --> [*]
-```
-
-A cancel is not a discard. Every branch that already returned is rendered as a partial,
-marked UNSCORED, with the pruned block absent and said to be absent, so a reader who has
-learned to look for that block is told why there isn't one.
-
-Hosts supply inference by claiming tasks and returning artifacts, over MCP or the CLI:
-
-<details>
-<summary><b>The syscalls</b>, over MCP or the CLI</summary>
-
-```
-adhd os submit --problem p.txt --decision '{"problem_class":"design_decision"}'   # preview, awaiting_confirm
-adhd os confirm <run_id>                                                           # branch tasks claimable
-adhd os claim --worker w1        # -> {agent, brief, continues}; spawn that agent with the brief
-adhd os return <task_id> --file out.yaml --worker w1   # kernel validates and advances the run
-adhd os status <run_id> | adhd os result <run_id> | adhd os cancel <run_id>
-```
-
-The same verbs are MCP tools (`adhd_submit`, `adhd_confirm`, `adhd_claim`, `adhd_return`,
-`adhd_status`, `adhd_result`, `adhd_cancel`, `adhd_list`), so any MCP host can submit work and
-any Claude Code session running the `adhd-worker` skill can execute it. `docs/OS.md` has the
-process model and the syscall table.
-
-</details>
+`adhd eval --audit` reports per-assertion hit rates rather than leaving them to prose, and
+[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) registers every experiment with its readings
+fixed before it runs. Nothing here is evidence that the frame library picks better answers
+than one careful pass, and no sentence in this repository should be read as claiming it does.
 
 ## Contributing
 
-Read `CONTRIBUTING.md`. Frames are the expensive part and have a proposal process (D6 in
-`docs/DECISIONS.md`) and a retirement bar (`docs/RETIREMENT.md`), because a library that only
-grows eventually contains three frames producing one answer, which is the monoculture this exists
-to prevent arriving by the back door. Fixtures are claims about what a good run must surface;
-tighten them, never loosen them.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) has the workflow. [`docs/MANIFEST.md`](docs/MANIFEST.md)
+is how code here gets written and binds every change.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

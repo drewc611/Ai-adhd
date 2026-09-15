@@ -41,7 +41,10 @@ def commas(n: int) -> str:
 
 
 #: Files that describe the shipped model and must therefore agree with its record.
-SHIPPED_CLAIM_SITES = ("README.md", "analysis/README.md")
+# The root README was cut from 655 lines to a product page and no longer quotes training figures;
+# analysis/README.md is where the models are described and is the only site these guards apply to.
+# A figure is checked wherever it is published, and the root page publishes none.
+SHIPPED_CLAIM_SITES = ("analysis/README.md",)
 
 
 @pytest.fixture(scope="module")
@@ -212,7 +215,7 @@ def test_the_readmes_quote_post_d26_figures_where_they_say_they_do():
     `\\*\\*2.09x\\*\\*`, and `analysis/README.md` writes "a 2.09x loss" and "Neither covers 2.09x" — two
     stale ratios in the file, inside the test's remit, invisible to it.
     """
-    for where in ("README.md", "analysis/README.md"):
+    for where in SHIPPED_CLAIM_SITES:  # the root README is a product page and quotes no training figures
         text = (ROOT / where).read_text()
         for stale, current in (("64.1", "64.29"), ("30.7", "30.95"), ("159.3", "154.81")):
             assert f"**{stale}**" not in text, f"{where} still quotes the pre-D26 {stale}, not {current}"
@@ -233,10 +236,15 @@ def test_the_readmes_quote_post_d26_figures_where_they_say_they_do():
                         f"  {' '.join(para.split())[:200]}"
                     )
         assert "2.077x" in text, f"{where} does not quote E6's post-D26 ratio"
+    # The root README used to carry "Every figure here is **post-D26**" and the figures to go with
+    # it. It is a product page now and quotes no training figure at all, so the sentence is gone
+    # and there is nothing on that page for this to check. The guard survives as a conditional:
+    # make the claim there again and the figures have to back it.
     root = (ROOT / "README.md").read_text()
-    assert "Every figure here is **post-D26**" in root, "the claim this checks has moved"
-    for current in ("64.29", "30.95", "154.81"):
-        assert f"**{current}**" in root, f"the README does not quote the post-D26 {current}"
+    if "post-D26" in root:
+        assert "2.077x" in root, "the root README claims post-D26 figures without quoting E6's"
+        for current in ("64.29", "30.95", "154.81"):
+            assert f"**{current}**" in root, f"the README does not quote the post-D26 {current}"
 
     # The other half of D27's rule: the decisions log keeps what it recorded.
     decisions = docs("docs/DECISIONS.md")
@@ -247,7 +255,7 @@ def test_the_readmes_quote_post_d26_figures_where_they_say_they_do():
 def test_both_readmes_carry_the_e9_result_that_removes_the_cap_excuse():
     """D21's figures are all at 8,192 types, a vocabulary reached by capping the n-gram. A README
     that states them without D28 leaves the reader with E6's open question and no answer to it."""
-    for where in ("README.md", "analysis/README.md"):
+    for where in SHIPPED_CLAIM_SITES:  # the root README is a product page and quotes no training figures
         text = (ROOT / where).read_text()
         assert "142.41" in text, f"{where} does not carry E9's result"
         assert "0.915101%" in text, f"{where} does not say why the pair is comparable"

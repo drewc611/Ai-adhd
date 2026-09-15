@@ -26,7 +26,20 @@ test("every mermaid fence in the README is closed and declares a diagram type", 
   const opens = (README.match(/^```mermaid$/gm) ?? []).length;
   const blocks = mermaidBlocks(README);
   assert.equal(blocks.length, opens, "an unclosed mermaid fence would swallow the rest of the page");
-  assert.ok(blocks.length >= 4, `expected at least 4 diagrams, found ${blocks.length}`);
+  assert.ok(blocks.length >= 1, "the page should carry at least one diagram");
+  /*
+   * This used to assert `blocks.length >= 4`, which is not what the test is called and not a
+   * property of a correct page. It was a page-length floor wearing a correctness test's name, and
+   * it fired when the README was cut from 655 lines to 216. What actually breaks a reader is a
+   * fence that declares no type: mermaid renders nothing and the block shows as blank.
+   */
+  for (const b of blocks) {
+    const first = b.split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
+    assert.ok(
+      /^(flowchart|graph|stateDiagram(-v2)?|sequenceDiagram|classDiagram|erDiagram|journey|gantt|pie|gitGraph|mindmap|timeline|quadrantChart|C4Context)\b/.test(first),
+      `a mermaid block opens with ${JSON.stringify(first.slice(0, 40))}, which is not a diagram type`,
+    );
+  }
   for (const b of blocks) {
     const first = b.split("\n").find((l) => l.trim())!.trim();
     assert.match(first, /^(flowchart|graph|stateDiagram-v2|sequenceDiagram|classDiagram)\b/, `unknown diagram type: ${first}`);
@@ -45,9 +58,13 @@ test("every frame id a diagram names is in the library", () => {
 });
 
 test("the kernel states a diagram names are states the kernel actually reaches", () => {
+  // The diagram moved to docs/ARCHITECTURE.md with the rest of the kernel section when the README
+  // was cut to a product page. The guard follows the content: what matters is that a published
+  // state machine names states src/os.ts reaches, not which file carries it.
   const os = readFileSync(join(cfg.root, "src", "os.ts"), "utf8");
-  const state = mermaidBlocks(README).find((b) => b.trimStart().startsWith("stateDiagram"));
-  assert.ok(state, "the operating system section should carry a state diagram");
+  const arch = readFileSync(join(cfg.root, "docs", "ARCHITECTURE.md"), "utf8");
+  const state = mermaidBlocks(arch).find((b) => b.trimStart().startsWith("stateDiagram"));
+  assert.ok(state, "docs/ARCHITECTURE.md should carry the kernel state diagram");
   const named = new Set<string>();
   for (const m of state!.matchAll(/^\s*(\w+)\s*-->\s*(\w+)/gm)) {
     named.add(m[1]!);
@@ -120,8 +137,27 @@ test("a test count the README states is the count the suite actually has", () =>
 });
 
 test("the layout block lists every top-level directory a reader would look for", () => {
-  const block = README.match(/^## Layout\n\n```\n([\s\S]*?)```/m)?.[1];
-  assert.ok(block, "the README should carry a layout block");
+  /*
+   * Found by shape rather than by heading. This used to key off the literal `## Layout`, so
+   * renaming the section to "Where things live" made the guard report the block missing rather
+   * than checking it — a rename silently disabling a test is worse than the drift it watches for.
+   * A layout block is the fenced block whose lines name directories, and nothing else here looks
+   * like that.
+   */
+  const fenced: string[] = [];
+  let open: string[] | null = null;
+  for (const line of README.split("\n")) {
+    if (line.startsWith("```")) {
+      if (open) {
+        fenced.push(open.join("\n"));
+        open = null;
+      } else open = [];
+      continue;
+    }
+    open?.push(line);
+  }
+  const block = fenced.find((b) => b.split("\n").filter((l) => /^\w[\w-]*\/\s/.test(l)).length >= 3);
+  assert.ok(block, "the README should carry a layout block listing the top-level directories");
   const onDisk = readdirSync(cfg.root, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith(".") && !["node_modules", "dist", "coverage", "runs"].includes(d.name))
     .map((d) => d.name);
@@ -305,12 +341,19 @@ test("the README's fixture 001 rates are the rates the audit computes", async ()
   const items = auditFixtures(cfg).items.filter((i) => i.fixture === "001" && i.kind === "must_surface");
   assert.ok(items.length >= 4, "fixture 001 lost its must_surface items");
 
-  const table = README.split("\n").filter((l) => /^\|/.test(l));
+  /*
+   * The table moved to docs/WRITEUP.md, which is where the honest reading of the corpus lives and
+   * where the README's Status section now points. The guard follows it: a published rate has to be
+   * the rate the audit computes, wherever it is published. The second half below stays pointed at
+   * the README, because overstating on the front page is the failure this test was written for.
+   */
+  const writeup = readFileSync(join(cfg.root, "docs", "WRITEUP.md"), "utf8");
+  const table = writeup.split("\n").filter((l) => /^\|/.test(l));
   for (const i of items) {
     const rate = `${i.real_matched}/${i.real_total}`;
     assert.ok(
       table.some((l) => l.includes(`| ${rate} |`) || l.includes(`| **${rate}** |`)),
-      `the audit rates 001/${i.item} at ${rate} and no README table row states it`,
+      `the audit rates 001/${i.item} at ${rate} and no docs/WRITEUP.md table row states it`,
     );
   }
 

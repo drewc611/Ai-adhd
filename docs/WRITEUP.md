@@ -144,3 +144,32 @@ adhd matrix                    every assertion against every run
 `docs/FAILURES.md` catalogues each failure and what it taught. `docs/EXPERIMENTS.md` holds the
 registrations, including the readings that turned out half right and were left standing rather than
 rewritten.
+
+## Fixture 001, assertion by assertion
+
+The motivating prompt — "what timeouts should I set on this HTTP client?" — ships as
+`evals/fixtures/001-http-timeouts.yaml` and is the regression test for the whole system. If a run
+only returns the timeout triple, the run failed. **It does not pass reliably, and `adhd eval
+--audit` says how unreliably.** Across the five recorded runs of this fixture, every one of its four
+`must_surface` items has now missed at least once, including the one that asks least.
+
+| assertion | rate |
+|---|---|
+| the human who can cancel | 4/5 |
+| the retry target questioned | 4/5 |
+| who pays for the retry | 4/5 |
+| a trap named | 4/5 |
+
+The four have different dependencies. The two retry items hold on every seed and miss only when the
+frames change, which is a frame-set dependency: `LEDGER` and `ACTOR_CENSUS` carry them and the
+alternate set dispatches neither. *The human who can cancel* does the opposite, holding under a
+different frame set and missing one reseed out of four, which is sample variance.
+
+*A trap named* asks almost nothing — any `T[1-8]` anywhere in the pruned block — and it is what the
+same-seed repeat broke. That run's critic fired no detector on any branch and pruned nobody, where
+the byte-identical pack had fired T7 twice. Three of that run's failed assertions are that single
+event, because an empty pruned block has nothing for any of them to read. D41 names the most
+economical cause: the critic agent's own instructions have never been in force.
+
+A `sometimes` verdict is not a pattern to loosen. It says nothing in the dispatched set reliably
+asks that question.
