@@ -3,6 +3,7 @@
 // the rubric, and the fixtures, so those can be changed on evidence instead of on taste.
 //
 // Everything here is a pure function over runs that already exist. Nothing calls a model.
+import { readJsonIf } from "./read.js";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -39,7 +40,7 @@ function loadScoredRuns(cfg: Config, recordedDir: string): ScoredRun[] {
       dir,
       passA: parsed.data,
       blindMap: forwardBlindMap(cfg, JSON.parse(readFileSync(bm, "utf8")) as Record<string, string>),
-      score: existsSync(scorePath) ? forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult) : null,
+      score: (() => { const s = readJsonIf<ScoreResult>(scorePath); return s ? forwardFrameIds(cfg, s) : null; })(),
     });
   }
   return out;
@@ -382,7 +383,8 @@ export function interRater(cfg: Config, runDir: string, altPassAPath: string): I
   const ranking_changed = order(tA).join(",") !== order(tB).join(",");
 
   const scorePath = join(runDir, "score.json");
-  const clusters = existsSync(scorePath) ? (forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
+  const loadedScore = readJsonIf<ScoreResult>(scorePath);
+  const clusters = loadedScore ? (forwardFrameIds(cfg, loadedScore).clusters ?? []) : [];
   const pick = (frames: string[], t: Record<string, number>) => [...frames].sort((x, y) => (t[y] ?? 0) - (t[x] ?? 0) || x.localeCompare(y))[0]!;
   const representative_changes: { cluster: string; a: string; b: string }[] = [];
   for (const c of clusters.filter((c) => c.survivors.length > 1)) {
@@ -625,7 +627,8 @@ export function raterPanel(cfg: Config, runDir: string): PanelReport {
   };
   const ranked = (frames: string[], t: Record<string, number>) => [...frames].sort((x, y) => (t[y] ?? 0) - (t[x] ?? 0) || x.localeCompare(y));
   const scorePath = join(runDir, "score.json");
-  const scored = existsSync(scorePath) ? (forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult).clusters ?? []) : [];
+  const scoredSource = readJsonIf<ScoreResult>(scorePath);
+  const scored = scoredSource ? (forwardFrameIds(cfg, scoredSource).clusters ?? []) : [];
 
   const clusters: PanelCluster[] = scored
     .filter((c) => c.survivors.length > 1)

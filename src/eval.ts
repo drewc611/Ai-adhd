@@ -1,5 +1,6 @@
 // The eval harness. Never calls a model. Replays recorded runs against fixture assertions.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readJsonIf } from "./read.js";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
@@ -98,10 +99,11 @@ function loadRecorded(dir: string): RecordedRun {
   const bdir = join(dir, "branches");
   const branchFiles = existsSync(bdir) ? readdirSync(bdir).filter((f) => f.endsWith(".yaml")) : [];
   const branchText = (files: string[]) => files.map((f) => readFileSync(join(bdir, f), "utf8")).join("\n---\n");
-  const score = existsSync(join(dir, "score.json")) ? (JSON.parse(readFileSync(join(dir, "score.json"), "utf8")) as ScoreResult) : null;
+  const score = readJsonIf<ScoreResult>(join(dir, "score.json"));
   const surviving = score ? new Set(score.frames.filter((f) => f.status === "survivor").map((f) => f.frame)) : null;
   let hash: string | null = null;
-  if (existsSync(join(dir, "plan.json"))) hash = (JSON.parse(readFileSync(join(dir, "plan.json"), "utf8")) as { problem_hash?: string }).problem_hash ?? null;
+  const planned = readJsonIf<{ problem_hash?: string }>(join(dir, "plan.json"));
+  if (planned) hash = planned.problem_hash ?? null;
   else {
     const m = synthesis.match(/problem_hash:\s*`?(sha256:[0-9a-f]+|sha256:pending)`?/);
     hash = m ? m[1]! : null;

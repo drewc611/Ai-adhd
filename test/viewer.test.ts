@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { buildViewer, collect, DATA_MARKER } from "../src/viewer.js";
@@ -149,4 +149,44 @@ test("a frame renamed since the run is labelled with the id the run recorded", (
   // Every other frame in the corpus is unrenamed and must not carry the tag.
   const spurious = data.runs.flatMap((r) => r.frames.filter((f) => f.recorded_as === f.frame).map((f) => `${r.id}/${f.frame}`));
   assert.deepEqual(spurious, [], "a frame that was not renamed must report recorded_as as null");
+});
+
+/*
+ * CI found this and a green local suite did not: `adhd viewer` walked `evals/recorded`, hit a
+ * `score.json` that parsed as empty, and died inside `JSON.parse` with `Unexpected end of JSON
+ * input` naming no file. What produced the empty file on that runner is not established, and this
+ * test does not claim to reproduce it — it pins the two behaviours that make the failure survivable
+ * whatever produced it.
+ *
+ * An empty file means absent, because that is what a phase killed mid-write leaves behind and the
+ * run is still worth showing without it. A malformed file is still an error, because silently
+ * skipping real corruption is how a viewer comes to disagree with the synthesis it is rendering,
+ * but it names itself now.
+ */
+test("a recording with an empty score.json renders without it rather than killing the page", () => {
+  const root = tmp();
+  const recorded = join(root, "recorded");
+  cpSync(join(cfg.root, "evals", "recorded"), recorded, { recursive: true });
+  const victim = join(recorded, "001-altframes", "score.json");
+  assert.ok(existsSync(victim), "the fixture this pins has moved");
+  writeFileSync(victim, "");
+
+  const data = collect(cfg, recorded);
+  const run = data.runs.find((r) => r.id === "001-altframes")!;
+  assert.ok(run, "the run vanished rather than degrading");
+  assert.deepEqual(run.clusters, [], "an absent score means no clusters, not a crash");
+  assert.ok(data.runs.length > 1, "the rest of the corpus still rendered");
+});
+
+test("a malformed recording names the file rather than throwing a bare SyntaxError", () => {
+  const root = tmp();
+  const recorded = join(root, "recorded");
+  cpSync(join(cfg.root, "evals", "recorded"), recorded, { recursive: true });
+  writeFileSync(join(recorded, "001-altframes", "score.json"), "{ not json");
+
+  assert.throws(
+    () => collect(cfg, recorded),
+    (e: Error) => /001-altframes[/\\]score\.json/.test(e.message),
+    "a corrupt recording has to say which one it is",
+  );
 });

@@ -1,3 +1,4 @@
+import { readJsonIf } from "./read.js";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { unfence } from "./validate.js";
 import { join } from "node:path";
@@ -134,7 +135,7 @@ export function frameStats(
       if (!existsSync(scorePath)) continue;
       let score: ScoreResult;
       try {
-        score = forwardFrameIds(cfg, JSON.parse(readFileSync(scorePath, "utf8")) as ScoreResult);
+        score = forwardFrameIds(cfg, readJsonIf<ScoreResult>(scorePath)!);
       } catch {
         continue;
       }
@@ -285,7 +286,7 @@ export function diffRuns(cfg: Config, dirA: string, dirB: string): RunDiff {
   const b = summarise(cfg, dirB);
   const hash = (d: string) => {
     const p = join(d, "plan.json");
-    return existsSync(p) ? ((JSON.parse(readFileSync(p, "utf8")) as { problem_hash?: string }).problem_hash ?? null) : null;
+    return readJsonIf<{ problem_hash?: string }>(p)?.problem_hash ?? null;
   };
   const same_problem = hash(dirA) !== null && hash(dirA) === hash(dirB);
 

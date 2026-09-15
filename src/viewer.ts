@@ -20,6 +20,7 @@ import { forwardFrameIds, type ScoreResult } from "./score.js";
 import { explainFrame, type WhyReport } from "./why.js";
 import { runEval } from "./eval.js";
 import { unfence } from "./validate.js";
+import { readJsonIf } from "./read.js";
 
 export interface ViewerFrame extends WhyReport {
   /**
@@ -66,6 +67,12 @@ export interface ViewerData {
   runs: ViewerRun[];
 }
 
+/**
+ * Text files of a recording. The JSON ones go through `readJsonIf` instead, so a half-written
+ * `score.json` reads as a recording missing that file rather than killing the page: CI found
+ * `adhd viewer` dying inside `JSON.parse` on `evals/recorded` at a commit whose suite was green
+ * locally. See `src/read.ts`.
+ */
 const readIf = <T>(p: string, f: (raw: string) => T): T | null => (existsSync(p) ? f(readFileSync(p, "utf8")) : null);
 
 export function collect(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): ViewerData {
@@ -85,9 +92,9 @@ export function collect(cfg: Config, recordedDir = join(cfg.root, "evals", "reco
   for (const id of readdirSync(recordedDir).sort()) {
     const dir = join(recordedDir, id);
     if (!statSync(dir).isDirectory()) continue;
-    const plan = readIf<Plan>(join(dir, "plan.json"), (r) => PlanSchema.parse(JSON.parse(r)));
-    const score = readIf<ScoreResult>(join(dir, "score.json"), (r) => forwardFrameIds(cfg, JSON.parse(r) as ScoreResult));
-    const expected = readIf(join(dir, "expected.json"), (r) => RecordedExpectationSchema.parse(JSON.parse(r)));
+    const plan = readJsonIf<Plan>(join(dir, "plan.json"), (v) => PlanSchema.parse(v));
+    const score = readJsonIf<ScoreResult>(join(dir, "score.json"), (v) => forwardFrameIds(cfg, v as ScoreResult));
+    const expected = readJsonIf(join(dir, "expected.json"), (v) => RecordedExpectationSchema.parse(v));
 
     // Frames the run actually dispatched. A control has no plan, so fall back to whatever the
     // scorer recorded; anything with neither is a directory the viewer can only name.
@@ -121,7 +128,7 @@ export function collect(cfg: Config, recordedDir = join(cfg.root, "evals", "reco
       synthesis: readIf(join(dir, "synthesis.md"), (r) => r),
       expected: expected ? { outcome: expected.outcome, note: expected.note } : null,
       eval: evalByRun.get(id) ?? null,
-      cost: readIf(join(dir, "cost.json"), (r) => JSON.parse(r) as { tokens?: number }),
+      cost: readJsonIf<{ tokens?: number }>(join(dir, "cost.json")),
       raters: existsSync(join(dir, "critic")) ? readdirSync(join(dir, "critic")).filter((f) => /^pass-a(\.rater\d+)?\.yaml$/.test(f)).length : 0,
     });
   }
