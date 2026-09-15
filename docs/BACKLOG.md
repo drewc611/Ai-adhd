@@ -1410,6 +1410,29 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     readable, or the corpus is re-keyed, and which of those is right is a D6 call.
     `frames --collisions` counts the problem and stops, and so does this.
 
+101. **A checked-in file has read short twice on CI and the cause is not established.** Both
+    failures are inside `adhd viewer`, on files `git` checked out and nothing in this repository
+    writes during a command. The first read zero bytes and reported `Unexpected end of JSON input`
+    naming no file. The second, four commits later on a green local suite, read **8,176 bytes of a
+    16,190-byte `evals/recorded/001-seed3/score.json`** and reported an unterminated string at
+    position 8176.
+
+    What is ruled out: the suite writes nothing into `evals/recorded` (`os.test.ts` records into a
+    scratch root, `viewer.test.ts` and `replay.test.ts` copy the corpus before touching it), and
+    the failing job ran the same commit as a passing job three seconds later. What is not ruled
+    out, and cannot be from here: anything about the runner's filesystem under concurrent
+    `cpSync` of the corpus from several test processes at once.
+
+    `src/read.ts` now re-reads once before calling a file corrupt, takes the second read when the
+    bytes differ, and warns on stderr with both lengths. **That is instrumentation, not a fix** —
+    it converts the next occurrence from "not valid JSON" into "read N of M bytes and read whole on
+    retry", which is a fact about the filesystem rather than about the corpus. If the warning ever
+    appears in a CI log, this item has its evidence. If a genuine corruption ever appears, the
+    error now says how short the read was, which is what the second failure needed and did not say.
+
+    Open because a re-read that succeeds is a command whose report was one read away from being
+    wrong, and because two occurrences in one week is a rate.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

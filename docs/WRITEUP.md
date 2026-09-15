@@ -32,7 +32,7 @@ before the run and, on four of the five, a linear chain-of-thought control. One 
 deliberate replicate: same fixture, same seed, same briefs, different session, which is how the noise
 floor got measured. Two are fixture 014 at seven branches, the widest path the router can produce.
 The mechanics — verbatim passthrough, `problem_hash`, blind pass A, the pruned block — are enforced
-by 489 tests rather than by inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
+by 497 tests rather than by inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
 before the commit that runs it.
 
 ## What holds
