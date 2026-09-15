@@ -1316,7 +1316,15 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     honest move is more runs before any retirement — which is the opposite of what D34 concluded
     about `foreclosure`, on the same kind of evidence, for a reason worth being explicit about.
 
-    What would settle it: the interval narrows with scored runs, and there are eight. If it stays
+    **Correction, 2026-09-15: this item named the wrong lever.** Alpha is an inter-rater figure, so
+    the interval narrows with *packs scored by two critics*, not with scored runs. There are five of
+    those and there have been five for a while; the corpus went from eight scored runs to eleven
+    without moving the interval at all, because none of the new runs was scored twice. Closing this
+    costs a second critic pass over existing packs, which is cheap — the artifacts are already
+    written and a second scoring spends one critic rather than a whole run. That is the work, and it
+    was mis-stated as "more runs" until the runs arrived and nothing moved.
+
+    What would settle it: the interval narrows with double-scored packs, and there are five. If it stays
     across zero at fifteen, the dimension is measuring nothing and `retired_in: 2` is the move. If it
     lifts clear, it was thin evidence and the rubric keeps a dimension that scores the thing the
     output contract is built around. Do not retire it on the current interval; D39's whole finding is
