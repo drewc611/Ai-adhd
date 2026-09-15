@@ -1,7 +1,7 @@
 import { dimensionsAt } from "../src/schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { cfg, tmp } from "./helpers.js";
@@ -548,40 +548,39 @@ test("a margin of exactly one anchor point is flagged despite float representati
  * from the runner up by two anchor points or fewer out of 48. A no-flip result on decisions that
  * narrow is not evidence the rubric is decisive.
  */
-test("five of six contested decisions are near-ties, one is an exact tie, and one is decided", () => {
+test("most contested decisions are near-ties, one is an exact tie, and the wide path separates better", () => {
   // This pinned "every contested decision is settled inside two anchor points", which reframed the
-  // 0-flip sensitivity result as narrowness rather than stability. `001-seed3` breaks it, and in the
-  // direction that makes the rubric look better: DOOR_KEEPER over MINIMALIST by 0.1042, which is
-  // four to five anchor points depending on which dimension set you price them in, against four
-  // earlier decisions at one or two. So the reframing holds for the corpus and no longer for every
-  // member of it, and that distinction is the point of keeping the count.
+  // 0-flip sensitivity result as narrowness rather than stability. `001-seed3` broke it, in the
+  // direction that makes the rubric look better. `001-seed3-repeat` then added the other end, a
+  // margin of exactly 0 — not a narrow decision but no decision — and the two runs are the same
+  // pack at the same seed, so one scored pack produced the corpus's clearest separation and its
+  // replicate produced its only tie. That is D40 and it is the sharpest illustration of item 4.
   //
-  // `001-seed3-repeat` then added the other end: a margin of exactly 0, which is not a narrow
-  // decision but no decision, and the two runs are the same pack at the same seed. One scored pack
-  // produced the corpus's clearest separation and its replicate produced its only tie. That is D40,
-  // and it is the sharpest single illustration of what backlog item 4 measured.
+  // E10's two n=7 runs then said something the n=5 corpus could not: at seven branches the winning
+  // margins are 0.0625 and 0.1042, both above the two-anchor-point line, where five of the six
+  // five-branch decisions sit at or under it. Two runs is not a rate and the obvious mechanism —
+  // more branches means more chances for one to be clearly best — is not tested here. It is
+  // recorded as the first evidence that the narrowness is partly a property of n.
   const r = weightSensitivity(cfg);
-  assert.equal(r.margins.length, 6);
-  // The denominator is the dimensions actually scored, not every dimension in the file. Since D34
-  // retired one, `cfg.rubric.dimensions` overstates the total weight and makes the step smaller
-  // than any real anchor point on a version 1 run, which would quietly loosen this bound.
+  assert.ok(r.margins.length >= 8, `the corpus lost contested decisions: ${r.margins.length}`);
   const step = 1 / dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).reduce((sum, d) => sum + d.weight * cfg.rubric.scale.max, 0);
   const near = r.margins.filter((m) => m.margin <= step * 2 + 1e-9);
-  assert.equal(near.length, 5, `expected five near-ties, got ${r.margins.map((m) => m.margin.toFixed(4)).join(", ")}`);
+  const wide = r.margins.filter((m) => m.margin > step * 2 + 1e-9);
+  assert.ok(near.length > wide.length, "near-ties no longer outnumber decided ones; the writeup's framing has flipped");
 
   const exact = r.margins.filter((m) => m.margin === 0);
   assert.equal(exact.length, 1, "the corpus has exactly one decision the rubric did not make");
   assert.equal(exact[0]!.run, "001-seed3-repeat");
   assert.match(r.text, /exact tie, broken alphabetically/);
 
-  const wide = r.margins.filter((m) => m.margin > step * 2 + 1e-9);
-  assert.equal(wide.length, 1);
-  assert.equal(wide[0]!.run, "001-seed3");
-  assert.ok(wide[0]!.margin > step * 3, `the one clear decision is only ${(wide[0]!.margin / step).toFixed(1)} anchor points`);
+  // Every wide decision has to be named in the writeup with its margin, so the exception list
+  // cannot quietly grow while the paragraph still reads as one case.
+  const doc = readFileSync(join(cfg.root, "docs", "WRITEUP.md"), "utf8");
+  for (const m of wide) assert.ok(doc.includes(m.run), `${m.run} is settled by ${(m.margin / step).toFixed(1)} anchor points and the writeup does not name it`);
 
   // Still no flips, which is the claim this sits next to and does not overturn.
   assert.match(r.text, /No representative changed under any single-dimension move/);
-  assert.match(r.text, /5 of 6 contested decisions were settled by two anchor points or fewer/);
+  assert.match(r.text, new RegExp(`${near.length} of ${r.margins.length} contested decisions were settled by two anchor points or fewer`));
 });
 
 /** The four-critic panel on the pack that split. Pinned because D8 quotes it. */

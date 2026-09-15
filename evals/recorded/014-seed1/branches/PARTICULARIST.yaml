@@ -1,0 +1,82 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: PARTICULARIST
+position: >-
+  Do wrap the cron line in `flock -n` that exits non-zero and sends that failure somewhere a human
+  reads, and treat the count of skipped runs as your measurement of how far the script's runtime has
+  crossed the cron interval.
+reasoning: |
+  Probe 1 - the three most specific details in the problem statement.
+
+  (a) The scheduler is cron, and cron shells out rather than running Python directly. That means there
+  is already a shell layer on the crontab line where a lock can be inserted without touching the
+  script, and it means cron is already capturing stdout and stderr of every run and delivering it
+  somewhere, because that is what cron does when it is given a command that writes output.
+
+  (b) "It has started overlapping with itself." Not "it overlaps" - it started. The overlap is a new
+  condition on a job that previously fit inside its interval. Something on one side of the inequality
+  moved, and it was almost certainly the run duration, because nobody edits a crontab interval and
+  then describes the result as the job starting to overlap with itself.
+
+  (c) "I want to see a few different directions before we commit to one." The asker is surveying, not
+  firefighting. If overlapping runs had already corrupted something, the message would have named the
+  corruption. So the overlap is currently observable but has not yet produced a visible failure - which
+  is exactly the window in which a silent fix is the expensive mistake.
+
+  Probe 2 - which of those details changes the answer, and to what.
+
+  Detail (b) is the one that flips it. If the job had always overlapped, this is a scheduling mismatch
+  and the answer is to change the interval or move to a queue. Because it *started*, the duration is on
+  a curve, and any fix that makes overlap stop being visible also makes the curve stop being visible.
+  Plain `flock` that waits, or a longer cron interval, or a lock file the script checks and quietly
+  returns from, all have the same shape: the symptom disappears, the duration keeps climbing, and the
+  next thing you learn is that the job has not completed a full pass in three weeks. `flock -n` with a
+  loud non-zero exit is the one variant that stops the overlap and keeps the curve on screen, because
+  the skipped-run count rises in exact proportion to how far runtime has passed the interval.
+
+  The single missing detail whose value would otherwise flip this is whether two concurrent runs of
+  this particular script corrupt shared state - whether it writes to a table or a file that a second
+  copy can interleave with. Both values land in the same place. If they corrupt, the noisy `flock -n`
+  is needed today and needed urgently. If they only waste CPU, the noisy `flock -n` is still the right
+  move because it is the cheapest instrument for measuring the duration growth that is the actual
+  problem. That is why this position is committal without that detail.
+
+  Probe 3 - the thirty-second answer, and what makes it wrong here.
+
+  Thirty seconds gets you "wrap it in flock." That answer is right about the tool and wrong about the
+  flag and the exit handling, and the flag is where the whole thing lives. `flock` without `-n` queues
+  the second run behind the first, so on a job whose duration is growing you build a backlog of Python
+  processes, each holding whatever the previous one held, until the box runs out of whatever it runs
+  out of first. `flock -n` without an alerting non-zero exit gives you a job that silently skips, on a
+  system where the person asking has already told you they cannot see the failure modes clearly enough
+  to pick a direction. The "started" in the problem statement is what makes the reflex answer wrong:
+  the reflex answer solves overlap, and overlap is not the problem here, it is the readout.
+forecloses:
+  - >-
+    Migrating this to Celery, RQ, or a systemd timer with a job queue as the first move - nothing in the
+    problem says the workload needs a queue, only that one Python script got slower than its interval,
+    and a migration would destroy the before-and-after duration record that is the most useful thing
+    currently available.
+  - >-
+    Lengthening the cron interval to whatever is comfortably longer than current runtime, which is the
+    other thirty-second answer and which resets the clock on the growth curve without telling anyone
+    what is growing.
+  - >-
+    A lock the Python script takes on itself at import time and exits quietly on contention, which keeps
+    the fix inside the codebase where it looks tidy and removes the one thing worth watching.
+falsifier: >-
+  Pull the modification timestamps on whatever this script last writes - the output file, the target
+  table's max updated_at, the log it appends to - going back a month or two. If the gap between
+  consecutive completions has sat above the cron interval since the first day in the record rather
+  than widening over recent weeks, then nothing started, the job was always over-long, the "started"
+  in the problem statement means somebody only recently started looking, and this position is wrong -
+  you want an interval change or a queue, not an instrument, because a noisy lock would then page
+  forever about a steady state nobody intends to change.
+missing_actor: >-
+  Whoever owns the mailbox or log sink that cron is already delivering this job's output to. Cron has
+  been mailing or writing the result of every single run since before the overlap began, to an address
+  in MAILTO or a path on the crontab line, and whoever holds that can hand over the dated history of
+  run durations - including the week it crossed the interval - without anyone instrumenting anything
+  or waiting for new data.
+confidence: medium
+```

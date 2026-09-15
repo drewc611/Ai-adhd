@@ -1,0 +1,67 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: MINIMALIST
+position: >-
+  Wrap the existing cron command in flock -n on a lock file and change nothing else.
+reasoning: |
+  1. The pain. Nobody types this question because they want architecture. Two copies of the
+     script ran at once and something visible went wrong: duplicated rows, a mangled output
+     file, a database deadlock, a memory spike, or a pager. The overlap is the symptom the
+     person can see. The cause underneath it is that the job's runtime has crept past the
+     cron interval, and that creep happened quietly. But the thing that hurts today is the
+     concurrent run, not the creep.
+
+  2. The smallest intervention. Change one line in the crontab: put the command behind
+     flock -n on a fixed lock path, so the interpreter never starts if the previous run is
+     still holding it. It is a single edit, it is reversible by deleting eight characters,
+     it touches no Python, it adds no daemon, no queue, no state store, no new failure
+     surface. flock ties the lock to a file descriptor, so the kernel releases it when the
+     process dies however it dies. That is the property that matters and it is the property
+     a hand-rolled PID file in the script would get wrong.
+
+  3. What it deliberately leaves unfixed. Everything except the overlap. It does not stop
+     the runtime from growing; it converts overlap into silently skipped runs, which is a
+     different and quieter failure. It does not tell anyone the skip happened unless the
+     non-zero exit from flock is noticed. It does not help if cron fires the job on more
+     than one host, because the lock is local to the filesystem. It does not make the script
+     resumable, so a run killed mid-way still leaves whatever half-done state it left
+     before. It does not address whether the schedule interval is right. All of that is
+     acceptable right now because none of it is what broke: the broken thing was two
+     processes in the same place at the same time, and this makes that impossible.
+
+  4. When the larger fix becomes necessary, and how you would know. The moment skipping is
+     no longer free. That is the day the job stops catching up, meaning a run is skipped and
+     the following run is also skipped because the work backed up. You would know by logging
+     flock's exit status and looking at the count per week. One skip a month is a schedule
+     that is slightly tight. Skips that cluster, or a skip followed immediately by another,
+     means the runtime has passed the interval for good and the interval, not the locking,
+     is now the problem. Until that count moves, the question of directions is premature.
+forecloses:
+  - >-
+    Moving the job to a scheduler or worker system such as systemd timers, Celery,
+    Airflow, or a hosted cron service. That migration cannot be justified by an overlap
+    that one line prevents, and it trades a known failure for a new set of unknown ones.
+  - >-
+    Putting the concurrency guard inside the Python script itself, via a PID file, a
+    database advisory lock, or a lock table. That is more code to own, it can strand a
+    stale lock when the process is killed with SIGKILL, and it only takes effect after
+    the interpreter has already started.
+  - >-
+    Queueing the overlapping run to execute immediately after the current one finishes,
+    using flock without -n. That looks kinder but lets work pile up invisibly and hides
+    exactly the runtime creep you need to be able to see.
+falsifier: >-
+  Look at one real overlap and ask whether the second run had work the first did not do.
+  If the script drains a queue, processes a per-invocation batch, or consumes anything
+  where a skipped run means work is lost rather than deferred, then dropping the second
+  run is silent data loss and this position is wrong. Same verdict if crontab -l on a
+  second host shows the same entry, since a local file lock cannot coordinate across
+  machines. Both checks take under ten minutes and need no code.
+missing_actor: >-
+  Whoever owns the mailbox that cron already delivers to. Cron mails each job's output to
+  the crontab owner, and that account almost certainly holds weeks of timestamps showing
+  the runtime growing toward the interval. That person can read the existing mail and say
+  when the creep started, which answers the interval question with evidence that already
+  exists instead of a redesign. If nobody reads that mailbox, that is the actual finding.
+confidence: high
+```

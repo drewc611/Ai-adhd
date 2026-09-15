@@ -1,0 +1,97 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: SABOTEUR
+position: >-
+  Make each unit of work idempotent and claimed under an expiring lease, wrap every invocation in
+  a hard wall-clock timeout that kills the whole process group, and page on the age of the last
+  successful completion rather than on a non-zero exit code, treating any lock as an optimization
+  and never as the correctness mechanism.
+reasoning: |
+  1. The obvious answer is to wrap the cron line in flock, or have the script write a PID file and
+  exit if one exists. It assumes four things about the world: that there is exactly one host and
+  one filesystem where the lock is visible and honored; that a process either finishes or dies in
+  a way that releases the lock; that a skipped run is harmless because the next run will catch up;
+  and that a quiet cron job is a working cron job.
+
+  2. Three concrete violations.
+
+  (a) The lock is not where the contention is. The job gets moved to two boxes behind a load
+  balancer, or the host is containerized and the scheduler double-schedules it after a node
+  drain, or the lock file sits on NFS/EFS where flock semantics are advisory-at-best across
+  clients. Two runs now hold the same lock happily. Worse and cheaper: the operator copies the
+  crontab and the config to staging, staging points at the production database, and the two
+  environments cannot see each other's lock at all. Mutual exclusion is silently absent while the
+  code still looks correct.
+
+  (b) The run hangs instead of dying. The script opens a socket with no timeout to a dependency
+  that accepts the connection and then says nothing, or it blocks on a database lock held by a
+  migration. flock holds for as long as that process lives, which is forever. Every subsequent
+  invocation exits immediately with "already running", which is exit code 1 to a wrapper nobody
+  reads, or exit code 0 if the wrapper was written kindly. The job now does no work at all and
+  emits exactly the same silence it emits when healthy. A stale PID file after an ungraceful
+  reboot gives the identical outcome for the identical price, and PID reuse makes it survive a
+  reboot cleanup script.
+
+  (c) Time does not behave. NTP steps the clock backward and cron fires the same minute twice, or
+  a DST transition replays or skips an hour, or the box is suspended and the scheduler runs its
+  backlog at once. Meanwhile the on-call engineer, seeing the job look stuck, runs the script by
+  hand from a shell as a different user with a different working directory, so the lock path and
+  the umask differ and the lock does not apply. The overlap arrives from a direction the lock does
+  not cover, and if the work is not idempotent, the doubled run corrupts and the skipped run loses
+  data equally.
+
+  3. The cheapest to cause and the most expensive to recover from is (b), the hung run holding the
+  lock. It costs one unanswered TCP connection or one power event to trigger, no adversary
+  required. It is the most expensive because the failure is invisible by construction: it presents
+  as a healthy, quiet job. The alarm that exists watches for errors, and there are none. You find
+  out days or weeks later, from a downstream consumer, and by then recovery means reconstructing
+  which units of work were never processed with no record of what was skipped, while downstream
+  systems have already consumed and acted on the gap. Violation (a) is loud and corrupting;
+  this one is quiet and cumulative, and quiet and cumulative is what costs the most to undo.
+
+  4. What survives all three is moving correctness out of the process and into the work. Give each
+  unit of work an identity and a claim row with an owner and an expiry, so a second concurrent run
+  claims different units instead of being forbidden. Make the effect of processing a unit twice
+  equal to processing it once, keyed by that identity. Wrap the invocation in timeout(1) sending
+  SIGKILL to the process group, so a hung run dies and its leases expire rather than sealing the
+  system shut. Emit a completion record on success and alert on the age of the newest one, which
+  makes silence an alarm rather than a green light. Under (a) the two hosts share the claim table
+  and interleave safely; the copied staging config is caught because it claims under a different
+  owner name against the same table, which is visible. Under (b) the hang is bounded and the
+  leases return. Under (c) a double fire claims nothing new and a skipped fire is caught up by the
+  next one.
+
+  What it still does not survive: a unit whose side effect is external and genuinely not
+  idempotent, such as sending a customer email, charging a card, or posting to a third-party API
+  with no idempotency key. There the lease can expire while the side effect is in flight and the
+  next run sends it a second time, and no amount of local bookkeeping fixes that. It also does not
+  survive the case where the script is simply slower than its period, where every run is a
+  timeout and every lease churns; that is a throughput or schedule problem and locking of any kind
+  only hides it.
+forecloses:
+  - >-
+    Shipping flock or a PID file as the fix and stopping there, which also forecloses keeping the
+    script as an opaque all-at-once batch with no per-unit boundary, since the leases require the
+    work to be divisible and named.
+  - >-
+    Solving the overlap by tuning timing, that is, lengthening the cron interval, staggering
+    schedules, or adding a sleep, since this position treats concurrent runs as normal and safe
+    rather than as something to be scheduled away.
+  - >-
+    Reaching for a distributed lock service such as Redis or ZooKeeper as the answer, which trades
+    the problem for a new dependency that can lie about lock ownership during a partition and
+    still leaves the underlying work unsafe to repeat.
+falsifier: >-
+  Run the script twice back to back over the same input window in staging against a restored copy
+  of production data, and diff the resulting rows and outbound side effects against a single run.
+  If the second run is a no-op and the script's p99 wall-clock runtime over the last month of logs
+  is comfortably under the cron period, then the overlap is only a resource collision with no
+  correctness consequence, plain flock is sufficient, and this position is overbuilt.
+missing_actor: >-
+  The on-call engineer who runs the script by hand during an incident. The problem describes cron
+  as the only caller, but a human invoking python script.py directly from a shell bypasses any
+  wrapper-level lock, runs under a different user, path and environment, and is the most likely
+  source of the very overlap being investigated. That same person is also the only one who can
+  kill a wedged run, so any design has to make hand-invocation safe rather than forbidden.
+confidence: medium
+```

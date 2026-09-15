@@ -1,0 +1,72 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: NIGHT_OPERATOR
+position: >-
+  Make the script guard itself at runtime: take a named lock that writes its holder's host, PID and
+  start time somewhere the on-call can read and clear, emit start/finish/skipped heartbeats to a
+  dead-man's-switch monitor, and re-read a disable flag on every start.
+reasoning: |
+  1. What pages someone, and what do they see first.
+  Nobody is paged for "cron overlapped" — nothing measures that. The page is a downstream symptom:
+  database CPU pinned and lock waits climbing, the job box out of disk or memory, a queue backing
+  up, or duplicate rows making a customer-facing number double. What the on-call sees first is a
+  graph going the wrong way. They do not see the cause. They spend the first twenty minutes
+  discovering by `ps` that three copies of the same script are running, because the only thing the
+  job ever emitted was cron mail that no human has read in years. The overlap is invisible by
+  construction, and that invisibility is the actual defect — worse than the overlap.
+
+  2. What they can change at 3am without a deploy.
+  Exactly three things: a file, a value the process reads at start, and kill. Every control worth
+  having must be one of those. A lock file whose contents name host, PID and start time turns "is
+  it wedged or is it working" into a `cat`. A disable flag checked at every start turns "stop the
+  bleeding" into a `touch`, and it has to suppress future starts everywhere, not require editing
+  crontab as root on one box while a second box keeps firing on schedule. Kill has to be safe: the
+  lock must release on SIGKILL, and if it lives in a shared store with a TTL there must be a
+  documented, one-command way to clear a stale one. A lock only the machine can release is not a
+  fix, it is a new outage with a fresh cause.
+
+  3. How they know the change worked.
+  Heartbeats, and specifically three of them: started, finished, and skipped-because-locked, to a
+  monitor that alerts on absence rather than on presence. The on-call confirms recovery when
+  last-success advances and the skip counter shows the guard firing. Without that, the only
+  evidence of a fix is that the alert stopped — and a stopped alert is indistinguishable from a
+  cron that is no longer running at all. Silence is the failure you cannot tell from success, which
+  is why the guard has to be loud when it engages.
+
+  4. What the on-call would beg for.
+  That the job report its state somewhere other than cron mail. That there be one obvious lever to
+  turn it off, documented in the runbook, that works without a deploy and without root on a
+  specific host. That overlap be a logged, counted skip instead of a silent second writer. And —
+  bluntly — that the answer to the question asked here not ship as a menu. "A few directions" is a
+  design-time luxury; if it lands as three half-wired mechanisms, the person holding the pager at
+  3am has three things to reason about and no runbook line to run. Pick one guard, make its state
+  readable and clearable by hand, and write down how to clear it.
+forecloses:
+  - >-
+    Delegating concurrency to the scheduler or an orchestrator — Kubernetes CronJob with
+    concurrencyPolicy: Forbid, systemd timers, Airflow max_active_runs. The guard's state then lives
+    in a control plane the on-call may not be able to read or clear from a shell, and when the
+    platform is the thing that is sick, the guard is sick with it.
+  - >-
+    Fixing it by changing the schedule: longer interval, staggered starts, or optimising the script
+    so runs finish inside the window. That is prevention only, it holds until the first run that is
+    slow for a reason nobody predicted, and it leaves the 3am recovery path exactly as bare as it is
+    today.
+  - >-
+    Making the job idempotent so concurrent copies are harmless and letting them all run.
+    Reentrancy is a good property to have underneath, but as the answer it deletes the signal: the
+    job is now taking longer than its interval and nobody will ever be told.
+falsifier: >-
+  Ask the current on-call, not the author, to show you in five minutes how they would stop this job
+  right now. If they cannot get a shell or a config write on the host the cron fires from — because
+  it is an ephemeral container, a locked-down box, or an account only the build pipeline holds —
+  then a file-based lock and a touch-a-flag kill switch are unreachable at 3am and this position is
+  wrong; the controls have to move to wherever that person actually has access.
+missing_actor: >-
+  The owner of the downstream datastore the job writes to — a DBA or the team on the other side of
+  those writes, never named in the problem. They can add a unique constraint or a session-level
+  advisory lock so that a second concurrent run fails fast and loudly at the database instead of
+  corrupting quietly, which is the one line of defence that does not depend on the script behaving
+  or on anyone having noticed the overlap at all.
+confidence: medium
+```

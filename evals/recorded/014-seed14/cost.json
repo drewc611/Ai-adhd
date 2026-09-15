@@ -1,0 +1,21 @@
+{
+  "tokens": 549437,
+  "wall": "not measured",
+  "reported_tasks": 10,
+  "of_tasks": 10,
+  "by_phase": {
+    "diverge": 386669,
+    "critique_a_and_b": 100128,
+    "deepen": 112415
+  },
+  "by_frame": {
+    "NIGHT_OPERATOR": 57542,
+    "SABOTEUR": 54976,
+    "PARTICULARIST": 55794,
+    "FRAME_BREAKER": 53395,
+    "LEDGER": 53645,
+    "DOOR_KEEPER": 57262,
+    "ACTOR_CENSUS": 54054
+  },
+  "note": "Every task reported. The critic figure is one resumed agent covering both passes, so it cannot be split between them. by_frame is diverge. Wall clock is not comparable: the run was driven by hand alongside a second run of the same fixture, so elapsed time measures the host."
+}

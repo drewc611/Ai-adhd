@@ -1,0 +1,198 @@
+{
+  "n": 7,
+  "frames": [
+    {
+      "frame": "ACTOR_CENSUS",
+      "status": "survivor",
+      "cluster": "local_flock_on_cron_line",
+      "pass_a": 0.8095238095238095,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Wrap the cron line itself in flock on a named lock file that records its holder and ships with a documented one-command force-release, and judge every other option by whether a tired on-call operator can see it and break it from a bare shell.",
+      "forecloses": [
+        "Making the script reentrant and idempotent so overlapping runs are harmless - it is the most elegant answer and it leaves the operator with nothing to look at, nothing to turn off, and no signal that anything is wrong while the pile-up eats the host.",
+        "Moving the job to a hosted scheduler or job queue (Airflow, Celery beat, a Kubernetes CronJob with concurrencyPolicy) as the first move - it relocates the kill switch into a UI or API the person holding the pager may not have credentials for at 3am.",
+        "A timeout that silently kills or supersedes the previous run - auto-recovery converts a visible incident into an invisible one and removes the operator from the loop entirely."
+      ],
+      "falsifier": "Search the last six months of pager history and shell history on that host for a single human intervention during an overlap - a kill, a crontab edit, a page - and check whether any alert on job runtime or concurrency exists at all. If nobody has ever intervened and nothing would ever page them, there is no operator holding this system, and the design should be optimized for the payer or the upstream instead.",
+      "missing_actor": "The upstream service the Python script calls: it can extend any single run's duration arbitrarily, for free, with no announcement and no change on your side, and that is the most likely trigger for an overlap that \"started\" happening."
+    },
+    {
+      "frame": "NIGHT_OPERATOR",
+      "status": "survivor",
+      "cluster": "external_ttl_lease_in_the_datastore",
+      "pass_a": 0.8571428571428571,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Do guard the job with a TTL lease held in a shared datastore that the on-call can read, break, and disable from a runbook link in the alert without a deploy, and page on the lease outliving the expected run duration rather than on the downstream damage.",
+      "forecloses": [
+        "flock or a local lockfile as the mechanism: it is invisible to anyone not already shelled into the correct host, it gives the responder nothing to inspect, and it quietly stops working the day the cron entry gets copied to a second box or the job moves into a container.",
+        "The \"make the script idempotent and just let the runs overlap\" option: safe concurrency removes the corruption but leaves the on-call with no handle at all, no signal that overlap is even happening, and nothing to switch off when the overlap is the symptom of something worse upstream.",
+        "Replacing cron with a real scheduler (Airflow, Celery beat, systemd timers with RefuseManualStart) as the answer to this question: it may well be right in six months, but it is a migration and a deploy, and it does nothing for the person holding the pager before it lands."
+      ],
+      "falsifier": "Pull the last three pages that trace back to this job and read what the responder actually did first. If every one was resolved by killing processes on a host they already had open, and none of them needed to know whether a lock was held, stop the next run, or coordinate with a second machine, then the external lease is ceremony and a local flock plus a run-duration alert is the cheaper correct answer. Cheaper still, check whether the current on-call rotation even has write credentials to the datastore you are proposing to put the lease in. If they do not, this position is wrong as written tonight.",
+      "missing_actor": "The on-call rotation itself, which the problem never names. Whoever carries the pager for this service is not on the team choosing between these options, and they can settle the choice before any code is written. Hand them the draft runbook step tomorrow and ask them to execute it against a healthy system: find the lease, break it, disable the job, confirm recovery. If they cannot do it in under five minutes, on a laptop, without asking the author a question, the design has already failed and no amount of locking correctness redeems it."
+    },
+    {
+      "frame": "LEDGER",
+      "status": "survivor",
+      "cluster": "local_flock_on_cron_line",
+      "pass_a": 0.8333333333333334,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Wrap the script in `flock -n` today and emit a counter on every refused lock, alerting when two consecutive runs are skipped.",
+      "forecloses": [
+        "Adopting a workflow orchestrator as the first move - no scheduler gets evaluated now, and if the real requirement turns out to be a dependency DAG with retries and backfill, this has to be reopened later at higher cost.",
+        "Redesigning the script as a queue consumer or event-driven worker, which is the right answer if the work is genuinely parallelisable and is the answer this position rules out.",
+        "Letting runs overlap deliberately and buying safety with idempotent writes instead of a lock - cheaper in throughput, more expensive in the care every future edit to the script has to take."
+      ],
+      "falsifier": "Pull start and end timestamps for the last 24 hours of runs from the existing log and compute p95 duration. If p95 already exceeds the cron interval, the lock will refuse most runs rather than a few, this converts an overlap problem into a permanent silent backlog, and the position is wrong - the answer is then a longer interval or real concurrency, not serialisation.",
+      "missing_actor": "The owner of the database or API the script writes to - they can add a unique constraint or take a Postgres advisory lock server-side, which is the only lock that still holds if this cron entry exists on more than one host, where a file lock silently does nothing."
+    },
+    {
+      "frame": "PARTICULARIST",
+      "status": "survivor",
+      "cluster": "local_flock_on_cron_line",
+      "pass_a": 0.9761904761904762,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Do wrap the cron line in `flock -n` that exits non-zero and sends that failure somewhere a human reads, and treat the count of skipped runs as your measurement of how far the script's runtime has crossed the cron interval.",
+      "forecloses": [
+        "Migrating this to Celery, RQ, or a systemd timer with a job queue as the first move - nothing in the problem says the workload needs a queue, only that one Python script got slower than its interval, and a migration would destroy the before-and-after duration record that is the most useful thing currently available.",
+        "Lengthening the cron interval to whatever is comfortably longer than current runtime, which is the other thirty-second answer and which resets the clock on the growth curve without telling anyone what is growing.",
+        "A lock the Python script takes on itself at import time and exits quietly on contention, which keeps the fix inside the codebase where it looks tidy and removes the one thing worth watching."
+      ],
+      "falsifier": "Pull the modification timestamps on whatever this script last writes - the output file, the target table's max updated_at, the log it appends to - going back a month or two. If the gap between consecutive completions has sat above the cron interval since the first day in the record rather than widening over recent weeks, then nothing started, the job was always over-long, the \"started\" in the problem statement means somebody only recently started looking, and this position is wrong - you want an interval change or a queue, not an instrument, because a noisy lock would then page forever about a steady state nobody intends to change.",
+      "missing_actor": "Whoever owns the mailbox or log sink that cron is already delivering this job's output to. Cron has been mailing or writing the result of every single run since before the overlap began, to an address in MAILTO or a path on the crontab line, and whoever holds that can hand over the dated history of run durations - including the week it crossed the interval - without anyone instrumenting anything or waiting for new data."
+    },
+    {
+      "frame": "SABOTEUR",
+      "status": "pruned",
+      "cluster": "external_ttl_lease_in_the_datastore",
+      "pass_a": 0.8095238095238095,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "Its cheapest-to-cause ranking is applied to failure modes, never to its own recommendations: a conditional-write lease, a heartbeat, per-call timeouts, and a rewritten keyed write path are proposed with no statement of what being wrong costs, how long until you find out, or which parts could be undone, and the one-line alternative is priced only as free and wrong."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Replace file locking with a TTL lease held in the datastore the job already writes to, make every run idempotent and resumable on a work-item key, and alarm on staleness of the last successful completion rather than on overlap.",
+      "forecloses": [
+        "Local mutual exclusion as the mechanism, meaning flock on a lock file or a PID file. It cannot coordinate two hosts, two containers, or two environments, and those are the cases that actually corrupt data.",
+        "Fixing the schedule instead of the correctness, meaning lengthening the interval, staggering start times, or splitting the cron entry. Any of those work until one run is slow once.",
+        "Having the new run kill the old one, for example a pkill in the cron line. That guarantees a half-finished run at a time you chose, and it is only safe if the work is already idempotent, at which point you did not need it."
+      ],
+      "falsifier": "Run two copies of the script concurrently against a staging copy of the datastore with the same inputs, then diff the resulting rows and count the external side effects. If the result is identical to a single run and nothing was sent or charged twice, then overlap is harmless here, the lease and the alarms are pure overhead, and this position is wrong. Cheaper still, check whether the job is already pinned to a singleton scheduler such as a Kubernetes CronJob with concurrencyPolicy Forbid, in which case the exclusion problem is solved outside the script and only the staleness alarm is worth keeping.",
+      "missing_actor": "The owner of the datastore or downstream service the script writes to, who was never named because the problem was framed as a scheduling question. They can add a uniqueness constraint or an idempotency key on the written records, which turns an undetected double run into a loud failure at the storage layer at zero cost to the cron job, and does so regardless of which locking scheme is chosen."
+    },
+    {
+      "frame": "MECHANIC",
+      "status": "pruned",
+      "cluster": "supervised_serial_loop",
+      "pass_a": 0.8333333333333334,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "Deleting the cron entry and installing a supervised service is the most structurally committed recommendation in the run, and it is argued purely on mechanism, with no account of what being wrong costs or how long until you know, and the only recovery point raised concerns leftover lock state rather than the reversibility of its own move."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Delete the cron entry and run the script under a supervisor that starts the next execution only after the previous process has exited, with a hard kill timeout on each execution.",
+      "forecloses": [
+        "A lockfile, flock wrapper, or database advisory lock left in front of the existing cron entry - this rules that out, because it converts overlap into unrecorded skipped work and reintroduces out-of-process state that survives a killed run.",
+        "A lock key with an expiry in a shared store - the expiry must be either shorter than the worst run, in which case it releases while the run is alive and permits the exact overlap it exists to stop, or longer, in which case a dead run blocks live ones for the remainder of the window.",
+        "Making the schedule finer or running several copies in parallel against the same input to catch up - this raises the arrival rate against a service rate that contention is already lowering."
+      ],
+      "falsifier": "Log the start and end timestamp of each run for a week, or just read the start times of the copies currently overlapping in the process table. If nearly every run finishes well inside the period and the overlaps come from a handful of runs that hung for hours, then the arrival rate never exceeded the service rate, the queueing argument does not apply, and the fix is a socket timeout plus a hard kill rather than a supervised loop - which would buy almost nothing.",
+      "missing_actor": "Whoever administers the host's init system (not named in the problem, which names only cron and a script) can install the script as a supervised long-running service with a restart policy, a runtime limit that kills a wedged execution, and memory and descriptor limits that make an escaping run die early and loudly instead of taking the box down with it."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "survivor",
+      "cluster": "local_flock_on_cron_line",
+      "pass_a": 0.8571428571428571,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Wrap the existing cron command in flock -n on a lock file and change nothing else.",
+      "forecloses": [
+        "Moving the job to a scheduler or worker system such as systemd timers, Celery, Airflow, or a hosted cron service. That migration cannot be justified by an overlap that one line prevents, and it trades a known failure for a new set of unknown ones.",
+        "Putting the concurrency guard inside the Python script itself, via a PID file, a database advisory lock, or a lock table. That is more code to own, it can strand a stale lock when the process is killed with SIGKILL, and it only takes effect after the interpreter has already started.",
+        "Queueing the overlapping run to execute immediately after the current one finishes, using flock without -n. That looks kinder but lets work pile up invisibly and hides exactly the runtime creep you need to be able to see."
+      ],
+      "falsifier": "Look at one real overlap and ask whether the second run had work the first did not do. If the script drains a queue, processes a per-invocation batch, or consumes anything where a skipped run means work is lost rather than deferred, then dropping the second run is silent data loss and this position is wrong. Same verdict if crontab -l on a second host shows the same entry, since a local file lock cannot coordinate across machines. Both checks take under ten minutes and need no code.",
+      "missing_actor": "Whoever owns the mailbox that cron already delivers to. Cron mails each job's output to the crontab owner, and that account almost certainly holds weeks of timestamps showing the runtime growing toward the interval. That person can read the existing mail and say when the creep started, which answers the interval question with evidence that already exists instead of a redesign. If nobody reads that mailbox, that is the actual finding."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "local_flock_on_cron_line",
+      "action": "Edit the crontab line so the command runs behind a non-blocking file lock on that host, and make every refused run visible to a human rather than silent.",
+      "members": [
+        "PARTICULARIST",
+        "LEDGER",
+        "MINIMALIST",
+        "ACTOR_CENSUS"
+      ],
+      "survivors": [
+        "PARTICULARIST",
+        "LEDGER",
+        "MINIMALIST",
+        "ACTOR_CENSUS"
+      ],
+      "singleton": false,
+      "strongest_objection": "A lock on a file descriptor is scoped to one filesystem, which means it guards the host and not the thing that actually gets damaged. The moment the crontab is copied to a second box, baked into an image that autoscales to two, moved into a container with its own private lock directory, or run on a staging host whose config still points at the production datastore, two runs each acquire their own lock entirely correctly and neither can see the other. Nothing in the problem statement establishes that there is exactly one host now, and nothing keeps it true later. Worse, the failure this introduces is silent and interleaved rather than loud, so it is discovered only when some downstream number looks wrong and someone has to reconstruct intended state from logs that were never written to serve as a reconciliation record. There are two further gaps the mechanism cannot close even on a single host. Exclusion never promised safety, only non-simultaneity, so a run killed mid-write by the OOM killer, a deploy, or a node drain releases the lock cleanly and the next run starts on top of half-finished state, which is the corruption people actually see. And a holder that wedges rather than dies, for example on a socket opened with no timeout, holds the lock forever while every subsequent firing exits immediately, so the skip counter that is supposed to be the instrument reads a job that has done no work in eleven days as a job that is merely being politely serialised. The counter measures refusals, not completions, and those are not the same signal; an alarm on the age of the last successful completion is the one that would catch this, and it is not in the design.",
+      "representative": "PARTICULARIST",
+      "mean_pass_a": 0.8690476190476191
+    },
+    {
+      "id": "external_ttl_lease_in_the_datastore",
+      "action": "Move the exclusion out of the filesystem into a row or key in the datastore the job already writes to, with owner, host, run id and expiry, and alarm on the lease or the last successful completion rather than on overlap.",
+      "members": [
+        "NIGHT_OPERATOR",
+        "SABOTEUR"
+      ],
+      "survivors": [
+        "NIGHT_OPERATOR"
+      ],
+      "singleton": false,
+      "strongest_objection": "This buys coordination and inspectability by adding exactly the kind of state the current design does not have, and that state is the thing most likely to wedge you. A lock held on a file descriptor is released by the kernel however the process dies; a lease recorded outside the process is not, because nothing ties the record to the life of the holder. So the expiry has to carry all of that weight, and it cannot: set it shorter than the worst real run and it lapses under a live holder, handing the lease to a second runner in good faith and permitting precisely the concurrency it exists to prevent, and that failure is not hypothetical since a paused VM, a long garbage collection pause, or a brief partition between the runner and the datastore produces it without anything being wrong with the code. Set it longer and a run killed at the wrong moment blocks every later run for the remainder of the window until a person clears it by hand. Idempotent keyed writes shrink the blast radius of the first case but do not save a read-modify-write counter and do not save an external side effect with no idempotency key on the far side, and closing that properly needs fencing tokens the storage layer itself enforces, which a database plus a Python script does not provide. There is also a scope objection underneath the mechanism. The recovery apparatus is justified by a responder working backwards from a symptom several hops away at three in the morning, but nothing establishes that anyone has ever been paged for this job, and if the rotation does not already hold write credentials on that datastore the runbook verb they are promised does not exist. Finally, none of this touches the rate. If the script now takes longer than its interval, a lease decides which firings to discard just as a file lock does; it changes what the discard is recorded in, not whether the work is falling behind.",
+      "representative": "NIGHT_OPERATOR",
+      "mean_pass_a": 0.8571428571428571
+    },
+    {
+      "id": "supervised_serial_loop",
+      "action": "Delete the cron entry and run the script under a supervisor that starts the next execution only after the previous one exits, with a hard kill timeout per execution.",
+      "members": [
+        "MECHANIC"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "All seven attacked the load bearing assumption that this is a concurrency-control choice about overlap, converging on overlap being a symptom, a readout, or a missing component rather than the defect itself."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every branch returned a non-null missing_actor, and four distinct parties were nominated: the cron mail sink owner, the datastore or downstream owner, the upstream service, the on-call rotation, and the init system administrator."
+    },
+    "notes": []
+  },
+  "proceed": true,
+  "rubric_version": 1
+}

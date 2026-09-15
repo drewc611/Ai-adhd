@@ -176,17 +176,17 @@ test("the fold changes what the contract asks for and not what the validator acc
 });
 
 test("not one unquoted value in any recorded run contains a colon-space, which is the luck this rests on", () => {
-  // The reason the corpus parses, counted, and the count now shows the fix landing. Across 49
-  // branch artifacts there are 147 `position` / `falsifier` / `missing_actor` values. **106 are bare
+  // The reason the corpus parses, counted, and the count now shows the fix landing. Across 63
+  // branch artifacts there are 189 `position` / `falsifier` / `missing_actor` values. **106 are bare
   // plain scalars and not one carries an internal `: `** — that is the coincidence, and it held for
   // eleven runs before breaking on the twelfth, where most of the artifacts broke it at once.
   //
-  // **30 are folded, and all 30 come from the two runs dispatched under D37**, `001-seed3` and
-  // `001-seed3-repeat`, 15 each. Every prose value in both is a block scalar and neither contributed
-  // a single plain one. One of `001-seed3`'s carries `isolation: under this position` inside a
-  // `forecloses` item — the exact construct that aborted the run before it. That the second run
-  // reproduced the pattern exactly is the first evidence that D37 reaches the briefs rather than
-  // having been one lucky draw, which is the same question item 4 asked of everything else.
+  // **72 are folded, and every one comes from a run dispatched under D37**: `001-seed3` and
+  // `001-seed3-repeat` at 15 each, then E10's `014-seed14` and `014-seed1` at 21 each, because the
+  // wide path carries seven branches rather than five. Four runs, 72 folded values, zero plain ones.
+  // One of `001-seed3`'s carries `isolation: under this position` inside a `forecloses` item, and
+  // `014-seed14`'s NIGHT_OPERATOR carries `concurrencyPolicy: Forbid` inside one — both are the
+  // exact construct that aborted a run before D37, and both now parse.
   //
   // Eleven values are quoted, which is the other way out, and exactly one of those needed to be:
   // `001-seed2/ACTOR_CENSUS`'s falsifier reads "Look at the inbound path for one hour of real
@@ -223,8 +223,8 @@ test("not one unquoted value in any recorded run contains a colon-space, which i
       }
     }
   }
-  assert.equal(files, 49, "the recorded corpus changed size; re-count before trusting the rest of this test");
-  assert.deepEqual({ plain, quoted, folded }, { plain: 106, quoted: 11, folded: 30 });
+  assert.equal(files, 63, "the recorded corpus changed size; re-count before trusting the rest of this test");
+  assert.deepEqual({ plain, quoted, folded }, { plain: 106, quoted: 11, folded: 72 });
   // Every folded value comes from a run dispatched under the folded contract, and those runs
   // contributed no plain ones. If a later run adds plain values, D37 stopped reaching the briefs.
   assert.equal(plain, 106, "a post-D37 run contributed a plain prose value, so the folded contract is not reaching the briefs");

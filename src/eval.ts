@@ -87,6 +87,8 @@ interface RecordedRun {
   synthesis: string;
   branches: string;
   survivingBranches: string;
+  /** Each branch artifact on its own, for the saturation check in `auditFixtures`. */
+  branchTexts: string[];
   score: ScoreResult | null;
   hash: string | null;
 }
@@ -112,6 +114,7 @@ function loadRecorded(dir: string): RecordedRun {
     dir,
     synthesis,
     branches: branchText(branchFiles),
+    branchTexts: branchFiles.map((f) => readFileSync(join(bdir, f), "utf8")),
     survivingBranches: surviving ? branchText(branchFiles.filter((f) => surviving.has(f.replace(/\.yaml$/, "")))) : branchText(branchFiles),
     score,
     hash,
@@ -321,20 +324,18 @@ export function runEval(cfg: Config, opts: { fixturesDir?: string; recordedDir?:
     }
     const runs = recorded.filter((d) => d.startsWith(`${fx.id}-`) || d === fx.id);
     /*
-     * A fixture's compile expectations do not need a run, so they are checked whenever there is no
-     * run to check instead. Fixture 014 found this: it carried `branches_expected: 7` and
-     * `distinct_axes`, gained pre-registered `must_surface` items under E10 before the run those
-     * items are for existed, and silently stopped reporting the two compile checks it was built
-     * around — "no recorded runs" reads as nothing to say, not as a check that went away. Writing
-     * assertions before the run is the discipline this repo asks for, so the window between the
-     * two has to stay covered.
+     * A fixture's compile expectations are about the compiler, not about any run, so they are
+     * checked whenever the fixture states them — before a run exists and after. Fixture 014 found
+     * this twice. It carried `branches_expected: 7` and `distinct_axes`, gained pre-registered
+     * `must_surface` items under E10 before the run those items are for existed, and stopped
+     * reporting the two compile checks it was built around; then it gained runs, and a first
+     * attempt at the fix that only covered the no-run case dropped them again. "No recorded runs"
+     * and "this fixture has runs now" both read as nothing to say rather than as a check that went
+     * away, which is why the condition is now the fixture's own expectation and nothing else.
      */
-    if (fx.expect.compiles && (!fx.must_surface.length || !runs.length)) {
-      pairs.push(evaluateCompiles(cfg, fx));
-      if (!runs.length) continue;
-    }
+    if (fx.expect.compiles) pairs.push(evaluateCompiles(cfg, fx));
     if (!runs.length) {
-      without.push(fx.id);
+      if (!fx.expect.compiles) without.push(fx.id);
       continue;
     }
     for (const d of runs) pairs.push(evaluatePair(fx, loadRecorded(join(recordedDir, d))));
@@ -366,7 +367,10 @@ export interface ItemAudit {
   control_total: number;
   /** The literal text in a control that satisfied the assertion. What makes the finding actionable. */
   control_evidence: string | null;
-  verdict: "discriminating" | "sometimes" | "matches a control" | "never matched" | "no evidence yet";
+  verdict: "discriminating" | "sometimes" | "matches a control" | "never matched" | "no evidence yet" | "every branch";
+  /** Branch artifacts across all real runs that satisfy this item on their own, and how many exist. */
+  branches_matched: number;
+  branches_total: number;
 }
 
 /**
@@ -396,13 +400,39 @@ const RATE_FLOOR = 2;
  * first version of this function applied the control rule to both kinds and reported it as a
  * defect, which is why the parameter is here.
  */
-function verdictFor(matched: number, real: number, controlMatched: number, controlIsDefect: boolean): ItemAudit["verdict"] {
+/**
+ * E10 found the second way an assertion can measure nothing, and the audit could not see it.
+ *
+ * The control test asks whether the consensus answer already satisfies an item. It does not ask
+ * whether *every frame* already satisfies it. Fixture 014's five items were written from the
+ * problem, before any run, and four of them turned out to be matched by five to seven of seven
+ * branch artifacts in both runs — one by all fourteen. An item every frame satisfies cannot show a
+ * frame-set effect, cannot show a seed effect, and cannot fail except by accident, which is the
+ * same defect `trap_named` has and the same defect the control test exists to catch, arriving from
+ * the other direction. So it gets the same treatment: reported, named, and left for a person to
+ * decide, never silently tightened.
+ */
+function verdictFor(
+  matched: number,
+  real: number,
+  controlMatched: number,
+  controlIsDefect: boolean,
+  branchesMatched = 0,
+  branchesTotal = 0,
+): ItemAudit["verdict"] {
   if (controlIsDefect && controlMatched > 0) return "matches a control";
   if (real === 0) return "no evidence yet";
   if (matched === 0) return "never matched";
+  if (controlIsDefect && branchesTotal >= BRANCH_FLOOR && branchesMatched === branchesTotal) return "every branch";
   if (real >= RATE_FLOOR && matched < real) return "sometimes";
   return "discriminating";
 }
+
+/**
+ * Branch artifacts an item needs before "every one of them matched" is a property rather than a
+ * coincidence. Two runs of a seven-branch fixture is fourteen, which is the case that raised it.
+ */
+export const BRANCH_FLOOR = 10;
 
 /**
  * Fixture quality, not run quality. An assertion the consensus answer also satisfies is not
@@ -430,10 +460,12 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
     const hit = (r: RecordedRun, scope: string, patterns: string[]) => anyMatch(scopeText(r, scope), patterns);
     const hits = (r: RecordedRun, scope: string, patterns: string[]) => hit(r, scope, patterns) !== null;
 
+    const branchTexts = real.flatMap((r) => r.branchTexts);
     for (const ms of fx.must_surface) {
       const rm = real.filter((r) => hits(r, ms.scope, ms.any_of)).length;
       const cm = controls.filter((r) => hits(r, ms.scope, ms.any_of)).length;
       const cev = controls.map((r) => hit(r, ms.scope, ms.any_of)).find((x) => x !== null) ?? null;
+      const bm = branchTexts.filter((b) => anyMatch(b, ms.any_of) !== null).length;
       items.push({
         fixture: fx.id,
         item: ms.id,
@@ -443,7 +475,9 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
         real_total: real.length,
         control_matched: cm,
         control_total: controls.length,
-        verdict: verdictFor(rm, real.length, cm, true),
+        branches_matched: bm,
+        branches_total: branchTexts.length,
+        verdict: verdictFor(rm, real.length, cm, true, bm, branchTexts.length),
       });
     }
     for (const mn of fx.must_not) {
@@ -460,19 +494,22 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
         real_total: real.length,
         control_matched: cm,
         control_total: controls.length,
+        branches_matched: branchTexts.filter((b) => anyMatch(b, mn.any_of) !== null).length,
+        branches_total: branchTexts.length,
         verdict: verdictFor(rm, real.length, cm, false),
       });
     }
   }
 
   const lines = [`fixture audit over ${runs.length} recorded run(s): ${runs.filter((r) => !r.control).length} real, ${runs.filter((r) => r.control).length} control`, ""];
-  lines.push(`${"fixture".padEnd(8)} ${"item".padEnd(26)} real  ctrl  verdict`);
+  lines.push(`${"fixture".padEnd(8)} ${"item".padEnd(26)} real  ctrl  branch  verdict`);
   for (const i of items)
     lines.push(
-      `${i.fixture.padEnd(8)} ${i.item.padEnd(26)} ${`${i.real_matched}/${i.real_total}`.padStart(4)}  ${`${i.control_matched}/${i.control_total}`.padStart(4)}  ${i.verdict === "matches a control" ? "!! " : i.verdict === "never matched" ? " ? " : i.verdict === "sometimes" ? " ~ " : "   "}${i.verdict}`,
+      `${i.fixture.padEnd(8)} ${i.item.padEnd(26)} ${`${i.real_matched}/${i.real_total}`.padStart(4)}  ${`${i.control_matched}/${i.control_total}`.padStart(4)}  ${`${i.branches_matched}/${i.branches_total}`.padStart(6)}  ${i.verdict === "matches a control" || i.verdict === "every branch" ? "!! " : i.verdict === "never matched" ? " ? " : i.verdict === "sometimes" ? " ~ " : "   "}${i.verdict}`,
     );
 
   const bad = items.filter((i) => i.verdict === "matches a control");
+  const saturated = items.filter((i) => i.verdict === "every branch");
   const cold = items.filter((i) => i.verdict === "never matched");
   const flaky = items.filter((i) => i.verdict === "sometimes");
   lines.push("");
@@ -483,6 +520,15 @@ export function auditFixtures(cfg: Config, opts: { fixturesDir?: string; recorde
       `  frame set has a real gap the control happens to cover, or the pattern rewards recitation.`,
       `  Decide which; do not loosen the pattern to make the report quiet.`,
       ...bad.map((i) => `    ${i.fixture}/${i.item} matched on: "${(i.control_evidence ?? "").replace(/\s+/g, " ").slice(0, 90)}"`),
+    );
+  if (saturated.length)
+    lines.push(
+      `${saturated.length} assertion(s) every branch already satisfies: ${saturated.map((i) => `${i.fixture}/${i.item}`).join(", ")}.`,
+      `  An item matched by every artifact in every real run is not measuring the frame set. It cannot`,
+      `  show a frame effect, a seed effect, or a session effect, because nothing it could vary changes`,
+      `  the answer. That is the control defect from the other side, and the fix is the same: tighten the`,
+      `  item deliberately, or accept it as a floor check and say so. Do not read its pass rate as`,
+      `  evidence about the library.`,
     );
   if (cold.length) lines.push(`${cold.length} assertion(s) no real run has ever matched: ${cold.map((i) => `${i.fixture}/${i.item}`).join(", ")}. A stretch goal and an unreachable pattern look identical here.`);
   if (flaky.length)

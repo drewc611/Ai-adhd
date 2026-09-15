@@ -49,7 +49,10 @@ def test_frame_ids_are_forwarded_so_a_rename_is_not_a_tenth_frame(corpus):
 def test_negative_controls_are_not_loaded_as_runs(corpus):
     """A control is a hand-written answer with no plan and no score, not a run."""
     assert not any(a.run.endswith("-linear-cot") for a in corpus.artifacts)
-    assert len(corpus.runs) == 9, "001-seed3-repeat is the ninth; the four -linear-cot controls are still excluded"
+    assert len(corpus.runs) == 11, "E10's two fixture-014 runs are the tenth and eleventh; the four -linear-cot controls are still excluded"
+    # Fixture 014 dispatches seven branches, every other fixture five, so the corpus is no longer a
+    # multiple of five artifacts. Anything that divides by five is wrong from here on.
+    assert len([a for a in corpus.artifacts if a.run.startswith("014-")]) == 14
 
 
 def test_the_ninth_run_is_a_replicate_and_the_corpus_cannot_tell(corpus):

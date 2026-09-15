@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from run 20260915080342-bad9dc, E10 cell one: fixture 014 at its own seed 14, the first real run of the wide path (n=7). Driven by hand through `adhd run --phase`, not the kernel. Four of the five pre-registered must_surface items hold; not_a_lock_problem misses. The miss is a pattern failure rather than a frame failure and the evidence is in the artifact: FRAME_BREAKER was dispatched, named the load-bearing assumption outright -- 'overlap is not a defect in the scheduler', 'the cron interval did not change, the job's runtime crossed it' -- and prescribed bounding the batch behind a watermark, which is exactly what the item asks for, in none of the six registered wordings. E3's rule applies: a pattern is not widened after seeing which run failed. Recorded as observed."
+}

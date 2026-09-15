@@ -1282,3 +1282,76 @@ Everything else is confounded and will be reported as confounded:
 - **Two new scored runs join the corpus either way.** That is not the point of the experiment, but
   `committal`'s interval (backlog 98) and every rate in `frames --health` are thin enough that it
   is worth saying the runs count for something even if the predictions all fail.
+
+### E10 result, 2026-09-15
+
+Recorded as `evals/recorded/014-seed14` and `evals/recorded/014-seed1`. Both ran clean: 7 briefs on
+7 distinct axes, 14 valid artifacts, 0 contract violations, both under their own token quote at 0.8x.
+
+**Every prediction in the table is wrong, and they are wrong in the same direction.**
+
+| item | predicted carrier | branch artifacts that carry it |
+|---|---|---|
+| `who_notices` | `NIGHT_OPERATOR`, as the control | **14 of 14** |
+| `why_it_started` | `MECHANIC` | 13 of 14 |
+| `the_half_finished_run` | `DOOR_KEEPER` | 10 of 14 |
+| `the_skipped_work` | `MINIMALIST` | 9 of 14 |
+| `not_a_lock_problem` | `FRAME_BREAKER` | **0 of 14** |
+
+Four items are carried by most of the library and one by none of it. Nothing is carried by the
+frame it was predicted for and not by the others, which is the only shape that could have shown a
+frame-set effect.
+
+**So this pair cannot answer item 91's question, and the reason is not the one registered.** The
+section above pre-registered the session as the confound and named the one clean reading: a frame
+that was not dispatched cannot produce anything. That reading is unavailable here because no item
+depends on a single frame. An item carried by 14 of 14 artifacts holds under any frame set; an item
+carried by 0 of 14 misses under any frame set. Both seeds returned the same four-of-five result,
+and that identical outcome is evidence about the assertions rather than about the library.
+
+**`not_a_lock_problem` is a pattern failure, and the artifact proves it.** `FRAME_BREAKER` was
+dispatched at seed 14, named the load-bearing assumption outright — "overlap is not a defect in the
+scheduler", "the cron interval did not change; the job's runtime crossed it" — and prescribed
+bounding the work per run behind a stored watermark. That is exactly what the item asks for, written
+in none of the six registered wordings. E3's rule holds and the pattern was not widened after seeing
+which run failed. What the item measures today is a vocabulary, not a question.
+
+**The registered reading about carriers, applied honestly.** "If a predicted carrier is dispatched
+and the item still misses, the prediction about that frame was wrong and the frame does not reliably
+produce that question." The first half stands: the prediction was wrong. The second half does not
+follow here, because the frame produced the substance and the instrument could not see it. Recording
+it as a frame failure would be the more flattering reading of my own fixture and the false one.
+
+**The audit could not see any of this, and now it can.** `adhd eval --audit` has always asked
+whether the *negative control* satisfies an assertion, because an item the consensus answer passes
+is not measuring divergence. It never asked whether *every branch* satisfies it, which is the same
+defect arriving from the other side: an item every frame passes cannot vary with anything. The audit
+now carries a `branch` column and an `every branch` verdict, and it fires on `014/who_notices` at
+14 of 14 — the item that was written as this experiment's control. A control that every frame
+satisfies is not a control.
+
+**What the runs do establish, none of it about frame sets.**
+
+- **The wide path works.** First real dispatch at `n=7`, twice. Seven distinct axes both times,
+  0 contract violations across 14 artifacts, and 42 folded prose values with no plain ones —
+  including `014-seed14`'s `concurrencyPolicy: Forbid` inside a `forecloses` item, which is the
+  construct that aborted a run before D37.
+- **The token model holds off its fitting point.** `tokens_per_branch_estimate` was calibrated at
+  n=5 and quoted 728,280 at n=7; the runs cost 549,437 and 558,877, both 0.8x, the same shape as
+  n=5's 0.9x. The `adhd cost` guard was comparing an n=5 quote against runs at any n and had to be
+  made per-branch-count to notice.
+- **T7 is the whole detector story again.** Three firings at seed 14, two at seed 1, and nothing
+  else fired in either run. Across the corpus T7 now accounts for most of everything that has ever
+  fired, which makes the trap taxonomy's breadth largely decorative in practice.
+- **Item 4's floor did work immediately.** Pass A on the five shared frames moved by up to 0.07,
+  which `adhd diff` now reports as clearing the 0.05 session floor rather than hedging about it.
+  With the frame sets differing the tool still calls the pair confounded, correctly.
+- **Two frame labels are ordinary nouns and it cost something.** `frames --collisions` flagged
+  `LEDGER` and `SUCCESSOR`; `014-seed1`'s SABOTEUR wrote "logs that were not written to be a ledger"
+  and the critic read "written to be a [frame]". Backlog 100.
+
+**What item 91 still needs.** A fixture routed to `enumerate_options` whose assertions each depend
+on one frame — which means writing them against the frame library rather than against the problem,
+and that is the move this repo refuses for good reason. The alternative is the honest one: run the
+same seeds again and read *which frames appear*, not which assertions pass, since frame selection is
+deterministic from the seed and needs no assertion to observe. Item 91 stays open, restated.

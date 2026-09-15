@@ -1,0 +1,65 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: DOOR_KEEPER
+verdict: defend
+response: |
+  The objection is right about the order and right about the blind spot, and it costs me the
+  first step of the position. It does not touch the claim the position exists to make.
+
+  What it got right, without qualification. A wedged holder is the one case where `flock -n`
+  is not a cheap reversible guard: it is a door that latches behind you. Every subsequent tick
+  skips, and both instruments I proposed report that as health - no duration row is written
+  because nothing finishes, and a skip counter climbing at exactly one per interval is
+  indistinguishable from a lock doing its job on a busy night. That is worse than the failure
+  it replaces. Overlapping runs are loud; a permanently silent job is quiet until someone
+  downstream notices stale data, which is the same months-long detection latency I used to
+  argue against the orchestrator. By my own frame's accounting, installing the lock first is
+  the irreversible-feeling move in the set: it is trivial to `git revert` and impossible to
+  revert the two weeks of silence you did not know you were buying. The correct first
+  instrument is the one the objection names - an alarm on the age of the last successful
+  completion, which is the only signal that does not require a run to finish in order to fire.
+  Timeout that kills the process group, alarm on age-of-last-success, then the lock. Same
+  afternoon, different order, and the order is the whole point.
+
+  Why that is a correction inside the position rather than a replacement of it. The position's
+  load-bearing clause is the second one: stay on cron and refuse the orchestrator until two
+  weeks of duration data show p95 climbing toward the interval with no hang present. The
+  objection argues the opposite of the orchestrator case - it says the likely cause is a
+  missing timeout on a hang, which is precisely the finding that keeps that door shut and is
+  fixed with one afternoon of shell. Reordering the first two steps makes the experiment work;
+  it does not make the experiment unnecessary, and nothing in the objection shows that the
+  three worlds (creep, hang, spike) can be told apart without running it, or that the platform
+  decision can be made before you know which one you are in. A fold would require one of those.
+
+  On the double-written rows, the objection lands and I under-ordered it. The position already
+  named cleanup as irreversible and named the datastore owner as the missing actor, but it
+  left them as a footnote to be picked up later, and "later" is wrong if every interval adds
+  damage. Add the unique constraint or the upsert key in the same afternoon, before the two
+  weeks start. It is the one change that makes both the hang and the overlap non-damaging
+  regardless of which world you are in, it is orthogonal to the scheduler, and if it fails to
+  apply, the failure itself enumerates the rows already duplicated - which is the audit nobody
+  was going to run by hand.
+
+  On multi-host and the lock path, the objection restates the falsifier the position already
+  shipped, and the ordering section already had `pgrep -af` on every host on day zero. I take
+  the one thing it adds: a lock path on a network filesystem fails the same way with a single
+  host, so the check is "is the lock file on local disk and is the crontab entry on exactly
+  one machine", not just the host count.
+revised_position: >-
+  Install in this order in one afternoon - a hard wall-clock timeout that kills the process
+  group, an alarm on the age of the last successful completion, a unique or upsert key at the
+  datastore so overlap cannot double-write, and only then `flock -n` on the crontab line with
+  per-run pid, start, end, duration and exit code - then commit to staying on cron unless two
+  weeks of that log show p95 runtime climbing past half the interval with no hang present.
+revised_falsifier: >-
+  The position assumes the two-week measurement is free, so it fails if waiting has a running
+  cost - if the script's writes cannot be made idempotent and no unique key can be added, every
+  overlapping interval corrupts data while you measure, and the cheap experiment is no longer
+  cheap, which means you serialize or stop the job now and argue about platforms afterwards. It
+  also fails at step one if there is no success signal to age-alarm on, because a script with no
+  exit-code discipline and no observable completion marker makes the whole telemetry-first order
+  unbuildable and observability becomes the first change instead. And as before - if the crontab
+  entry exists on more than one host, or the lock path sits on a network filesystem, the lock is
+  theatre while the duration graph reports health.
+confidence: medium
+```

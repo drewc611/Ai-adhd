@@ -1141,7 +1141,8 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     run of zeroes was a sample, not a property, and the next run's ones said so. What is left is not
     this item but the instrument — the counter does not name the tool — which is item 97.
 91. **`enumerate_options` is the only class where a reseed changes the frame set, and item 3 used the
-    one where it cannot.** Its primary list holds nine frames and `n` is seven, so the seeded shuffle
+    one where it cannot.** **Attempted as E10 and not closed; see the restatement at the end of this
+    item.** Its primary list holds nine frames and `n` is seven, so the seeded shuffle
     drops two primaries per run and which two is a property of the seed. Every other run class has
     `n` exactly equal to its primary length, so a reseed there permutes dispatch order and nothing
     else (item 89). Fixture 001 is `design_decision`, which is why seeds 1, 2 and 3 selected the same
@@ -1153,6 +1154,24 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     against the 001 reseeds, which measure branch sampling at a fixed frame set and are worth having
     under that description; it is an argument that the description in item 3 belongs to a different
     class, and that `docs/EXPERIMENTS.md` should say which of the two E1a measured.
+
+    **Run as E10 and it did not answer the question.** Fixture 014 at seed 14 and seed 1, which share
+    five frames and swap two each way, both recorded. The five `must_surface` items were written from
+    the problem before either run and each was predicted to a carrier. Every prediction was wrong the
+    same way: four items are carried by 9 to 14 of the 14 branch artifacts and one by none of them, so
+    no item depends on a frame the two sets differ on, so neither run could show a frame-set effect.
+    Both seeds returned the identical four-of-five result.
+
+    **What is needed is not another pair of runs.** An assertion that could discriminate between
+    frames has to be written against the frame library, which is the move `docs/RETIREMENT.md` and D6
+    both refuse. The honest version of this experiment drops assertions entirely and reads *which
+    frames the shuffle selected*, which is deterministic from the seed and observable at compile time
+    for nothing. What that cannot tell you is whether the frames that were dropped would have
+    mattered, and nothing cheap can.
+
+    The experiment paid for itself elsewhere: it exposed that `adhd eval --audit` had no way to see
+    an assertion every branch satisfies, which is now the `every branch` verdict, and it fired on
+    this fixture's own control.
 
 92. ~~**`reasoning_carries`, the other half of item 60.** It reads a near-constant 3 because twelve of
     thirteen frames have no web tools, so the dimension is measuring the D4 allowlist rather than the
@@ -1321,6 +1340,23 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Until it exists, every rate in `frames --health` is over runs rather than over draws, and the
     gap is one run wide. It will widen: item 4 is the kind of experiment worth repeating, and each
     repeat makes the denominator less honest. **Resolve before any frame is retired on a rate.**
+
+100. **Two frame labels are ordinary English nouns, and E10 showed what that costs.** `adhd frames
+    --collisions` reports `LEDGER` and `SUCCESSOR` appearing in artifacts their frames did not write:
+    `014-seed1`'s SABOTEUR wrote "logs that were not written to be a ledger" and `014-seed14`'s
+    PARTICULARIST wrote "successor". The redactor removes the phrase, so the critic read "written to
+    be a [frame]" — a real noun phrase replaced by a marker, in the pass where it is scoring
+    `specificity` and `substance`.
+
+    The pass A prompt tells the critic to read through a redaction, which bounds the damage and does
+    not undo it. Item 61 renamed the two labels that collided at the time, so the mechanism is
+    understood and the fix is known: a display name that is not also a common noun.
+
+    What makes this a decision rather than a chore is `frame_hash`. It covers the frame's axis,
+    attacks, tools, stance, probes and forbidden list, and a rename changes the id every recorded run
+    refers to. Fifteen runs are downstream. Either the rename carries an alias so old recordings stay
+    readable, or the corpus is re-keyed, and which of those is right is a D6 call.
+    `frames --collisions` counts the problem and stops, and so does this.
 
 ## Not doing, and why
 

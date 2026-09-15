@@ -1,0 +1,78 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: LEDGER
+position: >-
+  Wrap the script in `flock -n` today and emit a counter on every refused lock, alerting when two
+  consecutive runs are skipped.
+reasoning: |
+  1. What the obvious answers cost, in what currency, paid by whom, and when.
+
+  There are two obvious answers and a third that is running right now.
+
+  The first is `flock -n`. It costs skipped runs. The currency is freshness, and downstream it is
+  user trust. The payer is whoever consumes the job's output and never knew it was a job, and the
+  bill lands later than the fix, at the moment someone acts on data they believe is current.
+
+  The second is to adopt a real scheduler - Airflow, Temporal, Celery beat, whatever is fashionable
+  in the room. It costs a new stateful service. The currency is on-call sleep and operational
+  surface. The payer is whoever holds the pager next year, every week, forever, for a problem that
+  is currently one line of shell wide. That is the most expensive thing on this list and it is the
+  one that will get the most enthusiasm in the meeting.
+
+  The third is the one you are doing now, which is surveying options while the overlap continues.
+  That is not free either. Every overlapping cycle spends doubled load on whatever the script talks
+  to and, if the writes are not idempotent, spends correctness. The deliberation has a meter on it
+  and the meter is paid by the data, not by the people deliberating. That alone argues for a cheap
+  reversible stop-the-bleeding move first and the architecture conversation second.
+
+  2. Which cost is invisible from where you are standing.
+
+  The silent skip. `flock -n` exits non-zero, cron swallows the exit code or mails it to a root
+  mailbox nobody has opened since the last reorg. From your seat the overlap stops and the ticket
+  closes. What has actually happened is that a loud failure was converted into a quiet one - the
+  job is now not running, sometimes, and nothing says so.
+
+  There is a second invisible cost underneath it. Overlap is not a bug, it is a measurement. It
+  means runtime has grown past the interval. That is a trend, and it has a direction, and a bare
+  lock erases the only instrument you had for reading it. You would be paying for silence with the
+  one signal that tells you when the real redesign becomes unavoidable.
+
+  3. The cheapest option that still resolves the pain in the question.
+
+  `flock -n` on the cron line, plus a counter incremented on refusal and an alert on two in a row.
+  No new service, no new daemon, no new thing to upgrade, and it is reversible by deleting one line.
+  The counter is not a nicety bolted on to a lock - it is the half that keeps the lock from being a
+  way to stop noticing.
+
+  4. What that costs instead, and whether the trade is explicit.
+
+  It costs roughly half an hour of one engineer's time to wire the counter and the alert, and it
+  costs one slot in the team's page budget, which is a genuinely scarce resource that is almost
+  never accounted for. The payer is the on-call rotation. Stated plainly: you are buying visibility
+  of skipped runs with one more thing that can wake someone up.
+
+  It also costs throughput. Serialising means that if the job is genuinely falling behind rather
+  than occasionally running long, it can never catch up. The alert is precisely what surfaces that,
+  which is why the counter is the load-bearing part and the lock is the trivial part.
+forecloses:
+  - >-
+    Adopting a workflow orchestrator as the first move - no scheduler gets evaluated now, and if the
+    real requirement turns out to be a dependency DAG with retries and backfill, this has to be
+    reopened later at higher cost.
+  - >-
+    Redesigning the script as a queue consumer or event-driven worker, which is the right answer if
+    the work is genuinely parallelisable and is the answer this position rules out.
+  - >-
+    Letting runs overlap deliberately and buying safety with idempotent writes instead of a lock -
+    cheaper in throughput, more expensive in the care every future edit to the script has to take.
+falsifier: >-
+  Pull start and end timestamps for the last 24 hours of runs from the existing log and compute p95
+  duration. If p95 already exceeds the cron interval, the lock will refuse most runs rather than a
+  few, this converts an overlap problem into a permanent silent backlog, and the position is wrong -
+  the answer is then a longer interval or real concurrency, not serialisation.
+missing_actor: >-
+  The owner of the database or API the script writes to - they can add a unique constraint or take a
+  Postgres advisory lock server-side, which is the only lock that still holds if this cron entry
+  exists on more than one host, where a file lock silently does nothing.
+confidence: medium
+```

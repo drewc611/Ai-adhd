@@ -99,11 +99,25 @@ test("every run quoted under the old estimate over-ran it, and the first run quo
   const mean = old.reduce((a, x) => a + x.ratio!, 0) / old.length;
   assert.ok(mean > 2, `mean ratio over the pre-D32 runs is ${mean.toFixed(2)}, no longer the under-quote this pins`);
 
+  // Post-D32 the quote scales with n, so there is one figure per branch count rather than one
+  // figure. n=5 is 520,200 and n=7 is 728,280; both are `tokens_per_branch_estimate` times the
+  // same phase model, so a new n adds a value here rather than breaking the claim.
   assert.ok(recalibrated.length >= 1, "no run has been quoted under the recalibrated estimate yet");
+  const quotes = new Map<number, number>();
   for (const x of recalibrated) {
-    assert.equal(x.estimate, 520200, `${x.run} carries an estimate this test does not recognise`);
+    assert.ok(x.n !== null, `${x.run} has a recalibrated estimate and no branch count`);
+    const seen = quotes.get(x.n!);
+    if (seen === undefined) quotes.set(x.n!, x.estimate!);
+    else assert.equal(x.estimate, seen, `two runs at n=${x.n} were quoted different figures`);
     assert.ok(x.ratio! <= 1, `${x.run} over-ran the recalibrated gate at ${x.ratio!.toFixed(1)}x, so D32 is not yet enough`);
   }
+  assert.equal(quotes.get(5), 520200, "the n=5 quote moved");
+  // The wide path's first two runs came in at 0.8x, which is the same shape as n=5's 0.9x rather
+  // than a new regime, so `tokens_per_branch_estimate` holds across branch counts and not just at
+  // the one it was fitted on. `001-seed3-repeat` reads 0.5x and is not evidence either way: its
+  // five diverge tasks ran in the foreground and the harness reported no count for them, which its
+  // own cost.json says.
+  if (quotes.has(7)) assert.equal(quotes.get(7), 728280, "the n=7 quote moved");
 });
 
 // ---- kernel journal statistics -------------------------------------------------------------
@@ -175,15 +189,24 @@ test("the D5 gate never quotes less than the worst run on record", () => {
   const report = costReport(cfg);
   const withEstimate = report.runs.filter((r) => r.ratio !== null);
   assert.ok(withEstimate.length >= 7, "there should be recorded runs to check against");
-  const worst = Math.max(...withEstimate.map((r) => r.tokens));
 
-  for (const n of new Set(withEstimate.map((r) => r.n).filter((n): n is number => n !== null))) {
-    const c = compile(cfg, "What timeouts should I set on this HTTP client?", { problem_class: "design_decision" }, { seed: 1 });
+  /*
+   * The comparison is per branch count, and it has to be. The quote scales with n, so measuring an
+   * n=5 quote against the worst run at any n asks the five-branch gate to cover a seven-branch run.
+   * E10's two n=7 runs are what found that: both came in under their own 728,280 quote at 0.8x,
+   * and the test still failed because it was holding the n=5 figure against them.
+   */
+  const classFor = (n: number) => (n === 7 ? "enumerate_options" : "design_decision");
+  const problemFor = (n: number) =>
+    n === 7 ? "We run background jobs on a cron and it has started overlapping. What are the options?" : "What timeouts should I set on this HTTP client?";
+  for (const n of new Set(withEstimate.map((r) => r.n).filter((x): x is number => x !== null))) {
+    const worstAtN = Math.max(...withEstimate.filter((r) => r.n === n).map((r) => r.tokens));
+    const c = compile(cfg, problemFor(n), { problem_class: classFor(n) }, { seed: 1 });
     if (c.kind !== "plan") throw new Error("expected a plan");
     if (c.plan.branches.length !== n) continue;
     assert.ok(
-      c.plan.estimate.tokens_total >= worst,
-      `the gate quotes ${c.plan.estimate.tokens_total.toLocaleString()} for n=${n} against a recorded run of ${worst.toLocaleString()}`,
+      c.plan.estimate.tokens_total >= worstAtN,
+      `the gate quotes ${c.plan.estimate.tokens_total.toLocaleString()} for n=${n} against a recorded run of ${worstAtN.toLocaleString()}`,
     );
   }
 });

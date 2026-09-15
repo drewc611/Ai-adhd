@@ -1,0 +1,93 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+pass: B
+clusters:
+  - id: lock_then_measure
+    action: "Edit the crontab line to wrap the existing command in flock -n today, and in the same change start recording per-run duration and every skipped-because-locked event so the bigger scheduler decision is made later from that record."
+    members: [LEDGER, DOOR_KEEPER, PARTICULARIST]
+    singleton: false
+    strongest_objection: "The ordering is backwards in the one case that costs the most. If the overlap is caused by a run that hangs rather than a run that is merely slow, flock -n does not serialize anything - it hands the lock to a process that will never exit, and every subsequent tick is skipped forever. The telemetry proposed alongside it is blind to exactly that: an alert on run duration and a count of skips both depend on runs starting and finishing, and a wedged holder produces no duration at all, while a skip counter climbing steadily looks identical to a guard doing its job. That means the first thing installed should be a hard wall-clock timeout that kills the process group and an alarm on the age of the last successful completion, with the lock second; done in the stated order, the change converts a loud, visible failure into a quiet one and the alarm that would have caught it is the alarm that was not built. Two further gaps: serializing future runs repairs none of the rows already double-written, so if the work is not idempotent there is damage on disk that no amount of later measurement will surface; and a lock file is only mutual exclusion if there is exactly one host and one local filesystem honouring it - if the same crontab entry exists on a second machine, or the lock path sits on a network filesystem, the change buys nothing while the duration graph reports that everything is fine."
+  - id: operator_readable_guard
+    action: "Rebuild the job's entrypoint so a single run is guarded by a lock whose file names its holder, skipping is loud rather than silent, and a human at a shell can read the state, kill the run, and rerun it by hand without a deploy."
+    members: [NIGHT_OPERATOR, ACTOR_CENSUS]
+    singleton: false
+    strongest_objection: "The proposal quietly contains two different changes with wildly different prices, and it argues for the cheap one while assuming the expensive one. Writing PID and start time into a lock file and making a skipped run log loudly is genuinely a handful of lines. Making each unit of work commit individually, idempotently and resumably so a killed run loses nothing and a rerun redoes nothing is a rewrite of the script's core loop, and it is asserted rather than costed - which matters because the same argument is used to reject other approaches on the grounds that they are expensive infrastructure work. Worse, the two halves undercut each other: if every unit really is committed idempotently and resumably, a second concurrent copy is no longer dangerous, and the exclusive lock the position is named for stops being a correctness mechanism and becomes at most a resource optimisation. Then there is what the design does not touch. Overlap appeared because runtime crossed the interval; a guard makes the crossing survivable and legible at 3am but records nothing about the trend, so the same incident returns with a longer runtime and a better bedside manner. And the whole design rests on a person with a shell on the host that fires the cron. On an ephemeral container, a managed scheduler, or a box only a build pipeline can log into, that actor does not exist, and every control chosen here - cat the lock file, touch a flag, SIGKILL the copy - is unreachable at the moment it is needed."
+  - id: instrument_only_then_bound_the_batch
+    action: "Change nothing about concurrency now, add structured start and end logging with a run id and an item count, run it for a week, plot duration against volume, then cap the work per run behind a stored watermark."
+    members: [FRAME_BREAKER]
+    singleton: true
+    strongest_objection: null
+  - id: leased_idempotent_units
+    action: "Restructure the work into named units claimed under expiring leases in a claim table, make processing a unit twice equal to processing it once, wrap every invocation in a timeout that kills the process group, and alert on the age of the last completion instead of on exit codes."
+    members: [SABOTEUR]
+    singleton: true
+    strongest_objection: null
+traps:
+  LEDGER:
+    T1: { fired: false, evidence: "Strip cron, the Python shell-out and the recency of the overlap and the argument dies: it turns on the crontab line being the edit site, on -n versus -w queueing behaviour, and on an alert pegged to half the cron interval." }
+    T2: { fired: false, evidence: "It attacks the question's premise that overlap is the fault to be fixed, arguing overlap is the alarm proving runtime crossed the interval, and separately attacks the request for a menu as itself an unpriced cost." }
+    T3: { fired: false, evidence: "No authority, vendor, or cited practice appears; the cost-currency-payer chain is constructed from the problem and stands without any of it." }
+    T4: { fired: false, evidence: "It closes five decisions - lock now, -n not -w, no scheduler migration, no interval retune, no idempotence rewrite - and leaves only the post-measurement scheduler question open on purpose." }
+    T5: { fired: false, evidence: "The position is an imperative with a named command: wrap the existing cron line in flock -n and emit two numbers per run." }
+    T6: { fired: false, evidence: "Names the team, the on-call who will own the new page, the pager-holder eighteen months out, and the downstream consumer as missing_actor with a concrete action; omits the upstream data writer and any attacker." }
+    T7: { fired: false, evidence: "It separates a few lines of discardable shell from a migration described as a guess with a maintenance contract attached, and prices the rework of throwing the wrapper away." }
+    T8: { fired: false, evidence: "Flattened to locking without telemetry is disconnecting the alarm, the claim survives the loss of the ledger framing and remains the operative point." }
+  DOOR_KEEPER:
+    T1: { fired: false, evidence: "The three-worlds separation, the p95-against-half-the-interval rule and the pgrep across hosts carrying this crontab are meaningless once cron and the shelled-out script are removed." }
+    T2: { fired: false, evidence: "It attacks the unstated single-host assumption on which any lock answer depends, and the assumption that the orchestrator question is answerable before duration data exists." }
+    T3: { fired: false, evidence: "Detection latency and cost-of-being-wrong are argued from the mechanics of the situation with no appeal to any external authority." }
+    T4: { fired: false, evidence: "It closes the orchestrator question for two weeks, rules out interval widening and the idempotence path, and pre-commits the decision rule so the reader stops deciding when to decide." }
+    T5: { fired: false, evidence: "Do X is explicit and dated: flock -n today, log pid, start, end, duration, exit code, read the distribution at day fourteen." }
+    T6: { fired: false, evidence: "Names the crontab owners across hosts and the datastore owner as missing_actor with a unique-constraint action; the on-call, the upstream writer and any payer go unnamed." }
+    T7: { fired: false, evidence: "The undoable versus not-undoable inventory with explicit detection latencies is the structure of the whole answer and it orders every recommendation." }
+    T8: { fired: false, evidence: "Flattened to buy the orchestrator decision with two weeks of duration data instead of a preference, the claim is unchanged and still worth making." }
+  PARTICULARIST:
+    T1: { fired: false, evidence: "The load-bearing fact is that cron mails on output rather than exit status and flock prints nothing on failed acquire; delete cron and the entire recommendation evaporates." }
+    T2: { fired: false, evidence: "It attacks the assumption that this is a scheduling choice by showing the recency of the overlap flips the answer, and attacks the reflex answer on its reporting rather than its mechanism." }
+    T3: { fired: false, evidence: "The claim about flock exit behaviour and cron mail is argued mechanically, with no citation propping it up." }
+    T4: { fired: false, evidence: "It closes three decisions outright - no interval change, no queue or timer migration before the skip count exists, no lock inside the Python - and fixes the exact crontab text." }
+    T5: { fired: false, evidence: "The position is a single imperative with the shell operator to append spelled out." }
+    T6: { fired: false, evidence: "Names the crontab owner and the mailbox owner as missing_actor with an action available today; the downstream consumer whose tolerance for skipping decides whether the plan is safe is not named." }
+    T7: { fired: false, evidence: "Probe 3 weighs one shell operator against a rewrite justified by a number nobody has yet, which is a cheap-versus-committed distinction, though nothing is ordered by undoability as such." }
+    T8: { fired: false, evidence: "Flattened to bare flock -n makes skipped runs invisible, so make the skip produce output, the claim corrects a real defect in the obvious fix and survives losing the probe framing." }
+  FRAME_BREAKER:
+    T1: { fired: false, evidence: "The argument depends on a fixed interval that did not change while the job runtime crossed it, and on backfilling history from existing cron mail; both are specific to this setup." }
+    T2: { fired: false, evidence: "It names the load-bearing assumption explicitly - that overlap is a concurrency problem answered by picking a mechanism - and derives the whole position from rejecting it." }
+    T3: { fired: false, evidence: "No authority is invoked anywhere; the case rests on the claim that every menu item destroys the only measurement available." }
+    T4: { fired: false, evidence: "It closes three decisions - no flock now, no migration now, no interval change - and forces the reader to stop shopping for a mechanism, although it deliberately leaves the mechanism itself open." }
+    T5: { fired: false, evidence: "Ship a one-line instrumentation change tomorrow is a dated imperative with a named payload." }
+    T6: { fired: false, evidence: "Names the script owner, the upstream team that changed the volume, the asker, and an unnamed output consumer as missing_actor with a freshness-requirement action." }
+    T7: { fired: true, evidence: "It recommends redefining a run behind a stored watermark with no cost of being wrong and no detection latency, which is the one move here that changes run semantics irreversibly, and it treats a week of continued overlap while measuring as free." }
+    T8: { fired: false, evidence: "Flattened to measure the runtime curve before choosing a mechanism and then bound the work per run, the claim stands, though the first half is close to a truism and the bounded-batch half does the real work." }
+  NIGHT_OPERATOR:
+    T1: { fired: false, evidence: "It turns on cron mail no human has read, editing crontab as root on one box while a second keeps firing, and the lock releasing on SIGKILL - all specific to this shelled-out cron job." }
+    T2: { fired: false, evidence: "It attacks both the framing that overlap is the defect, arguing invisibility is the worse one, and the request itself, refusing to answer with a menu." }
+    T3: { fired: false, evidence: "The chain from downstream page to file-touch controls to alerting on absence borrows no authority." }
+    T4: { fired: false, evidence: "It closes the orchestrator delegation, the schedule and optimisation path, and the make-it-idempotent-and-let-them-run path, and insists on one guard rather than three." }
+    T5: { fired: false, evidence: "Pick one guard, make its state readable and clearable by hand, and write down how to clear it is a direct imperative." }
+    T6: { fired: false, evidence: "Names the on-call, the author as distinct from the on-call, and the downstream datastore owner as missing_actor with a unique-constraint action; the upstream cause of the growth and the payer are absent." }
+    T7: { fired: true, evidence: "Everything is sorted by whether a control works without a deploy or root, which is about access at 3am; no recommendation carries a cost of being wrong or a time to find out, and nothing is ordered by what can be backed out." }
+    T8: { fired: false, evidence: "Flattened to make the guard loud and its state readable and clearable, and alert on absence rather than presence, the claim survives the 3am framing intact." }
+  ACTOR_CENSUS:
+    T1: { fired: false, evidence: "The lock file contents, the crontab comment-out and the hand-run command are specific to this job, though the actor enumeration including an attacker and a payer reads as a template applied to the problem rather than drawn from it." }
+    T2: { fired: false, evidence: "It attacks the phrasing that the system started overlapping with itself, refusing the autonomy framing and insisting something with hands changed the runtime." }
+    T3: { fired: false, evidence: "The who-can-act-fastest chain uses no citation and no borrowed practice." }
+    T4: { fired: false, evidence: "It closes the queue-and-worker rewrite, the shard-across-concurrent-runs path, and the interval or jitter fix, and fixes the shape of the entrypoint." }
+    T6: { fired: false, evidence: "It enumerates the most actors of any branch - on-call, operator, cron daemon, upstream service, data writer, attacker, database, payer - and names the on-call as missing_actor with the position built on that actor." }
+    T5: { fired: false, evidence: "Wrap the script in an flock-guarded, idempotent, resumable single-run entrypoint is a single imperative." }
+    T7: { fired: false, evidence: "Actions are ranked by speed, cost and whether they need a deploy or review, and that ranking is what puts the shell-level change ahead of the rewrite, even though undoability is never the axis." }
+    T8: { fired: false, evidence: "Flattened to make the job safe to kill mid-flight and safe to start by hand, with a lock file that says who holds it, the claim is the same one and worth saying." }
+  SABOTEUR:
+    T1: { fired: false, evidence: "The violations are anchored in this setup - flock over a network filesystem, a copied crontab pointing staging at the production database, cron refiring on an NTP step - though the prescription itself would transfer to any scheduled batch job unchanged." }
+    T2: { fired: false, evidence: "It enumerates the four assumptions behind the obvious lock answer, including that a skipped run is harmless and a quiet job is a working job, and breaks each with a concrete violation." }
+    T3: { fired: false, evidence: "Every failure mode is argued from mechanism with no appeal to a vendor, standard or named practice." }
+    T4: { fired: false, evidence: "It closes shipping flock and stopping, keeping the work as an opaque batch, tuning the timing, and reaching for a distributed lock service." }
+    T5: { fired: false, evidence: "Make each unit idempotent and leased, wrap invocations in a timeout, page on the age of the last success - three imperatives in the position." }
+    T6: { fired: false, evidence: "Names the operator who copies config to staging and the on-call who runs the script by hand as missing_actor, with hand-invocation safety following from it; the payer for the rewrite is never named." }
+    T7: { fired: true, evidence: "It proposes the most invasive change in the run - per-unit identity, a claim table, restructured work - with no cost of being wrong, no detection latency and no statement of what could be backed out, while its own limits section covers failure modes rather than reversibility." }
+    T8: { fired: false, evidence: "Flattened to put correctness in the work rather than in the lock, and treat silence as an alarm, the claim is the strongest version of that argument and needs no angle." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "All seven attacked the question's frame, and three attacked it head-on: that overlap is a concurrency-mechanism choice rather than evidence that runtime crossed the interval, that a lock answer presumes a single host and filesystem, and that the request for a menu of directions is itself the expensive move." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every branch supplied a non-null missing_actor with an action - the downstream consumer stating a freshness requirement in hours, the datastore owner adding a unique constraint, the mailbox owner producing run history today, and the on-call human who can kill or hand-run the job." }
+lint_verdicts: []
+```

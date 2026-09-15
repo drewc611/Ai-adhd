@@ -1,15 +1,17 @@
-# What thirteen runs show
+# What fifteen runs show
 
 A short account of what this repository has actually established, written so the negative results
 are as easy to find as the rest. Every number below comes from a command in this checkout and is
 pinned by a test; the commands are named so you can rerun them.
 
-Backlog item 49 asked for this at five runs. There are thirteen now, nine with a `score.json`, and
-the extra eight did not change the shape of the answer — with three exceptions, all named where they
-belong. Two are from the twelfth run: it is the only contested decision the rubric actually
-separates, and the first to come in under the token estimate it was quoted. The third is the
-thirteenth, which is the twelfth run again at the same seed with byte-identical briefs, and it is the
-most uncomfortable number here: the critic pruned two branches the first time and none the second.
+Backlog item 49 asked for this at five runs. There are fifteen now, eleven with a `score.json`, and
+the extra ten did not change the shape of the answer — with four exceptions, all named where they
+belong. Two are from `001-seed3`: the first contested decision the rubric actually separates, and
+the first run to come in under the token estimate it was quoted. The third is its replicate at the
+same seed with byte-identical briefs, and it is the most uncomfortable number here: the critic pruned
+two branches the first time and none the second. The fourth is E10's pair of seven-branch runs, which
+are the first to exercise the wide path and the first to show the rubric separating a winner by more
+than two anchor points twice running.
 
 ## The claim
 
@@ -25,9 +27,10 @@ in-context divergence technique is built on exactly that (D2).
 
 ## Method
 
-Thirteen recorded runs over four fixtures, each fixture carrying `must_surface` assertions written
-before the run and a linear chain-of-thought control. One of the thirteen is a deliberate replicate:
-same fixture, same seed, same briefs, different session, which is how the noise floor got measured.
+Fifteen recorded runs over five fixtures, each fixture carrying `must_surface` assertions written
+before the run and, on four of the five, a linear chain-of-thought control. One of the fifteen is a
+deliberate replicate: same fixture, same seed, same briefs, different session, which is how the noise
+floor got measured. Two are fixture 014 at seven branches, the widest path the router can produce.
 The mechanics — verbatim passthrough, `problem_hash`, blind pass A, the pruned block — are enforced
 by 481 tests rather than by inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
 before the commit that runs it.
@@ -70,16 +73,19 @@ not a reseed. `retry_target_questioned` survived the reseed and not the frame se
 passed once. The only assertion robust across all three is `trap_named`, which asks almost nothing:
 any `T[1-8]` anywhere in the pruned block.
 
-**The recommendation is a near-tie the rubric does not settle.** `adhd learn --sensitivity` reports
-that no shipped representative changes under any single-dimension weight move of ±1 — which reads
-as stability until you read the next line. 5 of the 6 contested decisions were settled by two anchor
-points or fewer, two of them by exactly one, and one by nothing at all. Those representatives are not
-stable because the rubric is decisive; they are close enough that any of them could ship.
+**The recommendation is usually a near-tie the rubric does not settle.** `adhd learn --sensitivity`
+reports that no shipped representative changes under any single-dimension weight move of ±1 — which
+reads as stability until you read the next line. 5 of the 8 contested decisions were settled by two
+anchor points or fewer, two of them by exactly one, and one by nothing at all. Those representatives
+are not stable because the rubric is decisive; they are close enough that any of them could ship.
 
-The exception is `001-seed3`, where `DOOR_KEEPER` beat `MINIMALIST` by 0.1042 — four to five anchor
-points — and it is the only contested decision in the corpus the rubric actually separates. One
-case out of six is not a reversal of the paragraph above, and it is the first evidence that the
-narrowness is a property of particular packs rather than of the rubric.
+Three clear the line. `001-seed3` and `014-seed1` at 0.1042, and `014-seed14` at 0.0625. The last
+two are the wide path, and they say something the five-branch corpus could not: **both seven-branch
+runs separated their winner by more than two anchor points, where five of the six five-branch
+decisions did not.** Two runs is not a rate, and the obvious mechanism — seven candidates give one
+more room to be clearly best than five do — is not tested by anything here. It is the first evidence
+that the narrowness is partly a property of `n` rather than of the rubric, and it is cheap to test
+further, because `enumerate_options` is the only class that runs wide.
 
 **And the corpus now has an exact tie, which is the same finding with the floor taken out.** In
 `001-seed3-repeat`, `ACTOR_CENSUS` and `FRAME_BREAKER` both scored 0.8810 in the same cluster. The

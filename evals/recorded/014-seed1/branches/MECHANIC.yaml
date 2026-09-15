@@ -1,0 +1,92 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: MECHANIC
+position: >-
+  Delete the cron entry and run the script under a supervisor that starts the next execution only
+  after the previous process has exited, with a hard kill timeout on each execution.
+reasoning: |
+  1. The physical components, and what each does while the system waits.
+
+  A cron daemon sleeps on a timer and wakes at a wall-clock boundary. On waking it forks a shell,
+  the shell execs a Python interpreter, and the interpreter opens whatever it opens: a database
+  connection, one or more sockets, temp files, maybe a log file. Then it blocks on the slowest of
+  those. While it blocks, the cron daemon is doing exactly one thing: sleeping until the next
+  boundary. It does not read the process table, it does not wait on the earlier child, and nothing
+  about that child's state reaches the decision to fork again. There is no component in this
+  system whose job is to know that the last run is still alive. That is the whole of the defect.
+  The overlap is not a failure of the script; it is the absence of a part.
+
+  2. What is held, consumed, or leaked during the interval.
+
+  Per live copy: a process slot, the resident memory of an interpreter plus everything it imported
+  and every row it buffered, one or more connections against a pool with a fixed ceiling, file
+  descriptors, any temp file written but not yet renamed into place, and any rows locked by an
+  open transaction. Two copies touching the same rows each wait on the other's locks, so each runs
+  slower than one copy would. Run N+1 therefore takes longer than run N, which makes it more
+  likely to still be alive when run N+2 fires. The overlap feeds itself. Consumption does not grow
+  linearly with time; it grows with the number of live copies, and the number of live copies grows
+  because of the contention the copies create. Left alone, this ends at the connection ceiling or
+  at the memory ceiling, and which one it hits first decides whether the failure looks like
+  database errors or like the kernel killing something at random.
+
+  3. What happens at each boundary when a component stops responding.
+
+  If a remote peer stops answering and the socket has no timeout, the interpreter blocks forever,
+  holding its connection, its descriptors, and its transaction, and cron keeps firing on schedule
+  behind it. If the interpreter is killed with an uncatchable signal, the kernel closes its
+  descriptors, the database sees the connection drop and rolls the open transaction back, and a
+  lock held on a file descriptor is released by the kernel because the descriptor is gone. But a
+  lock recorded outside the process - a row in a table, a file on disk containing a PID, a key in
+  a cache - is not released by the death, because nothing in the mechanism ties that record to the
+  life of the process. It survives, and it blocks every later run until a person deletes it. If
+  the machine reboots, memory and anything on a memory-backed filesystem vanish; anything on real
+  disk does not. If the cron daemon itself dies, nothing runs and nothing says so.
+
+  4. Where the answer people reach for first stops following the mechanism.
+
+  The first answer is to wrap the script in a lock so the second copy sees the lock and exits. Now
+  trace that. The second copy exits, so the work scheduled for that minute is not done. Nothing in
+  the mechanism writes down that it was not done. Cron produces arrivals at a rate set by the
+  clock; the script serves them at a rate set by its own runtime. Overlap is the observable symptom
+  of runtime having grown past the period, which means arrivals outrun service. A lock does not
+  change either rate. It is a policy for deciding which arrivals to discard, and it discards them
+  silently. The derivation parts company at the step where the lock is described as fixing the
+  overlap: it prevents concurrent execution, it does not prevent the backlog that produced the
+  concurrency, and it adds the one piece of state from probe 3 that outlives a killed process and
+  wedges every future run.
+
+  Following the mechanism instead of the reflex leaves exactly three families, which is the "few
+  directions" the question asks for: discard arrivals (a lock), serve faster (make the script
+  cheaper or shard its input), or stop generating arrivals independently of completion. Only the
+  third makes overlap structurally impossible rather than handled. A supervisor that execs the
+  script, waits for the exit, sleeps a fixed gap, and execs again cannot produce two live copies,
+  because the cause of the next start is the exit of the previous one. It holds its state in its
+  own memory as a parent process, so a killed child leaks nothing that needs manual clearing, and
+  the kernel reclaims everything the child held. The hard timeout is the part that covers the
+  hung-socket boundary from probe 3: without it, a single wedged run stops the loop forever
+  instead of stopping it every minute, which is a quieter failure, not a smaller one.
+forecloses:
+  - >-
+    A lockfile, flock wrapper, or database advisory lock left in front of the existing cron entry -
+    this rules that out, because it converts overlap into unrecorded skipped work and reintroduces
+    out-of-process state that survives a killed run.
+  - >-
+    A lock key with an expiry in a shared store - the expiry must be either shorter than the worst
+    run, in which case it releases while the run is alive and permits the exact overlap it exists
+    to stop, or longer, in which case a dead run blocks live ones for the remainder of the window.
+  - >-
+    Making the schedule finer or running several copies in parallel against the same input to catch
+    up - this raises the arrival rate against a service rate that contention is already lowering.
+falsifier: >-
+  Log the start and end timestamp of each run for a week, or just read the start times of the
+  copies currently overlapping in the process table. If nearly every run finishes well inside the
+  period and the overlaps come from a handful of runs that hung for hours, then the arrival rate
+  never exceeded the service rate, the queueing argument does not apply, and the fix is a socket
+  timeout plus a hard kill rather than a supervised loop - which would buy almost nothing.
+missing_actor: >-
+  Whoever administers the host's init system (not named in the problem, which names only cron and a
+  script) can install the script as a supervised long-running service with a restart policy, a
+  runtime limit that kills a wedged execution, and memory and descriptor limits that make an
+  escaping run die early and loudly instead of taking the box down with it.
+confidence: medium
+```
