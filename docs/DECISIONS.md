@@ -3209,9 +3209,68 @@ dispatched on rung 2 as `adhd-branch-search`, launched, and returned three valid
 contract violations at critique. Item 54 asked for the plugin agents to be exercised as plugin agents;
 this is that, through a documented rung, on an agent whose grant cannot reach a sibling artifact.
 
-**One thing the run did not settle.** Each of the three reported `tool_uses: 1`, and the counter does
-not say which tool, so whether any of them actually searched is unknown. Branches dispatched as
+**One thing the run did not settle, and the check that partly answers it.** Each of the three
+reported `tool_uses: 1`, and the counter does not say which tool, so whether any of them actually
+searched is unknown. Running `adhd traps` over all three artifacts afterwards, which is what the run
+procedure now requires for rung 2, **fires nothing**: T3, T4 and T5 all clean. T3's detector is
+"remove every citation, does a chain of reasoning remain", so a branch that searched and leaned on
+what it found would have fired it. None did. That is not proof none searched — a branch that searched
+and did not use the result reads identically to one that never searched — but it is the difference
+that would have mattered, and it came back clean on the first rung-2 run. Branches dispatched as
 `general-purpose` reported 1 as well, and a bare diagnostic probe reported 0, so the count is not
 simply the hand-back. Whether rung 2 costs stance purity in practice or only in principle needs a
 counter that names the tool, and nothing here has one. Recorded as open rather than assumed either
 way.
+
+---
+
+## D39. `reasoning_carries` stays, because a ceiling is not the same as unmeasured
+
+Item 60 named two "ceiling dimensions" and treated them as one case. D34 retired `foreclosure` and
+left the other half open as item 92, which assumed the same answer was coming. The numbers say
+otherwise, and they were available the whole time.
+
+Chance-corrected reliability over the recorded corpus, worst first:
+
+| dimension | alpha | 95% interval | agreement | ceiling rate | distinct values |
+|---|---|---|---|---|---|
+| `foreclosure` | **-0.017** | **[-0.036, 0.000]** | 0.96 | 0.943 | 2 |
+| `committal` | **0.402** | **[-0.054, 0.683]** | 0.86 | 0.840 | 3 |
+| `substance` | 0.508 | [0.306, 0.645] | 0.76 | 0.707 | 3 |
+| `falsifiability` | 0.517 | [0.156, 0.820] | 0.82 | 0.747 | 3 |
+| `actor_coverage` | 0.557 | [0.341, 0.710] | 0.84 | 0.387 | 2 |
+| `reasoning_carries` | **0.678** | **[0.678, 0.700]** | 0.98 | 0.947 | 3 |
+| `specificity` | 0.731 | [0.428, 0.937] | 0.84 | 0.147 | 3 |
+| `assumption_attack` | 0.773 | [0.570, 0.915] | 0.70 | 0.520 | 3 |
+| `reversibility` | 0.850 | [0.734, 0.938] | 0.76 | 0.187 | 4 |
+
+**Decision:** keep `reasoning_carries` unchanged. Resolved 2026-09-15.
+
+`foreclosure` and `reasoning_carries` sit at almost the same ceiling — 0.943 against 0.947 — and are
+nothing alike underneath. `foreclosure`'s interval contains zero, so raters agreeing 96% of the time
+told you nothing they would not have told you by guessing. `reasoning_carries` reaches alpha 0.678
+with an interval that excludes zero comfortably, which puts it above `committal`, `substance`,
+`falsifiability` and `actor_coverage`. It is one of the better-behaved dimensions in the rubric. The
+ceiling rate was doing all the work in item 60's framing and it is the one statistic that cannot
+distinguish prevention from dead weight.
+
+**The ceiling has a mechanism, and it is the same one `docs/RETIREMENT.md` records for T3.**
+`reasoning_carries` scores the citation trap. T3 has fired exactly once in the corpus, on `PRIOR_ART`,
+the only frame carrying `WebSearch` and `WebFetch` — twelve of thirteen frames have no tools, so they
+have nothing to cite, so they score 3. That is a detector that is untriggered rather than useless, and
+the way to move it is to run the frames that attack it under the conditions they need, not to delete
+the dimension that reads it.
+
+**The conditional option is worse than it sounds, for a reason unrelated to the evidence.** Scoring a
+dimension only for tool-bearing frames would vary the dimension set *between branches inside one run*.
+Pass A aggregates as a weighted mean normalised by total weight, so two branches scored on different
+denominators are not comparable to each other, and comparing branches within a run is the one thing
+pass A exists to do. D34's `retired_in` varies the set across rubric *versions*, which is safe because
+every branch in a run shares a version. Per-branch variation is a different mechanism and a broken one.
+
+**What this promotes instead.** `committal` is now the dimension with `foreclosure`'s problem: alpha
+0.402 on an interval of [-0.054, 0.683] that contains zero, at 84% ceiling. D34 noted the interval in
+passing; nothing acted on it because item 60 had named the wrong second dimension. It is registered as
+backlog 98, and it is a harder case than `foreclosure` was, because 0.402 is a point estimate worth
+something and the interval is wide rather than pinned at zero. That difference is a corpus-size
+problem, not a rubric problem, and the honest move is more runs before a retirement.

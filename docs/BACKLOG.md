@@ -1090,7 +1090,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     probe agent before any spend, so a host where the permit does not resolve stops the run at the
     gate with a message naming D4 and D36 instead of a row of refusals after the plan was approved.
 
-89. **A reseed of fixture 001 cannot change its frame set, so item 3 measures less than it reads
+89. ~~**A reseed of fixture 001 cannot change its frame set, so item 3 measures less than it reads
     like it does.** `design_decision` lists exactly five primary frames and `n` resolves to five, so
     every seed selects all of them and the shuffle only permutes dispatch order. Seed 1 ran
     LEDGER, MINIMALIST, DOOR_KEEPER, ACTOR_CENSUS, FRAME_BREAKER; seed 2 ran ACTOR_CENSUS,
@@ -1099,8 +1099,11 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     `001/human_cancel` survived a whole new frame set but not a reseed is therefore a statement
     about dispatch order and branch sampling, not about frame composition, and `001-altframes` is
     the only recorded run that varies which frames appear. Worth stating in `docs/EXPERIMENTS.md`
-    where E1a is registered, because the pair of results reads as stronger than it is.
-90. **First observation bearing on D4's untested isolation claim, and it did not survive the second
+    where E1a is registered, because the pair of results reads as stronger than it is.~~
+    **Recorded and acted on; nothing left open.** `docs/EXPERIMENTS.md` states it under E1a — holding
+    the frame set fixed across seeds 1, 2 and 3 was forced by the class rather than chosen — and the
+    README's fixture table carries the same caveat. The experiment the title describes is item 91.
+90. ~~**First observation bearing on D4's untested isolation claim, and it did not survive the second
     run.** All five branches of the aborted run `20260914223732-7e664e` were dispatched as
     `general-purpose`, as all eleven recorded runs were, which grants the filesystem tools D4
     forbids, and every one returned `tool_uses: 0`. That read as evidence that the brief's "You have
@@ -1115,8 +1118,10 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     D36 and item 93.
 
     Either way it was never evidence about the launch permit, which is the claim D4 flags. D36
-    retires that question by making the permit `TodoWrite`, which reads nothing.
-
+    retires that question by making the permit `TodoWrite`, which reads nothing.~~
+    **Recorded, corrected, and closed as a finding.** The correction is in the item above: a single
+    run of zeroes was a sample, not a property, and the next run's ones said so. What is left is not
+    this item but the instrument — the counter does not name the tool — which is item 97.
 91. **`enumerate_options` is the only class where a reseed changes the frame set, and item 3 used the
     one where it cannot.** Its primary list holds nine frames and `n` is seven, so the seeded shuffle
     drops two primaries per run and which two is a property of the seed. Every other run class has
@@ -1131,14 +1136,28 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     under that description; it is an argument that the description in item 3 belongs to a different
     class, and that `docs/EXPERIMENTS.md` should say which of the two E1a measured.
 
-92. **`reasoning_carries`, the other half of item 60.** It reads a near-constant 3 because twelve of
+92. ~~**`reasoning_carries`, the other half of item 60.** It reads a near-constant 3 because twelve of
     thirteen frames have no web tools, so the dimension is measuring the D4 allowlist rather than the
     reasoning. D34 retired `foreclosure` and left this one alone, and the mechanism D34 built is what
     this needs: `retired_in: 2` and a rubric version bump would cost nothing to the archive now.
     What it wants first is the decision the item posed and nobody has answered — drop it, or make it
     conditional on the frame having had tools, which is a different dimension wearing the same id.
     D35 changes the arithmetic slightly in its favour: `strategy` now dispatches six frames and
-    `PRIOR_ART` is one of them, so the one frame with a tool grant appears more often than it did.
+    `PRIOR_ART` is one of them, so the one frame with a tool grant appears more often than it did.~~
+    **Resolved as D39, and the answer is keep it.** The item inherited item 60's framing that the two
+    ceiling dimensions were one case. They are not. `foreclosure` and `reasoning_carries` sit at
+    almost the same ceiling — 0.943 against 0.947 — and separate completely on the statistic that
+    matters: `foreclosure`'s interval contains zero, `reasoning_carries` reaches alpha **0.678 on
+    [0.678, 0.700]**, above `committal`, `substance`, `falsifiability` and `actor_coverage`. It is one
+    of the better dimensions in the rubric. The ceiling rate was doing all the work in the original
+    framing and it is the one statistic that cannot tell prevention from dead weight.
+
+    The ceiling has a mechanism, and `docs/RETIREMENT.md` already records it for T3: twelve of
+    thirteen frames carry no tools, so they have nothing to cite, so they score 3. Untriggered rather
+    than useless. The conditional option was rejected on a separate ground — it would vary the
+    dimension set between branches *inside one run*, and pass A normalises by total weight, so two
+    branches on different denominators stop being comparable to each other, which is the one
+    comparison pass A exists to make.
 93. **Verify that a launch permit resolves, and which one.** D36 guessed `TodoWrite` and the next
     session measured it: this host refuses with **"unrecognized [TodoWrite]"**, where `TaskList` had
     been "recognized but matched no tools in this session". Two names, two different failures, both on
@@ -1211,7 +1230,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     the `comparable_heldout` and `comparable_training` guards, which exist because a claim that
     nothing checks is a claim that drifts.
 
-97. **The subagent token counter does not say which tool was used, and a claim now rests on it.** D38's
+97. ~~**The subagent token counter does not say which tool was used, and a claim now rests on it.** D38's
     cost is stance purity: a plain branch dispatched on rung 2 holds `WebSearch` and `WebFetch` and is
     told in its brief not to look for anything. Whether it obeys is the difference between a cost in
     principle and a cost in fact, and the only instrument available is `tool_uses`, which reports a
@@ -1224,7 +1243,39 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     how that goes wrong: a count read as a finding twice, once each way. The cheap partial answer is a
     lint over rung-2 artifacts for the shape of borrowed material — a cited URL, a named product, a
     date the brief never carried — which is T3's detector pointed at the dispatch rather than the
-    reasoning. That would catch the case that matters without needing a better counter.
+    reasoning. That would catch the case that matters without needing a better counter.~~
+    **Partly answered, and the cheap half is built.** Nothing in reach distinguishes "searched the
+    web" from "wrote a checklist", so the count stays uninformative and D38's stance-purity cost stays
+    unmeasured *as a count*. What is now checked is the thing the count was a proxy for: whether a
+    rung-2 artifact shows borrowed material. `adhd traps` already runs the T3 detector over an
+    artifact, and T3 is exactly "remove every citation, does a chain of reasoning remain". Pointing it
+    at the dispatch rather than at the reasoning needed no new detector, only the discipline of
+    running it on every rung-2 artifact and recording the result, which the run procedure now says to
+    do. A branch that searched and leaned on what it found fires T3 and is pruned by the existing
+    hard rule. One that searched and did not lean on it is indistinguishable from one that did not
+    search, which is the honest limit and is the same limit the corpus has always had.
+
+    **First datum: clean.** All three rung-2 artifacts of `20260915065417-7e664e` pass `adhd traps`
+    with nothing fired across T3, T4 and T5. One run is not a rate, and the residual question stays
+    open as stated, but the check that would have caught the failure did run and did not catch one.
+98. **`committal` is the dimension that now carries `foreclosure`'s problem** (owner's call, and
+    harder than the last one). Alpha **0.402** on an interval of **[-0.054, 0.683]** that contains
+    zero, at 84% ceiling and three distinct values across the corpus. D34 noted the interval in
+    passing and nothing acted on it, because item 60 had named `reasoning_carries` as the second
+    ceiling dimension and D39 found that was the wrong one.
+
+    It is not `foreclosure`'s case repeated. `foreclosure` was pinned at zero with a tight interval
+    and two distinct values: unmeasured, and no amount of corpus would have rescued it. `committal`
+    has a point estimate worth something and an interval wide enough to contain both "as good as
+    `substance`" and "chance". That is a corpus-size problem rather than a rubric problem, and the
+    honest move is more runs before any retirement — which is the opposite of what D34 concluded
+    about `foreclosure`, on the same kind of evidence, for a reason worth being explicit about.
+
+    What would settle it: the interval narrows with scored runs, and there are eight. If it stays
+    across zero at fifteen, the dimension is measuring nothing and `retired_in: 2` is the move. If it
+    lifts clear, it was thin evidence and the rubric keeps a dimension that scores the thing the
+    output contract is built around. Do not retire it on the current interval; D39's whole finding is
+    that a ceiling rate is not evidence of that.
 
 ## Not doing, and why
 

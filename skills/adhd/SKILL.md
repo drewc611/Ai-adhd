@@ -69,6 +69,15 @@ Use this instead, and say which rung you used in the message you hand back with 
 3. **Stop and tell the user.** If neither rung is available, the run cannot preserve isolation and
    is not worth spending. Say so at the gate.
 
+**If you used rung 2, run `adhd traps <artifact>` on every branch artifact before the critique
+phase and keep the output.** Rung 2 hands a branch `WebSearch` and `WebFetch` and the brief tells it
+not to look; whether it obeyed is not something the token counter can answer, because that counter
+reports a bare count and never names the tool. T3 is the citation trap and its detector is exactly
+"remove every citation, does a chain of reasoning remain" — which is the question rung 2 raises,
+pointed at the dispatch instead of at the reasoning. A branch that searched and leaned on what it
+found fires T3 and the existing hard rule prunes it. A branch that searched and did not lean on it
+reads the same as one that never searched, and that is the honest limit. Backlog 97.
+
 The critic is the exception and does not need a rung. It is meant to see every artifact — the host
 pastes them into its prompt — and pass A is blinded by *redaction*, not by tool grants. So a
 filesystem-capable agent is harmless for the critic and `general-purpose` is acceptable there. The

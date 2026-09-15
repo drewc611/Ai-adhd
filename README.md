@@ -13,9 +13,9 @@
 <p align="center">
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-d97757" alt="Claude Code plugin marketplace"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-478-2ea44f" alt="478 TypeScript tests"></a>
-  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-242-2ea44f" alt="242 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D38%20resolved-0969da" alt="D1 through D38 resolved"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-479-2ea44f" alt="479 TypeScript tests"></a>
+  <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-244-2ea44f" alt="244 Python tests"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D39%20resolved-0969da" alt="D1 through D39 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -292,7 +292,7 @@ docs/       architecture, traps, decisions, experiments, superagent, manifest, p
 evals/      fixtures with must_surface assertions, recorded runs and controls
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       478 tests over all of it
+test/       479 tests over all of it
 analysis/   Python: reliability, bootstrap intervals, two language models trained from scratch
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 agents/     four run subagents, five mission subagents, the trainer and its governor
@@ -434,7 +434,7 @@ holding `config/` and `prompts/`) and `os_root` (the runs directory) as separate
 ## Status
 
 Library, CLI, MCP server, and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D38 are resolved in `docs/DECISIONS.md`.
+`CLAUDE.md`. D1 through D39 are resolved in `docs/DECISIONS.md`.
 
 Seven real runs are recorded, five isolated subagents each, plus a linear chain-of-thought
 negative control per fixture that must fail, plus three decline fixtures that assert routing

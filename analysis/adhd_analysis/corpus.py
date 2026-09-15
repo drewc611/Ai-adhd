@@ -21,21 +21,30 @@ from pathlib import Path
 import yaml
 
 def unfence(text: str) -> str:
-    """Strip a markdown code fence around a YAML document, as `unfence` does in src/validate.ts.
+    """Strip a markdown code fence around a YAML document.
 
-    A branch returns its artifact as its final message and the host writes that message unedited,
-    so an artifact may arrive wrapped in ```yaml ... ```. The TypeScript validator has always
-    tolerated that; this side did not, and `001-seed3` — the first recording to carry a fence —
-    broke every analysis that reads an artifact while the whole TypeScript suite stayed green.
-    Tolerating it here rather than editing the recording keeps the artifact byte-identical to what
-    the branch actually returned, which is the property the corpus exists to preserve.
+    This mirrors `unfence` in src/validate.ts index lookup for index lookup, and it has to: a
+    branch returns its artifact as its final message, the host writes that message unedited, and
+    both sides then read the same bytes. They ran in separate CI jobs with nothing comparing them
+    and they disagreed — this side used `rfind`, which cuts at a backtick run anywhere in the body
+    rather than at a closing fence on its own line. `evals/artifact-loader-cases.json` is the
+    contract both now assert against. Backlog 96.
+
+    Not a regular expression, for the reason the TypeScript side gives: every regex spelling of
+    "fence, info string, body, fence" has two quantifiers that can match the same character, which
+    is quadratic on input that is by construction an untrusted final message.
     """
-    s = text.lstrip()
-    if not s.startswith("```"):
+    open_at = text.find("```")
+    if open_at == -1:
         return text
-    body = s.split("\n", 1)[1] if "\n" in s else ""
-    end = body.rfind("```")
-    return body[:end] if end != -1 else body
+    # The info string runs to the end of that line, whatever it says: yaml, yml, or nothing.
+    body_start = text.find("\n", open_at + 3)
+    if body_start == -1:
+        return text
+    close = text.find("\n```", body_start)
+    if close == -1:
+        return text
+    return text[body_start + 1 : close]
 
 
 def load_artifact(path: Path):

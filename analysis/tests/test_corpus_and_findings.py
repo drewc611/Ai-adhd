@@ -186,3 +186,64 @@ def test_the_readme_badge_states_the_number_pytest_collects(request):
     m = re.search(r"/badge/python%20tests-(\d+)-", readme)
     assert m, "the README has no python tests badge"
     assert int(m.group(1)) == request.session.testscollected, "the badge has drifted from the suite"
+
+
+def test_unfence_matches_the_shared_cases_the_typescript_side_asserts_against():
+    """Backlog 96. Two loaders, two CI jobs, nothing comparing them, and they disagreed.
+
+    This side used rfind, which cuts at a backtick run anywhere in the body rather than at a
+    closing fence on its own line, so the first fenced recording broke the whole Python suite
+    while every TypeScript test stayed green. evals/artifact-loader-cases.json is the contract
+    both sides now assert against, and its expectations are hand-written rather than captured
+    from either implementation, so "both agree" cannot mean "both are wrong in the same way".
+    """
+    import json
+    from pathlib import Path
+
+    from adhd_analysis.corpus import unfence
+
+    root = Path(__file__).resolve().parents[2]
+    doc = json.loads((root / "evals" / "artifact-loader-cases.json").read_text())
+    assert len(doc["cases"]) >= 9, "the shared case file has been thinned"
+    for case in doc["cases"]:
+        assert unfence(case["text"]) == case["unfenced"], f"unfence disagrees with the shared case: {case['name']}"
+
+    names = [c["name"] for c in doc["cases"]]
+    assert any("not at line start" in n for n in names), "the case that caught the rfind divergence is gone"
+    assert any("seed 3 failure" in n for n in names), "the case that carries D37's failure is gone"
+
+
+def test_the_two_ceiling_dimensions_are_not_the_same_case(corpus):
+    """D39. Item 60 named two "ceiling dimensions" and assumed one answer covered both.
+
+    foreclosure and reasoning_carries sit at almost the same ceiling — 0.943 against 0.947 — and
+    are nothing alike underneath. foreclosure's interval contains zero, so 96% agreement told you
+    nothing guessing would not have. reasoning_carries reaches alpha 0.678 on an interval that
+    excludes zero, which puts it above committal, substance, falsifiability and actor_coverage.
+    The ceiling rate is the one statistic that cannot tell prevention from dead weight, and it was
+    doing all the work in the original framing.
+
+    If this fails, the corpus has moved and D39 needs rereading rather than the numbers nudging.
+    """
+    from adhd_analysis.report import reliability_section
+
+    _, table = reliability_section(corpus, resamples=200)
+    fore = table["foreclosure"]
+    reas = table["reasoning_carries"]
+
+    # Both at the ceiling, which is what made them look alike.
+    assert fore["ceiling_rate"] > 0.9 and reas["ceiling_rate"] > 0.9
+
+    # And separated by the statistic that matters.
+    assert fore["ci_hi"] <= 0.0 + 1e-9, "foreclosure's interval no longer reaches zero"
+    assert reas["ci_lo"] > 0.3, "reasoning_carries' interval now approaches chance; D39 rests on it not doing that"
+    assert reas["alpha"] > fore["alpha"] + 0.5
+
+    # reasoning_carries is mid-pack rather than worst, which is the whole finding.
+    ranked = sorted(table.items(), key=lambda kv: kv[1]["alpha"])
+    order = [name for name, _ in ranked]
+    assert order[0] == "foreclosure", f"foreclosure is no longer the worst dimension: {order}"
+    assert order.index("reasoning_carries") >= 4, f"reasoning_carries is no longer mid-pack: {order}"
+
+    # committal is the one that now carries foreclosure's problem, and is backlog 98.
+    assert table["committal"]["ci_lo"] < 0.0 < table["committal"]["ci_hi"], "committal's interval no longer spans chance"

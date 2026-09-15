@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { cfg } from "./helpers.js";
 import { renderBranchBrief } from "../src/compile.js";
 import { parse as parseYaml } from "yaml";
-import { validateBranchArtifact, validateDeepen } from "../src/validate.js";
+import { unfence, validateBranchArtifact, validateDeepen } from "../src/validate.js";
 import { RunAbort } from "../src/errors.js";
 
 /**
@@ -288,4 +288,42 @@ test("the deepen contract folds its prose fields and keeps the null path on one 
     .replace("verdict: defend", "verdict: fold");
   const n = validateDeepen(folded_null, HASH, "LEDGER");
   assert.equal(n.revised_position, null, "the null path broke, so a fold cannot report a fold");
+});
+
+/**
+ * Backlog 96. Two implementations read a branch's final message: `unfence` here and `unfence` in
+ * `analysis/adhd_analysis/corpus.py`. They run in separate CI jobs, nothing compared them, and they
+ * disagreed — this side scans for a closing fence at the start of a line, that side used `rfind`,
+ * which cuts at a backtick run anywhere in the body. The first fenced recording broke the whole
+ * Python suite while every test here stayed green.
+ *
+ * `evals/artifact-loader-cases.json` is the contract both sides assert against. The expectations in
+ * it are hand-written rather than captured from either implementation, so "both agree" cannot mean
+ * "both are wrong in the same way".
+ */
+test("the artifact loader matches the shared cases, which the Python side asserts against too", () => {
+  const doc = JSON.parse(readFileSync(join(cfg.root, "evals", "artifact-loader-cases.json"), "utf8")) as {
+    why: string;
+    cases: { name: string; text: string; unfenced: string }[];
+  };
+  assert.ok(doc.cases.length >= 9, "the shared case file has been thinned");
+  assert.match(doc.why, /both sides assert against/);
+  for (const c of doc.cases) {
+    assert.equal(unfence(c.text), c.unfenced, `unfence disagrees with the shared case: ${c.name}`);
+  }
+
+  // The two cases that carry the actual history, named so thinning the file is deliberate.
+  const names = doc.cases.map((c) => c.name);
+  assert.ok(names.some((n) => /not at line start/.test(n)), "the case that caught the rfind divergence is gone");
+  assert.ok(names.some((n) => /seed 3 failure/.test(n)), "the case that carries D37's failure is gone");
+
+  // And every recorded artifact still round-trips, fenced or not.
+  for (const run of readdirSync(join(cfg.root, "evals", "recorded"))) {
+    const dir = join(cfg.root, "evals", "recorded", run, "branches");
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".yaml"))) {
+      const text = readFileSync(join(dir, f), "utf8");
+      assert.doesNotThrow(() => parseYaml(unfence(text)), `${run}/${f} does not survive unfence + parse`);
+    }
+  }
 });
