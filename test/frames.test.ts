@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { PASS_A_NOISE_FLOOR, RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, orthogonality, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
+import { PASS_A_NOISE_FLOOR, RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, orthogonality, recordedDraws, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
 import { interRater } from "../src/learn.js";
 import { frameHash } from "../src/hash.js";
 import { compile, selectFrames } from "../src/compile.js";
@@ -15,10 +15,12 @@ function recordRun(
   id: string,
   frames: { frame: string; status: "survivor" | "pruned"; pass_a?: number; fired?: string[]; verdict?: "defend" | "fold" }[],
   clusters: { id: string; members: string[]; survivors: string[]; representative: string | null; singleton?: boolean }[],
-  runLevel: { monoculture?: boolean; scatter?: boolean } = {},
+  runLevel: { monoculture?: boolean; scatter?: boolean; replicate_of?: string } = {},
 ) {
   const dir = join(root, id);
   mkdirSync(join(dir, "deepen"), { recursive: true });
+  if (runLevel.replicate_of !== undefined)
+    writeFileSync(join(dir, "expected.json"), JSON.stringify({ outcome: "pass", replicate_of: runLevel.replicate_of }));
   writeFileSync(
     join(dir, "score.json"),
     JSON.stringify({
@@ -37,7 +39,7 @@ function recordRun(
         missing_actor: null,
       })),
       clusters: clusters.map((c) => ({ ...c, action: "act", singleton: c.singleton ?? c.members.length === 1, strongest_objection: null, mean_pass_a: 0.8 })),
-      run_level: { monoculture: false, scatter: false, ...runLevel, notes: [] },
+      run_level: { monoculture: runLevel.monoculture ?? false, scatter: runLevel.scatter ?? false, notes: [] },
       proceed: true,
     }),
   );
@@ -757,4 +759,114 @@ test("the same-seed pair still shows a stable pass A and an unstable trap sweep"
   assert.equal(d.b.frames.filter((f) => f.status === "pruned").length, 0);
   assert.equal(d.a.frames.filter((f) => f.status === "pruned").length, 2);
   assert.notEqual(d.a.recommendation, d.b.recommendation, "the recommendation changed hands with the seed held");
+});
+
+/*
+ * Backlog 99. `001-seed3-repeat` is fixture 001 at seed 3 with briefs byte-identical to
+ * `001-seed3`'s, recorded to measure the noise floor, and every rate in `frames --health` counted
+ * it as a second appearance. `LEDGER` met a retirement criterion on a denominator two of whose
+ * five entries were the same problem declining to pick it twice, and crossed the five-appearance
+ * floor on the same duplicate.
+ */
+test("a declared replicate is one draw for a rate and still its own run for a count", () => {
+  const root = join(tmp(), "recorded");
+  mkdirSync(root, { recursive: true });
+  for (const [id, replicate_of] of [["001-a", undefined], ["001-a-repeat", "001-a"], ["002-a", undefined]] as const)
+    recordRun(
+      root,
+      id,
+      [
+        { frame: "LEDGER", status: "pruned", pass_a: 0.7 },
+        { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9, verdict: "defend" },
+      ],
+      [{ id: "c1", members: ["LEDGER", "DOOR_KEEPER"], survivors: ["DOOR_KEEPER"], representative: "DOOR_KEEPER" }],
+      replicate_of === undefined ? {} : { replicate_of },
+    );
+
+  const s = frameStats(cfg, root);
+  const ledger = s.frames.find((f) => f.frame === "LEDGER")!;
+  assert.equal(s.runs, 3);
+  assert.equal(ledger.runs, 3, "three artifacts were produced and all three are real");
+  assert.equal(ledger.draws, 2, "two of those runs are the same draw");
+  assert.equal(ledger.pruned, 3);
+  assert.equal(ledger.draws_pruned, 2);
+  assert.deepEqual(ledger.split_draws, [], "the replicate agreed with its original");
+  assert.match(s.text, /3 recorded run\(s\) with score\.json, 2 distinct draw\(s\)/);
+
+  const door = s.frames.find((f) => f.frame === "DOOR_KEEPER")!;
+  assert.equal(door.recommended, 3);
+  assert.equal(door.draws_recommended, 2);
+});
+
+test("a replicate that disagrees with its original is reported as a split, not averaged into the rate", () => {
+  const root = join(tmp(), "recorded");
+  mkdirSync(root, { recursive: true });
+  const run = (id: string, status: "survivor" | "pruned", replicate_of?: string) =>
+    recordRun(
+      root,
+      id,
+      [{ frame: "LEDGER", status, pass_a: 0.7 }, { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9 }],
+      [{ id: "c1", members: ["LEDGER", "DOOR_KEEPER"], survivors: status === "pruned" ? ["DOOR_KEEPER"] : ["LEDGER", "DOOR_KEEPER"], representative: "DOOR_KEEPER" }],
+      replicate_of === undefined ? {} : { replicate_of },
+    );
+  run("001-a", "pruned");
+  run("001-a-repeat", "survivor", "001-a");
+
+  const s = frameStats(cfg, root);
+  const ledger = s.frames.find((f) => f.frame === "LEDGER")!;
+  assert.equal(ledger.draws, 1);
+  assert.equal(ledger.draws_pruned, 0, "the draw is not unanimous, so it is not a pruned draw");
+  assert.deepEqual(ledger.split_draws, ["001-a"]);
+  assert.match(s.text, /draws whose members disagreed, on identical input:/);
+  assert.match(s.text, /LEDGER\s+001-a/);
+});
+
+test("the retirement floor counts draws, so a replicate cannot carry a frame over it", () => {
+  const root = join(tmp(), "recorded");
+  mkdirSync(root, { recursive: true });
+  // Five appearances, four draws: the fifth is a declared replicate of the fourth.
+  for (let i = 0; i < 5; i++)
+    recordRun(
+      root,
+      i === 4 ? "004-a-repeat" : `00${i}-a`,
+      [{ frame: "SUPPLICANT", status: "pruned", pass_a: 0.5 }, { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9 }],
+      [{ id: "c1", members: ["SUPPLICANT", "DOOR_KEEPER"], survivors: ["DOOR_KEEPER"], representative: "DOOR_KEEPER" }],
+      i === 4 ? { replicate_of: "003-a" } : {},
+    );
+
+  const h = frameHealth(cfg, root);
+  const s = h.frames.find((f) => f.frame === "SUPPLICANT")!;
+  assert.equal(s.runs, 5);
+  assert.ok(s.met >= 2, "it meets the pruned-every-time and never-recommended criteria");
+  assert.equal(s.at_floor, false, `four draws is under the ${RETIREMENT_FLOOR}-draw floor`);
+  assert.equal(s.candidate, false, "and under the floor it is not a candidate");
+  assert.match(h.text, /4 distinct draw\(s\) from 5 recorded run\(s\)/);
+  assert.match(h.text, /pruned in 4\/4 draw\(s\), over 5 run\(s\)/);
+});
+
+test("a replicate_of naming a run that is not on disk is an error rather than a silent no-op", () => {
+  const root = join(tmp(), "recorded");
+  mkdirSync(root, { recursive: true });
+  recordRun(root, "001-a", [{ frame: "LEDGER", status: "pruned" }], [], { replicate_of: "001-that-never-existed" });
+  const draws = recordedDraws(root);
+  assert.equal(draws.get("001-a"), "001-a", "a dangling reference leaves the run as its own draw");
+});
+
+test("a circular replicate_of resolves rather than hanging", () => {
+  const root = join(tmp(), "recorded");
+  mkdirSync(root, { recursive: true });
+  recordRun(root, "001-a", [{ frame: "LEDGER", status: "pruned" }], [], { replicate_of: "001-b" });
+  recordRun(root, "001-b", [{ frame: "LEDGER", status: "pruned" }], [], { replicate_of: "001-a" });
+  const draws = recordedDraws(root);
+  assert.equal(draws.size, 2);
+  for (const id of ["001-a", "001-b"]) assert.ok(draws.get(id), `${id} resolved to some draw`);
+});
+
+/* The corpus itself: `001-seed3-repeat` declares its original and nothing else does. */
+test("the recorded corpus has exactly one declared replicate and it names a run that exists", () => {
+  const dir = join(cfg.root, "evals", "recorded");
+  const draws = recordedDraws(dir);
+  const replicates = [...draws.entries()].filter(([id, draw]) => id !== draw);
+  assert.deepEqual(replicates, [["001-seed3-repeat", "001-seed3"]]);
+  assert.equal(new Set(draws.values()).size, draws.size - 1, "one fewer draw than runs");
 });

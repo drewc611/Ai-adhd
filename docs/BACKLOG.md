@@ -1349,8 +1349,9 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     says the 0.402 estimate was thin evidence rather than a weak dimension, exactly as the second
     branch above predicted. The ceiling rate did not move and was never the question.
 
-99. **The corpus counts a deliberate replicate as an independent run, and a retirement criterion just
-    moved on one.** `001-seed3-repeat` is fixture 001 at seed 3 with briefs byte-identical to
+99. ~~**The corpus counts a deliberate replicate as an independent run, and a retirement criterion just
+    moved on one.**~~ **Built. `expected.json` takes `replicate_of`, and every rate in
+    `frames --stats` and `frames --health` is over draws rather than runs.** Original below. `001-seed3-repeat` is fixture 001 at seed 3 with briefs byte-identical to
     `001-seed3`'s. It exists to measure the noise floor (item 4) and it is the right thing to have
     recorded. But `frames --health` counts nine runs where there are eight distinct problem-and-seed
     draws, and at nine `LEDGER` became the first frame ever to meet the retirement bar: criterion 3
@@ -1367,6 +1368,30 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Until it exists, every rate in `frames --health` is over runs rather than over draws, and the
     gap is one run wide. It will widen: item 4 is the kind of experiment worth repeating, and each
     repeat makes the denominator less honest. **Resolve before any frame is retired on a rate.**
+
+    **Done, and it moved less than the item expected and found something it did not.** The shape is
+    the one named above: `replicate_of` on `expected.json`, `recordedDraws` resolving the chain, and
+    `frames --stats`, `frames --health` and the five-appearance floor reading draws while the runs
+    column stays as what was produced. `learn` was left alone on purpose — more scorings of one pack
+    is exactly what reliability wants.
+
+    Both criteria that read a rate are unanimity claims ("pruned in every appearance", "held the
+    recommendation zero times"), so collapsing does not change either predicate. What it changes is
+    the denominator and the floor, and that is all backlog 99 ever was: `LEDGER` is 0 of 6 draws
+    over 7 runs and still a candidate, because it was over the floor either way. A frame with four
+    draws and a fifth run that is a replicate is now correctly under the floor, which is the case
+    the item was written to prevent and which the corpus does not yet contain.
+
+    **The unexpected part is the split draw.** A draw whose members disagree is now reported rather
+    than folded in, and the corpus has three, all of them `001-seed3`: `FRAME_BREAKER` and
+    `ACTOR_CENSUS` pruned in one member and not the other, `DOOR_KEEPER` holding the recommendation
+    in one and not the other. Item 4 established that the trap sweep does not reproduce; this is the
+    same fact standing next to the counts a retirement decision is made from, in the command that
+    prints them. `docs/RETIREMENT.md` says so in the standing section.
+
+    A `replicate_of` naming a run that is not on disk is a `doctor` error rather than a silent
+    no-op, because the failure mode of a typo here is the report going back to counting the run
+    twice and reading exactly as it did before the field existed.
 
 100. **Two frame labels are ordinary English nouns, and E10 showed what that costs.** `adhd frames
     --collisions` reports `LEDGER` and `SUCCESSOR` appearing in artifacts their frames did not write:

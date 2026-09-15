@@ -4,7 +4,7 @@ import { unfence } from "./validate.js";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { currentFrameId, type Config } from "./config.js";
-import { DeepenArtifactSchema, PassBSchema, TRAP_IDS, type TrapId } from "./schema.js";
+import { DeepenArtifactSchema, PassBSchema, RecordedExpectationSchema, TRAP_IDS, type TrapId } from "./schema.js";
 import { forwardFrameIds, type ScoreResult } from "./score.js";
 import { frameHash } from "./hash.js";
 import { selectFrames } from "./compile.js";
@@ -67,10 +67,53 @@ export function orthogonality(cfg: Config, recordedDir = join(cfg.root, "evals",
   return { pairs, flagged, runs, text: lines.join("\n") };
 }
 
+/**
+ * Which recorded runs are the same draw. A run whose `expected.json` names `replicate_of` is a
+ * deliberate repeat of that run, not a second observation of the library, so for anything shaped
+ * like "pruned in n of m" its group counts once (backlog 99).
+ *
+ * Returns run id -> draw id, where the draw id is the root of the replicate chain. A run naming a
+ * `replicate_of` that is not on disk is its own draw: a dangling reference should not silently
+ * merge two groups, and `doctor` reports it.
+ */
+export function recordedDraws(recordedDir: string): Map<string, string> {
+  const parent = new Map<string, string | undefined>();
+  if (existsSync(recordedDir))
+    for (const d of readdirSync(recordedDir).sort()) {
+      if (!statSync(join(recordedDir, d)).isDirectory()) continue;
+      const e = readJsonIf(join(recordedDir, d, "expected.json"), (v) => RecordedExpectationSchema.parse(v));
+      parent.set(d, e?.replicate_of);
+    }
+  const draws = new Map<string, string>();
+  for (const id of parent.keys()) {
+    const seen = new Set<string>([id]);
+    let root = id;
+    for (;;) {
+      const next = parent.get(root);
+      // Stop on absent, unknown, or a cycle. Each leaves the chain rooted where it stands.
+      if (!next || !parent.has(next) || seen.has(next)) break;
+      seen.add(next);
+      root = next;
+    }
+    draws.set(id, root);
+  }
+  return draws;
+}
+
 export interface FrameStat {
   frame: string;
   axis: string;
   runs: number;
+  /*
+   * The same three counts over draws rather than runs: a replicate group contributes one. Every
+   * rate in `docs/RETIREMENT.md` reads these, and `runs`/`pruned`/`recommended` stay as the count
+   * of artifacts actually produced, which is what reliability wants. See `recordedDraws`.
+   */
+  draws: number;
+  draws_pruned: number;
+  draws_recommended: number;
+  /** Draws whose members disagreed about this frame. A rate over these is hiding a coin flip. */
+  split_draws: string[];
   pruned: number;
   survived: number;
   /** Survived the trap sweep, then folded under its objection. */
@@ -104,6 +147,21 @@ export function frameStats(
   const trapFires = new Map<TrapId, number>();
   let runs = 0;
 
+  const drawOf = recordedDraws(recordedDir);
+  // frame -> draw -> what that draw's members saw. Collapsed after the run loop, because a draw's
+  // verdict is not known until every member of it has been read.
+  const perDraw = new Map<string, Map<string, { runs: string[]; pruned: number; recommended: number }>>();
+  const observe = (frame: string, run: string, pruned: boolean, recommended: boolean) => {
+    const draw = drawOf.get(run) ?? run;
+    if (!perDraw.has(frame)) perDraw.set(frame, new Map());
+    const d = perDraw.get(frame)!;
+    const e = d.get(draw) ?? { runs: [], pruned: 0, recommended: 0 };
+    e.runs.push(run);
+    if (pruned) e.pruned++;
+    if (recommended) e.recommended++;
+    d.set(draw, e);
+  };
+
   const get = (frame: string) => {
     let s = by.get(frame);
     if (!s) {
@@ -111,6 +169,10 @@ export function frameStats(
         frame,
         axis: axisOf.get(frame) ?? "(not in library)",
         runs: 0,
+        draws: 0,
+        draws_pruned: 0,
+        draws_recommended: 0,
+        split_draws: [],
         pruned: 0,
         survived: 0,
         folded: 0,
@@ -183,9 +245,37 @@ export function frameStats(
         if (v === "fold") s.folded++;
         else if (v === "defend") s.defended++;
         if (f.frame === holder) s.recommended++;
+        observe(f.frame, d, f.status === "pruned", f.frame === holder);
       }
       for (const c of score.clusters) if (c.singleton && c.members[0]) get(c.members[0]).singleton++;
     }
+  }
+
+  /*
+   * Collapse to draws. Both retirement criteria that read a rate are unanimity claims — "pruned in
+   * every appearance", "held the recommendation zero times" — so a draw counts as pruned only if
+   * every member pruned, and as having held the recommendation if any member did. That keeps each
+   * predicate meaning exactly what it meant over runs.
+   *
+   * What the collapse actually moves is the denominator and the five-run floor, and that is the
+   * whole of backlog 99: `LEDGER` met criterion 3 at "0 of 5" where two of the five were fixture
+   * 001 at seed 3 declining to pick it twice, and crossed the floor on the same duplicate.
+   *
+   * A draw whose members disagree is recorded as split rather than averaged. It is a frame the
+   * corpus has watched survive and be pruned on identical input, which is a fact about the critic
+   * and belongs beside any decision made from these counts.
+   */
+  for (const [frame, draws] of perDraw) {
+    const s = by.get(frame);
+    if (!s) continue;
+    s.draws = draws.size;
+    for (const [draw, e] of draws) {
+      if (e.pruned === e.runs.length) s.draws_pruned++;
+      if (e.recommended > 0) s.draws_recommended++;
+      const split = (e.pruned > 0 && e.pruned < e.runs.length) || (e.recommended > 0 && e.recommended < e.runs.length);
+      if (split) s.split_draws.push(draw);
+    }
+    s.split_draws.sort();
   }
 
   const frames: FrameStat[] = [...by.values()]
@@ -193,18 +283,29 @@ export function frameStats(
     .sort((a, b) => b.runs - a.runs || b.pruned / (b.runs || 1) - a.pruned / (a.runs || 1) || a.frame.localeCompare(b.frame));
   const traps: TrapStat[] = TRAP_IDS.map((t) => ({ trap: t, fired: trapFires.get(t) ?? 0, frames: [...(trapCounts.get(t) ?? [])].sort() }));
 
-  const lines = [`frame stats over ${runs} recorded run(s) with score.json`];
+  const drawCount = new Set([...drawOf.entries()].filter(([id]) => by.size && existsSync(join(recordedDir, id, "score.json"))).map(([, draw]) => draw)).size;
+  const lines = [
+    drawCount && drawCount !== runs
+      ? `frame stats over ${runs} recorded run(s) with score.json, ${drawCount} distinct draw(s)`
+      : `frame stats over ${runs} recorded run(s) with score.json`,
+  ];
   if (!frames.length) {
     lines.push("no scored runs yet. Record runs to populate this.");
     return { frames, traps, runs, text: lines.join("\n") };
   }
   lines.push("");
-  lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  pruned  folded  rec  meanA  traps`);
+  lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  draws  pruned  folded  rec  meanA  traps`);
   for (const f of frames) {
     const t = TRAP_IDS.filter((x) => f.traps[x]).map((x) => `${x}x${f.traps[x]}`).join(",") || "-";
     lines.push(
-      `${f.frame.padEnd(17)} ${f.axis.padEnd(15)} ${String(f.runs).padStart(4)}  ${String(f.pruned).padStart(6)}  ${String(f.folded).padStart(6)}  ${String(f.recommended).padStart(3)}  ${(f.mean_pass_a ?? 0).toFixed(2).padStart(5)}  ${t}`,
+      `${f.frame.padEnd(17)} ${f.axis.padEnd(15)} ${String(f.runs).padStart(4)}  ${String(f.draws).padStart(5)}  ${String(f.pruned).padStart(6)}  ${String(f.folded).padStart(6)}  ${String(f.recommended).padStart(3)}  ${(f.mean_pass_a ?? 0).toFixed(2).padStart(5)}  ${t}`,
     );
+  }
+  const split = frames.filter((f) => f.split_draws.length);
+  if (split.length) {
+    lines.push("");
+    lines.push("draws whose members disagreed, on identical input:");
+    for (const f of split) lines.push(`  ${f.frame.padEnd(17)} ${f.split_draws.join(", ")}`);
   }
   lines.push("");
   lines.push("detectors:");
@@ -535,11 +636,24 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
       }
     }
 
+  /*
+   * Every rate here is over draws, not runs (backlog 99). A recorded replicate is the same problem
+   * at the same seed answered twice on purpose, and counting it as a second appearance both shrinks
+   * the evidence a criterion needs and moves the five-appearance floor on a duplicate. `runs` is
+   * still carried and still printed, because how many artifacts a frame has produced is a real
+   * number and the two are worth seeing side by side.
+   */
+  const drawTotal = new Set(
+    [...recordedDraws(recordedDir).entries()].filter(([id]) => existsSync(join(recordedDir, id, "score.json"))).map(([, draw]) => draw),
+  ).size;
+
   const frames: FrameHealth[] = cfg.frames.frames.map((f) => {
     const s = statOf.get(f.id);
     const runs = s?.runs ?? 0;
-    const pruned = s?.pruned ?? 0;
-    const recommended = s?.recommended ?? 0;
+    const draws = s?.draws ?? 0;
+    const pruned = s?.draws_pruned ?? 0;
+    const recommended = s?.draws_recommended ?? 0;
+    const splits = s?.split_draws ?? [];
 
     const partners = ortho.flagged.filter((p) => p.a === f.id || p.b === f.id);
     const deadTraps = f.attacks.filter((t) => (firedEver.get(t) ?? 0) === 0);
@@ -554,10 +668,20 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
       },
       {
         id: 2,
-        met: runs > 0 && pruned === runs,
-        detail: runs === 0 ? "never dispatched" : `pruned in ${pruned}/${runs}`,
+        met: draws > 0 && pruned === draws,
+        detail:
+          draws === 0
+            ? "never dispatched"
+            : `pruned in ${pruned}/${draws} draw(s)${draws === runs ? "" : `, over ${runs} run(s)`}${splits.length ? `; split on ${splits.join(", ")}` : ""}`,
       },
-      { id: 3, met: runs > 0 && recommended === 0, detail: runs === 0 ? "never dispatched" : `held the recommendation ${recommended}/${runs}` },
+      {
+        id: 3,
+        met: draws > 0 && recommended === 0,
+        detail:
+          draws === 0
+            ? "never dispatched"
+            : `held the recommendation ${recommended}/${draws} draw(s)${draws === runs ? "" : `, over ${runs} run(s)`}`,
+      },
       {
         id: 4,
         met: deadTraps.length === f.attacks.length,
@@ -568,13 +692,13 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
       },
       {
         id: 5,
-        met: runs === 0 && stats.runs >= RETIREMENT_FLOOR && classes.size >= 2,
-        detail: runs > 0 ? `dispatched ${runs} time(s)` : `never dispatched across ${stats.runs} run(s) in ${classes.size} problem class(es)`,
+        met: draws === 0 && drawTotal >= RETIREMENT_FLOOR && classes.size >= 2,
+        detail: draws > 0 ? `dispatched in ${draws} draw(s)` : `never dispatched across ${drawTotal} draw(s) in ${classes.size} problem class(es)`,
       },
     ];
 
     const met = criteria.filter((c) => c.met).length;
-    const atFloor = runs >= RETIREMENT_FLOOR;
+    const atFloor = draws >= RETIREMENT_FLOOR;
     return {
       frame: f.id,
       axis: f.axis,
@@ -592,7 +716,11 @@ export function frameHealth(cfg: Config, recordedDir = join(cfg.root, "evals", "
   });
 
   const candidates = frames.filter((f) => f.candidate);
-  const lines = [`frame health over ${stats.runs} recorded run(s) in ${classes.size} problem class(es), against docs/RETIREMENT.md`];
+  const lines = [
+    `frame health over ${drawTotal} distinct draw(s) from ${stats.runs} recorded run(s) in ${classes.size} problem class(es), against docs/RETIREMENT.md`,
+    "Every rate and the appearance floor are over draws: a recorded replicate of a run is not a",
+    "second appearance (backlog 99). The runs column is what was actually produced.",
+  ];
   lines.push("");
   lines.push(`${"frame".padEnd(17)} ${"axis".padEnd(15)} runs  met  criteria         standing`);
   for (const f of [...frames].sort((a, b) => b.met - a.met || b.runs - a.runs || a.frame.localeCompare(b.frame))) {

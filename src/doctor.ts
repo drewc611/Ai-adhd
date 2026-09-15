@@ -13,9 +13,10 @@ import { join } from "node:path";
 import { STAGE_AGENT, STAGE_TOOLS } from "./super/index.js";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
-import { TRAP_IDS } from "./schema.js";
-import { frameReach } from "./frames.js";
+import { RecordedExpectationSchema, TRAP_IDS } from "./schema.js";
+import { frameReach, recordedDraws } from "./frames.js";
 import { auditFixtures } from "./eval.js";
+import { readJsonIf } from "./read.js";
 
 export type Severity = "error" | "warn";
 
@@ -330,6 +331,23 @@ function checkCorpus(cfg: Config): Finding[] {
     for (const b of plan.branches ?? [])
       if (!existsSync(join(run, b.artifact_path)))
         out.push({ severity: "warn", check: "corpus", message: `${d} planned ${b.frame} and ${b.artifact_path} is absent; that branch returned nothing, which is not the same as scoring badly` });
+  }
+
+  /*
+   * A `replicate_of` pointing at nothing is silent otherwise: `recordedDraws` leaves the run as its
+   * own draw, so the rates go back to counting it twice and the report reads the same as before the
+   * field was added. That is exactly the state backlog 99 exists to prevent, so it is an error.
+   */
+  const draws = recordedDraws(dir);
+  for (const d of readdirSync(dir).sort()) {
+    if (!statSync(join(dir, d)).isDirectory()) continue;
+    const e = readJsonIf(join(dir, d, "expected.json"), (v) => RecordedExpectationSchema.parse(v));
+    const target = e?.replicate_of;
+    if (!target) continue;
+    if (!existsSync(join(dir, target)))
+      out.push({ severity: "error", check: "corpus", message: `${d} declares replicate_of ${target} and no such recorded run exists, so it is counted as an independent draw` });
+    else if (draws.get(d) === d)
+      out.push({ severity: "error", check: "corpus", message: `${d} declares replicate_of ${target} and did not resolve to a draw; the chain is circular` });
   }
   return out;
 }

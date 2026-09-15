@@ -86,11 +86,12 @@ The table exists because a reader needs the argument, not because it is the sour
 a test fails if the command puts a frame at two criteria and this table does not name it, which
 is how `NIGHT_OPERATOR` got its row.
 
-**`LEDGER` meets the bar, and at eleven runs the sample objection has run out.** Seven dispatched
-runs, criteria 1 and 3: it co-clusters with `ACTOR_CENSUS` in 4 of the 6 runs they share (67%
-against a 60% threshold) and has held the recommendation 0 of 7 times. Backlog 99's argument that
-two of those runs are one replicate still holds and no longer rescues it — strike the replicate and
-`LEDGER` sits at six, over the floor either way.
+**`LEDGER` meets the bar, and at eleven runs the sample objection has run out.** Six dispatched
+draws over seven runs, criteria 1 and 3: it co-clusters with `ACTOR_CENSUS` in 4 of the 6 runs they
+share (67% against a 60% threshold) and has held the recommendation 0 of 6 draws. Backlog 99's
+argument that two of those runs are one replicate is now implemented rather than argued — every
+rate here is over draws and `frames --health` strikes the replicate itself — and `LEDGER` is over
+the floor either way.
 
 **It is not being acted on, and the reason is now a measurement rather than a sample size.**
 Criterion 1 is a co-clustering rate. Criterion 3 is a count of who held a recommendation. Backlog
@@ -99,6 +100,12 @@ seed, and both moved: the clustering went from two clusters to three, and the re
 hands. Retiring a frame on two statistics that a repeat of the same input can flip is the failure
 this document exists to prevent, and the evidence that they flip is now in the corpus rather than
 suspected.
+
+`frames --stats` reports it directly. Three frames have a **split draw** — members of one draw that
+disagreed on identical input — and all three are `001-seed3`: `FRAME_BREAKER` and `ACTOR_CENSUS`
+pruned in one member and not the other, `DOOR_KEEPER` holding the recommendation in one and not the
+other. Any criterion read on those three frames is being read across a coin flip, and the command
+says so beside the counts rather than leaving it to this document.
 
 **The exemption question has been asked of `LEDGER` and the answer is not clean.** `adhd why`
 across its appearances shows a frame that reaches the user through corroboration rather than
@@ -115,17 +122,19 @@ So: recorded, watched, not acted on.
 `FRAME_BREAKER` with `SABOTEUR`. Same reading as `LEDGER`'s criterion 1 and for the same measured
 reason.
 
-| frame | runs | why it is on the list |
-|---|---|---|
-| `LEDGER` | 7 | **CANDIDATE.** Criteria 1 and 3, as above. Watch, do not act. |
-| `FRAME_BREAKER` + `ACTOR_CENSUS`, `FRAME_BREAKER` + `SABOTEUR` | 6 and 5 shared | criterion 1 on `FRAME_BREAKER`, which meets nothing else at ten runs. Watch, do not act. |
-| `SUPPLICANT`, `PRIOR_ART` | 2 each | pruned in every appearance. `SUPPLICANT` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
-| `MINIMALIST` | 6 | criterion 3 alone: held the recommendation 0 of 6. Over the floor now, and one criterion is a pattern rather than a case. |
-| `MECHANIC`, `NIGHT_OPERATOR` | 4, 3 | criterion 3 alone. Under the floor. `NIGHT_OPERATOR` was at two criteria at nine runs and dropped to one when it survived at `014-seed1`, which is the floor doing its job. |
-| `DOOR_KEEPER`, `SUCCESSOR` | 6, 2 | never pruned in any appearance. Not a retirement criterion, and the opposite worry, which belongs in D6. `MECHANIC` left this list at eleven runs, pruned on T7 in `014-seed1`; at three samples the property was never a property. |
-| `FIRST_PRINCIPLES` | 0 | never dispatched across eleven runs; criterion 5's count has not started. Reachable since D35 as a `strategy` primary at n=6, and it is an `enumerate_options` **alternate**, so the two wide-path runs did not reach it either. |
+The counts are draws, with runs beside them where the two differ. Ten draws over eleven runs.
 
-Seven frames now sit at or past the five-run floor. Only `LEDGER` meets two criteria.
+| frame | draws | why it is on the list |
+|---|---|---|
+| `LEDGER` | 6 of 7 runs | **CANDIDATE.** Criteria 1 and 3, as above. Watch, do not act. |
+| `FRAME_BREAKER` + `ACTOR_CENSUS`, `FRAME_BREAKER` + `SABOTEUR` | 6 and 5 shared | criterion 1 on `FRAME_BREAKER`, which meets nothing else at nine draws. Both `FRAME_BREAKER` and `ACTOR_CENSUS` carry a split draw. Watch, do not act. |
+| `SUPPLICANT`, `PRIOR_ART` | 2 each | pruned in every appearance. `SUPPLICANT` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
+| `MINIMALIST` | 5 of 6 runs | criterion 3 alone: held the recommendation 0 of 5 draws. At the floor, and one criterion is a pattern rather than a case. |
+| `MECHANIC`, `NIGHT_OPERATOR` | 4, 3 | criterion 3 alone. Under the floor. `NIGHT_OPERATOR` was at two criteria at nine runs and dropped to one when it survived at `014-seed1`, which is the floor doing its job. |
+| `DOOR_KEEPER`, `SUCCESSOR` | 5 of 6 runs, 2 | never pruned in any appearance. Not a retirement criterion, and the opposite worry, which belongs in D6. `DOOR_KEEPER` carries a split draw on the recommendation. `MECHANIC` left this list at eleven runs, pruned on T7 in `014-seed1`; at three samples the property was never a property. |
+| `FIRST_PRINCIPLES` | 0 | never dispatched across ten draws; criterion 5's count has not started. Reachable since D35 as a `strategy` primary at n=6, and it is an `enumerate_options` **alternate**, so the two wide-path runs did not reach it either. |
+
+Six frames now sit at or past the five-draw floor. Only `LEDGER` meets two criteria.
 
 **A separate naming problem, found by the same runs.** `adhd frames --collisions` reports that
 `LEDGER` and `SUCCESSOR` are ordinary English nouns and both appeared as nouns in E10's artifacts:

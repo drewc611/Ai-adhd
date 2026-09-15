@@ -393,5 +393,20 @@ export const RecordedExpectationSchema = z
     note: z.string().optional(),
     /** A hand written consensus answer that exists to fail. Audited separately from real runs. */
     control: z.boolean().default(false),
+    /*
+     * The id of the run this one deliberately repeats: same fixture, same seed, briefs identical,
+     * recorded to measure what moves when nothing does (backlog 4). Two treatments follow from it
+     * and they are not the same treatment, which is why this field exists rather than a filter.
+     *
+     * For a *rate* — pruned in n of m, held the recommendation in n of m — a replicate is not an
+     * independent observation. `001-seed3-repeat` is fixture 001 at seed 3 declining to pick
+     * `LEDGER` for the second time, and counting it twice is how `LEDGER` became the first frame
+     * ever to meet a retirement criterion (backlog 99). Rates collapse a replicate group to one
+     * draw.
+     *
+     * For *reliability* — inter-rater agreement, alpha, the noise floor — more samples of the same
+     * pack is exactly what is wanted and nothing collapses.
+     */
+    replicate_of: z.string().optional(),
   })
   .strict();
