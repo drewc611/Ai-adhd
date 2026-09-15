@@ -1079,14 +1079,22 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     about dispatch order and branch sampling, not about frame composition, and `001-altframes` is
     the only recorded run that varies which frames appear. Worth stating in `docs/EXPERIMENTS.md`
     where E1a is registered, because the pair of results reads as stronger than it is.
-90. **First observation bearing on D4's untested isolation claim, and it is indirect.** All five
-    branches of run `20260914223732-7e664e` were dispatched as `general-purpose`, as all eleven
-    recorded runs were, which grants the filesystem tools D4 forbids. Every one of the five returned
-    with `tool_uses: 0`. So the grant D4 refuses went unused by every branch that held it, under a
-    brief that told each of them "You have no tools. Everything you need is in this brief." That is
-    evidence that the instruction carries, and it is not evidence about `TaskList`, which is the
-    claim D4 actually flags as argued rather than demonstrated. Item 88 is why that one still cannot
-    be checked here.
+90. **First observation bearing on D4's untested isolation claim, and it did not survive the second
+    run.** All five branches of the aborted run `20260914223732-7e664e` were dispatched as
+    `general-purpose`, as all eleven recorded runs were, which grants the filesystem tools D4
+    forbids, and every one returned `tool_uses: 0`. That read as evidence that the brief's "You have
+    no tools. Everything you need is in this brief." carries on its own.
+
+    **It does not, and the next run said so.** Every one of the five branches of
+    `20260915013807-7e664e` reported `tool_uses: 1`, as did the critic. So the count is not a
+    property of the instruction; it varies run to run under an identical brief, and a single run of
+    zeroes was a sample rather than a finding. What the counter cannot say is *which* tool, so
+    neither run establishes whether a branch reached the filesystem — only that the earlier one
+    reached nothing at all. Getting further needs the grant removed rather than counted, which is
+    D36 and item 93.
+
+    Either way it was never evidence about the launch permit, which is the claim D4 flags. D36
+    retires that question by making the permit `TodoWrite`, which reads nothing.
 
 91. **`enumerate_options` is the only class where a reseed changes the frame set, and item 3 used the
     one where it cannot.** Its primary list holds nine frames and `n` is seven, so the seeded shuffle
@@ -1121,6 +1129,26 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     again, and item 91 is the argument for spending it on a fixture routed to `enumerate_options`
     instead — that is the only class where a reseed changes the frame set, and 001 is not it. Either
     way it is spend, so it is the owner's call under D5.
+
+95. **The critic contract has the defect D37 just fixed in the branch contract.** `prompts/critic-pass-a.md`
+    shows each cell as `{ score: <0-3>, evidence: <one sentence> }`, a flow mapping with the evidence
+    unquoted, so an evidence string containing `: ` closes the mapping early and the pass is rejected
+    — the same failure that cost run `20260914223732-7e664e`, one contract over. Pass B is the same
+    shape: `T1: { fired: <bool>, evidence: <text> }`, plus `action`, `strongest_objection` and the
+    `lint_verdicts` rows.
+
+    It has never fired. Every recorded pass A quotes its evidence and so did the critic of
+    `20260915013807-7e664e`, which wrote `evidence: "One sentence, one imperative verb..."` in all
+    40 cells unprompted. That is the same luck D37 found in the branch artifacts — 106 plain values,
+    not one with an internal colon — and the same reason not to rely on it.
+
+    The fix is not identical, because a folded scalar cannot sit inside a flow mapping. Either the
+    cells become block mappings, which makes a pass A file about three times longer and changes the
+    shape of every recorded one, or the contract shows the evidence quoted and says why. The second
+    is what the branch contract rejected as "asking harder is not a mechanism" — the difference here
+    is that quoting inside `{ }` is the only option the syntax leaves, so the argument that beat it
+    there does not apply. Worth doing before the next real run, and it is a contract change, so it
+    wants a D-number.
 
 ## Not doing, and why
 
