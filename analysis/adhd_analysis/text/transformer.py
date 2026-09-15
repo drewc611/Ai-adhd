@@ -35,7 +35,7 @@ from typing import Iterable, Iterator
 import numpy as np
 
 from .budget import Budget
-from .modelfile import ModelFileRefused, body_lines, bounded_int, line_bound_for, read_header, read_vocabulary
+from .modelfile import surprisal_from_logprob_terms, ModelFileRefused, body_lines, bounded_int, line_bound_for, read_header, read_vocabulary
 from .tokenize import BOS, EOS, UNK, Vocab
 
 #: What `load` allows itself when no `Budget` says otherwise. Generous against this machine's
@@ -473,6 +473,22 @@ class Transformer:
         return float(-np.log(np.maximum(flat[np.arange(n), targets.reshape(n)], 1e-12)).mean())
 
     # ---- scoring, duck-typed against KneserNey ---------------------------------------------------
+
+    def surprisal(self, ids: list[int]) -> list[float]:
+        """Per-token surprisal in bits, the contract `KneserNey.surprisal` set.
+
+        Here so that anything taking a background model takes this one too. See
+        `modelfile.surprisal_from_logprob_terms` for why the end-of-sequence term is dropped.
+        """
+        return surprisal_from_logprob_terms(self.logprob_terms(ids))
+
+    def describe(self) -> str:
+        """One line naming the model class and its shape, for a report that takes any of them."""
+        c = self.config
+        return (
+            f"Decoder-only transformer, d_model {c.d_model}, {c.n_layers} layers, {c.n_heads} heads, "
+            f"context {c.context}, vocabulary {len(self.vocab):,}, {self.n_params:,} parameters"
+        )
 
     def logprob_terms(self, ids: Iterable[int]) -> list[tuple[float, bool]]:
         """Per-position natural log probability and whether the target is a real word.

@@ -1203,7 +1203,15 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     dimension set between branches *inside one run*, and pass A normalises by total weight, so two
     branches on different denominators stop being comparable to each other, which is the one
     comparison pass A exists to make.
-93. **Verify that a launch permit resolves, and which one.** D36 guessed `TodoWrite` and the next
+93. ~~**Verify that a launch permit resolves, and which one.**~~ **Closed by D41, on the conclusion
+    this item named itself.** Neither name resolves for a subagent anywhere it has been tried, so a
+    zero-capability subagent is not a thing this ecosystem supports and the three agent files were a
+    fiction rung 2 quietly replaced. The permit is the web pair for all four isolated agents: it
+    resolves, and it reaches nothing the run wrote. What the item did not anticipate is what the
+    substitution cost — a subagent type selects a system prompt, so `adhd-critic.md` has never been
+    in force, which is the live hypothesis for why the trap sweep does not reproduce. Original below.
+
+93a. **Original text.** D36 guessed `TodoWrite` and the next
     session measured it: this host refuses with **"unrecognized [TodoWrite]"**, where `TaskList` had
     been "recognized but matched no tools in this session". Two names, two different failures, both on
     reasoning rather than measurement. D38 is the correction — the permit is now the pair

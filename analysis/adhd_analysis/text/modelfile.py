@@ -163,3 +163,58 @@ def read_vocabulary(fh: TextIO, path: Path, *, max_types: int | None = None) -> 
         dropped_types=0,
         dropped_tokens=0,
     )
+
+
+#: Every model class this package can train, keyed by the `format` marker it writes into its own
+#: header line. Adding a class here is what makes it usable everywhere a background model is taken.
+BACKGROUND_FORMATS = {
+    "adhd-kn-1": ("..text.ngram", "KneserNey"),
+    "adhd-tf-1": ("..text.transformer", "Transformer"),
+    "adhd-lstm-1": ("..text.lstm", "LSTM"),
+}
+
+
+def load_background(path, budget=None):
+    """Load a trained background model, whichever class wrote it.
+
+    Three model classes ship and all three duck-type each other where the scoring machinery touches
+    them: `vocab`, `meta`, `logprob_terms`. Nothing that consumes a background model needs to know
+    which one it got, and until now every caller hard-coded `KneserNey.load`, so the transformer
+    D20 added could be trained and then used by nothing. A model nobody can point at a corpus is a
+    research artifact, not a component.
+
+    Dispatch is on the `format` marker each class already writes into its header, so the file says
+    what it is and the caller does not have to guess from a filename.
+    """
+    import gzip
+    import importlib
+    from pathlib import Path
+
+    p = Path(path)
+    with gzip.open(p, "rt", encoding="utf-8") as fh:
+        fmt = read_header(fh, p, "header").get("format")
+    if fmt not in BACKGROUND_FORMATS:
+        raise ModelFileRefused(
+            f"{p}: header says format {fmt!r}, which is not a background model this package trains. "
+            f"Known: {', '.join(sorted(BACKGROUND_FORMATS))}"
+        )
+    module, cls = BACKGROUND_FORMATS[fmt]
+    return getattr(importlib.import_module(module, __package__), cls).load(p, budget)
+
+
+def surprisal_from_logprob_terms(terms):
+    """Per-token surprisal in bits, from the one method every model class here shares.
+
+    `KneserNey` has carried `surprisal` since the beginning and the genericity report is written
+    against it; the transformer and the LSTM only ever exposed `logprob_terms`, which is why a
+    trained transformer could not be handed to the report that needs a background model.
+
+    The trailing term is dropped. Both `logprob_terms` implementations append `</s>` and score it,
+    while `KneserNey.surprisal` stops at the last real token, so keeping it would make the two model
+    classes disagree by one end-of-sequence probability on the same text. Dropping it means the
+    figure means the same thing whichever model produced it, which is the only reason to have a
+    shared surface at all.
+    """
+    import math
+
+    return [-lp / math.log(2) for lp, _ in list(terms)[:-1]]

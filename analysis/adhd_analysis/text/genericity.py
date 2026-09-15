@@ -34,7 +34,7 @@ import yaml
 
 from ..corpus import Corpus, _forwarder, load_artifact
 from ..resample import permutation_test
-from .ngram import KneserNey
+from .background import BackgroundModel
 from .tokenize import tokens
 
 #: `position` and `reasoning` are the argued prose. `forecloses` and `falsifier` are list-shaped
@@ -65,7 +65,7 @@ def artifact_text(path: Path) -> str:
     return "\n".join(str(doc.get(f, "")) for f in SCORED_FIELDS)
 
 
-def score_text(model: KneserNey, text: str) -> tuple[float, float, int]:
+def score_text(model: BackgroundModel, text: str) -> tuple[float, float, int]:
     ts = tokens(text)
     if not ts:
         return float("nan"), 0.0, 0
@@ -77,7 +77,7 @@ def score_text(model: KneserNey, text: str) -> tuple[float, float, int]:
     return (statistics.fmean(in_vocab) if in_vocab else float("nan")), oov, len(ts)
 
 
-def score_corpus(corpus: Corpus, model: KneserNey) -> list[Scored]:
+def score_corpus(corpus: Corpus, model: BackgroundModel) -> list[Scored]:
     forward = _forwarder(corpus.root)
     out: list[Scored] = []
     for art in corpus.artifacts:
@@ -97,7 +97,7 @@ def score_corpus(corpus: Corpus, model: KneserNey) -> list[Scored]:
     return out
 
 
-def report(corpus: Corpus, model: KneserNey, resamples: int = 10_000) -> str:
+def report(corpus: Corpus, model: BackgroundModel, resamples: int = 10_000) -> str:
     rows = score_corpus(corpus, model)
     if not rows:
         return "## Genericity\n\nNo artifact could be scored: the model and the corpus do not overlap.\n"
@@ -107,8 +107,7 @@ def report(corpus: Corpus, model: KneserNey, resamples: int = 10_000) -> str:
         "## Genericity under the background model",
         "",
         f"Trained on: {sources or 'unrecorded'}",
-        f"Order {model.order}, vocabulary {len(model.vocab):,}, "
-        f"{sum(len(t) for t in model.counts):,} n-grams, OOV rate at training {model.meta.get('oov_rate', '?')}.",
+        f"{model.describe()}, OOV rate at training {model.meta.get('oov_rate', '?')}.",
         "",
         "Mean surprisal in bits over in-vocabulary tokens. Lower means the prose was more",
         "predictable from the training library, which is what T1 is about.",

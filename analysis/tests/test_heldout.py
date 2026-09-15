@@ -750,3 +750,48 @@ def test_a_restricted_score_still_counts_the_sentence_end(tmp_path):
     # Every real word excluded leaves exactly the sentence ends, so there is still something to score.
     assert empty.restricted_to_types == 0
     assert math.isfinite(empty.perplexity) and empty.perplexity > 0
+
+
+def test_every_model_class_satisfies_the_background_protocol(tmp_path):
+    """The integration that was missing, and the reason it was missing.
+
+    `genericity.py` is the T1 measure: it scores a branch artifact's prose against a model trained
+    on a document library, and low surprisal is prose predictable from everything else ever written
+    on the subject. It was typed and written against `KneserNey`, calling `surprisal`, `order` and
+    `counts`. The transformer has none of those three, so D20 could add a second model class,
+    gradient-check its backward pass, train it, and hand it to nothing.
+
+    What each class has to answer is now written down as `BackgroundModel` and checked here for all
+    of them, so a fourth class is usable the day it trains rather than after someone widens a type.
+    """
+    from adhd_analysis.text.lstm import LSTM
+    from adhd_analysis.text.ngram import KneserNey
+    from adhd_analysis.text.transformer import Transformer
+
+    for cls in (KneserNey, Transformer, LSTM):
+        for method in ("logprob_terms", "surprisal", "describe"):
+            assert callable(getattr(cls, method, None)), f"{cls.__name__} has no {method}"
+
+
+def test_surprisal_agrees_with_logprob_terms_on_the_model_that_has_both(tmp_path):
+    """`KneserNey` is the one class carrying both, so it is the one that can check the derivation.
+
+    The other two classes get `surprisal` from `surprisal_from_logprob_terms`. If that conversion is
+    wrong — the wrong log base, or the end-of-sequence term left in — every figure the genericity
+    report prints for a transformer is wrong by a constant and nothing else would catch it. The
+    n-gram's own two methods pin the conversion.
+    """
+    import math
+
+    from adhd_analysis.text.modelfile import surprisal_from_logprob_terms
+
+    lib = _library(tmp_path, n=20)
+    rec = train(lib, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    ids = model.vocab.encode(["the", "quick", "brown", "fox"])
+    native = model.surprisal(ids)
+    derived = surprisal_from_logprob_terms(model.logprob_terms(ids))
+    assert len(native) == len(derived), "the derivation must emit one bit-figure per real token"
+    for a, b in zip(native, derived):
+        assert math.isclose(a, b, rel_tol=1e-9), f"surprisal {a} but the derivation gives {b}"
