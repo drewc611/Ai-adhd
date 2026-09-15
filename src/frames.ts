@@ -270,11 +270,19 @@ function summarise(cfg: Config, dir: string): RunSummary {
 }
 
 /**
- * The largest pass A move observed between two runs of fixture 001 at seed 3 with byte-identical
- * briefs and the same dispatch was 0.048 (backlog item 4, `evals/recorded/001-seed3-repeat`).
- * A move smaller than this is the session, whatever else differs between the runs.
+ * Two sources move pass A on artifacts nobody touched, and the floor is the larger of them.
+ *
+ * Item 4 re-ran fixture 001 at seed 3 with byte-identical briefs and the same dispatch, and the
+ * largest move on any frame was 0.0476 (`evals/recorded/001-seed3-repeat`). E11 then held the
+ * artifacts of both runs completely fixed and scored each a second time, and a critic swap alone
+ * moved a frame by 0.0952 — twice the whole replicate's maximum, with the same mean. Any real
+ * comparison between two runs carries a different session *and* a different critic, so the floor
+ * is 0.0952 rounded up, not 0.0476.
+ *
+ * Raising it withdraws a reading: `014-seed14`'s 0.0625, which E10 took as the wide path
+ * separating its frames better, does not clear this at all.
  */
-export const PASS_A_NOISE_FLOOR = 0.05;
+export const PASS_A_NOISE_FLOOR = 0.1;
 
 /**
  * Two runs of the same fixture, side by side. The question this answers is the one the repo
@@ -346,9 +354,10 @@ export function diffRuns(cfg: Config, dirA: string, dirB: string): RunDiff {
     lines.push("", "pass A moved (>= 0.01):");
     for (const m of pass_a_moved.slice(0, 12)) lines.push(`  ${m.frame.padEnd(17)} ${m.a.toFixed(2)} -> ${m.b.toFixed(2)}  ${m.delta > 0 ? "+" : ""}${m.delta.toFixed(2)}`);
     const biggest = Math.max(...pass_a_moved.map((m) => Math.abs(m.delta)));
-    /* The floor is 0.05: backlog item 4 re-ran fixture 001 at seed 3 with byte-identical briefs
-       and the same dispatch, and pass A moved by at most 0.048 on any frame. See E1a in
-       docs/EXPERIMENTS.md. Below that, a move is the session, not the thing being compared. */
+    /* The floor is 0.10, and both halves of it are measured: 0.0476 from re-running fixture 001 at
+       seed 3 with byte-identical briefs (item 4), 0.0952 from swapping the critic on fixed
+       artifacts (E11). Two runs differ in both at once. Below the floor, a move is the session and
+       the critic, not the thing being compared. */
     lines.push(
       `  Largest move ${biggest.toFixed(2)} on an unchanged artifact-producing frame.`,
       biggest < PASS_A_NOISE_FLOOR

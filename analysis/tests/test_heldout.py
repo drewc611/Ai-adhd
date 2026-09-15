@@ -18,6 +18,20 @@ from pathlib import Path
 
 import pytest
 
+
+def _load_script(name: str):
+    """Import `analysis/scripts/<name>.py` by path, unambiguously. See the note at its use."""
+    import importlib.util
+    import sys
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
 from adhd_analysis.text.budget import Budget
 from adhd_analysis.text.corpora import Library, Source
 from adhd_analysis.text.evaluate import (
@@ -648,7 +662,13 @@ def test_the_scoring_script_releases_each_model_before_loading_the_next(tmp_path
     """
     import weakref
 
-    import scripts.score_heldout as ss
+    # Loaded by path, not as `scripts.score_heldout`. There are two `scripts/` directories in this
+    # checkout — `analysis/scripts/`, which holds this module, and the repository root's, which
+    # holds shell — and which one the bare import resolves to depends on where pytest was started.
+    # From `analysis/` it found the right one; from the repository root, which is how the build
+    # brief says to run the suite, it found the shell directory and raised ModuleNotFoundError in
+    # this one test. `test_fetch_and_genericity.py` already loads its script this way.
+    ss = _load_script("score_heldout")
 
     lib = _library(tmp_path, n=20)
     rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3,

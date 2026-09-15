@@ -21,7 +21,7 @@ def corpus():
 
 
 def test_the_loader_reproduces_the_number_the_typescript_reports(corpus):
-    """79% exact over 225 cells, 100% within one point.
+    """81% exact over 305 cells, 100% within one point.
 
     The repository computes that in `src/learn.ts`. Reproducing it in Python from the same files
     is what makes everything else here trustworthy: a loader that quietly dropped a rater or
@@ -33,8 +33,8 @@ def test_the_loader_reproduces_the_number_the_typescript_reports(corpus):
         if rater in (1, 2)
     }
     s = summarise(pair_only, 3)
-    assert s["pairs"] == 225
-    assert round(s["percent_agreement"], 2) == 0.79
+    assert s["pairs"] == 305
+    assert round(s["percent_agreement"], 2) == 0.81
     assert s["within_one"] == 1.0
 
 
@@ -157,7 +157,7 @@ def test_the_signal_model_is_grouped_by_run_and_never_scored_in_sample(corpus):
 
 def test_bootstrap_resamples_runs_and_reports_when_it_cannot(corpus):
     multi = corpus.multi_rated_runs()
-    assert len(multi) == 5
+    assert len(multi) == 7
 
     def alpha_over(runs):
         keep = set(runs)
@@ -206,6 +206,56 @@ def test_permutation_p_is_never_zero():
     same = [1.0, 2.0, 3.0, 4.0] * 4
     _obs, p_same = permutation_test(same[:8], same[8:], resamples=500, seed=1)
     assert p_same > 0.2, "identical distributions should not look significant"
+
+
+def test_the_analysis_readme_table_is_the_table_the_report_prints(corpus):
+    """The reliability table in `analysis/README.md` was hand-copied and nothing checked it.
+
+    Two second scorings arrived for E11 and every row moved. Six of the nine alphas in the README
+    were then wrong, `committal`'s interval had stopped containing zero while the paragraph under
+    the table still said it did, and the whole thing had been correct on the day it was written and
+    silently false ever since. Every other published figure in this repository is pinned; this one
+    was not, so it is pinned now, against the report rather than against a copy of it.
+
+    Alpha, percent agreement, ceiling rate and distinct values are deterministic. The bootstrap
+    interval is not, so only the fact it does or does not reach chance is asserted — which is the
+    half any sentence in the README is ever built on.
+    """
+    from adhd_analysis.report import reliability_section
+
+    _, table = reliability_section(corpus, resamples=400)
+    readme = (ROOT / "analysis" / "README.md").read_text()
+
+    row = re.compile(
+        r"^\| `([a-z_]+)` \| \*{0,2}([+-][\d.]+)\*{0,2} \| \[([+-][\d.]+), ([+-][\d.]+)\] "
+        r"\| (\d+)% \| (\d+)% \| (\d+) \|$",
+        re.M,
+    )
+    rows = {m[0]: m[1:] for m in row.findall(readme)}
+    assert set(rows) == set(table), f"the README table names {sorted(rows)}, the rubric has {sorted(table)}"
+
+    for dim, (alpha, lo, hi, exact, ceiling, distinct) in rows.items():
+        d = table[dim]
+        assert f"{d['alpha']:+.3f}" == alpha, f"{dim}: README says alpha {alpha}, report says {d['alpha']:+.3f}"
+        assert f"{d['percent_agreement']:.0%}" == f"{exact}%", f"{dim}: README says {exact}% exact, report says {d['percent_agreement']:.0%}"
+        assert f"{d['ceiling_rate']:.0%}" == f"{ceiling}%", f"{dim}: README says {ceiling}% ceiling, report says {d['ceiling_rate']:.0%}"
+        assert str(d["distinct"]) == distinct, f"{dim}: README says {distinct} distinct values, report says {d['distinct']}"
+        claims_chance = float(lo) <= 0.0 <= float(hi)
+        reaches_chance = d["ci_lo"] <= 0.0 <= d["ci_hi"]
+        assert claims_chance == reaches_chance, (
+            f"{dim}: the README interval [{lo}, {hi}] "
+            f"{'reaches' if claims_chance else 'clears'} chance and the report disagrees"
+        )
+
+    # And the two figures the prose above the table quotes.
+    pair_only = {
+        (f"{run}/{letter}/{dim}", rater): float(v)
+        for (run, rater, letter, dim), v in corpus.scores.items()
+        if rater in (1, 2)
+    }
+    s = summarise(pair_only, 3)
+    assert f"the same {s['pairs']} marks" in readme, f"the README quotes a mark count that is not {s['pairs']}"
+    assert f"{s['percent_agreement']:.0%} agreement is not" in readme
 
 
 def test_the_readme_badge_states_the_number_pytest_collects(request):
@@ -278,5 +328,10 @@ def test_the_two_ceiling_dimensions_are_not_the_same_case(corpus):
     assert order[0] == "foreclosure", f"foreclosure is no longer the worst dimension: {order}"
     assert order.index("reasoning_carries") >= 4, f"reasoning_carries is no longer mid-pack: {order}"
 
-    # committal is the one that now carries foreclosure's problem, and is backlog 98.
-    assert table["committal"]["ci_lo"] < 0.0 < table["committal"]["ci_hi"], "committal's interval no longer spans chance"
+    # `committal` was read as carrying foreclosure's problem (backlog 98) on an interval that
+    # spanned chance at five double-scored packs. E11 added two more and it lifted clear, so the
+    # claim here is the opposite one: foreclosure is alone at the bottom, and the dimension that
+    # looked like the next candidate is measuring something after all.
+    assert table["committal"]["ci_lo"] > 0.0, "committal's interval spans chance again; backlog 98 reopens"
+    spans = [n for n, d in table.items() if d["ci_lo"] is not None and d["ci_lo"] <= 0.0 <= d["ci_hi"]]
+    assert spans == ["foreclosure"], f"exactly one dimension should still reach chance, got {spans}"

@@ -79,13 +79,17 @@ reads as stability until you read the next line. 5 of the 8 contested decisions 
 anchor points or fewer, two of them by exactly one, and one by nothing at all. Those representatives
 are not stable because the rubric is decisive; they are close enough that any of them could ship.
 
-Three clear the line. `001-seed3` and `014-seed1` at 0.1042, and `014-seed14` at 0.0625. The last
-two are the wide path, and they say something the five-branch corpus could not: **both seven-branch
-runs separated their winner by more than two anchor points, where five of the six five-branch
-decisions did not.** Two runs is not a rate, and the obvious mechanism — seven candidates give one
-more room to be clearly best than five do — is not tested by anything here. It is the first evidence
-that the narrowness is partly a property of `n` rather than of the rubric, and it is cheap to test
-further, because `enumerate_options` is the only class that runs wide.
+Three clear two anchor points: `001-seed3` and `014-seed1` at 0.1042, and `014-seed14` at 0.0625.
+That was read here as the wide path separating better — both seven-branch runs above the line where
+five of the six five-branch decisions were below it — and **that reading is withdrawn.** Two anchor
+points is not the line that matters. The line that matters is the noise floor, which is 0.10 (E1a
+and E11), and against it `014-seed14`'s 0.0625 is not a margin at all. `001-seed3` and `014-seed1`
+clear it by 0.0042, which is to say they do not clear it either.
+
+**The corpus contains no comfortably separated contested decision.** One of the eight is above the
+floor by a rounding error and the rest are below it. Whether `n` has anything to do with it is
+untested and was never tested by these two runs; the paragraph this replaces was reading a gap
+between two numbers that are both inside the measurement error of the thing producing them.
 
 **And the corpus now has an exact tie, which is the same finding with the floor taken out.** In
 `001-seed3-repeat`, `ACTOR_CENSUS` and `FRAME_BREAKER` both scored 0.8810 in the same cluster. The
@@ -95,14 +99,19 @@ worth reading beside the run it came from — the same pack scored at a differen
 trap sweep also went from firing twice to firing not at all.
 
 **Two critics scoring the same pack rank it differently every time.** `adhd learn
---agreement-all`, pooled over 5 runs and 225 scored cells: 79% exact agreement, 100% within one
-point, and the ranking changed in all five. In `002-kernel-enduser` the shipped representative
-changed with it, `FRAME_BREAKER` to `PARTICULARIST`. A rubric with 79% exact agreement, deciding
-outcomes separated by one anchor point, is not deciding them.
+--agreement-all`, pooled over 7 runs and 305 scored cells: 81% exact agreement, 100% within one
+point, and the ranking changed in all seven. In two of them the shipped representative changed with
+it: `002-kernel-enduser` from `FRAME_BREAKER` to `PARTICULARIST`, and `001-seed3-repeat` from
+`ACTOR_CENSUS` to `FRAME_BREAKER` — which is the exact tie above, broken the other way by a critic
+who scored the identical artifacts. A rubric with 81% exact agreement, deciding outcomes separated
+by one anchor point, is not deciding them.
 
-**Two dimensions are near the ceiling and separate almost nothing.** `foreclosure` sits at 2.91 with
-91% of scores at the ceiling and two distinct values ever used; `reasoning_carries` at 2.89, 94%,
-two values. Both carry weight. Backlog 60 is the rewrite and it is open.
+**One dimension is near the ceiling and separates almost nothing.** `foreclosure` sits at 2.91 with
+91% of scores at the ceiling and two distinct values ever used, and it is retired (D34). The second
+suspect named here was `reasoning_carries` at 2.89, 94%, two values, and it is not one: D39 measured
+alpha 0.678 on an interval excluding zero, above four dimensions that nobody had flagged. Ceiling
+rate cannot tell prevention from dead weight, which is the whole of D39. `committal` was the next
+candidate and E11 cleared it too, at `+0.562 [+0.26, +0.85]`.
 
 **A run costs about three times its estimate.** Seven runs with `cost.json` came in at 407k to 519k
 tokens against an estimate of 156k — 2.6x to 3.3x. The D5 gate quotes the estimate, so the number a
@@ -110,13 +119,13 @@ user confirms is a third of what they spend. Backlog 68 is the recalibration.
 
 ## What would change the answer
 
-The single most valuable open item is backlog 3 and 4: the same fixture at two more seeds, and the
-same fixture at the same seed on a different day. Nothing in this repository separates run-to-run
-noise from signal, so every single-run number here — including the flattering ones — is quoted
-against a noise floor nobody has measured. `adhd diff` says so in place, on every comparison it
-prints, rather than leaving the reader to remember.
+Backlog 3 and 4 were the most valuable open items here and both are closed, which is why several
+paragraphs above now read worse than they did. The floor they measured is 0.10, and `adhd diff`
+prints it on every comparison rather than leaving the reader to remember. What is still unmeasured
+is the *other* half of item 4's finding: pass A reproduced across a replicate and the trap sweep did
+not, and the trap sweep is the half that prunes. One pair is not a rate.
 
-Twelve runs over four fixtures is an existence proof that the machinery runs and the controls lose.
+Fifteen runs over five fixtures is an existence proof that the machinery runs and the controls lose.
 It is not evidence that the frame library picks better answers than one careful pass, and no
 sentence in this repository should be read as claiming it does.
 

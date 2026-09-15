@@ -1,0 +1,50 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence, one number, one place, and the clause 'change nothing else' removes every escape hatch." }
+    falsifiability: { score: 3, evidence: "Two cheap checks are named — existing p99 above 10s, or a retry wrapper at the call site — and either one explicitly voids the single-number move." }
+    specificity: { score: 2, evidence: "The reasoning bends around the specifics of an unbounded default and an asker who has no latency data yet, though the minimal-intervention shape could survive a different subject." }
+    assumption_attack: { score: 2, evidence: "It tests the question's assumption that several timeout knobs are needed and argues one suffices, but the underlying framing of a timeout as a client-side constant goes unchallenged." }
+    reasoning_carries: { score: 3, evidence: "No authorities, defaults-as-received-wisdom, or citations appear anywhere; the argument runs entirely on the unbounded-versus-bounded distinction it builds itself." }
+    actor_coverage: { score: 2, evidence: "The server's operator is named with concrete actions (publish a latency expectation, disclose the internal deadline), but the 10-second position does not depend on them acting." }
+    reversibility: { score: 2, evidence: "It orders the work by deferring every additional knob until a named signal appears, using cheapness of the one-number change to justify going first." }
+    substance: { score: 3, evidence: "Flattened to 'put one 10s total deadline on it and stop there until logs show it cutting off successes', it is the same claim and still worth making." }
+  B:
+    committal: { score: 2, evidence: "It forces a decision but packs three separate settings and a because-clause into one long sentence, and the budget it names may not exist at the call site." }
+    falsifiability: { score: 3, evidence: "Reading the entry point directly above the client takes ten minutes and, if nothing upstream waits, the position flips to a long flat timeout." }
+    specificity: { score: 2, evidence: "The cost-accounting frame is portable, but the handshake-is-bimodal argument and the retry-amplification arithmetic bend around this problem's particulars." }
+    assumption_attack: { score: 2, evidence: "It names and rejects the assumption that the number follows from the dependency's own latency, but the test of whether an inherited deadline exists is deferred to the falsifier rather than performed." }
+    reasoning_carries: { score: 3, evidence: "Nothing is borrowed from an authority; the twenty-seven-requests amplification chain and the queueing argument are constructed in place." }
+    actor_coverage: { score: 2, evidence: "The dependency's operators are named with real actions — publish a histogram, return 429 with Retry-After — but the recommendation stands whether or not they do." }
+    reversibility: { score: 1, evidence: "It mentions that an afternoon of plumbing beats repeated tuning sessions, but never sorts the recommendations by how hard they are to undo." }
+    substance: { score: 3, evidence: "Stripped of the bill-and-payer framing it still says 'subtract your budget from the caller's deadline, keep connect short, cap retries globally', which is a real claim." }
+  C:
+    committal: { score: 3, evidence: "A single sentence with three sequenced imperatives — stamp, propagate, compute — and no hedge handing the choice back." }
+    falsifiability: { score: 3, evidence: "Grepping one incident review for an unconfigured stall is nearly free and would show the propagation machinery buys nothing here." }
+    specificity: { score: 2, evidence: "It quotes the question's own phrasing and works the fan-out arithmetic, but the budget-propagation argument would transfer to almost any timeout question unchanged." }
+    assumption_attack: { score: 3, evidence: "It isolates the assumption that a timeout is a per-client constant, shows who that assumption is convenient for, and the entire position follows from rejecting it." }
+    reasoning_carries: { score: 3, evidence: "No citation or appeal to practice appears; the three-hops-times-retries figure is derived rather than quoted." }
+    actor_coverage: { score: 3, evidence: "The downstream owner is named with actions only they can take — reading the deadline, shedding expired work — and without them the client timeout merely abandons work the server keeps doing." }
+    reversibility: { score: 1, evidence: "The one-entry-point pilot implies a cheap first step, but reversible and committed moves are never distinguished as such." }
+    substance: { score: 3, evidence: "Flat, it says 'give the whole operation a deadline and derive each call's timeout from what remains', which survives the loss of its reframing." }
+  D:
+    committal: { score: 3, evidence: "Four concrete values plus an explicit 'no retries today' and a named follow-on, in one sentence with nothing returned to the reader." }
+    falsifiability: { score: 2, evidence: "The p99.9 and error-rate checks are genuinely decisive and symmetric, but both require the week of histogram data the position itself commissions." }
+    specificity: { score: 3, evidence: "Pool acquisition timeouts, idempotency-key wire commitments, published SLA numbers, and the staging hung-server test make the reasoning unusable for any other question." }
+    assumption_attack: { score: 3, evidence: "It names the question's assumption that the decision is the integers, shows the integers are the cheap part, and the ordering of the answer follows directly from that inversion." }
+    reasoning_carries: { score: 3, evidence: "The hours-versus-months detection-latency comparison carries the whole argument with no authority invoked." }
+    actor_coverage: { score: 3, evidence: "The downstream team is named with actions, and the no-retries-today position depends on them honoring idempotency keys before retries can be enabled." }
+    reversibility: { score: 3, evidence: "The position is a sequence built on the two-way-door versus one-way-door split, with a detection-latency cost attached to each irreversible item." }
+    substance: { score: 3, evidence: "Flattened to 'ship conservative numbers and no retries now, then buy deadline propagation and idempotency before enabling retries', it is the same claim and non-obvious." }
+  E:
+    committal: { score: 2, evidence: "Clear direction, but the 'keep static per-call timeouts as a hard ceiling' clause and the relegation of actual numbers to defaults soften what the reader is told to do today." }
+    falsifiability: { score: 3, evidence: "One day of access logs plus a p99-against-ingress-limit comparison is cheap and the stated 1% threshold would send the answer back to static per-phase timeouts." }
+    specificity: { score: 2, evidence: "The actor enumeration is a portable device, but slow-loris body trickling, the ingress idle timeout, and the pool slot as scarce resource bend it to this problem." }
+    assumption_attack: { score: 3, evidence: "It identifies that the question grants agency only to the person choosing the number, tests who else acts faster and cheaper, and the design follows from the caller winning that test." }
+    reasoning_carries: { score: 3, evidence: "The commonly-30s-or-60s remark is an observation, not an authority, and removing it leaves the argument about the fastest actor intact." }
+    actor_coverage: { score: 3, evidence: "The caller who abandons the request is named with an action, and the whole cancellation-and-budget design rests on that actor existing in volume." }
+    reversibility: { score: 1, evidence: "Speed of change is noted for the operator versus the compiled constant, but that never becomes an ordering of which moves to make first." }
+    substance: { score: 2, evidence: "Flat, it reduces to 'carry a deadline with the request and cap it under the load balancer', which is worth saying though the six-actor framing did much of the persuading." }
+```

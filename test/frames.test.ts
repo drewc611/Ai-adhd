@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
 import { PASS_A_NOISE_FLOOR, RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, orthogonality, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
+import { interRater } from "../src/learn.js";
 import { frameHash } from "../src/hash.js";
 import { compile, selectFrames } from "../src/compile.js";
 import { loadFixtures } from "../src/eval.js";
@@ -707,10 +708,10 @@ test("every fixture names a class routing can actually run, or one it declines o
 });
 
 /*
- * The pass A noise floor is a published number (docs/EXPERIMENTS.md, E1a; backlog 4) and it has
- * exactly one piece of evidence: two runs of fixture 001 at seed 3 with byte-identical briefs and
- * the same dispatch. A constant that drifts away from the pair it was measured on is the failure
- * mode `comparable_heldout` exists to prevent on the analysis side, so it is guarded the same way.
+ * The pass A noise floor is a published number (docs/EXPERIMENTS.md, E1a and E11; backlog 4) with
+ * two pieces of evidence, and it has to cover both. A constant that drifts away from what it was
+ * measured on is the failure mode `comparable_heldout` exists to prevent on the analysis side, so
+ * it is guarded the same way.
  */
 test("PASS_A_NOISE_FLOOR still covers the pair it was measured on", () => {
   const a = join(cfg.root, "evals", "recorded", "001-seed3");
@@ -724,6 +725,22 @@ test("PASS_A_NOISE_FLOOR still covers the pair it was measured on", () => {
   assert.ok(
     biggest <= PASS_A_NOISE_FLOOR,
     `the floor is ${PASS_A_NOISE_FLOOR} and its own evidence now moves ${biggest.toFixed(4)}; re-measure or raise it`,
+  );
+
+  /*
+   * The second half, and the reason the floor is not the replicate's 0.0476. E11 re-scored both
+   * runs' fixed artifacts with a second critic; the critic alone moved a frame further than the
+   * whole re-run did. If that ever stops being true the floor is over-stated and should come down.
+   */
+  const swap = [a, b].map((dir) => interRater(cfg, dir, join(dir, "critic", "pass-a.rater2.yaml")));
+  const swung = Math.max(...swap.map((r) => r.max_pass_a_move));
+  assert.ok(
+    swung <= PASS_A_NOISE_FLOOR,
+    `a critic swap on fixed artifacts moves ${swung.toFixed(4)}, above the ${PASS_A_NOISE_FLOOR} floor`,
+  );
+  assert.ok(
+    swung > biggest,
+    `E11's finding is that the critic moves pass A further than a whole re-run (${swung.toFixed(4)} vs ${biggest.toFixed(4)}); that no longer holds`,
   );
 });
 

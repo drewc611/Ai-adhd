@@ -3254,6 +3254,13 @@ with an interval that excludes zero comfortably, which puts it above `committal`
 ceiling rate was doing all the work in item 60's framing and it is the one statistic that cannot
 distinguish prevention from dead weight.
 
+**Still true at seven double-scored packs.** E11 added a second scoring to `001-seed3` and
+`001-seed3-repeat`, which is 80 more marks than this table was computed on, and nothing here changed
+its sign: `foreclosure` is still the only interval reaching zero, `reasoning_carries` is still
+mid-pack at 0.675, and the dimension this decision set aside as the real case — `committal` — lifted
+to **+0.562 on [+0.26, +0.85]** and cleared chance as well. The table above is left at the numbers
+the decision was made on.
+
 **The ceiling has a mechanism, and it is the same one `docs/RETIREMENT.md` records for T3.**
 `reasoning_carries` scores the citation trap. T3 has fired exactly once in the corpus, on `PRIOR_ART`,
 the only frame carrying `WebSearch` and `WebFetch` — twelve of thirteen frames have no tools, so they

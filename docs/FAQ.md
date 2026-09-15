@@ -48,8 +48,9 @@ catch. `CLAUDE.md` lists replacing it under **Do not**.
 
 The rubric is not above suspicion either. Corrected for chance, `foreclosure` scores Krippendorff's
 alpha of **-0.017** with a 95% interval of [-0.04, +0.00] on 96% exact agreement — an interval spanning
-zero, which at seven runs means *unmeasured*, not weak. `committal` is the same shape. `adhd learn
---agreement` reports it and D9 has the argument.
+zero, which at seven double-scored packs means *unmeasured*, not weak. It is retired for that reason
+(D34). `committal` looked like the same shape on five packs and is not: two more put it at **+0.562
+on [+0.26, +0.85]**, clear of chance. `adhd learn --agreement` reports it and D9 has the argument.
 
 ## How much evidence is there, honestly?
 

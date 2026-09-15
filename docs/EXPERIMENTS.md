@@ -1397,3 +1397,64 @@ argues against, which is why it is worth the two scorings.
 **Registered limits.** Two packs is not a rate, and both are the same problem, so nothing here
 generalises to other fixtures. Alpha is a corpus-level figure and 80 new cells against 225 will
 move `committal`'s interval without settling it; backlog 98 stays open on the terms it states.
+
+### E11 result, 2026-09-15
+
+Both cells ran. A fresh critic scored the existing pass A packs of `001-seed3` and
+`001-seed3-repeat` from the briefs those runs shipped on, written to `pass-a.rater2.yaml`.
+
+**One deviation, stated because it is the kind of thing that should not be silent.**
+`001-seed3`'s brief predates item 95, so its output block spelled `evidence: <one sentence>`
+unquoted — the construct item 95 fixed because it loses passes. Every scoring input was pasted
+verbatim: the problem, the hash, the rubric with its anchors, all five artifacts, the redaction
+notice. Only the output block was swapped for the quoted form. Nothing the critic scores was
+touched.
+
+**The load-bearing prediction holds, and it decides what item 4 measured.**
+
+| comparison | what varies | mean \|Δ\| | max \|Δ\| |
+|---|---|---|---|
+| `001-seed3` → `001-seed3-repeat` | session **and** artifacts **and** critic | 0.0190 | 0.0476 |
+| `001-seed3`, rater 1 → rater 2 | **critic only** | 0.0238 | 0.0476 |
+| `001-seed3-repeat`, rater 1 → rater 2 | **critic only** | 0.0238 | 0.0952 |
+
+Changing nothing but the scorer moves per-frame totals **more** than the entire replicate did.
+So item 4's 0.019 is a measurement of the critic, not a fact about the branches: two independent
+sets of branch artifacts, produced in different sessions from byte-identical briefs, score
+essentially the same, and what moved was who was scoring. That is the decomposition item 4 could
+not make, and it strengthens "divergence reproduces, adjudication does not" rather than softening
+it — the divergence half now has a control.
+
+**The first prediction is wrong on the level and right on the shape.** Both packs were predicted
+near D8's pooled 79%. They came in at **88%** and **85%**, the two highest n=5 packs in the corpus
+after `004-kernel-naming`. They are close to each other, which is what the prediction was really
+about, but both are above the pooled figure rather than at it, and the pooled figure has risen to
+81% because of them. Whatever makes a pack easy to agree on, these two share it — which is
+consistent with them being the same problem, and is one observation, not a mechanism.
+
+**The third prediction holds and then goes further.** The ranking changed in both packs, as D8's
+five-of-five said it would. In `001-seed3-repeat` **the representative changed too**, from
+`ACTOR_CENSUS` to `FRAME_BREAKER` — and that is the cluster D40 found tied at exactly 0.0000. A tie
+the rubric could not break is a tie a different critic breaks the other way, so the alphabetical
+tiebreak is not a formality: it decides which position reaches the user, and it decides it
+differently from how a second scorer would. Two of seven double-scored runs would now send a
+different position to deepen, up from one of five.
+
+**This raises the noise floor, and the old number was too small.** Item 4 set it at 0.05 from the
+replicate's 0.0476 maximum. A critic swap on fixed artifacts produced **0.0952**, twice that. Any
+real comparison between two runs carries both sources, so the floor is the larger:
+`PASS_A_NOISE_FLOOR` is **0.10**.
+
+That is uncomfortable where it should be. `001-seed3`'s `DOOR_KEEPER` over `MINIMALIST` at 0.1042
+and `014-seed1`'s `PARTICULARIST` over `MINIMALIST` at 0.1042 clear the new floor by four
+thousandths. `014-seed14`'s 0.0625, which E10 read as the wide path separating better, does not
+clear it at all and that reading is withdrawn. **The corpus contains no comfortably separated
+contested decision.** It contains two that scrape past a floor measured on two packs, and the
+honest statement of the rubric's discriminating power is that it has not yet been demonstrated.
+
+**Backlog 98 is answered, and the correction to it was the right one.** `committal` was at alpha
+0.402 on an interval of [−0.054, +0.683] that contained zero. With two more double-scored packs it
+is **+0.562 on [+0.26, +0.85]**, clear of zero. The item had said the interval narrows with scored
+runs; it does not, it narrows with double-scored packs, and going from eight scored runs to eleven
+moved it not at all while going from five double-scored packs to seven settled it. `foreclosure`,
+already retired, is now the only dimension whose interval spans zero.

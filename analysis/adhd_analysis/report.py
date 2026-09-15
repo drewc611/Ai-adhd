@@ -97,8 +97,16 @@ def reliability_section(corpus: Corpus, resamples: int) -> tuple[str, dict]:
         lines += [
             "",
             f"At this sample size the interval for {', '.join(f'`{x}`' for x in spans_chance)} spans zero.",
-            "Whatever their point estimates, seven runs cannot distinguish them from chance, and the",
-            "honest reading of a dimension whose interval contains chance is that it is unmeasured.",
+            f"Whatever their point estimates, {len(multi)} double-scored pack(s) cannot distinguish them from",
+            "chance, and the honest reading of a dimension whose interval contains chance is that it is",
+            "unmeasured.",
+        ]
+    else:
+        lines += [
+            "",
+            "No dimension's interval spans zero. That is a recent state and a fragile one: it took",
+            f"{len(multi)} double-scored packs to get here and the narrowest interval is still wide enough",
+            "that one more pack could put a dimension back across the line.",
         ]
     return "\n".join(lines), data
 
@@ -133,9 +141,10 @@ def pooled_section(corpus: Corpus, resamples: int) -> tuple[str, dict]:
         f"  bootstrap over {len(multi)} run(s), {ci.defined}/{ci.resamples} resamples defined"
         + (f", interval width {ci.width:.2f}." if ci.width is not None else "."),
         "",
-        "The pooled figure is the stable one, because it averages 630 marks over nine dimensions.",
+        f"The pooled figure is the stable one, because it averages {len(pair_only)} marks over "
+        f"{len(corpus.dimensions)} dimensions.",
         "That stability is not reassurance: pooling is exactly what hides the per-dimension result",
-        "above, where one dimension sits at chance and another's interval spans it.",
+        "above, where a dimension at chance is averaged in with one that separates cleanly.",
     ]
     return "\n".join(lines), {"pooled_alpha": ci.estimate, "ci_lo": ci.lo, "ci_hi": ci.hi, "pair_only": s}
 

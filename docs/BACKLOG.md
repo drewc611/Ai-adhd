@@ -57,6 +57,14 @@ yet enough to know whether they work.
    unchanged to four decimal places. So a pass A gap under **0.05** is noise, which retires the
    hedge `adhd diff` had been printing since it was built.
 
+   **Correction, 2026-09-15: 0.05 was too low, and this item's own number was mis-attributed.**
+   E11 scored both runs' artifacts a second time with the artifacts held completely fixed, and a
+   critic swap alone moved a frame **0.0952** — twice this item's maximum, with the same mean
+   (0.0238 against 0.0190). So the 0.019 measured here is not "the session"; it is a critic
+   measurement that a session happened to be wrapped around, and the session's own contribution is
+   whatever is left after the critic's, which this pair cannot separate. Two runs differ in both at
+   once, so `PASS_A_NOISE_FLOOR` is **0.10**, the larger of the two.
+
    **The trap sweep is not stable, and it is the part that prunes.** Identical artifacts and
    identical detector text: one critic fired T7 twice and pruned two of five, the other fired
    nothing and pruned none. Clusters went 2 to 3, the recommendation changed hands, and three of
@@ -1303,8 +1311,13 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     **First datum: clean.** All three rung-2 artifacts of `20260915065417-7e664e` pass `adhd traps`
     with nothing fired across T3, T4 and T5. One run is not a rate, and the residual question stays
     open as stated, but the check that would have caught the failure did run and did not catch one.
-98. **`committal` is the dimension that now carries `foreclosure`'s problem** (owner's call, and
-    harder than the last one). Alpha **0.402** on an interval of **[-0.054, 0.683]** that contains
+98. ~~**`committal` is the dimension that now carries `foreclosure`'s problem** (owner's call, and
+    harder than the last one).~~ **Answered by E11: it lifts clear. Alpha `+0.562` on `[+0.26,
+    +0.85]`, which excludes zero. `committal` stays, and `foreclosure` is now the only dimension in
+    the rubric whose interval contains chance — which is the one already retired.** Original text
+    below, because the correction inside it is the part worth keeping.
+
+    Alpha **0.402** on an interval of **[-0.054, 0.683]** that contains
     zero, at 84% ceiling and three distinct values across the corpus. D34 noted the interval in
     passing and nothing acted on it, because item 60 had named `reasoning_carries` as the second
     ceiling dimension and D39 found that was the wrong one.
@@ -1329,6 +1342,12 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     lifts clear, it was thin evidence and the rubric keeps a dimension that scores the thing the
     output contract is built around. Do not retire it on the current interval; D39's whole finding is
     that a ceiling rate is not evidence of that.
+
+    **Settled at seven packs, not fifteen.** E11 added a second scoring to `001-seed3` and
+    `001-seed3-repeat` for a different purpose and this fell out of it: `committal` went to
+    `+0.562 [+0.26, +0.85]` and cleared zero. Two packs did what the item expected ten to do, which
+    says the 0.402 estimate was thin evidence rather than a weak dimension, exactly as the second
+    branch above predicted. The ceiling rate did not move and was never the question.
 
 99. **The corpus counts a deliberate replicate as an independent run, and a retirement criterion just
     moved on one.** `001-seed3-repeat` is fixture 001 at seed 3 with briefs byte-identical to

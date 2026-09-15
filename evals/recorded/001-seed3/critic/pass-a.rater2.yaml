@@ -1,0 +1,50 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One sentence, one number, one place, and the clause 'change nothing else' removes any escape hatch." }
+    falsifiability: { score: 3, evidence: "A single dashboard query or log grep for the existing p99 would show the 5s default cuts healthy traffic and kill the position outright." }
+    specificity: { score: 2, evidence: "The reasoning bends around HTTP particulars — total versus split connect/read/write budgets, streaming paths, pool exhaustion — though the minimal-bound argument would survive some rewording." }
+    assumption_attack: { score: 2, evidence: "It names and rejects the question's implicit framing that this is a tuning problem, but the rejection is asserted from how the question is shaped rather than tested against anything." }
+    reasoning_carries: { score: 3, evidence: "No authority is invoked anywhere; every claim is argued from what an unbounded wait does to a caller." }
+    actor_coverage: { score: 3, evidence: "The upstream team is named with a concrete action — hand over their latency distribution and server-side cutoff — and the position explicitly collapses if their server cuts at 2s." }
+    reversibility: { score: 2, evidence: "It orders work by deferring per-endpoint tables, retries and deadline propagation until a cheap bound reveals which one bites, but never names reversibility as the principle doing the ordering." }
+    substance: { score: 3, evidence: "Flattened to 'put one 5s total timeout on the client and stop there', it is still a real, contestable claim." }
+  B:
+    committal: { score: 2, evidence: "It forces a decision but packs four separate commitments and a 'roughly' into one overloaded sentence." }
+    falsifiability: { score: 3, evidence: "Counting cancelled requests that the dependency logged as successful is one hour of logs and would directly invalidate a p99-derived deadline." }
+    specificity: { score: 2, evidence: "The cost argument is built on connection pool slots, retry amplification and per-stage versus total budgets, which are particular to this problem though the accounting shape is portable." }
+    assumption_attack: { score: 2, evidence: "It attacks the assumption that the number is the asker's to choose and shows what that hides, but treats the inherited-deadline alternative as established rather than testing whether a caller deadline exists." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities appear; the case rests entirely on who pays which cost and when." }
+    actor_coverage: { score: 3, evidence: "The dependency owner publishes an SLO and enforces a server deadline and the caller sends a budget at all, and the whole position depends on that budget arriving." }
+    reversibility: { score: 1, evidence: "It notes the plumbing is one afternoon and asks for coordination, but never sorts moves by whether they can be undone." }
+    substance: { score: 3, evidence: "Stripped flat — inherit a deadline, derive from measured p99, one retry and only when idempotent — it is the same claim and still worth making." }
+  C:
+    committal: { score: 3, evidence: "One sentence with three chained imperatives and no hedge or return of the choice to the reader." }
+    falsifiability: { score: 3, evidence: "Checking the call graph for multi-hop paths is cheap and specific, and a single-hop graph with a tight p99.9 concedes that a constant was right." }
+    specificity: { score: 2, evidence: "The reasoning turns on hop chains, per-attempt budget division and remaining-budget headers, which is this problem's machinery though the 'derive, do not choose' move generalizes." }
+    assumption_attack: { score: 3, evidence: "It isolates the assumption that a timeout is a property of the client rather than of the call, unpacks the three things that smuggles in, and the propagation answer follows directly from rejecting it." }
+    reasoning_carries: { score: 3, evidence: "No authorities are cited and none are needed; the argument runs on the mechanics of a shared deadline." }
+    actor_coverage: { score: 3, evidence: "The upstream owner both publishes an SLO to size the budget and cancels server-side work on the header, which the position calls the half no client-side number can reach." }
+    reversibility: { score: 1, evidence: "It gives a 'tomorrow' first action but never separates cheap undoable moves from committed ones." }
+    substance: { score: 3, evidence: "Flat restatement — stamp a deadline at the edge and spend it down instead of picking constants — is the same claim and still contestable." }
+  D:
+    committal: { score: 2, evidence: "It commits to specific numbers and a shipping move, but the sentence carries several decisions plus a deliberate deferral of the retry and budget questions." }
+    falsifiability: { score: 3, evidence: "The black-hole test is an hour and would show the configured connect timeout never covered DNS or TLS, killing the premise that the number in config is the number in effect." }
+    specificity: { score: 3, evidence: "DNS and TLS sitting outside the connect timeout, duplicate charges from retried POSTs, and attempts times per-attempt timeout are unusable for any problem other than this one." }
+    assumption_attack: { score: 2, evidence: "It tests the assumption that the question is about values by separating value from shape, but the recommendation still supplies the values the question asked for." }
+    reasoning_carries: { score: 3, evidence: "No citation or authority is used; the ordering is argued from detection latency and cost of being wrong." }
+    actor_coverage: { score: 3, evidence: "The endpoint team supplies the latency distribution and an idempotency key, which is what converts the position's hardest one-way door into a dial." }
+    reversibility: { score: 3, evidence: "The entire position is a sequence built on sorting two-way doors from one-way ones, with the ordering derived from which door is irreversible." }
+    substance: { score: 3, evidence: "Flattened to 'ship an aggressive configurable timeout now, measure for a week, then decide retries', it is still the same worthwhile claim." }
+  E:
+    committal: { score: 3, evidence: "One sentence, three concrete imperatives, and no clause handing the decision back." }
+    falsifiability: { score: 3, evidence: "One counter on whether the caller's connection was still open plus a grep of the ingress path is an afternoon and would show there is no budget to inherit." }
+    specificity: { score: 2, evidence: "The actor list is populated with this problem's furniture — the 60s proxy default, TLS handshake before the read timeout is armed, pool-acquire queueing — but the enumeration itself is a reusable template." }
+    assumption_attack: { score: 3, evidence: "It names that the question admits only one actor holding the config, shows the human's free sub-second cancel overrides whatever number that actor picks, and the inherited-deadline design follows from that." }
+    reasoning_carries: { score: 3, evidence: "No authorities are invoked; the case is built from what each party can do and how fast." }
+    actor_coverage: { score: 3, evidence: "The human at the keyboard is named with a concrete action, and the position exists precisely because that action makes a client-side constant decoration." }
+    reversibility: { score: 1, evidence: "It rates each actor's action by speed and cost, and notes a deploy versus dynamic config, but never orders recommendations by reversibility." }
+    substance: { score: 3, evidence: "Flat — inherit an absolute deadline, pass the remainder down, abort the socket on disconnect — is the same claim without the actor framing." }
+```

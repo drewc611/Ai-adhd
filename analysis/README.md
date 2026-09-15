@@ -10,47 +10,50 @@ cd analysis
 pip install -e '.[dev]'
 python -m adhd_analysis --root ..              # the report
 python -m adhd_analysis --root .. --json       # the same numbers, machine readable
-pytest                                         # 58 tests
+pytest                                         # 246 tests, the whole suite
 ```
 
 ## Why this exists
 
-Every headline figure in the repository is a point estimate over seven runs. 79% critic
-agreement. A 3.0x cost ratio. Per-frame prune rates out of two or three appearances. An
+Every headline figure in the repository is a point estimate over seven double-scored packs. 81%
+critic agreement. A 3.0x cost ratio. Per-frame prune rates out of two or three appearances. An
 orthogonality rate of 2 in 3. `docs/EXPERIMENTS.md` says those are single-sample noise and
 `docs/RETIREMENT.md` refuses to act on one of them for that reason, but neither says *how*
 uncertain, because nothing had computed it.
 
 Two things follow from computing it.
 
-**79% agreement is not 79% reliability.** Percent agreement counts matches and never asks how
-many of those matches chance explains. Krippendorff's alpha does. Over the same 630 marks:
+**81% agreement is not 81% reliability.** Percent agreement counts matches and never asks how
+many of those matches chance explains. Krippendorff's alpha does. Over the same 305 marks:
 
 | dimension | alpha | 95% interval | % exact | ceiling | distinct values |
 |---|---|---|---|---|---|
-| `reversibility` | **+0.850** | [+0.73, +0.94] | 76% | 19% | 4 |
-| `assumption_attack` | +0.773 | [+0.57, +0.91] | 70% | 50% | 3 |
-| `specificity` | +0.731 | [+0.43, +0.94] | 84% | 14% | 3 |
-| `reasoning_carries` | +0.678 | [+0.68, +0.70] | 98% | 94% | 3 |
-| `actor_coverage` | +0.557 | [+0.34, +0.71] | 84% | 36% | 2 |
-| `falsifiability` | +0.517 | [+0.16, +0.82] | 82% | 76% | 3 |
-| `substance` | +0.508 | [+0.31, +0.65] | 76% | 69% | 3 |
-| `committal` | +0.402 | [-0.05, +0.68] | 86% | 86% | 3 |
+| `reversibility` | **+0.875** | [+0.78, +0.95] | 80% | 18% | 4 |
+| `specificity` | +0.732 | [+0.42, +0.95] | 85% | 16% | 3 |
+| `assumption_attack` | +0.709 | [+0.48, +0.87] | 70% | 51% | 3 |
+| `reasoning_carries` | +0.675 | [+0.68, +0.69] | 98% | 96% | 3 |
+| `actor_coverage` | +0.649 | [+0.50, +0.76] | 85% | 45% | 3 |
+| `committal` | +0.562 | [+0.26, +0.85] | 87% | 83% | 3 |
+| `substance` | +0.469 | [+0.22, +0.65] | 77% | 76% | 3 |
+| `falsifiability` | +0.383 | [+0.06, +0.63] | 80% | 80% | 3 |
 | `foreclosure` | **-0.017** | [-0.04, +0.00] | 96% | 94% | 2 |
 
 The two orderings invert. `foreclosure` is second-best by percentage and last by alpha: the
 critics agree 96% of the time because 94% of its marks are the same mark, and corrected for
-chance that agreement is worth nothing. `reversibility` is third from the bottom by percentage
-and first by alpha, because the thing the critics agree about actually varies.
+chance that agreement is worth nothing. `reversibility` is near the bottom by percentage and
+first by alpha, because the thing the critics agree about actually varies.
 
 That is D8 finding 5 arriving from a second direction and with a sign on it. Finding 5 identified
 `foreclosure` and `reasoning_carries` as scoring the output contract and the D4 tool allowlist
 rather than the reasoning, and reached that conclusion from ceiling rates. Alpha reaches it
 without being told which dimensions to suspect.
 
-**`committal` and `foreclosure` have intervals that contain zero.** Whatever their point
-estimates, seven runs cannot distinguish them from chance. A dimension whose interval spans
-chance is unmeasured, not weak.
+**`foreclosure` is the only dimension whose interval contains zero, and it is already retired.**
+It was two: `committal` sat at +0.402 on [-0.05, +0.68] over five double-scored packs, and backlog
+98 was open on whether to retire it. E11 added a second scoring to two more packs for an unrelated
+reason and `committal` moved to +0.562 on [+0.26, +0.85], clear of chance. Two packs did what the
+item expected ten to do, so the 0.402 was thin evidence rather than a dead dimension. A dimension
+whose interval spans chance is unmeasured, not weak, and that now describes exactly one.
 
 **All nine dimensions push the same way on whether an artifact is pruned.** `learn --correlation`
 already reports max |r| = 0.51, so no two dimensions are redundant with each other. Fit a
