@@ -387,6 +387,46 @@ export const FixtureSchema = z
   });
 export type Fixture = z.infer<typeof FixtureSchema>;
 
+/**
+ * What the host actually spawned, as opposed to what the plan asked for.
+ *
+ * `plan.json` records the agent a run *intends* for each task. Nothing recorded what it *got*, and
+ * that gap hid the defect D41 found for fifteen runs: `adhd-branch`, `adhd-critic` and
+ * `adhd-deepen` could not launch at all, every dispatch silently fell back to another agent type,
+ * and because a subagent type selects a system prompt, the critic ran the branch instructions.
+ * Twelve recorded runs and two decisions were written on top of that, and every one of their
+ * `plan.json` files still claims `"agent": "adhd-branch"`.
+ *
+ * A substitution is not forbidden — D41's own fallback reasoning is sound and a host that cannot
+ * launch one agent may legitimately use another. What is forbidden is doing it silently. An entry
+ * whose `actual` differs from its `planned` must say why, and the synthesis ships that to the
+ * reader the same way the pruned block does.
+ */
+export const DispatchEntrySchema = z
+  .object({
+    /** `branch:<FRAME>`, `critique:pass-a`, `critique:pass-b`, or `deepen:<FRAME>`. */
+    task: z.string().min(1),
+    planned: z.string().min(1),
+    actual: z.string().min(1),
+    /** Required when `actual` differs from `planned`. The refusal text, ideally verbatim. */
+    note: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const DispatchRecordSchema = z
+  .object({ entries: z.array(DispatchEntrySchema) })
+  .strict()
+  .superRefine((v, ctx) => {
+    for (const e of v.entries)
+      if (e.actual !== e.planned && !e.note)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${e.task}: planned ${e.planned} and spawned ${e.actual} with no note. A substitution is allowed; an unexplained one is not`,
+        });
+  });
+export type DispatchRecord = z.infer<typeof DispatchRecordSchema>;
+export type DispatchEntry = z.infer<typeof DispatchEntrySchema>;
+
 export const RecordedExpectationSchema = z
   .object({
     outcome: z.enum(["pass", "fail"]),

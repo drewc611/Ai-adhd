@@ -3367,6 +3367,27 @@ guarantee held by an agent that could not start, with every recorded run falling
 `general-purpose` — which grants `Read`, `Glob` and `Grep`. The guarantee was weaker in practice than
 it now is on paper.
 
+**The permit was the symptom. The defect is that nothing recorded which agent actually ran.**
+
+`plan.json` records the agent a run *intends* for each task. Nothing recorded what it *got*, so a
+dispatch that fell back left no trace in the run directory, in the artifacts, or in the synthesis.
+That is how a silent substitution survived twelve recorded runs and two decisions written on top of
+them, and why all fifteen recordings still carry `"agent": "adhd-branch"` for branches that agent
+never produced.
+
+So a run now writes `dispatch.json`: one entry per task, with `planned`, `actual`, and a `note`
+that is **required** whenever the two differ. A substitution is allowed — the fallback reasoning is
+sound and a host that cannot launch one agent may legitimately use another — and an unexplained one
+is refused by the schema. Substitutions ship in the synthesis the way the pruned block does, because
+a run whose critic was not the critic is a run whose scoring means something else, and the person
+acting on the recommendation is the one who needs to know.
+
+The fifteen existing recordings are exempt and the exemption is narrow. Appending a section to all
+of them would rewrite the corpus item 4's finding rests on to suit a feature added afterwards, and
+`adhd replay` caught exactly that attempt when it was tried. They render byte-identically; `adhd
+doctor` names all eleven that carry a plan and no dispatch record, so the gap is reported rather
+than papered over.
+
 **What catches this next time.** `adhd doctor` checks each isolated agent's permit against the list
 of names known to resolve, and errors on a permit outside it or on an empty one. `test/agents.test.ts`
 names `TodoWrite` and `TaskList` specifically, because both shipped, both read as inert, both passed

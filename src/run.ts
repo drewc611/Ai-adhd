@@ -3,8 +3,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { readJsonIf } from "./read.js";
 import type { Config } from "./config.js";
-import { PlanSchema, dimensionsAt, type BranchArtifact, type DeepenArtifact, type Plan } from "./schema.js";
+import { DispatchRecordSchema, PlanSchema, dimensionsAt, type BranchArtifact, type DeepenArtifact, type DispatchEntry, type Plan } from "./schema.js";
 import { compile, letterFor, previewText } from "./compile.js";
 import {
   checkBlind,
@@ -177,6 +178,52 @@ function yamlBlock(obj: unknown): string {
 
 // ---- critique ---------------------------------------------------------------------------
 
+export interface DispatchCheck {
+  /** Absent for every run recorded before D41, which is the point of reporting it. */
+  recorded: boolean;
+  substitutions: DispatchEntry[];
+  missing: string[];
+  text: string;
+}
+
+/**
+ * What the host actually spawned, checked against what the plan asked for.
+ *
+ * The plan records an intent. Until D41 nothing recorded the outcome, so a dispatch that fell back
+ * to a different agent — and therefore to a different system prompt — left no trace anywhere in the
+ * run directory. Fifteen recorded runs carry `"agent": "adhd-branch"` for branches that agent never
+ * produced, because it could not launch.
+ *
+ * Absence is reported rather than thrown. Every existing recording predates the file and failing
+ * them would destroy the corpus the finding rests on; what it must not do is read as clean.
+ */
+export function checkDispatch(runDir: string): DispatchCheck {
+  const plan = loadPlan(runDir);
+  const planned = new Map<string, string>(plan.branches.map((b) => [`branch:${b.frame}`, b.agent]));
+  const rec = readJsonIf(join(runDir, "dispatch.json"), (v) => DispatchRecordSchema.parse(v));
+  if (!rec)
+    return {
+      recorded: false,
+      substitutions: [],
+      missing: [...planned.keys()],
+      text: [
+        "dispatch: not recorded. This run does not say which subagent type produced each artifact,",
+        "  so plan.json's `agent` field is an intention rather than a fact. See D41.",
+      ].join("\n"),
+    };
+
+  const seen = new Set(rec.entries.map((e) => e.task));
+  const missing = [...planned.keys()].filter((t) => !seen.has(t));
+  const substitutions = rec.entries.filter((e) => e.actual !== e.planned);
+  const lines = [`dispatch: ${rec.entries.length} task(s) recorded`];
+  for (const e of rec.entries.filter((x) => planned.has(x.task) && planned.get(x.task) !== x.planned))
+    lines.push(`  ${e.task}: record says planned ${e.planned}, plan.json says ${planned.get(e.task)}`);
+  if (missing.length) lines.push(`  no dispatch recorded for: ${missing.join(", ")}`);
+  for (const e of substitutions) lines.push(`  SUBSTITUTED ${e.task}: planned ${e.planned}, spawned ${e.actual} — ${e.note}`);
+  if (!substitutions.length && !missing.length) lines.push("  every task ran on the agent the plan named");
+  return { recorded: true, substitutions, missing, text: lines.join("\n") };
+}
+
 export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
   const plan = loadPlan(runDir);
   const problem = rd(join(runDir, "problem.txt"));
@@ -221,7 +268,11 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
       text: [
         `critique: ${valid.length} valid artifact(s), ${invalid.length} contract violation(s) (pruned), ${lints.length} lint hint(s).`,
         `pass A brief written (blind, ${shuffled.length} letters).`,
+        // D41: say what actually produced these artifacts before scoring them. A pack built by an
+        // agent the plan did not name is still scorable, but the reader has to be told.
+        checkDispatch(runDir).text,
         `next: spawn adhd-critic with ${briefPath} as the prompt; write its final message to ${passAPath}; run this phase again.`,
+        `  and append a dispatch.json entry for critique:pass-a naming the agent you actually spawned.`,
       ].join("\n"),
       next: [{ kind: "spawn", agent: "adhd-critic", brief: briefPath, artifact: passAPath }],
       exitCode: 0,
@@ -270,7 +321,7 @@ export function phaseCritique(cfg: Config, runDir: string): PhaseResult {
 
   // State 3: both present.
   validatePassB(rd(passBPath), plan.problem_hash, valid.map((a) => a.frame), cfg.rubric.hard_rules.min_evidence_words_on_fire);
-  return { text: "critique complete. next: --phase deepen.", exitCode: 0 };
+  return { text: ["critique complete.", checkDispatch(runDir).text, "next: --phase deepen."].join("\n"), exitCode: 0 };
 }
 
 // ---- deepen -----------------------------------------------------------------------------
@@ -380,13 +431,43 @@ export function renderRun(cfg: Config, runDir: string, opts: { partial?: boolean
       deepen[frame] = validateDeepen(rd(join(deepenDir, f)), p2.problem_hash, frame);
     }
   }
-  return renderSynthesis(cfg, p2, score, deepen, costFor(runDir, p2));
+  const body = renderSynthesis(cfg, p2, score, deepen, costFor(runDir, p2));
+  /*
+   * D41. A substitution reaches the reader, for the same reason the pruned block does: a run whose
+   * critic was not the critic is a run whose scoring means something different, and the person
+   * acting on the recommendation is the one who needs to know. Appended rather than threaded
+   * through `renderSynthesis`, which takes what it scores and has no business reading the run
+   * directory.
+   */
+  const dispatch = checkDispatch(runDir);
+  /*
+   * A run with no dispatch.json renders exactly as it did before D41. That is deliberate and it is
+   * the narrower choice: every one of the fifteen recorded runs predates the file, and appending a
+   * section to all of them would rewrite the corpus that item 4's finding rests on to accommodate a
+   * feature added afterwards. `adhd replay` is the guard that caught the attempt.
+   *
+   * The absence is not swallowed. `runPhase` prints it to the operator at critique and at synth,
+   * and `adhd doctor` reports which recordings lack it. What does not happen is a historical
+   * synthesis quietly gaining a paragraph its run never produced.
+   */
+  if (!dispatch.recorded || (!dispatch.substitutions.length && !dispatch.missing.length)) return body;
+  const lines = ["", "## Dispatch", ""];
+  if (dispatch.substitutions.length) {
+    lines.push("**This run did not use the agents its plan named.** A subagent type selects a system", "prompt, so a substituted agent ran different instructions on the same brief.", "");
+    for (const e of dispatch.substitutions) lines.push(`- \`${e.task}\`: planned \`${e.planned}\`, spawned \`${e.actual}\` — ${e.note}`);
+  }
+  if (dispatch.missing.length) {
+    lines.push("", `No dispatch was recorded for: ${dispatch.missing.join(", ")}.`);
+  }
+  return `${body}\n${lines.join("\n")}\n`;
 }
 
 export function phaseSynth(cfg: Config, runDir: string, opts: { partial?: boolean } = {}): PhaseResult {
   const text = renderRun(cfg, runDir, opts);
   wr(join(runDir, "synthesis.md"), text);
-  return { text, exitCode: 0 };
+  // To the operator, not into the file. See the note in renderRun about why the corpus is exempt.
+  const dispatch = checkDispatch(runDir);
+  return { text: dispatch.recorded && !dispatch.substitutions.length && !dispatch.missing.length ? text : `${text}\n\n${dispatch.text}`, exitCode: 0 };
 }
 
 export type Phase = "compile" | "critique" | "deepen" | "synth";

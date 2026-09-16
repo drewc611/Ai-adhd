@@ -394,6 +394,25 @@ function checkCorpus(cfg: Config): Finding[] {
   }
 
   /*
+   * D41. Which recordings say what actually produced them?
+   *
+   * `plan.json` records the agent a run intended for each branch. Every recorded run carries
+   * `"agent": "adhd-branch"` and that agent could not launch in any host tried, so for all fifteen
+   * the field is an intention that was not met and nothing anywhere says so. A warning rather than
+   * an error because the recordings predate the file and rewriting them would destroy the evidence;
+   * what it must not do is read as clean.
+   */
+  const undispatched = readdirSync(dir)
+    .filter((d) => statSync(join(dir, d)).isDirectory() && existsSync(join(dir, d, "plan.json")) && !existsSync(join(dir, d, "dispatch.json")))
+    .sort();
+  if (undispatched.length)
+    out.push({
+      severity: "warn",
+      check: "corpus",
+      message: `${undispatched.length} recording(s) do not say which subagent type produced them, so their plan.json \`agent\` field is an intention rather than a fact: ${undispatched.join(", ")} (D41)`,
+    });
+
+  /*
    * A `replicate_of` pointing at nothing is silent otherwise: `recordedDraws` leaves the run as its
    * own draw, so the rates go back to counting it twice and the report reads the same as before the
    * field was added. That is exactly the state backlog 99 exists to prevent, so it is an error.

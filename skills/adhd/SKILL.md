@@ -53,6 +53,29 @@ reach the local filesystem, so sibling isolation holds by capability. The permit
 but will not grant it to a subagent, and does not recognise `TodoWrite` at all, so the three agents
 it was declared on never launched anywhere.
 
+### Record what you actually spawned (D41)
+
+As you spawn, append an entry to `runs/<run_id>/dispatch.json`:
+
+```json
+{ "entries": [
+  { "task": "branch:LEDGER", "planned": "adhd-branch", "actual": "adhd-branch" },
+  { "task": "critique:pass-a", "planned": "adhd-critic", "actual": "adhd-branch-search",
+    "compare": "note is required whenever actual differs from planned",
+    "note": "adhd-critic refused: unrecognized [TodoWrite]" }
+] }
+```
+
+`task` is `branch:<FRAME>`, `critique:pass-a`, `critique:pass-b`, or `deepen:<FRAME>`. **A
+substitution is allowed; an unexplained one is refused** — the phase throws on an `actual` that
+differs from `planned` with no `note`, and the note should be the host's refusal text verbatim.
+
+This is not bookkeeping. A subagent type selects a *system prompt*, so a substituted agent runs
+different instructions on the same brief, and for the critic that means losing "run every detector
+mechanically, eight records per branch, a gap rejects the pass". Fifteen runs were recorded before
+this file existed, every one of their `plan.json` files claims `"agent": "adhd-branch"`, and that
+agent had never launched. The substitution ships in the synthesis the way the pruned block does.
+
 **Do not reach for `general-purpose`.** It carries `Read`, `Glob` and `Grep`, so a branch dispatched
 that way can open its siblings' artifacts in the run directory. "Branches never see siblings" is the
 non-negotiable the whole architecture rests on, and every run recorded before D41 was dispatched

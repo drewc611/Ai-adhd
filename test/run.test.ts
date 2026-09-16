@@ -1,10 +1,10 @@
 import { dimensionsAt } from "../src/schema.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifact, cfg, passA, passB, tmp, writeProblem, yaml } from "./helpers.js";
-import { computeScore, phaseCompile, phaseCritique, phaseDeepen, phaseSynth, loadPlan } from "../src/run.js";
+import { checkDispatch, computeScore, loadPlan, phaseCompile, phaseCritique, phaseDeepen, phaseSynth, renderRun } from "../src/run.js";
 import { checkBlind } from "../src/validate.js";
 import { HashMismatch, RunAbort } from "../src/errors.js";
 import { sections } from "../src/eval.js";
@@ -235,4 +235,98 @@ test("a scored run records the rubric version that produced its numbers", () => 
   const { score } = computeScore(cfg, runDir);
   assert.equal(score.rubric_version, cfg.rubric.version);
   assert.equal(JSON.parse(readFileSync(join(runDir, "score.json"), "utf8")).rubric_version, cfg.rubric.version);
+});
+
+/*
+ * D41's second half. The permit was the symptom; this is the defect that let it hide.
+ *
+ * `plan.json` records the agent a run *intends* for each task and nothing recorded what it *got*.
+ * `adhd-branch`, `adhd-critic` and `adhd-deepen` could not launch in any host tried, every dispatch
+ * silently fell back, and because a subagent type selects a system prompt the critic ran the branch
+ * instructions. Twelve recorded runs and two decisions were written on top of that, and all fifteen
+ * `plan.json` files still say `"agent": "adhd-branch"`.
+ */
+test("a run with no dispatch record says so rather than reading as clean", () => {
+  const d = checkDispatch(join(cfg.root, "evals", "recorded", "001-seed3"));
+  assert.equal(d.recorded, false);
+  assert.match(d.text, /not recorded/);
+  assert.match(d.text, /intention rather than a fact/);
+  assert.ok(d.missing.length >= 5, "every planned branch is unaccounted for when nothing was recorded");
+});
+
+test("a substitution is reported with the agent that actually ran and the reason", () => {
+  const dir = join(tmp(), "run");
+  cpSync(join(cfg.root, "evals", "recorded", "001-seed3"), dir, { recursive: true });
+  writeFileSync(
+    join(dir, "dispatch.json"),
+    JSON.stringify({
+      entries: [
+        { task: "branch:ACTOR_CENSUS", planned: "adhd-branch", actual: "adhd-branch-search", note: "adhd-branch refused: unrecognized [TodoWrite]" },
+        { task: "critique:pass-a", planned: "adhd-critic", actual: "adhd-branch-search", note: "adhd-critic refused the same way" },
+      ],
+    }),
+  );
+  const d = checkDispatch(dir);
+  assert.equal(d.recorded, true);
+  assert.equal(d.substitutions.length, 2);
+  assert.match(d.text, /SUBSTITUTED critique:pass-a: planned adhd-critic, spawned adhd-branch-search/);
+  assert.match(d.text, /unrecognized \[TodoWrite\]/, "the refusal text is the evidence and must survive into the report");
+  assert.ok(d.missing.length > 0, "branches with no entry are still named");
+});
+
+/** A substitution is allowed. Doing it silently is what produced fifteen misleading recordings. */
+test("a substitution with no reason is refused rather than recorded", () => {
+  const dir = join(tmp(), "run");
+  cpSync(join(cfg.root, "evals", "recorded", "001-seed3"), dir, { recursive: true });
+  writeFileSync(
+    join(dir, "dispatch.json"),
+    JSON.stringify({ entries: [{ task: "branch:LEDGER", planned: "adhd-branch", actual: "general-purpose" }] }),
+  );
+  assert.throws(
+    () => checkDispatch(dir),
+    (e: Error) => /planned adhd-branch and spawned general-purpose with no note/.test(e.message),
+  );
+});
+
+test("a run whose dispatch matches its plan says so in one line", () => {
+  const dir = join(tmp(), "run");
+  cpSync(join(cfg.root, "evals", "recorded", "001-seed3"), dir, { recursive: true });
+  const plan = JSON.parse(readFileSync(join(dir, "plan.json"), "utf8")) as { branches: { frame: string; agent: string }[] };
+  writeFileSync(
+    join(dir, "dispatch.json"),
+    JSON.stringify({ entries: plan.branches.map((b) => ({ task: `branch:${b.frame}`, planned: b.agent, actual: b.agent })) }),
+  );
+  const d = checkDispatch(dir);
+  assert.deepEqual(d.substitutions, []);
+  assert.deepEqual(d.missing, []);
+  assert.match(d.text, /every task ran on the agent the plan named/);
+});
+
+/*
+ * The corpus is exempt on purpose and the exemption has to stay narrow. Appending a Dispatch
+ * section to every recording would rewrite the fifteen syntheses item 4's finding rests on to suit
+ * a feature added afterwards, and `adhd replay` caught that attempt. A run that records nothing
+ * renders exactly as it did before.
+ */
+test("a recording with no dispatch record renders byte-identically to before D41", () => {
+  const dir = join(cfg.root, "evals", "recorded", "001-seed3");
+  const rendered = renderRun(cfg, dir);
+  assert.ok(!/## Dispatch/.test(rendered), "a historical synthesis must not gain a section its run never produced");
+  assert.equal(rendered, readFileSync(join(dir, "synthesis.md"), "utf8"));
+});
+
+test("a substitution reaches the synthesis, the way the pruned block does", () => {
+  const dir = join(tmp(), "run");
+  cpSync(join(cfg.root, "evals", "recorded", "001-seed3"), dir, { recursive: true });
+  writeFileSync(
+    join(dir, "dispatch.json"),
+    JSON.stringify({
+      entries: [{ task: "critique:pass-a", planned: "adhd-critic", actual: "adhd-branch-search", note: "adhd-critic refused: unrecognized [TodoWrite]" }],
+    }),
+  );
+  const rendered = renderRun(cfg, dir);
+  assert.match(rendered, /## Dispatch/);
+  assert.match(rendered, /did not use the agents its plan named/);
+  assert.match(rendered, /a subagent type selects a system/i, "the reader is told why a substitution matters, not just that one happened");
+  assert.match(rendered, /adhd-critic.*adhd-branch-search/);
 });
