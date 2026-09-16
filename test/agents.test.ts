@@ -278,3 +278,35 @@ test("no mission agent can reach the network or start a run, and only the builde
   const reviewer = tools(frontmatter(join(dir, "adhd-reviewer.md")));
   assert.ok(!reviewer.includes("Write") && !reviewer.includes("Bash"), "a reviewer that can fix what it finds never writes the objection down");
 });
+
+/**
+ * D42. `agents/` is only read when the plugin is installed. A session opened straight on this
+ * repository installs nothing, so every dispatch name in `skills/adhd/SKILL.md` resolved to no
+ * agent at all and the spawn was refused before any permit was looked at — which is why D41's
+ * permit fix could not be observed to change anything. `.claude/agents/` is the directory such a
+ * session reads, so the shipped agents are mirrored into it by `scripts/sync-claude-agents.mjs`.
+ *
+ * The mirror is a copy, so it can drift. This is the check that says so.
+ */
+test("the shipped agents are mirrored into .claude/agents, byte for byte", () => {
+  const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
+  const shipped = (p["agents"] as string[]).map((a) => a.replace(/^\.\/agents\//, ""));
+  const dir = join(cfg.root, ".claude", "agents");
+
+  assert.ok(existsSync(dir), ".claude/agents does not exist, so a session on this repository has no adhd agents");
+  for (const file of shipped) {
+    const mirror = join(dir, file);
+    assert.ok(existsSync(mirror), `.claude/agents/${file} is missing; run node scripts/sync-claude-agents.mjs`);
+    assert.equal(
+      readFileSync(mirror, "utf8"),
+      readFileSync(join(cfg.root, "agents", file), "utf8"),
+      `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-agents.mjs`,
+    );
+  }
+
+  // The maintenance agents stay out for the same reason plugin.json leaves them out: adhd-trainer
+  // has Bash and adhd-governor reads this repository's training records, and neither belongs in
+  // the agent list of a session that merely opened the clone.
+  const mirrored = readdirSync(dir).filter((f) => f.endsWith(".md"));
+  assert.deepEqual(mirrored.sort(), [...shipped].sort());
+});

@@ -138,6 +138,27 @@ function checkPlugin(cfg: Config): Finding[] {
       if (!(tools as readonly string[]).includes(t))
         out.push({ severity: "error", check: "tools", message: `agents/${agent}.md declares ${t} and no stage kind grants it` });
   }
+  // D42. `agents/` is read only when the plugin is installed, and a session opened straight on a
+  // clone installs nothing. `.claude/agents/` is the directory such a session does read, so a
+  // shipped agent missing from the mirror is an agent that does not exist as far as a dispatch is
+  // concerned: the spawn is refused on the name, before the permit above is ever consulted.
+  const shipped = Array.isArray(manifest["agents"]) ? (manifest["agents"] as string[]).map((a) => a.replace(/^\.\/agents\//, "")) : [];
+  const mirrorDir = join(cfg.root, ".claude", "agents");
+  if (!existsSync(mirrorDir))
+    out.push({ severity: "error", check: "plugin", message: ".claude/agents does not exist, so a session opened on this repository resolves none of the agents a run dispatches to; run node scripts/sync-claude-agents.mjs" });
+  else {
+    const mirrored = readdirSync(mirrorDir).filter((f) => f.endsWith(".md"));
+    for (const file of shipped) {
+      if (!mirrored.includes(file))
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} is missing, so ${file.replace(/\.md$/, "")} resolves to no agent without the plugin installed; run node scripts/sync-claude-agents.mjs` });
+      else if (read(join(mirrorDir, file)) !== read(join(cfg.root, "agents", file)))
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-agents.mjs` });
+    }
+    for (const file of mirrored)
+      if (!shipped.includes(file))
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} is not shipped by plugin.json; a maintenance agent in the mirror is loaded by every session opened on this repository` });
+  }
+
   for (const a of maintenance) {
     if (!onDisk.includes(a)) continue;
     const body = read(join(cfg.root, "agents", `${a}.md`)) ?? "";
