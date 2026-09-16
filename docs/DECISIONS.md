@@ -3425,3 +3425,26 @@ tool, and every one of them passed while the agents were unreachable. `adhd doct
 different question — whether the definition is somewhere a session without the plugin will read it —
 and `evals/d41-spawn-proof.md` and `evals/d42-spawn-proof.md` are the before and after, each written
 by the session that ran the probe rather than the session that made the change.
+
+**This one was measured before it was written down.** A second session was opened on the branch
+carrying the mirror and asked to spawn all four dispatch names. All four returned `OK` on the first
+attempt, with no refusal and no substitution. Its enumeration of available agents is the mirror's
+nine and not `agents/`'s eleven: `adhd-governor` and `adhd-trainer` are absent, which is the mirror
+being read rather than the plugin directory.
+
+**The documented loader agrees, and says one more thing.** Claude Code resolves subagents in a fixed
+precedence: managed settings, then `--agents`, then `.claude/agents/`, then `~/.claude/agents/`, and
+a plugin's `agents/` directory last and only where the plugin is enabled. So the mirror outranks the
+plugin copy when both are present. That is safe only because the two are byte-identical, which is
+what the drift check is actually protecting — not tidiness.
+
+**And it corrects the premise the whole permit chain rested on.** `tools:` is optional. Omitting it
+inherits every tool available to subagents; the refusal D36 read as "the host refuses to launch an
+agent with no tools" is the narrower rule that a `tools:` list *in which no entry resolves* fails to
+launch. The two are not the same, and the difference is the one that matters here: the empty-permit
+agent D4 wanted was never expressible, because the way to ask for no tools is to omit the field, and
+omitting it grants all of them. D41's web pair therefore stands, but on this argument rather than the
+one recorded — it is the smallest allowlist that resolves, not a workaround for a host that will not
+take an empty one. Backlog item 103 carries the consequence: `agents/adhd-branch.md` tells the agent
+in its own system prompt that the permit exists "because the host refuses to launch an agent with no
+tools", and that sentence is now known to be false.
