@@ -11,6 +11,8 @@ on:
       - "evals/fixtures/**"
       - "agents/**"
       - ".claude/agents/**"
+      - ".claude/skills/**"
+      - "skills/**"
 
 permissions:
   contents: read
@@ -30,7 +32,7 @@ jobs:
       # The mirror `.claude/agents/` is a copy of the shipped definitions in `agents/`, and a copy
       # can drift. `adhd doctor` below catches drift too; this runs first so the failure names the
       # one command that fixes it rather than arriving inside a list of ten checks.
-      - run: node scripts/sync-claude-agents.mjs --check
+      - run: node scripts/sync-claude-dir.mjs --check
 
       # Gates. These must pass: they say the library still describes itself correctly.
       - run: node dist/src/cli.js validate

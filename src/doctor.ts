@@ -145,19 +145,39 @@ function checkPlugin(cfg: Config): Finding[] {
   const shipped = Array.isArray(manifest["agents"]) ? (manifest["agents"] as string[]).map((a) => a.replace(/^\.\/agents\//, "")) : [];
   const mirrorDir = join(cfg.root, ".claude", "agents");
   if (!existsSync(mirrorDir))
-    out.push({ severity: "error", check: "plugin", message: ".claude/agents does not exist, so a session opened on this repository resolves none of the agents a run dispatches to; run node scripts/sync-claude-agents.mjs" });
+    out.push({ severity: "error", check: "plugin", message: ".claude/agents does not exist, so a session opened on this repository resolves none of the agents a run dispatches to; run node scripts/sync-claude-dir.mjs" });
   else {
     const mirrored = readdirSync(mirrorDir).filter((f) => f.endsWith(".md"));
     for (const file of shipped) {
       if (!mirrored.includes(file))
-        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} is missing, so ${file.replace(/\.md$/, "")} resolves to no agent without the plugin installed; run node scripts/sync-claude-agents.mjs` });
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} is missing, so ${file.replace(/\.md$/, "")} resolves to no agent without the plugin installed; run node scripts/sync-claude-dir.mjs` });
       else if (read(join(mirrorDir, file)) !== read(join(cfg.root, "agents", file)))
-        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-agents.mjs` });
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-dir.mjs` });
     }
     for (const file of mirrored)
       if (!shipped.includes(file))
         out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} is not shipped by plugin.json; a maintenance agent in the mirror is loaded by every session opened on this repository` });
   }
+
+  /*
+   * D44. The other half of the same path, and the half that matters more. `skills/adhd/SKILL.md` is
+   * the run procedure — it is what spawns the agents D42 made resolvable — and it is plugin-only in
+   * exactly the same way they were. A session with the agents and without the skill has the pieces
+   * of a run and no way to start one.
+   */
+  const shippedSkills = Array.isArray(manifest["skills"]) ? (manifest["skills"] as string[]).map((x) => x.replace(/^\.\/skills\//, "")) : [];
+  for (const name of shippedSkills) {
+    const at = join(cfg.root, ".claude", "skills", name, "SKILL.md");
+    if (!existsSync(at))
+      out.push({ severity: "error", check: "plugin", message: `.claude/skills/${name}/SKILL.md is missing, so /${name} does not exist in a session opened on this repository; run node scripts/sync-claude-dir.mjs` });
+    else if (read(at) !== read(join(cfg.root, "skills", name, "SKILL.md")))
+      out.push({ severity: "error", check: "plugin", message: `.claude/skills/${name}/SKILL.md has drifted from skills/${name}/SKILL.md; run node scripts/sync-claude-dir.mjs` });
+  }
+  const skillMirror = join(cfg.root, ".claude", "skills");
+  if (existsSync(skillMirror))
+    for (const name of readdirSync(skillMirror))
+      if (!shippedSkills.includes(name))
+        out.push({ severity: "error", check: "plugin", message: `.claude/skills/${name} is not shipped by plugin.json` });
 
   for (const a of maintenance) {
     if (!onDisk.includes(a)) continue;

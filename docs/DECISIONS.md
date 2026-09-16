@@ -3530,3 +3530,38 @@ decisions were reaching for did not exist to be reached for.
 Every check in this repository asked about the tool grant, because the tool grant is what D4 wrote
 down. The checks now ask about the front matter fields that carry content without being tools, and
 the honest statement of the limit is that the list is still a list of doors somebody thought of.
+
+---
+
+## D44. The skills are mirrored too, because a dispatchable agent with no procedure is not a run
+
+**Decision:** `scripts/sync-claude-agents.mjs` becomes `scripts/sync-claude-dir.mjs` and mirrors
+`skills/` into `.claude/skills/` alongside the agents. `adhd doctor`, `test/agents.test.ts` and the
+library workflow fail on a missing or drifted skill. Resolved 2026-09-16.
+
+D42 found that `agents/` is read only where the plugin is enabled, mirrored it, and proved the four
+dispatch names resolve. It stopped there. `skills/` is the same kind of directory, read under the
+same condition, and `skills/adhd/SKILL.md` is the run procedure — the thing that spawns the agents
+D42 had just made spawnable.
+
+**So the state D42 shipped was four dispatchable agents and no way to dispatch them.** A session
+opened on this clone had `adhd-branch`, `adhd-critic`, `adhd-deepen` and `adhd-branch-search` in its
+agent list and no `/adhd` in its skill list. The half that was fixed is the half that cannot start
+anything on its own; `SKILL.md` step 1b, step 2 and step 3 are where the spawns live.
+
+**It was found the same way the first half was: by looking at the list.** The session that wrote D43
+restarted, its own available-skills listing had no `adhd` in it, and the agent listing did. That is
+the entire diagnosis, and it was available at the moment D42 was declared proven — the proof session
+was asked about agents and answered about agents.
+
+**The general shape, since this is now three for three.** D42, D43 and D44 are all one defect: the
+repository describes itself to a plugin host, and is opened by sessions that are not one. `agents/`,
+`skills/` and the CLAUDE.md a subagent inherits are three instances, found in that order, each after
+shipping a fix for the previous one and calling it done. What `plugin.json` names is the list of
+things this applies to, which is why the mirror is derived from `plugin.json` rather than from a
+directory listing: a fourth entry added there is mirrored without anyone remembering to.
+
+**What is still not checked.** That a mirrored skill *works* — that `/adhd` drives a run — is not
+established by any of this, and cannot be from inside the session that writes it. D42's and D43's
+evidence is a probe session that loaded the change and reported what it saw, and the same is owed
+here. Backlog 103 is the standing version of that complaint.

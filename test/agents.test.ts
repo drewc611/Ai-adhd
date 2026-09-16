@@ -284,7 +284,7 @@ test("no mission agent can reach the network or start a run, and only the builde
  * repository installs nothing, so every dispatch name in `skills/adhd/SKILL.md` resolved to no
  * agent at all and the spawn was refused before any permit was looked at — which is why D41's
  * permit fix could not be observed to change anything. `.claude/agents/` is the directory such a
- * session reads, so the shipped agents are mirrored into it by `scripts/sync-claude-agents.mjs`.
+ * session reads, so the shipped agents are mirrored into it by `scripts/sync-claude-dir.mjs`.
  *
  * The mirror is a copy, so it can drift. This is the check that says so.
  */
@@ -296,11 +296,11 @@ test("the shipped agents are mirrored into .claude/agents, byte for byte", () =>
   assert.ok(existsSync(dir), ".claude/agents does not exist, so a session on this repository has no adhd agents");
   for (const file of shipped) {
     const mirror = join(dir, file);
-    assert.ok(existsSync(mirror), `.claude/agents/${file} is missing; run node scripts/sync-claude-agents.mjs`);
+    assert.ok(existsSync(mirror), `.claude/agents/${file} is missing; run node scripts/sync-claude-dir.mjs`);
     assert.equal(
       readFileSync(mirror, "utf8"),
       readFileSync(join(cfg.root, "agents", file), "utf8"),
-      `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-agents.mjs`,
+      `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-dir.mjs`,
     );
   }
 
@@ -309,4 +309,29 @@ test("the shipped agents are mirrored into .claude/agents, byte for byte", () =>
   // the agent list of a session that merely opened the clone.
   const mirrored = readdirSync(dir).filter((f) => f.endsWith(".md"));
   assert.deepEqual(mirrored.sort(), [...shipped].sort());
+});
+
+/**
+ * D44. And the skill, which D42 left behind. `/adhd` is the procedure that spawns the agents D42
+ * made resolvable, and it lived in the same plugin-only directory they did — so the fix left a
+ * session holding four dispatchable agents and no way to dispatch them. Project skills resolve from
+ * `.claude/skills/<name>/SKILL.md`, so the shipped skills are mirrored there too.
+ */
+test("the shipped skills are mirrored into .claude/skills, byte for byte", () => {
+  const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
+  const shipped = (p["skills"] as string[]).map((x) => x.replace(/^\.\/skills\//, ""));
+  const dir = join(cfg.root, ".claude", "skills");
+
+  assert.ok(existsSync(dir), ".claude/skills does not exist, so a session on this repository has no /adhd");
+  assert.ok(shipped.includes("adhd"), "plugin.json no longer ships the adhd skill");
+  for (const name of shipped) {
+    const at = join(dir, name, "SKILL.md");
+    assert.ok(existsSync(at), `.claude/skills/${name}/SKILL.md is missing; run node scripts/sync-claude-dir.mjs`);
+    assert.equal(
+      readFileSync(at, "utf8"),
+      readFileSync(join(cfg.root, "skills", name, "SKILL.md"), "utf8"),
+      `.claude/skills/${name}/SKILL.md has drifted; run node scripts/sync-claude-dir.mjs`,
+    );
+  }
+  assert.deepEqual(readdirSync(dir).sort(), [...shipped].sort());
 });
