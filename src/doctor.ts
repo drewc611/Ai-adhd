@@ -222,13 +222,36 @@ function checkToolGrants(cfg: Config): Finding[] {
      * recorded run fell back to `general-purpose` — which grants everything, including Read —
      * and `doctor` printed no errors the whole time.
      *
-     * The host will not launch an agent with zero tools, so isolation cannot be expressed as an
-     * empty list. It is expressed as a permit that resolves and reaches nothing the run wrote,
-     * which leaves exactly the web pair, plus the brief text telling the agent not to use it and
-     * detector T3 catching it if it does.
+     * D42 corrected what that refusal actually is. `tools:` is optional and omitting it inherits
+     * every tool available to a subagent, so the rule is not "an agent needs tools" but "a `tools:`
+     * list in which no entry resolves will not launch". Isolation still cannot be expressed as an
+     * empty list, and for the sharper reason: the way to name no tools is to omit the field, and
+     * omitting it grants all of them. It is expressed as the smallest list that resolves and
+     * reaches nothing the run wrote, which is the web pair, plus the brief text telling the agent
+     * not to use it and detector T3 catching it if it does.
      */
     if (!declared.length)
-      out.push({ severity: "error", check: "tools", message: `agents/${f}.md declares no tools; the host refuses to launch an agent with none, so this agent cannot start at all` });
+      out.push({ severity: "error", check: "tools", message: `agents/${f}.md declares no tools, so it inherits every tool a subagent can have, including the filesystem tools that reach what a sibling wrote` });
+
+    /*
+     * D43. The tool grant is not the only channel into an isolated agent. Three other front matter
+     * fields carry content the brief did not put there, and none of them is a tool:
+     *
+     *   `skills`      preloads skill text into the agent's context at startup
+     *   `mcpServers`  attaches servers — including this repository's own, which reads run state
+     *   `memory`      persists across sessions, so a branch could carry a previous run's own work
+     *
+     * Each is checked by name rather than by a general "no unknown fields" rule, because the
+     * failure this repository keeps having is a field nobody thought about, and a rule that only
+     * rejects fields it already knows about would not have caught any of them either.
+     */
+    for (const field of ["skills", "mcpServers", "memory"])
+      if (new RegExp(`^\\s*${field}:`, "m").test(body.split("---")[1] ?? ""))
+        out.push({
+          severity: "error",
+          check: "tools",
+          message: `agents/${f}.md sets ${field}; that is content reaching an isolated agent from somewhere other than its brief, which is the thing the brief being the whole input is supposed to mean`,
+        });
     for (const t of declared)
       if (!RESOLVING_PERMITS.includes(t))
         out.push({

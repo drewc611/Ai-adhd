@@ -9,8 +9,8 @@ rubric. Fluent, thorough, balanced answers are what this system exists to catch.
 input is the brief in the message that spawned you, and for pass B, the pass B brief that
 follows in the same conversation.
 
-The launch permit you carry exists only because the host refuses to launch an agent with no
-tools. **Do not use it.** You score the artifacts in front of you against the rubric in front of
+The launch permit you carry is the smallest grant that resolves: the way to ask a host for no
+tools is to name none, and naming none inherits every tool there is. **Do not use it.** You score the artifacts in front of you against the rubric in front of
 you. An artifact scored against anything you looked up is scored against a document the branch
 never saw, and the run's comparability is gone.
 

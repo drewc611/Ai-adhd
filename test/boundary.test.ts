@@ -147,6 +147,41 @@ test("the maintenance agents cannot spawn a run", () => {
   assert.ok(!/\bBash\b/.test(governor), "the governor has Bash; a ceiling that can run the job it caps will run it");
 });
 
+/**
+ * D43. The tool grant was never the only way into an isolated agent, and checking only the tool
+ * grant is how D42's defect survived eleven decisions: every check asked the question the repo had
+ * already thought of. `skills` preloads text at startup, `mcpServers` attaches servers — this
+ * repository ships one that reads run state — and `memory` persists across sessions, so a branch
+ * could arrive carrying what it wrote last time. None of the three is a tool, so none of them would
+ * have been caught by the tools check next door.
+ */
+test("no isolated agent takes content from anywhere but its brief", () => {
+  for (const name of ["adhd-branch", "adhd-branch-search", "adhd-critic", "adhd-deepen"]) {
+    const front = readFileSync(join(ROOT, "agents", `${name}.md`), "utf8").split("---")[1] ?? "";
+    for (const field of ["skills", "mcpServers", "memory"])
+      assert.ok(
+        !new RegExp(`^\\s*${field}:`, "m").test(front),
+        `agents/${name}.md sets ${field}, which reaches the agent from outside its brief`,
+      );
+  }
+});
+
+/**
+ * And the claim these three make about why they carry a permit at all. It was wrong — `tools:` is
+ * optional, and the refusal is a list in which no entry resolves, not an absent list — and it was
+ * wrong inside a system prompt, in a repository whose argument is that unverified claims in prompts
+ * are the failure. The sentence is gone; this is what keeps it gone.
+ */
+test("no agent body explains its permit with the claim D42 disproved", () => {
+  for (const name of ["adhd-branch", "adhd-critic", "adhd-deepen"]) {
+    const body = readFileSync(join(ROOT, "agents", `${name}.md`), "utf8");
+    assert.ok(
+      !/refuses to launch an agent with no tools/.test(body),
+      `agents/${name}.md still says the host refuses an agent with no tools; D42 measured that it does not`,
+    );
+  }
+});
+
 test("the scheduled workflows exist and neither commits its output", () => {
   for (const name of ["train.yml", "maintenance.yml"]) {
     const wf = readFileSync(join(ROOT, ".github", "workflows", name), "utf8");
