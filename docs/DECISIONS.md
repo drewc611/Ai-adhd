@@ -3371,3 +3371,57 @@ it now is on paper.
 of names known to resolve, and errors on a permit outside it or on an empty one. `test/agents.test.ts`
 names `TodoWrite` and `TaskList` specifically, because both shipped, both read as inert, both passed
 every check in the repository, and neither could launch.
+
+---
+
+## D42. The shipped agents are mirrored into `.claude/agents`, because `agents/` is a plugin path
+
+**Decision:** `scripts/sync-claude-agents.mjs` copies the nine agents `plugin.json` ships into
+`.claude/agents/`, and `adhd doctor`, `test/agents.test.ts` and the library workflow each fail on
+drift. Resolved 2026-09-16.
+
+D41 changed the permit on `adhd-branch`, `adhd-critic` and `adhd-deepen` from `TodoWrite, TaskList`
+to `WebSearch, WebFetch`, and said the evidence was direct: `adhd-branch-search` spawns on exactly
+that list. The next session was asked to spawn all three and prove it.
+
+**All three were refused, and not on the permit.** The message was
+`Agent type 'adhd:adhd-branch' not found. Available agents: claude, claude-code-guide, Explore,
+general-purpose, Plan, statusline-setup` — the same for the critic and the deepen agent. That list
+is the host's built-ins and nothing else. `adhd-branch-search` is not in it either.
+
+**`agents/` is only read when the plugin is installed.** A Claude Code session opened on a clone of
+this repository installs no plugin, so every name in `skills/adhd/SKILL.md` step 1b, step 2 and step
+3 resolves to no agent at all. The spawn fails on the *name*, before the host ever looks at what
+`tools:` says. Every permit decision from D36 onward — `TodoWrite`, then `TodoWrite, TaskList`, then
+the web pair — was argued, shipped and checked inside a repository where the argument could not be
+reached.
+
+**This is the more economical explanation of the thing D41 explained.** D41 attributed fifteen runs
+of `general-purpose` dispatch to a permit that would not resolve. The permit was never consulted.
+What the recorded runs show is a host that could not find the agents, and an operator substituting
+the one agent type that exists — which is exactly what D38 said was the user's call and never a
+silent workaround, happening silently, fifteen times, because the failure looked like a tool problem
+and was a path problem. D41's reading of the critic's absence still stands and is unaffected:
+`adhd-critic.md` has never executed either way, and "none of that has been in force in any of the
+fifteen recorded runs" is if anything better supported now.
+
+**Why a copy and not the directory itself.** `agents/` is named by `plugin.json`, by `package.json`'s
+`files`, by twelve messages in `src/doctor.ts`, by three test files and by the library workflow's path
+filter. Moving it to satisfy a host convention would rewrite all of that to make one loader happy.
+Nor is it a symlink: a symlinked directory is one more thing that has to be true about the host's
+loader, and the entire cost of D36 through D41 was assuming something about the loader and shipping
+before finding out.
+
+**What the copy costs, stated rather than buried.** Two files hold the same bytes and can disagree.
+Three separate checks now fail when they do, and each names `node scripts/sync-claude-agents.mjs` in
+the failure, because a drift check whose message does not say how to fix it is a check people learn
+to re-run rather than read. The maintenance agents stay out of the mirror for the reason `plugin.json`
+leaves them out: `adhd-trainer` carries `Bash`, and a session that merely opened this clone should not
+find it in its agent list.
+
+**What catches this next time.** Nothing in this repository could have caught it, which is the
+finding. Every check asked whether `agents/*.md` existed, was well formed, and declared a permitted
+tool, and every one of them passed while the agents were unreachable. `adhd doctor` now asks the
+different question — whether the definition is somewhere a session without the plugin will read it —
+and `evals/d41-spawn-proof.md` and `evals/d42-spawn-proof.md` are the before and after, each written
+by the session that ran the probe rather than the session that made the change.
