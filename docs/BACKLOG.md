@@ -1474,6 +1474,24 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Cheap to describe, not cheap to build: it needs a live host, which is the same thing that made
     D36 through D41 untestable from inside a session.
 
+104. **The MCP server is the one plugin-only surface still unreachable from a clone** (decision,
+    owner's call — D44 declined to make it). `plugin.json` declares `adhd` as an MCP server pointing
+    at `${CLAUDE_PLUGIN_ROOT}/bin/adhd-mcp.mjs`. There is no `.mcp.json`, so a session opened on this
+    repository has none of the four MCP tools, and `skills/adhd-worker/SKILL.md` names them as one of
+    its two routes to the kernel.
+
+    D42 and D44 mirrored the other two surfaces because a copied file costs nothing and fails
+    loudly when it drifts. This one is not a copied file. Adding `.mcp.json` makes every session
+    opened on this clone start a server before the user has asked for anything, and on a fresh clone
+    — no `dist/`, no `node_modules`, both gitignored — `bin/adhd-mcp.mjs` exits with its diagnostic
+    every single time. That diagnostic is well written and exists precisely because a host starts
+    servers without asking; it is not improved by firing on every clone.
+
+    The two sides: an unreachable v0 deliverable, against a startup failure that greets every new
+    reader of the repository. A third option is a `.mcp.json` plus a SessionStart hook that builds
+    if `dist/` is absent, which trades the noise for a network fetch nobody asked for and is the
+    thing `bin/adhd-mcp.mjs` says in its own comments it refuses to do.
+
 ## Not doing, and why
 
 - **An inference client.** See CLAUDE.md. This is the design, not an omission.

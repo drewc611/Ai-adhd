@@ -3561,7 +3561,24 @@ shipping a fix for the previous one and calling it done. What `plugin.json` name
 things this applies to, which is why the mirror is derived from `plugin.json` rather than from a
 directory listing: a fourth entry added there is mirrored without anyone remembering to.
 
-**What is still not checked.** That a mirrored skill *works* — that `/adhd` drives a run — is not
-established by any of this, and cannot be from inside the session that writes it. D42's and D43's
-evidence is a probe session that loaded the change and reported what it saw, and the same is owed
-here. Backlog 103 is the standing version of that complaint.
+**Measured, like the two before it.** `evals/d44-skill-proof.md` is a probe session that loaded the
+mirror and read back its own startup listing: `adhd`, `adhd-worker` and `superagent` are all there,
+and all three are listed unprefixed. The absence of a prefix is the part that identifies the source —
+a plugin skill lists as `adhd:adhd` — so these came from `.claude/skills/`, and the same session saw
+`adhd-branch` and `adhd-critic` in its agent listing. A run has its entry point and its subagent
+types in one session for the first time.
+
+**What is still not checked.** That a mirrored skill *works* — that `/adhd` drives a run to a
+synthesis — is not established by any of this. The probe read a listing; a listing says a name
+resolved, not that the procedure behind it runs. Backlog 103 is the standing version of that
+complaint.
+
+**And the third surface, which is not mirrored and is not a mirroring problem.** `plugin.json` also
+declares an MCP server, `${CLAUDE_PLUGIN_ROOT}/bin/adhd-mcp.mjs`, and it is plugin-only in exactly
+the way the other two were: there is no `.mcp.json`, so a session opened on this clone does not have
+the `adhd` MCP tools, which `skills/adhd-worker/SKILL.md` names as one of its two ways to reach the
+kernel. It is left open deliberately. A `.mcp.json` is not a copied file: it makes every session
+opened on this repository launch a server at startup, and on a fresh clone with no `dist/` and no
+`node_modules` the launcher exits with its diagnostic every time. Noisy startup on every clone
+against an unreachable deliverable is a trade with two defensible sides, which by the rule at the top
+of `CLAUDE.md` makes it the owner's call and not a commit. Backlog item 104.
