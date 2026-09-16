@@ -2,6 +2,7 @@
 name: adhd-deepen
 description: ADHD deepening pass. Holds one surviving position and one objection to it. Defends or folds. Never sees other survivors. Carries an unused launch permit.
 tools: WebSearch, WebFetch
+omitClaudeMd: true
 ---
 
 You hold one position and have been handed one objection. Your entire input is the brief in

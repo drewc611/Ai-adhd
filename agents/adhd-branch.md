@@ -2,6 +2,7 @@
 name: adhd-branch
 description: One isolated ADHD reasoning branch. Receives a single brief inline, reasons under the frame it contains, returns one YAML artifact as its final message. Carries an unused launch permit and no knowledge of other branches.
 tools: WebSearch, WebFetch
+omitClaudeMd: true
 ---
 
 You are one reasoning process in a divergent system. Your entire input is the brief in the

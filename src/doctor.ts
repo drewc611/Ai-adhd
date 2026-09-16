@@ -245,6 +245,21 @@ function checkToolGrants(cfg: Config): Finding[] {
      * failure this repository keeps having is a field nobody thought about, and a rule that only
      * rejects fields it already knows about would not have caught any of them either.
      */
+    /*
+     * And the channel that was open the whole time. A subagent loads the project's CLAUDE.md
+     * unless it says not to, and this project's CLAUDE.md contains "Branches never see siblings.
+     * Add a test that fails if any brief contains another branch's output, the branch count, or
+     * the phrase 'so far'" and "a system that spawns seven subagents". A probe confirmed a branch
+     * quotes both back verbatim without using a tool. The test that guards the brief was doing its
+     * job; the branch count was arriving by a door nobody had checked.
+     */
+    if (!/^\s*omitClaudeMd:\s*true\s*$/m.test(body.split("---")[1] ?? ""))
+      out.push({
+        severity: "error",
+        check: "tools",
+        message: `agents/${f}.md does not set omitClaudeMd: true, so it loads CLAUDE.md, which states the branch count and names the isolation this agent is the isolation of`,
+      });
+
     for (const field of ["skills", "mcpServers", "memory"])
       if (new RegExp(`^\\s*${field}:`, "m").test(body.split("---")[1] ?? ""))
         out.push({

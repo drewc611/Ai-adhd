@@ -158,6 +158,11 @@ test("the maintenance agents cannot spawn a run", () => {
 test("no isolated agent takes content from anywhere but its brief", () => {
   for (const name of ["adhd-branch", "adhd-branch-search", "adhd-critic", "adhd-deepen"]) {
     const front = readFileSync(join(ROOT, "agents", `${name}.md`), "utf8").split("---")[1] ?? "";
+
+    // CLAUDE.md is the one that was actually open, and it is the worst of them: it states the
+    // branch count, which is the specific thing the brief is checked for three tests down.
+    assert.match(front, /^\s*omitClaudeMd:\s*true\s*$/m, `agents/${name}.md loads CLAUDE.md, which states the branch count`);
+
     for (const field of ["skills", "mcpServers", "memory"])
       assert.ok(
         !new RegExp(`^\\s*${field}:`, "m").test(front),
