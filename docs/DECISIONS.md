@@ -3469,3 +3469,64 @@ one recorded — it is the smallest allowlist that resolves, not a workaround fo
 take an empty one. Backlog item 103 carries the consequence: `agents/adhd-branch.md` tells the agent
 in its own system prompt that the permit exists "because the host refuses to launch an agent with no
 tools", and that sentence is now known to be false.
+
+---
+
+## D43. The isolated agents stop loading CLAUDE.md, because CLAUDE.md states the branch count
+
+**Decision:** `adhd-branch`, `adhd-branch-search`, `adhd-critic` and `adhd-deepen` set
+`omitClaudeMd: true`, and `adhd doctor` and `test/boundary.test.ts` reject any of them that does not.
+The same agents may not set `skills`, `mcpServers` or `memory`. Resolved 2026-09-16.
+
+D42 sent a session to read the documented loader, and the loader documents more than the path that
+D42 fixed. A subagent inherits the project's `CLAUDE.md` unless its own definition opts out, and this
+repository's `CLAUDE.md` contains, in its "Non negotiable in review" section:
+
+> Branches never see siblings. Add a test that fails if any brief contains another branch's output,
+> **the branch count**, or the phrase "so far".
+
+and, in "Do not":
+
+> A system that spawns **seven subagents** and gives the user no way out fails its own fixture 001.
+
+**A branch quoted both back, from context, without using a tool.** `evals/d43-context-leak-baseline.md`
+is the transcript. Asked what was in its context, `adhd-branch` named `/home/user/Ai-adhd/CLAUDE.md`,
+quoted its first five lines verbatim, quoted the sibling rule, quoted the orchestrator rule, and
+quoted the seven-subagent sentence. It had `WebSearch` and `WebFetch` and used neither.
+
+**The test that guards the brief was never wrong and never enough.** `test/docs.test.ts` asserts that
+`LEDGER`'s brief names no other frame, contains no "so far", and does not state the branch count. It
+passes, and it has always passed. The branch count reached the branch anyway, through the project
+instructions, in all fifteen recorded runs. A non-negotiable enforced on one channel and open on
+another is not enforced; it is documented.
+
+**What it cost, which is not nothing and not everything.** A branch that knows it is one of seven
+under a distorted frame has been told the shape of the experiment it is inside. That is the demand
+characteristic the whole architecture is built to avoid, and D2's claim — that a subagent's separate
+context window *is* the isolation mechanism — was true about siblings and false about the room. What
+it does not do is give a branch any sibling's output, so "branches never see siblings" survives
+literally. The weaker claim that does not survive is that a branch knows nothing about the system it
+is in.
+
+**Measured, not argued.** `evals/d43-context-leak-proof.md` runs the same probe on the changed agents
+with `adhd-researcher` as a control. `adhd-branch` and `adhd-critic` answer NO to all of it and can
+quote none of it; `adhd-researcher`, which does not carry the flag and legitimately works in the
+repository, still quotes the first five lines, the sibling rule, the orchestrator rule and the count.
+One flag, two agents changed, one unchanged, and the difference is the flag.
+
+**The three other doors, closed at the same time and for the same reason.** `skills` preloads text
+into a subagent at startup, `mcpServers` attaches servers — this repository ships one that reads run
+state — and `memory` persists across sessions, so a branch could arrive carrying what it wrote last
+time. None is a tool, so none would have been caught by the D4 tool check that sits next to them.
+They are banned by name rather than by a rule against unknown fields, because a rule that rejects
+only the fields already thought of would not have caught `omitClaudeMd` either, and did not.
+
+**Also recorded, because it retires a question rather than answering it.** All three probed agents
+report one tool they do not declare: `SubagentHandback`, the channel a subagent replies on. So no
+subagent ever had zero tools, in any host, under any of D36 through D41. The empty permit those five
+decisions were reaching for did not exist to be reached for.
+
+**What catches this next time.** Nothing did, again, and that is the second time in two decisions.
+Every check in this repository asked about the tool grant, because the tool grant is what D4 wrote
+down. The checks now ask about the front matter fields that carry content without being tools, and
+the honest statement of the limit is that the list is still a list of doors somebody thought of.

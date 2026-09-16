@@ -1458,22 +1458,21 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     that is cheaper and testable, and the write-up should not be read as having ruled it out. Two
     runs of fixture 001 at n=5, between 407k and 519k tokens each on the recorded evidence.
 
-103. **Three agent bodies state a reason for their permit that is now known to be false** (prompts,
-    owner's call). `agents/adhd-branch.md` says "the launch permit you carry exists only because the
-    host refuses to launch an agent with no tools". D42 established the actual rule: `tools:` is
-    optional, omitting it inherits every subagent tool, and the refusal is specifically a `tools:`
-    list in which no entry resolves. `adhd-critic.md` and `adhd-deepen.md` carry the same claim in
-    shorter form.
+103. **The isolation checks are a list of doors somebody thought of** (design, owner's call).
+    D42 and D43 were each found by reading the host's documentation rather than by any check in this
+    repository, and each was a channel into an isolated agent that the D4 tool check did not cover:
+    a plugin-only path, then `CLAUDE.md`, then `skills`, `mcpServers` and `memory`. The fix in both
+    cases was to add the specific door to a list.
 
-    The instruction around it — you have a permit, do not use it — is unaffected and stays. What is
-    wrong is the sentence explaining why the permit is there, inside a system prompt, in a repository
-    whose whole argument is that unverified claims in prompts are the failure mode. It is listed
-    rather than fixed because these three files are the system prompts that produced the recorded
-    corpus, and editing them is a prompt change: it belongs in a decision with the owner, not in the
-    commit that fixed the path.
+    That list cannot be complete, and the failure mode is now well evidenced: eleven decisions passed
+    every check while three agents could not start, and fifteen runs passed every check while the
+    branch count reached every branch. The question is whether there is a check that asks the general
+    question — what reaches this agent that its brief did not put there — rather than enumerating
+    answers. A probe agent that reports its own context, run as a gate rather than by hand, is one
+    candidate; `evals/d43-context-leak-baseline.md` is that probe run manually.
 
-    Cheap to do and cheap to check: one sentence in each of three files, and `adhd doctor` and the
-    499 tests say nothing about prose bodies either way.
+    Cheap to describe, not cheap to build: it needs a live host, which is the same thing that made
+    D36 through D41 untestable from inside a session.
 
 ## Not doing, and why
 
