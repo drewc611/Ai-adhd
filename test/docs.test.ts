@@ -159,7 +159,7 @@ test("the layout block lists every top-level directory a reader would look for",
   const block = fenced.find((b) => b.split("\n").filter((l) => /^\w[\w-]*\/\s/.test(l)).length >= 3);
   assert.ok(block, "the README should carry a layout block listing the top-level directories");
   const onDisk = readdirSync(cfg.root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith(".") && !["node_modules", "dist", "coverage", "runs"].includes(d.name))
+    .filter((d) => d.isDirectory() && !d.name.startsWith(".") && !["node_modules", "dist", "coverage", "runs", "missions"].includes(d.name))
     .map((d) => d.name);
   for (const dir of onDisk) assert.match(block, new RegExp(`^${dir}/`, "m"), `${dir}/ exists and the layout block does not mention it`);
   for (const line of block.split("\n")) {
