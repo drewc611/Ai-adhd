@@ -29,13 +29,13 @@ many of those matches chance explains. Krippendorff's alpha does. Over the same 
 | dimension | alpha | 95% interval | % exact | ceiling | distinct values |
 |---|---|---|---|---|---|
 | `reversibility` | **+0.875** | [+0.78, +0.95] | 80% | 18% | 4 |
-| `specificity` | +0.732 | [+0.42, +0.95] | 85% | 16% | 3 |
-| `assumption_attack` | +0.709 | [+0.48, +0.87] | 70% | 51% | 3 |
-| `reasoning_carries` | +0.675 | [+0.68, +0.69] | 98% | 96% | 3 |
+| `specificity` | +0.732 | [+0.48, +0.95] | 85% | 15% | 4 |
+| `assumption_attack` | +0.709 | [+0.48, +0.87] | 70% | 50% | 4 |
+| `reasoning_carries` | +0.675 | [+0.68, +0.68] | 98% | 96% | 3 |
 | `actor_coverage` | +0.649 | [+0.50, +0.76] | 85% | 45% | 3 |
-| `committal` | +0.562 | [+0.26, +0.85] | 87% | 83% | 3 |
+| `committal` | +0.562 | [+0.26, +0.85] | 87% | 80% | 3 |
 | `substance` | +0.469 | [+0.22, +0.65] | 77% | 76% | 3 |
-| `falsifiability` | +0.383 | [+0.06, +0.63] | 80% | 80% | 3 |
+| `falsifiability` | +0.383 | [+0.06, +0.63] | 80% | 78% | 3 |
 | `foreclosure` | **-0.017** | [-0.04, +0.00] | 96% | 94% | 2 |
 
 The two orderings invert. `foreclosure` is second-best by percentage and last by alpha: the

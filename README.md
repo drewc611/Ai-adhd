@@ -183,7 +183,7 @@ Nothing under `src/` calls a model. Nothing under `analysis/` does either, and n
 Library, CLI, MCP server and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D44 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
-Fifteen runs are recorded over five fixtures, with a linear chain-of-thought negative control
+Seventeen runs are recorded over five fixtures, with a linear chain-of-thought negative control
 per fixture that must fail, and three decline fixtures asserting that routing refuses a class
 rather than spending on it.
 

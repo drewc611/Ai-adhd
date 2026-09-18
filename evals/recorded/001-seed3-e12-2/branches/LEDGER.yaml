@@ -1,0 +1,63 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: LEDGER
+position: >-
+  Set explicit connect and read timeouts derived from the dependency's measured
+  p99 latency (never leave them unset or at a framework's default/infinite value),
+  and cap retries so the timeout choice cannot be silently multiplied.
+reasoning: |
+  1. The obvious answer is "pick some numbers that feel safe" — often a generous
+  read timeout (30s, 60s, or whatever the library ships with, which is frequently
+  infinite). That costs in thread/connection-pool currency, paid by the service's
+  own infrastructure the first time the downstream dependency gets slow: requests
+  pile up holding connections and threads instead of failing fast, and that bill
+  comes due later, during an incident, paid by on-call as sleep and by users as a
+  cascading outage rather than a contained one.
+
+  2. The invisible cost from where the asker stands is systemic, not local. The
+  question is scoped to "this HTTP client" as an isolated thing, but timeouts
+  never live in isolation. If this client sits behind an upstream caller with its
+  own deadline, a mismatched (too-long) timeout means the upstream gives up while
+  this service keeps working the request anyway — wasted compute paid by whoever
+  runs the infra, invisible until you look at CPU spent on requests nobody is
+  still waiting for. Combine that with retry logic and the real wait time a user
+  experiences is timeout times retry count, not the single number the asker is
+  choosing. None of that shows up when you're staring at one client's config.
+
+  3. The cheapest fix that still resolves the actual pain (client hanging
+  indefinitely, or arbitrarily) is to set both timeouts explicitly and short,
+  anchored to something measured — the dependency's own p99 latency — rather than
+  guessed. This is cheap: it requires looking at existing metrics, not building a
+  deadline-propagation framework or a circuit breaker. Pairing it with a retry cap
+  is also cheap and closes the "timeout times retries" trap without redesigning
+  anything.
+
+  4. That trade is real and must be named: short, measured timeouts will
+  occasionally kill a request that was legitimately slow but would have
+  succeeded. That cost is paid by users as a visible failure (or a client-side
+  retry) instead of a long silent wait, and by the downstream service as slightly
+  more retry traffic. There's also an ongoing cost: someone has to watch the
+  metric and retune the timeout as the dependency's latency profile shifts — a
+  small recurring slice of an engineer's attention, not a one-time decision. That
+  is a better bill to carry than an unbounded one, but it is still a bill, and it
+  is not the asker's alone — the downstream team absorbs the retry load.
+forecloses:
+  - >-
+    Leaving connect/read timeouts unset or at the client library's default,
+    which is frequently unbounded or far longer than any caller's actual
+    patience.
+  - >-
+    Picking one large "safe" timeout without looking at the dependency's actual
+    latency distribution, on the theory that fewer failed calls now means less
+    work later.
+falsifier: >-
+  Run the client under load against the real dependency and check the failure
+  rate attributable to timeout expiry against the dependency's own p99: if the
+  timeout kills a materially higher share of requests than the dependency's
+  natural slow tail (e.g., timeout set at 1s cuts off a meaningful chunk of
+  requests when measured p99 is 2s), the chosen value is wrong and too tight.
+missing_actor: >-
+  The team that owns the downstream dependency, who can publish a committed
+  latency SLA/budget for that endpoint — without it, the client's timeout is a
+  guess dressed up as a measurement, and the downstream team is the one who
+  absorbs the retry traffic when the guess is wrong.
+confidence: medium

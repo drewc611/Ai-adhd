@@ -1,0 +1,11 @@
+{
+  "entries": [
+    { "task": "branch:ACTOR_CENSUS", "planned": "adhd-branch", "actual": "adhd-branch" },
+    { "task": "branch:DOOR_KEEPER", "planned": "adhd-branch", "actual": "adhd-branch" },
+    { "task": "branch:LEDGER", "planned": "adhd-branch", "actual": "adhd-branch" },
+    { "task": "branch:FRAME_BREAKER", "planned": "adhd-branch", "actual": "adhd-branch" },
+    { "task": "branch:MINIMALIST", "planned": "adhd-branch", "actual": "adhd-branch" },
+    { "task": "critique:pass-a", "planned": "adhd-critic", "actual": "adhd-critic" },
+    { "task": "critique:pass-b", "planned": "adhd-critic", "actual": "adhd-critic" }
+  ]
+}

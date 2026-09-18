@@ -1,0 +1,76 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: ACTOR_CENSUS
+position: >-
+  Set explicit, short timeouts on every phase of the request (DNS/connect, TLS
+  handshake, per-read/write, and total deadline), each sized to bound how long
+  a stalled or adversarial peer can hold a socket, thread, or pool slot, not
+  to the expected happy-path latency.
+reasoning: |
+  1. Who can act on this system: the developer who writes the client code and
+  picks initial values; the operator/SRE who can override timeouts via env
+  var or config and redeploy or hot-restart; the caller (the service or
+  function invoking this HTTP client) who has its own deadline budget and can
+  retry or cancel; the upstream service being called, which can be slow,
+  degrade, or hang; the scheduler/orchestrator (Kubernetes, systemd, a load
+  balancer's health check) that can kill and restart a hung process on its
+  own liveness timer; the attacker, who can open a connection and withhold
+  bytes to hold resources open; the on-call engineer who gets paged when
+  connections pile up and can kill -9 or roll back; the person who pays the
+  cloud bill, who notices resource exhaustion in cost and can cut budget or
+  escalate.
+
+  2. The problem statement names only "you" implicitly (the person choosing
+  the number) and "this HTTP client" itself. It leaves out the operator, the
+  caller's deadline budget, the upstream service's own behavior, the
+  scheduler, the attacker, the on-call responder, and the payer. It treats
+  timeout selection as a private tuning decision rather than a multi-actor
+  contract.
+
+  3. Of the omitted actors, the attacker is fastest and cheapest to act.
+  Opening a TCP connection and stalling (sending headers slowly or never
+  sending a body) costs essentially nothing and takes milliseconds, requires
+  no deploy, no human noticing, and no privileged access -- only network
+  reachability to the client. The scheduler is also cheap but only reacts on
+  its own health-check interval (seconds) and only kills the process, it does
+  not prevent the resource exhaustion from accumulating first. The operator
+  is cheap but slow (has to notice, then deploy). The attacker's action is
+  strictly faster and cheaper than any of these, and it is the one whose
+  behavior the timeout value is actually supposed to defend against, whether
+  or not real malice is present -- a merely slow or broken upstream behaves
+  identically to this actor for design purposes.
+
+  4. Treating the attacker as the primary control means the timeout numbers
+  are not chosen to match "typical" latency for the happy path; they are
+  chosen to bound the maximum time any single connection, thread, or
+  connection-pool slot can be held hostage. That requires per-phase timeouts
+  (connect, TLS handshake, read, total), not one blanket number, because a
+  peer that completes the handshake instantly but drips one byte every 30
+  seconds defeats a single overall timeout unless reads are individually
+  bounded. It also means timing out must free the resource immediately
+  (close/reset the socket, remove it from the pool) rather than leaving it in
+  a half-open state, and the numbers should be the tightest bound the
+  legitimate caller's own deadline budget allows, not a generous "just in
+  case" allowance.
+forecloses:
+  - >-
+    Setting one generous overall timeout tuned only to observed happy-path
+    latency, with connect/read/TLS phases left unbounded or defaulted to
+    "infinite."
+  - >-
+    Treating the upstream service as trusted and well-behaved by default,
+    such that a slow-but-not-yet-failed connection is allowed to hold a
+    thread or pool slot indefinitely while waiting to see if it recovers.
+falsifier: >-
+  Check whether a network layer already in front of this client (a load
+  balancer, sidecar proxy, or reverse proxy) already enforces an
+  idle-connection or read-timeout cutoff tighter than whatever you would set
+  here; if it does, client-level timeout tuning adds no marginal protection
+  against the stalling-peer scenario and the attacker is not actually the
+  binding constraint at this layer, which would falsify treating it as the
+  primary control.
+missing_actor: >-
+  The attacker (or an upstream that behaves identically to one): they can
+  open a connection to this client and withhold or trickle bytes, holding a
+  socket, thread, or connection-pool slot open at essentially zero cost to
+  themselves for as long as no timeout forces the client to release it.
+confidence: medium

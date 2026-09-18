@@ -1441,7 +1441,11 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Open because a re-read that succeeds is a command whose report was one read away from being
     wrong, and because two occurrences in one week is a rate.
 
-102. **Run E12: does the trap sweep reproduce with the critic agent actually in force?** (evidence,
+102. ~~**Run E12: does the trap sweep reproduce with the critic agent actually in force?**~~
+    **Run. Confirmed: at the trap-sweep level it reproduces near-perfectly (39 of 40 frame x trap
+    records agree, identical prune sets both times); item 4's instability does not recur under the
+    real critic. It also found something item 4 did not go looking for — see `docs/EXPERIMENTS.md`
+    E12.** Original below. (evidence,
     owner's call on spend). D41 established that `agents/adhd-critic.md` has never executed — the
     permit resolved nowhere and D38's fallback dispatched the critique phase to
     `adhd-branch-search`, which is a different system prompt. The critic's own instruction to sweep
@@ -1457,6 +1461,16 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     prune sets differ; what changed is that "the critic is unstable" now has a competing explanation
     that is cheaper and testable, and the write-up should not be read as having ruled it out. Two
     runs of fixture 001 at n=5, between 407k and 519k tokens each on the recorded evidence.
+
+    **Done, and it confirmed the hypothesis but not by producing a normal run.** Both cells
+    (`evals/recorded/001-seed3-e12-1`, `-e12-2`) pruned all five branches — T1 fired on every
+    branch, both times, and 39 of the 40 (branch, trap) records agree between the two runs. Item 4's
+    pair agreed on none of its detector firings; this pair disagrees on one cell out of forty. The
+    instability was the missing instruction, as the hypothesis said. It also cost far less than
+    quoted: 111,871 and 120,402 tokens against a 520,200-token estimate, because deepen never spent
+    anything on a run with nothing to deepen. See `docs/EXPERIMENTS.md` E12 for the full reading,
+    including the part the pre-registration did not anticipate: a total wipeout is a legitimate
+    result the fixture's own checks were not written to receive.
 
 103. **The isolation checks are a list of doors somebody thought of** (design, owner's call).
     D42 and D43 were each found by reading the host's documentation rather than by any check in this
@@ -1491,6 +1505,29 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     reader of the repository. A third option is a `.mcp.json` plus a SessionStart hook that builds
     if `dist/` is absent, which trades the noise for a network fetch nobody asked for and is the
     thing `bin/adhd-mcp.mjs` says in its own comments it refuses to do.
+
+105. **Fixture 001's `must_not` checks assume a recommendation exists.** Found running E12
+    (item 102): both cells pruned every branch, which is a legitimate run outcome — nothing wrong
+    happened, the trap sweep just found a real objection to all five positions — and `synthesis.md`
+    correctly says "No recommendation. Every branch was pruned." `must_not triple_only` and
+    `must_not no_verdict` both trip on that text, because they were written to catch a shallow
+    recommendation (a bare timeout triple, a hedge with no "do X" sentence) and a total wipeout
+    reads to a word-count-and-imperative-sentence check exactly like the thing it exists to catch.
+    `must_surface retry_target_questioned` fails for a related reason: it scopes to "the synthesis
+    or a surviving branch artifact", and the pruned block only carries `position` and detector
+    evidence, not `reasoning`, so language that is genuinely present in `branches/DOOR_KEEPER.yaml`
+    never reaches the text the check reads.
+
+    None of this is wrong exactly — `adhd eval` reporting `FAIL` on a recording whose
+    `expected.json` says `"outcome": "fail"` is the harness working — but two of the four failing
+    checks are measuring "is this a bad answer" on a run that gave no answer at all, which is a
+    different question. Either the `must_not` checks should special-case an empty recommendation
+    (pass, since there is nothing shallow to catch), or the fixture needs a fifth assertion class
+    for "a total wipeout is itself a valid outcome and here is what should be true about it when it
+    happens" — trap ids present in the pruned block, every branch accounted for, no assertion that
+    presupposes survivors. `evals/recorded/001-seed3-e12-1` and `-e12-2` are the fixture cases to
+    build it against. Resolve with the user before writing the check, per this repository's own
+    rule on new decisions.
 
 ## Not doing, and why
 

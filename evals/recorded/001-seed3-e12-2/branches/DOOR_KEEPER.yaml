@@ -1,0 +1,75 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+position: >-
+  Spend an afternoon measuring the real latency distribution of the downstream
+  dependency, then commit to a client architecture with deadline/cancellation
+  propagation built in from day one, while keeping the numeric timeout values
+  and retry policy as runtime-adjustable config rather than hardcoded constants.
+reasoning: |
+  1. Two-way vs one-way. Almost every number here is a two-way door: connect
+  timeout, read timeout, retry count, backoff curve. If these live in config,
+  changing them is a redeploy or a flag flip, reversible in an afternoon. Two
+  things are not cheaply reversible. First, whether the client is architected
+  to propagate a caller's deadline/cancellation through the whole call chain
+  (context threading, cancellation tokens) — if this is skipped, every call
+  site written afterward assumes no propagation, and retrofitting it later
+  means touching every one of those call sites, which is a migration, not a
+  config change. Second, turning on automatic retries for non-idempotent
+  requests (POST/PUT without idempotency keys) is a one-way door in effect:
+  the retry setting itself is reversible, but each duplicate side effect
+  (double charge, double email, double order) that already fired before you
+  noticed is not undoable.
+
+  2. Cost and detection latency of the one-way doors. Missing deadline
+  propagation: cost is cascading resource exhaustion or hung fan-out chains
+  under load, and it is invisible until a specific pathological traffic
+  pattern occurs — detection latency can be weeks to months, and by then the
+  fix is an expensive refactor, not a flag flip. Retries on non-idempotent
+  calls: cost is silent duplicate side effects; detection latency is also
+  long, often only surfacing when a customer complains about a duplicate
+  charge or order, by which point the damage per incident is already done
+  and unrecoverable even though the setting can be flipped off immediately
+  after.
+
+  3. Cheap reversible experiment. Instrument the existing calls (or a
+  staging/shadow-traffic run) and log the dependency's p50/p99/p99.9 latency
+  for a day before picking any timeout number — this is free and tells you
+  where to set connect/read timeouts with a real margin instead of a guessed
+  round number. In parallel, a five-minute audit of which endpoints are
+  idempotent (or already carry idempotency keys) tells you which request
+  types are safe to retry and which are not, before retries are ever
+  enabled. Both experiments are two-way doors that directly de-risk the two
+  one-way doors above.
+
+  4. Ordering. First, measure latency and audit idempotency (cheap,
+  reversible, same afternoon). Second, set config-driven connect/read
+  timeouts at measured p99 plus margin, and gate retries so they only apply
+  to endpoints confirmed idempotent — still reversible, just informed now
+  instead of guessed. Third, and only after that measurement confirms this
+  client sits in a multi-hop or fan-out call chain where a caller's deadline
+  should bound the callee, take the one-way door: build deadline/cancellation
+  propagation into the client's architecture now, while the codebase is
+  smallest and the retrofit cost is lowest, rather than deferring it until
+  more call sites exist that assume its absence.
+forecloses:
+  - >-
+    Hardcoding a single fixed timeout constant in code with no config layer,
+    which would make even the reversible numeric tuning expensive to change.
+  - >-
+    Enabling automatic retries on all requests uniformly before checking
+    which endpoints are idempotent.
+  - >-
+    Deferring the deadline-propagation architecture decision indefinitely
+    and adding it later once many call sites already assume its absence.
+falsifier: >-
+  If a day of latency instrumentation shows this client only ever makes a
+  single flat call with no downstream fan-out and no caller ever needs to
+  bound it by their own deadline, and load testing with a naive fixed timeout
+  and no propagation produces zero cascading failures or retry storms, then
+  building deadline propagation in now is unneeded overhead and the position
+  is wrong.
+missing_actor: >-
+  The owner of the downstream service being called, who can state their
+  actual SLA and p99 latency directly, letting you skip a day of measurement
+  and set timeouts from a known number instead of an inferred one.
+confidence: medium

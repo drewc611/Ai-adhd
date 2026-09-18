@@ -176,15 +176,17 @@ test("the fold changes what the contract asks for and not what the validator acc
 });
 
 test("not one unquoted value in any recorded run contains a colon-space, which is the luck this rests on", () => {
-  // The reason the corpus parses, counted, and the count now shows the fix landing. Across 63
-  // branch artifacts there are 189 `position` / `falsifier` / `missing_actor` values. **106 are bare
+  // The reason the corpus parses, counted, and the count now shows the fix landing. Across 73
+  // branch artifacts there are 219 `position` / `falsifier` / `missing_actor` values. **106 are bare
   // plain scalars and not one carries an internal `: `** — that is the coincidence, and it held for
   // eleven runs before breaking on the twelfth, where most of the artifacts broke it at once.
   //
-  // **72 are folded, and every one comes from a run dispatched under D37**: `001-seed3` and
+  // **102 are folded, and every one comes from a run dispatched under D37**: `001-seed3` and
   // `001-seed3-repeat` at 15 each, then E10's `014-seed14` and `014-seed1` at 21 each, because the
-  // wide path carries seven branches rather than five. Four runs, 72 folded values, zero plain ones.
-  // One of `001-seed3`'s carries `isolation: under this position` inside a `forecloses` item, and
+  // wide path carries seven branches rather than five, then E12's `001-seed3-e12-1` and
+  // `-e12-2` at 15 each — the first runs where `adhd-branch` dispatched as itself rather than
+  // falling back to `general-purpose`. Six runs, 102 folded values, zero plain ones. One of
+  // `001-seed3`'s carries `isolation: under this position` inside a `forecloses` item, and
   // `014-seed14`'s NIGHT_OPERATOR carries `concurrencyPolicy: Forbid` inside one — both are the
   // exact construct that aborted a run before D37, and both now parse.
   //
@@ -223,8 +225,8 @@ test("not one unquoted value in any recorded run contains a colon-space, which i
       }
     }
   }
-  assert.equal(files, 63, "the recorded corpus changed size; re-count before trusting the rest of this test");
-  assert.deepEqual({ plain, quoted, folded }, { plain: 106, quoted: 11, folded: 72 });
+  assert.equal(files, 73, "the recorded corpus changed size; re-count before trusting the rest of this test");
+  assert.deepEqual({ plain, quoted, folded }, { plain: 106, quoted: 11, folded: 102 });
   // Every folded value comes from a run dispatched under the folded contract, and those runs
   // contributed no plain ones. If a later run adds plain values, D37 stopped reaching the briefs.
   assert.equal(plain, 106, "a post-D37 run contributed a plain prose value, so the folded contract is not reaching the briefs");

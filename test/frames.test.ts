@@ -863,10 +863,14 @@ test("a circular replicate_of resolves rather than hanging", () => {
 });
 
 /* The corpus itself: `001-seed3-repeat` declares its original and nothing else does. */
-test("the recorded corpus has exactly one declared replicate and it names a run that exists", () => {
+test("the recorded corpus has exactly three declared replicates and each names a run that exists", () => {
   const dir = join(cfg.root, "evals", "recorded");
   const draws = recordedDraws(dir);
-  const replicates = [...draws.entries()].filter(([id, draw]) => id !== draw);
-  assert.deepEqual(replicates, [["001-seed3-repeat", "001-seed3"]]);
-  assert.equal(new Set(draws.values()).size, draws.size - 1, "one fewer draw than runs");
+  const replicates = [...draws.entries()].filter(([id, draw]) => id !== draw).sort();
+  assert.deepEqual(replicates, [
+    ["001-seed3-e12-1", "001-seed3"],
+    ["001-seed3-e12-2", "001-seed3"],
+    ["001-seed3-repeat", "001-seed3"],
+  ]);
+  assert.equal(new Set(draws.values()).size, draws.size - 3, "three fewer draws than runs");
 });

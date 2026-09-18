@@ -1,0 +1,228 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "ACTOR_CENSUS",
+      "status": "pruned",
+      "cluster": "per_phase_adversarial_timeout",
+      "pass_a": 0.7142857142857143,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The per-phase, adversarial-peer framing is a generic security-hardening template the branch would produce for any bare timeout question, since the prompt names no protocol, traffic pattern, or trust boundary for it to depend on."
+        },
+        {
+          "trap": "T2",
+          "evidence": "The branch tests whether the upstream should be trusted by default, not whether a single client-level number is the right unit of decision at all; it still ends up setting several client-level values, just more of them."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The branch compares actors by how fast and cheap their actions are, but never frames the timeout choice itself in terms of cost-of-being-wrong versus time-to-detect for a reversible-versus-committed bet."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set explicit, short timeouts on every phase of the request (DNS/connect, TLS handshake, per-read/write, and total deadline), each sized to bound how long a stalled or adversarial peer can hold a socket, thread, or pool slot, not to the expected happy-path latency.",
+      "forecloses": [
+        "Setting one generous overall timeout tuned only to observed happy-path latency, with connect/read/TLS phases left unbounded or defaulted to \"infinite.\"",
+        "Treating the upstream service as trusted and well-behaved by default, such that a slow-but-not-yet-failed connection is allowed to hold a thread or pool slot indefinitely while waiting to see if it recovers."
+      ],
+      "falsifier": "Check whether a network layer already in front of this client (a load balancer, sidecar proxy, or reverse proxy) already enforces an idle-connection or read-timeout cutoff tighter than whatever you would set here; if it does, client-level timeout tuning adds no marginal protection against the stalling-peer scenario and the attacker is not actually the binding constraint at this layer, which would falsify treating it as the primary control.",
+      "missing_actor": "The attacker (or an upstream that behaves identically to one): they can open a connection to this client and withhold or trickle bytes, holding a socket, thread, or connection-pool slot open at essentially zero cost to themselves for as long as no timeout forces the client to release it."
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "status": "pruned",
+      "cluster": "deadline_propagation_architecture",
+      "pass_a": 0.5714285714285714,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The one-way/two-way-door framework is a generic decision-analysis template that would be produced for this question regardless of any detail the prompt supplied, since none were supplied."
+        },
+        {
+          "trap": "T2",
+          "evidence": "The branch never names or tests the assumption that a client-level timeout number is the right unit of decision; it arrives at deadline propagation through a reversibility argument, not by attacking that framing directly."
+        },
+        {
+          "trap": "T6",
+          "evidence": "A downstream service owner is named, but an attacker, a scheduler, on-call, and whoever pays for infrastructure never appear in the reasoning."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Spend an afternoon measuring the real latency distribution of the downstream dependency, then commit to a client architecture with deadline/cancellation propagation built in from day one, while keeping the numeric timeout values and retry policy as runtime-adjustable config rather than hardcoded constants.",
+      "forecloses": [
+        "Hardcoding a single fixed timeout constant in code with no config layer, which would make even the reversible numeric tuning expensive to change.",
+        "Enabling automatic retries on all requests uniformly before checking which endpoints are idempotent.",
+        "Deferring the deadline-propagation architecture decision indefinitely and adding it later once many call sites already assume its absence."
+      ],
+      "falsifier": "If a day of latency instrumentation shows this client only ever makes a single flat call with no downstream fan-out and no caller ever needs to bound it by their own deadline, and load testing with a naive fixed timeout and no propagation produces zero cascading failures or retry storms, then building deadline propagation in now is unneeded overhead and the position is wrong.",
+      "missing_actor": "The owner of the downstream service being called, who can state their actual SLA and p99 latency directly, letting you skip a day of measurement and set timeouts from a known number instead of an inferred one."
+    },
+    {
+      "frame": "LEDGER",
+      "status": "pruned",
+      "cluster": "measured_connect_read_timeout",
+      "pass_a": 0.6666666666666666,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "Deleting the prompt's near-absent details leaves the p99-anchoring-and-retry-cap advice untouched, since nothing in the branch's argument depends on anything the prompt actually said."
+        },
+        {
+          "trap": "T2",
+          "evidence": "The branch still treats 'set connect and read numbers on the client' as the right unit of decision and never questions whether the timeout should instead vary per call or per caller."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Users, on-call, and a downstream-owning team are engaged, but an attacker, a scheduler, and whoever owns the infrastructure budget never appear anywhere in the reasoning."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The branch names an 'ongoing cost' of retuning but never contrasts a cheap, reversible bet against an expensive, committed one, or states how long a wrong choice would take to surface."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set explicit connect and read timeouts derived from the dependency's measured p99 latency (never leave them unset or at a framework's default/infinite value), and cap retries so the timeout choice cannot be silently multiplied.",
+      "forecloses": [
+        "Leaving connect/read timeouts unset or at the client library's default, which is frequently unbounded or far longer than any caller's actual patience.",
+        "Picking one large \"safe\" timeout without looking at the dependency's actual latency distribution, on the theory that fewer failed calls now means less work later."
+      ],
+      "falsifier": "Run the client under load against the real dependency and check the failure rate attributable to timeout expiry against the dependency's own p99: if the timeout kills a materially higher share of requests than the dependency's natural slow tail (e.g., timeout set at 1s cuts off a meaningful chunk of requests when measured p99 is 2s), the chosen value is wrong and too tight.",
+      "missing_actor": "The team that owns the downstream dependency, who can publish a committed latency SLA/budget for that endpoint — without it, the client's timeout is a guess dressed up as a measurement, and the downstream team is the one who absorbs the retry traffic when the guess is wrong."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "deadline_propagation_architecture",
+      "pass_a": 0.6666666666666666,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The per-operation-budget argument is a generic architectural stance the branch would produce for literally any bare timeout question, since the prompt gives it no operation list, idempotency facts, or deadline figures to work from."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Only a downstream service owner is named as missing; an attacker, a scheduler, and whoever pays for infrastructure never enter the reasoning at all."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The branch never distinguishes a cheap, reversible bet from an expensive, committed one, or discusses how long a wrong per-operation policy would take to surface."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Stop looking for a single timeout value to set on the client object; instead define a per-operation deadline budget and retry/idempotency policy for each distinct call this client makes, driven by the caller's own request deadline.",
+      "forecloses": [
+        "Picking one universal number (e.g. \"30s connect, 60s read\") on the client constructor and considering the problem solved.",
+        "Treating timeout configuration as a one-time setting made at client setup rather than something derived per call from the caller's own deadline."
+      ],
+      "falsifier": "Audit the actual call sites that use this client: list every distinct operation and check whether they differ in idempotency, retry-safety, or urgency. If every single one turns out to have identical failure cost and latency SLA, a single client-level timeout is in fact correct and this position is wrong.",
+      "missing_actor": "The owner of the downstream service this client talks to, who can publish a documented per-endpoint latency SLA; the caller should request or look up that documentation and set per-operation budgets against it instead of guessing a number."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "pruned",
+      "cluster": "single_global_timeout",
+      "pass_a": 0.6428571428571429,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The prompt supplies no case-specific detail beyond 'this HTTP client', so deleting any of its sparse details leaves the single-timeout-first advice completely unchanged."
+        },
+        {
+          "trap": "T2",
+          "evidence": "The branch never questions whether timeout configuration belongs at the client level at all; it accepts that framing and only asks how many client-level numbers to set."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Only an on-call/observability owner is named; the caller's own deadline budget, the upstream service, an attacker, a scheduler, and whoever pays for infrastructure never enter the reasoning."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The branch sequences 'fix now, expand later' but never frames the choice in terms of cost-of-being-wrong or time-to-detect, so cheap and expensive moves are never explicitly distinguished."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set one overall request timeout (a single hard cap on total time from request start to response) and stop there.",
+      "forecloses": [
+        "Configuring separate connect/read/write timeouts up front.",
+        "Per-endpoint or per-operation timeout tuning before any latency data exists.",
+        "Adding retry-with-backoff or circuit-breaker logic as part of this change."
+      ],
+      "falsifier": "If, after adding the single timeout, calls that should succeed start failing at a rate above the prior baseline while other requests still hang past the configured value — meaning the client's \"total timeout\" doesn't actually govern a phase like DNS resolution or connection acquisition — then one number in one place does not cover the pain and the phase-level breakdown is needed now, not later.",
+      "missing_actor": "Whoever owns this service's on-call or observability: they can add a metric or log line on timeout-triggered failures (call site, elapsed time) so the bimodal-pattern signal in step 4 is actually visible instead of anecdotal."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "single_global_timeout",
+      "action": "Set one overall client-level timeout value and treat the timeout question as closed until failure data says otherwise.",
+      "members": [
+        "MINIMALIST"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "measured_connect_read_timeout",
+      "action": "Set explicit connect and read timeout values anchored to the dependency's measured p99 latency and cap retries so they cannot silently multiply the wait.",
+      "members": [
+        "LEDGER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "per_phase_adversarial_timeout",
+      "action": "Set a short timeout on every phase of the request (DNS/connect, TLS handshake, read/write, total) sized to bound a stalled or adversarial peer rather than typical latency.",
+      "members": [
+        "ACTOR_CENSUS"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "deadline_propagation_architecture",
+      "action": "Wire the client so its timeout/cancellation behavior is derived from the caller's own deadline via context propagation, rather than fixed as a single hardcoded client-level number, and gate retries to idempotent operations.",
+      "members": [
+        "DOOR_KEEPER",
+        "FRAME_BREAKER"
+      ],
+      "survivors": [],
+      "singleton": false,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "FRAME_BREAKER names the load-bearing assumption ('timeouts is a property of the client itself... correct for every call') and provides a falsifier, auditing call sites for identical idempotency and latency, whose outcome would overturn or confirm it."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every branch populated missing_actor with a specific, non-null party and action: an on-call/observability owner in one branch, a downstream-dependency team in three branches, and an attacker in one branch."
+    },
+    "notes": [
+      "every branch was pruned. Nothing to deepen."
+    ]
+  },
+  "proceed": false,
+  "rubric_version": 1
+}

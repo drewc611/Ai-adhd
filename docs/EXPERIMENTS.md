@@ -1509,3 +1509,79 @@ The honest ceiling on a confirming result is "the hypothesis survived its first 
 **Cost.** Two runs of fixture 001 at n=5. `adhd cost` quotes the estimate at the D5 gate; the
 recorded runs of this fixture came in between 407k and 519k tokens each. Owner's call, for the same
 reason D5 exists.
+
+### The readings, run
+
+**Run 2026-09-18, owner's go-ahead given.** `evals/recorded/001-seed3-e12-1` and `-e12-2`. Same
+briefs as item 4's pair, confirmed byte-identical; `adhd-branch` and `adhd-critic` both launched as
+themselves, with `dispatch.json` recording every task and `planned` equal to `actual` throughout —
+the first pair of runs on this fixture where that is true rather than assumed.
+
+**1. Detector records per branch: complete, both cells.** `adhd run --phase critique` validated
+pass A at "5 letters x 8 dimensions" and pass B produced a full eight-trap row for every branch in
+both cells, no gaps, nothing rejected. The contract the critic was supposed to be following in all
+fifteen prior runs held on the first two runs where it could actually be checked.
+
+**2. Prune-set agreement: identical, and total.** Both cells pruned all five branches. Every
+branch fired T1 in pass B, both times. Against item 4's `{ACTOR_CENSUS, FRAME_BREAKER}` to `{}` —
+the two runs agreeing on nothing — this pair agrees on everything: the prune set, `{ALL FIVE}`,
+is the same set both times.
+
+**3. Trap-sweep agreement: 39 of 40.** Forty (branch, trap) records exist per cell (five branches,
+eight traps). Comparing cell 1 to cell 2 record by record, thirty-nine agree. The one disagreement
+is ACTOR_CENSUS/T2: cell 1's critic read it as not attacking the load-bearing assumption, cell 2's
+critic read a fresh ACTOR_CENSUS artifact as attacking it (the branches themselves are independent
+draws at each cell, not the same text re-scored, so this is a real place where two competent
+readings differed, not a scoring bug). T3, T4, T5 and T8 were unfired on every branch in both
+cells — thirty of forty records where nothing happened and both cells said so identically. Where
+item 4's pair disagreed on every fired detector, this pair disagrees on one cell in forty.
+
+**4. Pass A movement: past the floor, but not a clean comparison to E11's.** Composite pass A
+scores per frame, cell 2 minus cell 1: MINIMALIST +0.12, LEDGER +0.15, FRAME_BREAKER +0.12,
+DOOR_KEEPER −0.05, ACTOR_CENSUS +0.00. Three of five frames moved more than `PASS_A_NOISE_FLOOR`
+(0.10). E11 isolated critic-only noise by holding one set of artifacts fixed and swapping the
+critic; this pair cannot do that, because the branches are also a fresh draw at each cell.
+The movement here carries branch-content variance and critic-scoring variance together, and
+nothing in this pair separates them. What is real regardless of that confound: pass A's cardinal
+scores moved past the floor established for scoring noise alone, while pass B's structural verdict
+— which is the half that actually decides what gets pruned — barely moved at all. The cardinal
+numbers are noisier than the decision they feed.
+
+**The hypothesis is not falsified.** What would have falsified it was a second pair as
+disorganized as item 4's own — two runs disagreeing on the prune set the way `001-seed3` and
+`001-seed3-repeat` did. That did not happen. Both cells wiped out completely, in agreement,
+with the detector sweep landing on the same trap in the same place thirty-nine times out of forty.
+D41's fifteen prior runs never had `agents/adhd-critic.md`'s instructions in force; these two are
+the first that did, and adjudication reproduced.
+
+**What this pair still cannot settle.** One pair remains one pair. Near-total agreement between
+two runs is consistent with a sweep that agrees thirty-nine times in forty on this particular
+fixture and would disagree more on another; nothing here generalizes past fixture 001, seed 3.
+Pass A's movement past the noise floor is also a live question this pair raises rather than
+answers — E11 measured critic-only noise on fixed artifacts, and a version of that experiment
+run on E12-quality artifacts (real `adhd-branch` and `adhd-critic` dispatch, not
+`general-purpose`) has not been done.
+
+**What the pre-registration did not anticipate: a total wipeout is a result the fixture was not
+built to receive.** `must_not triple_only` and `must_not no_verdict` both trip on both cells,
+and `must_surface retry_target_questioned` fails on both — not because the run reasoned badly,
+but because "No recommendation. Every branch was pruned." is short, has no "do X" sentence, and
+the pruned block in `synthesis.md` carries only each branch's `position` and the critic's
+detector-evidence text, not its full `reasoning` — so language that exists in `branches/*.yaml`
+(DOOR_KEEPER's artifact discusses retry storms and duplicate side effects at length) never
+reaches the text these checks read. `must_surface human_cancel` disagreed between the two cells
+for the same reason, on incidental wording rather than on anything the trap sweep decided. Every
+`expect` assertion and `must_surface trap_named` passed on both: the checks that read the pruned
+block's structure (traps present, at least one pruned) are fine; the checks that assumed a
+recommendation exists to read are not built for the case where the honest answer is that nothing
+survived. `adhd eval` reports both cells `FAIL` against `expected.json`, correctly, since a fail
+recorded as observed is what an `outcome: "fail"` entry means — the finding is that two of the
+four failing checks are measuring the wrong thing for this outcome, not that the run did anything
+wrong. Filed as backlog item 105 rather than fixed here, because changing what a fixture's own
+checks mean is exactly the kind of thing this repository asks to be resolved with the user first.
+
+**Cost, actual.** 111,871 tokens (cell 1) and 120,402 tokens (cell 2), against a 520,200-token
+estimate for n=5 — `deepen`'s 109,650-token share of that estimate went unspent both times,
+because a run with nothing to deepen spends nothing there. `adhd cost` was not run against these
+because they predate a kernel `os.json`; `cost.json` in each recording carries the measured
+`by_phase` and `by_frame` breakdown by hand, in the same shape `adhd cost` reads.

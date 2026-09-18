@@ -1,0 +1,57 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MINIMALIST
+position: >-
+  Set one overall request timeout (a single hard cap on total time from
+  request start to response) and stop there.
+reasoning: |
+  1. The pain is almost never "I lack a timeout taxonomy." It is "a request
+  hung and nothing bounded it," or fear of that happening — a thread or
+  connection pool slowly filling with stuck calls, discovered either in an
+  incident or while pre-empting one. The asker is imagining a design problem
+  (connect vs. read vs. write, per-endpoint values, retry policy) because
+  that's what documentation for HTTP clients presents as "the" way to
+  configure timeouts, not because their situation currently needs that
+  granularity.
+  2. The smallest fix that removes the pain is a single overall timeout
+  value, applied globally, that turns "hangs forever" into "fails after N
+  seconds." One number, one place in the client config, no per-call-site
+  decisions. This is enough to stop pool exhaustion and unbounded waits,
+  which is the actual failure mode behind the question. Everything past
+  that is refinement of a bound that now exists, not creation of the bound
+  itself.
+  3. Left unfixed: no separate connect/read/write phases, no per-endpoint
+  tuning (a large upload and a health check share the same cap), no
+  retries or backoff, no timeout-budget propagation across a call chain.
+  This is acceptable now because none of those problems are visible yet —
+  there is no data showing the single cap is wrong for some call and right
+  for another. Building that structure before the data exists is designing
+  against a distribution of latencies nobody has observed.
+  4. The larger fix is warranted when the single value is demonstrably
+  wrong in both directions at once: legitimate slow operations get killed
+  by the cap that correctly catches hangs on fast ones. You'd know this
+  from timeout-failure logs showing which call site tripped the timeout and
+  how long it had been running — once that shows a bimodal pattern (one
+  cluster of calls that are naturally slow, another that are actually
+  stuck), that's the signal to split timeouts by call type, not before.
+forecloses:
+  - >-
+    Configuring separate connect/read/write timeouts up front.
+  - >-
+    Per-endpoint or per-operation timeout tuning before any latency data
+    exists.
+  - >-
+    Adding retry-with-backoff or circuit-breaker logic as part of this
+    change.
+falsifier: >-
+  If, after adding the single timeout, calls that should succeed start
+  failing at a rate above the prior baseline while other requests still
+  hang past the configured value — meaning the client's "total timeout"
+  doesn't actually govern a phase like DNS resolution or connection
+  acquisition — then one number in one place does not cover the pain and
+  the phase-level breakdown is needed now, not later.
+missing_actor: >-
+  Whoever owns this service's on-call or observability: they can add a
+  metric or log line on timeout-triggered failures (call site, elapsed
+  time) so the bimodal-pattern signal in step 4 is actually visible instead
+  of anecdotal.
+confidence: medium

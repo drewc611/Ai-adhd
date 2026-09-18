@@ -1,0 +1,73 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: ACTOR_CENSUS
+position: >-
+  Give the shared client only a generous safety-net timeout, and make the
+  calling code at each call site set its own per-call deadline (e.g. a
+  context-based timeout) as the actual control, rather than picking one
+  static timeout value for the client to enforce everywhere.
+reasoning: |
+  1. Who can act on this system, at least six: the developer configuring the
+  client's default timeout values in source; the operator/SRE who overrides
+  those values via env vars or deploy config after the fact; the caller,
+  meaning the code path that invokes client.Do() or equivalent for a
+  specific request; the upstream service, which can slow down, hang, or
+  half-respond and thereby force the timeout's hand; the scheduler or
+  orchestrator (load balancer, k8s liveness probe, cron runner) that kills
+  the whole process on its own clock regardless of what the client decides;
+  the attacker, who can hold a connection open (slow-loris style) or send a
+  trickling response specifically to exploit a missing or overlong timeout;
+  the person who pays, i.e. whoever's cloud bill grows when hung sockets and
+  idle workers pile up; and the end user at the keyboard, who experiences
+  the wait and can bail out (close tab, hit cancel) before any server-side
+  timeout ever fires.
+
+  2. The problem statement names nobody. It asks "what timeouts should I
+  set on this HTTP client" as if the client's static configuration were the
+  whole story. Implicitly it addresses the developer/operator (the one who
+  would "set" a value) and gestures at the upstream service as the thing
+  being timed. Left out entirely: the caller (the specific code path making
+  each request), the scheduler/orchestrator, the attacker, the person who
+  pays, and the end user.
+
+  3. Of the omitted, the caller is fastest and cheapest to act. The end
+  user can act instantly too (close the tab) but that is not a design lever
+  on the system, just an escape hatch outside it. The scheduler can act
+  fast but changing its policy usually means an infra/config change with
+  review and rollout. The attacker acts for free but is adversarial, not a
+  legitimate control to design around as primary. The caller, by contrast,
+  can wrap any individual call in a local deadline (a single line of code
+  at the call site) with zero coordination, zero deploy of the shared
+  client, and zero waiting on ops. That is strictly faster and cheaper than
+  re-tuning a shared client's static timeout, and it is the one omission
+  that directly answers "what number do I pick" with "it depends on which
+  caller is asking."
+
+  4. When the caller is the primary control, the client itself stops trying
+  to guess the one correct number. It exposes a generous connect/idle
+  ceiling as a fallback so nothing hangs forever by accident, but the real
+  timeout is supplied per call by whichever code is making that particular
+  request, sized to that call's own budget: a user-facing lookup gets a
+  tight deadline, a background batch job gets a loose one, both using the
+  same client. The design question shifts from "what timeout value is
+  correct" to "does every call site actually set its own deadline," which
+  is a code-review and interface-design problem, not a single-constant
+  problem.
+forecloses:
+  - >-
+    Picking one static timeout value baked into the client that is applied
+    uniformly to every request regardless of who is calling it or why.
+  - >-
+    Treating "what should the timeout be" as a property of the network or
+    the upstream service rather than a property of each calling workflow's
+    own latency budget.
+falsifier: >-
+  Look at the existing call sites of this client: if every one of them
+  tolerates the exact same latency budget and none of them wraps the call
+  in its own deadline or would ever want a different one, then a single
+  static client-level timeout is sufficient and this position is wrong.
+missing_actor: >-
+  The caller, meaning the specific code path invoking this client for a
+  given request, can attach its own per-call deadline (e.g. a context
+  timeout) at the call site instantly and without touching the shared
+  client's configuration at all.
+confidence: medium

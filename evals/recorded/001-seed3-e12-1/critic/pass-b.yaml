@@ -1,0 +1,68 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: B
+clusters:
+  - id: minimalist_ship_now
+    action: "Ship one conservative blanket timeout value on the client now, with no retry policy, no circuit breaker, and no per-endpoint tuning, and defer everything else until evidence shows it wrong."
+    members: [MINIMALIST]
+    singleton: true
+    strongest_objection: null
+  - id: analyze_then_guard
+    action: "Before setting a number, derive the timeout from real analysis (own capacity, measured downstream latency, or the propagated deadline budget) and never ship it without a retry/backoff and circuit-breaker policy attached."
+    members: [LEDGER, DOOR_KEEPER, FRAME_BREAKER]
+    singleton: false
+    strongest_objection: null
+  - id: push_control_to_caller
+    action: "Leave the shared client with only a generous fallback timeout and have each call site set its own per-call deadline as the real control instead of tuning the client's static value."
+    members: [ACTOR_CENSUS]
+    singleton: true
+    strongest_objection: null
+traps:
+  MINIMALIST:
+    T1: { fired: true, evidence: "The prompt supplies no language, framework, downstream name, or latency numbers, and the bound-now-refine-later heuristic reads identically for any numeric knob (buffer size, pool size, retry count), not just an HTTP client timeout." }
+    T2: { fired: true, evidence: "The branch accepts that a single client-wide number is the right kind of fix and never questions whether a bare timeout is the correct unit of decision." }
+    T3: { fired: false, evidence: "The four-step chain (unbounded wait is the pain, any finite bound solves it, precision is deferred, evidence triggers the next step) is self-contained with no authority cited anywhere." }
+    T4: { fired: false, evidence: "The forecloses list closes three live decisions (no per-signal tuning, no retry/circuit-breaker design, no per-endpoint values) right now." }
+    T5: { fired: false, evidence: "The position is the imperative sentence 'Set one blanket timeout value on the client now, a conservative round number.'" }
+    T6: { fired: true, evidence: "Only the downstream service owner is named; caller, operator, attacker, scheduler, and finance are never mentioned." }
+    T7: { fired: true, evidence: "It only notes that precision is 'a distinct, later problem' without ever costing out what a wrong blanket value would break or how fast that would surface beyond a week-one log check." }
+    T8: { fired: false, evidence: "Flatly restated -- pick one round conservative number now and refine later from evidence -- is still a real, actionable stance worth stating." }
+  LEDGER:
+    T1: { fired: true, evidence: "The pool-budget-not-downstream-latency argument and the payer analysis never touch anything specific to HTTP or to this client and would read the same for any outbound network call." }
+    T2: { fired: true, evidence: "It attacks copying a number from a blog post but still treats 'one client-level timeout value' as the correct unit of decision, never questioning that framing itself." }
+    T3: { fired: false, evidence: "The four-step who-pays-and-when argument about pool exhaustion and retry storms is built from first principles with no citation to strip." }
+    T4: { fired: false, evidence: "It forecloses two live options: copying a generic value unchecked against pool size, and pairing the new timeout with unlimited or immediate retries." }
+    T5: { fired: false, evidence: "The position opens with the imperative 'Set connect/read timeouts from your own thread and connection pool budget.'" }
+    T6: { fired: true, evidence: "It names the on-call engineer, the downstream team, and end users, but never the caller code path, an attacker, the scheduler, or finance/payer explicitly (it even says the currency 'is not money')." }
+    T7: { fired: true, evidence: "It describes an 'explicit trade' and an 'ongoing attention cost' but never frames the decision as a sequence of cheap-reversible steps before an expensive-committed one the way a reversibility-first argument would." }
+    T8: { fired: false, evidence: "Flatly restated -- size the timeout to your own capacity and never ship it without retries and a circuit breaker -- remains a substantive, non-obvious engineering claim." }
+  FRAME_BREAKER:
+    T1: { fired: true, evidence: "The map-the-call-chain-and-subtract-upstream-budget method is a generic deadline-propagation pattern that never depends on any concrete detail this bare prompt supplies." }
+    T2: { fired: false, evidence: "It explicitly names the load-bearing assumption -- that a timeout is 'a single tunable value you can look up or guess correctly in isolation' -- and the policy-first position follows directly from rejecting it." }
+    T3: { fired: false, evidence: "The four-step argument about deadline budgets and who benefits from skipping the harder design work is entirely self-derived with nothing to strip." }
+    T4: { fired: false, evidence: "It forecloses three live options: copying a safe-default number, treating retries/circuit-breaking as a later concern, and using one timeout across environments regardless of consumed budget." }
+    T5: { fired: false, evidence: "The position states directly: 'Define the end-to-end failure-handling policy ... before setting any timeout number.'" }
+    T6: { fired: true, evidence: "Only the on-call/SRE downstream owner is named as missing; the caller code path, operator, attacker, scheduler, and finance never appear as distinct actors." }
+    T7: { fired: true, evidence: "The falsifier gestures at incident logs but the reasoning never separates a cheap reversible move from an expensive committed one, or costs out how long a wrong policy would take to surface." }
+    T8: { fired: false, evidence: "Flatly restated -- work out the failure-handling policy and let the number fall out of it -- is still a real, worthwhile claim independent of the assumption-attack framing." }
+  DOOR_KEEPER:
+    T1: { fired: true, evidence: "The reversible-vs-irreversible taxonomy of timeouts, retries, and shared-library freezes is a generic risk-management pattern that never touches anything specific to this HTTP client." }
+    T2: { fired: true, evidence: "It reframes around reversibility and never questions whether a timeout should be a single client-level value at all; that premise survives untouched." }
+    T3: { fired: false, evidence: "The idempotency-then-data-then-canary-then-freeze chain is argued entirely from first principles with no authority invoked." }
+    T4: { fired: false, evidence: "It forecloses two live options: auto-retrying non-idempotent calls without an idempotency check, and hardcoding an unconfigurable constant into a shared library." }
+    T5: { fired: false, evidence: "The position opens with the imperative 'Derive the timeout values from measured latency data ... and set them as config-overridable, not hardcoded.'" }
+    T6: { fired: true, evidence: "Only the downstream service owner is named as missing; caller, operator, attacker, scheduler, and finance are never named as distinct actors." }
+    T7: { fired: false, evidence: "It explicitly separates two-way-door config values from one-way doors (hardcoding into a shared library, retrying non-idempotent calls, publishing an external SLA) and costs each by detection latency, e.g. 'days to weeks' versus 'minutes, via paging.'" }
+    T8: { fired: false, evidence: "Flatly restated -- measure real latency, keep values configurable, only lock defaults in after a canary confirms them -- is still a concrete, worthwhile engineering claim." }
+  ACTOR_CENSUS:
+    T1: { fired: true, evidence: "The caller-sets-its-own-deadline argument is a generic interface-design pattern (context deadlines at call sites) that would read the same for any shared client, not just an HTTP one." }
+    T2: { fired: false, evidence: "It explicitly names the assumption that 'the client's static configuration were the whole story' and the per-call-deadline answer follows directly from rejecting it via the omitted caller." }
+    T3: { fired: false, evidence: "The actor-enumeration-and-design argument is entirely self-derived with no citation anywhere to remove." }
+    T4: { fired: false, evidence: "It forecloses two live options: baking one static value into the client for every caller, and treating the timeout as a property of the network rather than of each calling workflow." }
+    T5: { fired: false, evidence: "The position opens with the imperative 'Give the shared client only a generous safety-net timeout, and make the calling code at each call site set its own per-call deadline.'" }
+    T6: { fired: false, evidence: "It explicitly enumerates developer, operator/SRE, caller, upstream service, scheduler/orchestrator, attacker, the person who pays, and the end user -- covering essentially the full census list." }
+    T7: { fired: true, evidence: "Nothing in the argument costs a wrong choice or distinguishes a cheap-reversible bet (a one-line call-site deadline) from an expensive-committed one; the speed argument is about coordination cost, not about reversibility of being wrong." }
+    T8: { fired: false, evidence: "Flatly restated -- keep the shared client's timeout loose and let each call site set its own deadline -- is still a real, independently useful architectural claim." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "Two branches explicitly named and rejected a load-bearing assumption -- one that a timeout is a single value choosable in isolation, the other that the client's static configuration is the whole story -- so the run-level trap does not fire." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every branch populated its missing_actor field with a concrete actor and a concrete action (downstream owner publishing an SLA in four branches, the caller attaching a per-call deadline in the fifth), so no branch left it null." }
+lint_verdicts: []

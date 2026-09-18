@@ -1,0 +1,64 @@
+{
+  "run_id": "e12-run2-seed3",
+  "created_at": "2026-09-18T09:20:12.244Z",
+  "problem_hash": "sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394",
+  "problem_class": "design_decision",
+  "seed": 3,
+  "n": 5,
+  "allow_wide": false,
+  "rubric_version": 1,
+  "overlay": null,
+  "estimate": {
+    "tokens_branches": 255000,
+    "tokens_critic": 155550,
+    "tokens_deepen": 109650,
+    "tokens_total": 520200
+  },
+  "branches": [
+    {
+      "frame": "ACTOR_CENSUS",
+      "axis": "actors",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:3a6f045eac2ea654",
+      "brief_path": "briefs/ACTOR_CENSUS.md",
+      "artifact_path": "branches/ACTOR_CENSUS.yaml"
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "axis": "reversibility",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:54680f3438e4c643",
+      "brief_path": "briefs/DOOR_KEEPER.md",
+      "artifact_path": "branches/DOOR_KEEPER.yaml"
+    },
+    {
+      "frame": "LEDGER",
+      "axis": "cost",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:9539af5cdc2d7e08",
+      "brief_path": "briefs/LEDGER.md",
+      "artifact_path": "branches/LEDGER.yaml"
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "axis": "frame_validity",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:81f78380009fb3dd",
+      "brief_path": "briefs/FRAME_BREAKER.md",
+      "artifact_path": "branches/FRAME_BREAKER.yaml"
+    },
+    {
+      "frame": "MINIMALIST",
+      "axis": "scope",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:088dc8a5532c1e88",
+      "brief_path": "briefs/MINIMALIST.md",
+      "artifact_path": "branches/MINIMALIST.yaml"
+    }
+  ]
+}

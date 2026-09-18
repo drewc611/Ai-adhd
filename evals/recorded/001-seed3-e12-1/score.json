@@ -1,0 +1,213 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "ACTOR_CENSUS",
+      "status": "pruned",
+      "cluster": "push_control_to_caller",
+      "pass_a": 0.7142857142857143,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The caller-sets-its-own-deadline argument is a generic interface-design pattern (context deadlines at call sites) that would read the same for any shared client, not just an HTTP one."
+        },
+        {
+          "trap": "T7",
+          "evidence": "Nothing in the argument costs a wrong choice or distinguishes a cheap-reversible bet (a one-line call-site deadline) from an expensive-committed one; the speed argument is about coordination cost, not about reversibility of being wrong."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Give the shared client only a generous safety-net timeout, and make the calling code at each call site set its own per-call deadline (e.g. a context-based timeout) as the actual control, rather than picking one static timeout value for the client to enforce everywhere.",
+      "forecloses": [
+        "Picking one static timeout value baked into the client that is applied uniformly to every request regardless of who is calling it or why.",
+        "Treating \"what should the timeout be\" as a property of the network or the upstream service rather than a property of each calling workflow's own latency budget."
+      ],
+      "falsifier": "Look at the existing call sites of this client: if every one of them tolerates the exact same latency budget and none of them wraps the call in its own deadline or would ever want a different one, then a single static client-level timeout is sufficient and this position is wrong.",
+      "missing_actor": "The caller, meaning the specific code path invoking this client for a given request, can attach its own per-call deadline (e.g. a context timeout) at the call site instantly and without touching the shared client's configuration at all."
+    },
+    {
+      "frame": "DOOR_KEEPER",
+      "status": "pruned",
+      "cluster": "analyze_then_guard",
+      "pass_a": 0.6190476190476191,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The reversible-vs-irreversible taxonomy of timeouts, retries, and shared-library freezes is a generic risk-management pattern that never touches anything specific to this HTTP client."
+        },
+        {
+          "trap": "T2",
+          "evidence": "It reframes around reversibility and never questions whether a timeout should be a single client-level value at all; that premise survives untouched."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Only the downstream service owner is named as missing; caller, operator, attacker, scheduler, and finance are never named as distinct actors."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Derive the timeout values from measured latency data (existing metrics or a quick canary load test) and set them as config-overridable, not hardcoded; only freeze a value into a shared library or a documented external contract after a canary run confirms it, since that freezing is the one real one-way door here.",
+      "forecloses": [
+        "Automatically retrying non-idempotent operations on timeout without an idempotency check first.",
+        "Hardcoding a single timeout constant with no per-caller override inside a shared or widely-used HTTP client library."
+      ],
+      "falsifier": "During the canary rollout, the timeout-triggered retry rate spikes, or reconciliation turns up duplicate writes/charges attributable to retried non-idempotent calls — either observation shows the chosen values or retry policy were wrong before they were frozen anywhere permanent.",
+      "missing_actor": "The owner of the downstream service being called, who could publish an explicit latency budget or SLA for their endpoint, turning this from a guessing exercise into a negotiated contract instead of something inferred purely from the client side."
+    },
+    {
+      "frame": "LEDGER",
+      "status": "pruned",
+      "cluster": "analyze_then_guard",
+      "pass_a": 0.5238095238095238,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The pool-budget-not-downstream-latency argument and the payer analysis never touch anything specific to HTTP or to this client and would read the same for any outbound network call."
+        },
+        {
+          "trap": "T2",
+          "evidence": "It attacks copying a number from a blog post but still treats 'one client-level timeout value' as the correct unit of decision, never questioning that framing itself."
+        },
+        {
+          "trap": "T6",
+          "evidence": "It names the on-call engineer, the downstream team, and end users, but never the caller code path, an attacker, the scheduler, or finance/payer explicitly (it even says the currency 'is not money')."
+        },
+        {
+          "trap": "T7",
+          "evidence": "It describes an 'explicit trade' and an 'ongoing attention cost' but never frames the decision as a sequence of cheap-reversible steps before an expensive-committed one the way a reversibility-first argument would."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set connect/read timeouts from your own thread and connection pool budget, not from the downstream's average latency, and never ship a timeout without a bounded retry policy and circuit breaker attached to it.",
+      "forecloses": [
+        "copying a single generic timeout value from another service's config or a library default without checking it against your own pool size",
+        "treating the timeout as the whole fix and adding unlimited or immediate retries to paper over requests that now fail faster"
+      ],
+      "falsifier": "Run a load test that holds downstream latency above your configured timeout for a sustained period; if your service's thread/connection pool still saturates and you still see a full outage rather than a bounded, monitored error rate, the position is wrong.",
+      "missing_actor": "The downstream API's owning team, who can publish a documented p99 latency SLO for clients to time out against and add server-side load shedding so that client-side retries triggered by your new timeouts don't amplify into a retry storm on their side."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "analyze_then_guard",
+      "pass_a": 0.5476190476190477,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The map-the-call-chain-and-subtract-upstream-budget method is a generic deadline-propagation pattern that never depends on any concrete detail this bare prompt supplies."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Only the on-call/SRE downstream owner is named as missing; the caller code path, operator, attacker, scheduler, and finance never appear as distinct actors."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The falsifier gestures at incident logs but the reasoning never separates a cheap reversible move from an expensive committed one, or costs out how long a wrong policy would take to surface."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Define the end-to-end failure-handling policy for this call chain (deadline budget, retry/backoff rules, circuit breaker behavior) before setting any timeout number, and derive the timeout from that policy instead of picking it first.",
+      "forecloses": [
+        "Copying a \"safe default\" timeout (e.g. 30s) from a blog post or library docs without checking it against the caller's actual deadline budget.",
+        "Setting one timeout value and treating retries, circuit breaking, and fallback behavior as a separate, later concern.",
+        "Using the same timeout for every environment or call site regardless of how much of the parent request's time budget is already consumed upstream."
+      ],
+      "falsifier": "Pull the incident/postmortem logs from the last time this dependency was slow or unavailable; if the system degraded cleanly (no retry amplification, no cascading timeouts up the call chain, callers got fast clean errors) even though no deadline budget or retry policy was ever documented, this position is wrong and a bare timeout number was sufficient.",
+      "missing_actor": "The on-call/SRE owner of the downstream service being called, who can publish or negotiate a documented latency SLA for the endpoint; without that number the caller's deadline budget is a guess, and this actor was never named as someone to consult before setting the timeout."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "pruned",
+      "cluster": "minimalist_ship_now",
+      "pass_a": 0.5238095238095238,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The prompt supplies no language, framework, downstream name, or latency numbers, and the bound-now-refine-later heuristic reads identically for any numeric knob (buffer size, pool size, retry count), not just an HTTP client timeout."
+        },
+        {
+          "trap": "T2",
+          "evidence": "The branch accepts that a single client-wide number is the right kind of fix and never questions whether a bare timeout is the correct unit of decision."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Only the downstream service owner is named; caller, operator, attacker, scheduler, and finance are never mentioned."
+        },
+        {
+          "trap": "T7",
+          "evidence": "It only notes that precision is 'a distinct, later problem' without ever costing out what a wrong blanket value would break or how fast that would surface beyond a week-one log check."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Set one blanket timeout value on the client now, a conservative round number, instead of tuning separate connect/read/write/pool values.",
+      "forecloses": [
+        "Tuning connect, read, write, and pool timeouts as separate values right now.",
+        "Designing a retry/backoff or circuit-breaker policy alongside the timeout change.",
+        "Setting different timeout values per endpoint or per call before any endpoint has shown it needs one."
+      ],
+      "falsifier": "Within the first week of traffic, check logs for requests that hit the timeout but would have succeeded given more time (e.g. the same call retried manually completes past the cutoff) at a rate above roughly 1% — if so, one blanket number is already wrong and needs splitting.",
+      "missing_actor": "The owner of the downstream service being called, who could publish an expected response-time SLA; the client-side timeout is currently a guess because that number was never asked for."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "minimalist_ship_now",
+      "action": "Ship one conservative blanket timeout value on the client now, with no retry policy, no circuit breaker, and no per-endpoint tuning, and defer everything else until evidence shows it wrong.",
+      "members": [
+        "MINIMALIST"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "analyze_then_guard",
+      "action": "Before setting a number, derive the timeout from real analysis (own capacity, measured downstream latency, or the propagated deadline budget) and never ship it without a retry/backoff and circuit-breaker policy attached.",
+      "members": [
+        "LEDGER",
+        "DOOR_KEEPER",
+        "FRAME_BREAKER"
+      ],
+      "survivors": [],
+      "singleton": false,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "push_control_to_caller",
+      "action": "Leave the shared client with only a generous fallback timeout and have each call site set its own per-call deadline as the real control instead of tuning the client's static value.",
+      "members": [
+        "ACTOR_CENSUS"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "Two branches explicitly named and rejected a load-bearing assumption -- one that a timeout is a single value choosable in isolation, the other that the client's static configuration is the whole story -- so the run-level trap does not fire."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every branch populated its missing_actor field with a concrete actor and a concrete action (downstream owner publishing an SLA in four branches, the caller attaching a per-call deadline in the fifth), so no branch left it null."
+    },
+    "notes": [
+      "every branch was pruned. Nothing to deepen."
+    ]
+  },
+  "proceed": false,
+  "rubric_version": 1
+}

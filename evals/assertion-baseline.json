@@ -5,6 +5,7 @@
       "001-altframes",
       "001-first-run",
       "001-seed3",
+      "001-seed3-e12-2",
       "001-seed3-repeat"
     ],
     "001/no_verdict": [
@@ -18,6 +19,8 @@
       "001-first-run",
       "001-seed2",
       "001-seed3",
+      "001-seed3-e12-1",
+      "001-seed3-e12-2",
       "001-seed3-repeat"
     ],
     "001/retry_target_questioned": [
@@ -30,7 +33,9 @@
       "001-altframes",
       "001-first-run",
       "001-seed2",
-      "001-seed3"
+      "001-seed3",
+      "001-seed3-e12-1",
+      "001-seed3-e12-2"
     ],
     "001/triple_only": [
       "001-altframes",

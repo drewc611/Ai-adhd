@@ -1,0 +1,65 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+position: >-
+  Derive the timeout values from measured latency data (existing metrics or a
+  quick canary load test) and set them as config-overridable, not hardcoded;
+  only freeze a value into a shared library or a documented external contract
+  after a canary run confirms it, since that freezing is the one real one-way
+  door here.
+reasoning: |
+  1. Reversible vs irreversible: almost every individual number in a timeout
+  policy (connect timeout, read timeout, retry count, backoff) is a two-way
+  door — it lives in config, can be changed and redeployed in an afternoon,
+  and the blast radius of a bad value is bounded by how fast you can detect
+  and roll it back. What is NOT reversible in an afternoon is: (a) baking a
+  single hardcoded timeout/retry policy into a shared client library with no
+  override hook, so many callers silently inherit it and start depending on
+  its exact behavior; (b) retrying non-idempotent operations on timeout,
+  which can produce duplicate side effects (double charge, double send) that
+  cannot be un-sent once they've happened; (c) publishing the timeout
+  behavior as a documented external SLA/contract that third parties build
+  against.
+
+  2. Cost and detection latency of the one-way doors: retrying non-idempotent
+  calls costs real duplicated side effects and trust damage, and detection
+  latency is long — days to weeks, surfacing via customer complaints or
+  reconciliation, not alerts. A too-aggressive timeout with retries on an
+  already-degraded downstream can amplify load into a retry storm and turn a
+  partial degradation into a full outage; that is high-cost but fast to
+  detect (minutes, via paging). Freezing an unconfigurable timeout into a
+  shared library is lower single-incident cost but has long detection latency
+  (you only learn it was wrong when some future caller needs different
+  behavior and discovers they can't get it without a risky shared-code
+  change).
+
+  3. Cheap reversible experiment: before setting any number, check whether
+  the calls are idempotent (a code/doc read, not a deploy) and pull the
+  actual p50/p95/p99 latency of the dependency from existing metrics, or run
+  a short load test in staging if none exist. Then set a conservative,
+  config-driven timeout (e.g., p99 plus margin) with retries enabled only for
+  idempotent calls, plus a circuit breaker, and roll it out to a canary or
+  non-critical path first while watching timeout-rate and retry-rate.
+
+  4. Ordering: idempotency check first (cheapest, instant) -> pull or
+  generate latency data second -> set config-overridable conservative values
+  with circuit breaker on a canary path third, monitoring live -> only then,
+  with real traffic data in hand, consider the one-way move of freezing a
+  value into a shared library default or an external SLA.
+forecloses:
+  - >-
+    Automatically retrying non-idempotent operations on timeout without an
+    idempotency check first.
+  - >-
+    Hardcoding a single timeout constant with no per-caller override inside a
+    shared or widely-used HTTP client library.
+falsifier: >-
+  During the canary rollout, the timeout-triggered retry rate spikes, or
+  reconciliation turns up duplicate writes/charges attributable to retried
+  non-idempotent calls — either observation shows the chosen values or retry
+  policy were wrong before they were frozen anywhere permanent.
+missing_actor: >-
+  The owner of the downstream service being called, who could publish an
+  explicit latency budget or SLA for their endpoint, turning this from a
+  guessing exercise into a negotiated contract instead of something inferred
+  purely from the client side.
+confidence: medium

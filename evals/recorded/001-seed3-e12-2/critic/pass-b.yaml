@@ -1,0 +1,73 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: B
+clusters:
+  - id: single_global_timeout
+    action: "Set one overall client-level timeout value and treat the timeout question as closed until failure data says otherwise."
+    members: [MINIMALIST]
+    singleton: true
+    strongest_objection: null
+  - id: measured_connect_read_timeout
+    action: "Set explicit connect and read timeout values anchored to the dependency's measured p99 latency and cap retries so they cannot silently multiply the wait."
+    members: [LEDGER]
+    singleton: true
+    strongest_objection: null
+  - id: per_phase_adversarial_timeout
+    action: "Set a short timeout on every phase of the request (DNS/connect, TLS handshake, read/write, total) sized to bound a stalled or adversarial peer rather than typical latency."
+    members: [ACTOR_CENSUS]
+    singleton: true
+    strongest_objection: null
+  - id: deadline_propagation_architecture
+    action: "Wire the client so its timeout/cancellation behavior is derived from the caller's own deadline via context propagation, rather than fixed as a single hardcoded client-level number, and gate retries to idempotent operations."
+    members: [DOOR_KEEPER, FRAME_BREAKER]
+    singleton: false
+    strongest_objection: null
+traps:
+  MINIMALIST:
+    T1: { fired: true, evidence: "The prompt supplies no case-specific detail beyond 'this HTTP client', so deleting any of its sparse details leaves the single-timeout-first advice completely unchanged." }
+    T2: { fired: true, evidence: "The branch never questions whether timeout configuration belongs at the client level at all; it accepts that framing and only asks how many client-level numbers to set." }
+    T3: { fired: false, evidence: "No citation or external authority appears anywhere in the reasoning, so nothing is lost by stripping citations and the incident-mechanics argument stands on its own." }
+    T4: { fired: false, evidence: "The forecloses list closes three concrete decisions (separate connect/read/write, per-endpoint tuning, retries/circuit-breakers) rather than leaving them as an open menu." }
+    T5: { fired: false, evidence: "The position is a direct imperative, 'Set one overall request timeout... and stop there,' which is exactly a do-X sentence." }
+    T6: { fired: true, evidence: "Only an on-call/observability owner is named; the caller's own deadline budget, the upstream service, an attacker, a scheduler, and whoever pays for infrastructure never enter the reasoning." }
+    T7: { fired: true, evidence: "The branch sequences 'fix now, expand later' but never frames the choice in terms of cost-of-being-wrong or time-to-detect, so cheap and expensive moves are never explicitly distinguished." }
+    T8: { fired: false, evidence: "Flattened to 'set one global timeout and don't add complexity until data shows you need it,' the claim is still ordinary, defensible operational advice, not one that depends on its framing." }
+  LEDGER:
+    T1: { fired: true, evidence: "Deleting the prompt's near-absent details leaves the p99-anchoring-and-retry-cap advice untouched, since nothing in the branch's argument depends on anything the prompt actually said." }
+    T2: { fired: true, evidence: "The branch still treats 'set connect and read numbers on the client' as the right unit of decision and never questions whether the timeout should instead vary per call or per caller." }
+    T3: { fired: false, evidence: "The cost argument (pool exhaustion, cascading outages, timeout-times-retries) is built from mechanics alone, with no citation to remove." }
+    T4: { fired: false, evidence: "The branch forces two concrete numeric decisions (connect and read timeout) plus a retry cap, rather than leaving the reader with an open list." }
+    T5: { fired: false, evidence: "The position opens with an explicit imperative, 'Set explicit connect and read timeouts derived from... p99... and cap retries,' which is a do-X sentence." }
+    T6: { fired: true, evidence: "Users, on-call, and a downstream-owning team are engaged, but an attacker, a scheduler, and whoever owns the infrastructure budget never appear anywhere in the reasoning." }
+    T7: { fired: true, evidence: "The branch names an 'ongoing cost' of retuning but never contrasts a cheap, reversible bet against an expensive, committed one, or states how long a wrong choice would take to surface." }
+    T8: { fired: false, evidence: "Flattened to 'measure the dependency and cap retries so they can't multiply an unset timeout,' the claim remains standard, worthwhile engineering advice independent of its cost-ledger framing." }
+  FRAME_BREAKER:
+    T1: { fired: true, evidence: "The per-operation-budget argument is a generic architectural stance the branch would produce for literally any bare timeout question, since the prompt gives it no operation list, idempotency facts, or deadline figures to work from." }
+    T2: { fired: false, evidence: "The branch explicitly names the load-bearing assumption, 'timeouts is a property of the client itself... correct for every call,' and its falsifier (audit call sites for identical idempotency/latency) is a real test whose failure would restore a single client-level timeout as correct." }
+    T3: { fired: false, evidence: "The incentive argument (who benefits from a magic constant surviving unexamined) is self-contained reasoning with no authority cited." }
+    T4: { fired: false, evidence: "The branch forces a concrete decision closed ('one universal number... considered solved' is rejected) and replaces it with an enumerated per-operation obligation, not an open-ended menu." }
+    T5: { fired: false, evidence: "The position pairs 'stop looking for a single value' with an explicit instruction, 'instead define a per-operation deadline budget and retry/idempotency policy,' which is a do-X sentence." }
+    T6: { fired: true, evidence: "Only a downstream service owner is named as missing; an attacker, a scheduler, and whoever pays for infrastructure never enter the reasoning at all." }
+    T7: { fired: true, evidence: "The branch never distinguishes a cheap, reversible bet from an expensive, committed one, or discusses how long a wrong per-operation policy would take to surface." }
+    T8: { fired: false, evidence: "Flattened to 'don't use one client-wide number, budget timeouts per operation based on idempotency and the caller's deadline,' the claim is ordinary systems-design advice that holds without its assumption-attack framing." }
+  DOOR_KEEPER:
+    T1: { fired: true, evidence: "The one-way/two-way-door framework is a generic decision-analysis template that would be produced for this question regardless of any detail the prompt supplied, since none were supplied." }
+    T2: { fired: true, evidence: "The branch never names or tests the assumption that a client-level timeout number is the right unit of decision; it arrives at deadline propagation through a reversibility argument, not by attacking that framing directly." }
+    T3: { fired: false, evidence: "The door-cost argument (cascading exhaustion, duplicate side effects, detection latency) is built entirely from inferred failure mechanics with nothing to strip." }
+    T4: { fired: false, evidence: "The branch forces three concrete decisions closed (config over hardcoding, gate retries to idempotent endpoints, build propagation now) rather than leaving them open." }
+    T5: { fired: false, evidence: "The position is an explicit sequence of imperatives, 'Spend an afternoon measuring... then commit to a client architecture with deadline/cancellation propagation,' which is a do-X sentence." }
+    T6: { fired: true, evidence: "A downstream service owner is named, but an attacker, a scheduler, on-call, and whoever pays for infrastructure never appear in the reasoning." }
+    T7: { fired: false, evidence: "The entire argument is organized around distinguishing cheap, reversible config changes from the expensive, hard-to-undo commitment of skipping deadline-propagation architecture, and orders the recommendation on that basis." }
+    T8: { fired: false, evidence: "Flattened to 'measure real latency, keep values configurable, but commit early to deadline propagation because retrofitting it later is expensive,' the claim survives without the door metaphor." }
+  ACTOR_CENSUS:
+    T1: { fired: true, evidence: "The per-phase, adversarial-peer framing is a generic security-hardening template the branch would produce for any bare timeout question, since the prompt names no protocol, traffic pattern, or trust boundary for it to depend on." }
+    T2: { fired: true, evidence: "The branch tests whether the upstream should be trusted by default, not whether a single client-level number is the right unit of decision at all; it still ends up setting several client-level values, just more of them." }
+    T3: { fired: false, evidence: "The actor-by-actor speed/cost comparison is argued from first principles with no citation anywhere to remove." }
+    T4: { fired: false, evidence: "The branch forces two concrete decisions closed (no generous happy-path-only timeout, no default trust of the upstream) rather than leaving an open list." }
+    T5: { fired: false, evidence: "The position is a direct imperative, 'Set explicit, short timeouts on every phase of the request,' which is a do-X sentence." }
+    T6: { fired: false, evidence: "The reasoning explicitly enumerates and engages the developer, operator/SRE, caller, upstream service, scheduler/orchestrator, attacker, on-call engineer, and whoever pays the cloud bill, covering every actor category on the checklist." }
+    T7: { fired: true, evidence: "The branch compares actors by how fast and cheap their actions are, but never frames the timeout choice itself in terms of cost-of-being-wrong versus time-to-detect for a reversible-versus-committed bet." }
+    T8: { fired: false, evidence: "Flattened to 'set short per-phase timeouts because a stalled or malicious peer can hold a socket open almost for free,' the claim is plain, defensible advice independent of the actor-inventory frame." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "FRAME_BREAKER names the load-bearing assumption ('timeouts is a property of the client itself... correct for every call') and provides a falsifier, auditing call sites for identical idempotency and latency, whose outcome would overturn or confirm it." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every branch populated missing_actor with a specific, non-null party and action: an on-call/observability owner in one branch, a downstream-dependency team in three branches, and an attacker in one branch." }
+lint_verdicts: []

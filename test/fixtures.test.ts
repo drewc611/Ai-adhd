@@ -129,10 +129,19 @@ test("assertion history reports which runs held each item, matching the recorded
   // is the same pack as `001-seed3` at the same seed, so it is a fifth run and not a fifth draw;
   // that the three content items all reproduced on it is the evidence that they are stable, and
   // backlog 99 is the counter that cannot tell the two apart.
-  assert.deepEqual(row("001", "human_cancel").passing.sort(), ["001-altframes", "001-first-run", "001-seed3", "001-seed3-repeat"]);
-  assert.deepEqual(row("001", "human_cancel").failing, ["001-seed2"]);
-  // E1b: retry_target_questioned survived a reseed but not the frame swap.
-  assert.deepEqual(row("001", "retry_target_questioned").failing, ["001-altframes"]);
+  assert.deepEqual(row("001", "human_cancel").passing.sort(), [
+    "001-altframes",
+    "001-first-run",
+    "001-seed3",
+    "001-seed3-e12-2",
+    "001-seed3-repeat",
+  ]);
+  assert.deepEqual(row("001", "human_cancel").failing.sort(), ["001-seed2", "001-seed3-e12-1"]);
+  // E1b: retry_target_questioned survived a reseed but not the frame swap. E12's pair adds a
+  // second reason to fail it that has nothing to do with the frame set: both cells pruned every
+  // branch, and the pruned block carries only position and detector evidence, not the full
+  // reasoning the retry-storm language actually lives in. Backlog 105.
+  assert.deepEqual(row("001", "retry_target_questioned").failing.sort(), ["001-altframes", "001-seed3-e12-1", "001-seed3-e12-2"]);
   // E3: retry_cost was LEDGER's at seed 1, and the item read as needing that frame alive. Reading
   // seed 2 showed LEDGER had produced it there too — retries priced as a share of traffic, with the
   // critic's detector output naming the payer — and the patterns only recognised seed 1's wording.
@@ -142,7 +151,14 @@ test("assertion history reports which runs held each item, matching the recorded
   // Three seeds, three passes, and the only miss is the run that changed the frames — so this is a
   // frame-set dependency and not sample variance, which is the cleanest form E1b's supersession
   // of E1a could take.
-  assert.deepEqual(row("001", "retry_cost").passing.sort(), ["001-first-run", "001-seed2", "001-seed3", "001-seed3-repeat"]);
+  assert.deepEqual(row("001", "retry_cost").passing.sort(), [
+    "001-first-run",
+    "001-seed2",
+    "001-seed3",
+    "001-seed3-e12-1",
+    "001-seed3-e12-2",
+    "001-seed3-repeat",
+  ]);
   assert.deepEqual(row("001", "retry_cost").failing, ["001-altframes"]);
   assert.deepEqual(row("001", "retry_target_questioned").passing.sort(), ["001-first-run", "001-seed2", "001-seed3", "001-seed3-repeat"]);
   // The frame-set gap that 004 is recorded as failing on.
@@ -171,7 +187,13 @@ test("the gate catches an assertion that stops holding on a run it used to hold 
   const g = regressionGate(cfg, { fixturesDir: s.fixtures, recordedDir: s.recorded });
   assert.equal(g.regressions.length, 1);
   assert.equal(g.regressions[0]!.item, "human_cancel");
-  assert.deepEqual(g.regressions[0]!.now_failing.sort(), ["001-altframes", "001-first-run", "001-seed3", "001-seed3-repeat"]);
+  assert.deepEqual(g.regressions[0]!.now_failing.sort(), [
+    "001-altframes",
+    "001-first-run",
+    "001-seed3",
+    "001-seed3-e12-2",
+    "001-seed3-repeat",
+  ]);
   assert.match(g.text, /^REGRESSION\s+001\/human_cancel/m);
 });
 
