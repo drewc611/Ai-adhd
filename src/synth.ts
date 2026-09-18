@@ -5,6 +5,7 @@ import type { BranchValidation } from "./validate.js";
 import type { LintHint } from "./lint.js";
 import { render } from "./template.js";
 import { lintBranch } from "./lint.js";
+import { WIPEOUT_RECOMMENDATION_SUFFIX } from "./eval.js";
 
 export interface Cost {
   tokens: number | string;
@@ -115,7 +116,7 @@ export function renderSynthesis(
   if (!rec) {
     if (score.run_level.monoculture) no_recommendation = "Run level monoculture. See below.";
     else if (score.run_level.scatter) no_recommendation = "Run level scatter. The question needs clarification before it can be answered.";
-    else if (live.length === 0) no_recommendation = "Every branch was pruned. The pruned block is the result.";
+    else if (live.length === 0) no_recommendation = WIPEOUT_RECOMMENDATION_SUFFIX;
     else no_recommendation = "Every surviving position folded under its strongest objection.";
   }
 

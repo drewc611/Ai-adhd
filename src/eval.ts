@@ -10,6 +10,15 @@ import { hasImperative, IMPERATIVE_START, lintProblemInjection, splitSentences, 
 import type { ScoreResult } from "./score.js";
 import { compile, previewText } from "./compile.js";
 
+/**
+ * The wipeout suffix `src/synth.ts` renders into `## Recommendation` when every branch was
+ * pruned. Exported so the renderer assigns this text rather than a copy of it that can drift out
+ * of sync with the sentinel the guard below recognises (backlog 105).
+ */
+export const WIPEOUT_RECOMMENDATION_SUFFIX = "Every branch was pruned. The pruned block is the result.";
+/** The full `## Recommendation` text a total wipeout renders, prefix and all. */
+export const WIPEOUT_RECOMMENDATION = `No recommendation. ${WIPEOUT_RECOMMENDATION_SUFFIX}`;
+
 export interface PairResult {
   fixture: string;
   recorded: string;
@@ -130,7 +139,16 @@ function plain(md: string): string {
 
 function scopeText(run: RecordedRun, scope: string): string {
   const secs = sections(run.synthesis);
-  if (scope === "all") return plain(`${run.synthesis}\n${run.survivingBranches}`);
+  if (scope === "all") {
+    // A total wipeout leaves no survivor to read the deeper `reasoning` field from: the pruned
+    // block synth.ts renders carries only `position` and detector evidence (backlog 105). Falling
+    // back to every branch's full artifact, pruned or not, is the only way this scope can see
+    // language that was genuinely produced but only ever reached a pruned branch's `reasoning`
+    // field. A run with at least one survivor is unaffected — survivingBranches is non-empty and
+    // wins as before, so this changes nothing for the runs this scope already passed.
+    const branchText = run.survivingBranches || run.branches;
+    return plain(`${run.synthesis}\n${branchText}`);
+  }
   const title = SCOPE_TITLES[scope]!;
   return plain(secs[title] ?? "");
 }
@@ -167,6 +185,17 @@ export function evaluatePair(fixture: Fixture, run: RecordedRun): PairResult {
   }
   for (const mn of fixture.must_not) {
     const text = scopeText(run, mn.scope);
+    // A total wipeout has no recommendation to be shallow. `min_words_outside` and
+    // `must_be_imperative` exist to catch a bare timeout triple or a hedge with no "do X"
+    // sentence, and a genuine wipeout reads to a word-count-and-imperative-sentence check
+    // exactly like the thing it was written to catch (backlog 105) even though nothing went
+    // wrong: the pruned block is the honest result. Guarded to this exact sentinel and these two
+    // checks, not every `must_not`, so a check like `never_names_it` (004) that is a real
+    // requirement of any recommendation, wipeout or not, still runs.
+    if ((mn.check === "min_words_outside" || mn.check === "must_be_imperative") && mn.scope === "recommendation" && text.trim() === WIPEOUT_RECOMMENDATION) {
+      notes.push(`must_not ${mn.id}: recommendation is the wipeout sentinel; nothing shallow to catch`);
+      continue;
+    }
     if (mn.check === "min_words_outside") {
       const stripped = text.replace(new RegExp(mn.pattern, "gi"), " ");
       const w = wordCount(stripped);

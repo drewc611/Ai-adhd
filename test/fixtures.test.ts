@@ -123,25 +123,31 @@ test("assertion history reports which runs held each item, matching the recorded
   const row = (f: string, i: string) => h.rows.find((r) => r.fixture === f && r.item === i)!;
 
   // E1a: human_cancel survived a whole new frame set but not a reseed — and seed 3 put it back,
-  // so it holds on four runs of five and seed 2 was the unlucky draw rather than seed 1 the lucky
+  // so it holds on five runs of six and seed 2 was the unlucky draw rather than seed 1 the lucky
   // one. The registered reading ("one sample, not the frame set") is confirmed for this item and
   // its sign is the opposite of what the seed 2 recording implies on its own. `001-seed3-repeat`
   // is the same pack as `001-seed3` at the same seed, so it is a fifth run and not a fifth draw;
   // that the three content items all reproduced on it is the evidence that they are stable, and
-  // backlog 99 is the counter that cannot tell the two apart.
+  // backlog 99 is the counter that cannot tell the two apart. `001-seed3-e12-1` used to fail here
+  // too, for the reason backlog 105 fixed: "all" scope had nothing to fall back to when every
+  // branch was pruned, so the "can bail out (close tab, hit cancel)" line that landed in a pruned
+  // branch's artifact never reached the check. It holds now that the fallback exists.
   assert.deepEqual(row("001", "human_cancel").passing.sort(), [
     "001-altframes",
     "001-first-run",
     "001-seed3",
+    "001-seed3-e12-1",
     "001-seed3-e12-2",
     "001-seed3-repeat",
   ]);
-  assert.deepEqual(row("001", "human_cancel").failing.sort(), ["001-seed2", "001-seed3-e12-1"]);
-  // E1b: retry_target_questioned survived a reseed but not the frame swap. E12's pair adds a
-  // second reason to fail it that has nothing to do with the frame set: both cells pruned every
-  // branch, and the pruned block carries only position and detector evidence, not the full
-  // reasoning the retry-storm language actually lives in. Backlog 105.
-  assert.deepEqual(row("001", "retry_target_questioned").failing.sort(), ["001-altframes", "001-seed3-e12-1", "001-seed3-e12-2"]);
+  assert.deepEqual(row("001", "human_cancel").failing.sort(), ["001-seed2"]);
+  // E1b: retry_target_questioned survived a reseed but not the frame swap. E12's pair used to add
+  // a second reason to fail it that had nothing to do with the frame set: both cells pruned every
+  // branch, and "all" scope fell back to nothing rather than to every branch's full artifact, so
+  // the retry-storm language that only ever reached a pruned branch's `reasoning` field never
+  // reached the check. Backlog 105 fixed the fallback; both cells hold now, same as the frame-set
+  // pattern the rest of this item already shows.
+  assert.deepEqual(row("001", "retry_target_questioned").failing.sort(), ["001-altframes"]);
   // E3: retry_cost was LEDGER's at seed 1, and the item read as needing that frame alive. Reading
   // seed 2 showed LEDGER had produced it there too — retries priced as a share of traffic, with the
   // critic's detector output naming the payer — and the patterns only recognised seed 1's wording.
@@ -160,7 +166,14 @@ test("assertion history reports which runs held each item, matching the recorded
     "001-seed3-repeat",
   ]);
   assert.deepEqual(row("001", "retry_cost").failing, ["001-altframes"]);
-  assert.deepEqual(row("001", "retry_target_questioned").passing.sort(), ["001-first-run", "001-seed2", "001-seed3", "001-seed3-repeat"]);
+  assert.deepEqual(row("001", "retry_target_questioned").passing.sort(), [
+    "001-first-run",
+    "001-seed2",
+    "001-seed3",
+    "001-seed3-e12-1",
+    "001-seed3-e12-2",
+    "001-seed3-repeat",
+  ]);
   // The frame-set gap that 004 is recorded as failing on.
   assert.deepEqual(row("004", "false_means").passing, []);
 
@@ -191,6 +204,7 @@ test("the gate catches an assertion that stops holding on a run it used to hold 
     "001-altframes",
     "001-first-run",
     "001-seed3",
+    "001-seed3-e12-1",
     "001-seed3-e12-2",
     "001-seed3-repeat",
   ]);
