@@ -1506,7 +1506,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     if `dist/` is absent, which trades the noise for a network fetch nobody asked for and is the
     thing `bin/adhd-mcp.mjs` says in its own comments it refuses to do.
 
-105. **Fixture 001's `must_not` checks assume a recommendation exists.** Found running E12
+105. ~~**Fixture 001's `must_not` checks assume a recommendation exists.** Found running E12
     (item 102): both cells pruned every branch, which is a legitimate run outcome — nothing wrong
     happened, the trap sweep just found a real objection to all five positions — and `synthesis.md`
     correctly says "No recommendation. Every branch was pruned." `must_not triple_only` and
@@ -1527,7 +1527,22 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     happens" — trap ids present in the pruned block, every branch accounted for, no assertion that
     presupposes survivors. `evals/recorded/001-seed3-e12-1` and `-e12-2` are the fixture cases to
     build it against. Resolve with the user before writing the check, per this repository's own
-    rule on new decisions.
+    rule on new decisions.~~
+    **Resolved by patching the checks in place (the first of the two named options), not by
+    adding a fixth assertion class.** `must_not triple_only`/`no_verdict` now pass when the
+    recommendation text is exactly the wipeout sentinel `synthesis.md` renders, pulled into a
+    named constant in `src/eval.ts` that the renderer itself now imports so the two cannot drift
+    apart. `must_surface`'s `all` scope, which used to fall back to nothing when every branch was
+    pruned, now falls back to every branch's full artifact in that case only — a run with any
+    survivor is unaffected — which is what let `retry_target_questioned` (and, as an unplanned but
+    verified consequence, `human_cancel` on `001-seed3-e12-1`) start passing too. The general
+    schema-class option was set aside: fixture 001 already matches both wipeout and non-wipeout
+    recordings under one static `expect` block, its routing condition can't tell those apart
+    per-run without new plumbing nothing in `src/eval.ts` has, and no other fixture in the corpus
+    has ever produced a wipeout to justify the general machinery. `evals/recorded/001-seed3-e12-1`
+    and `-e12-2` (`expected.json`) now read `"outcome": "pass"`. Full reasoning, including a third
+    option (splitting fixture 001 by outcome class) that was considered and set aside, is in
+    `missions/missions/backlog-105-fix/synthesis.md` and `build.md`.
 
 ## Not doing, and why
 
