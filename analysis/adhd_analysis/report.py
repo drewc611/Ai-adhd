@@ -16,7 +16,7 @@ from .reliability import krippendorff_alpha, summarise
 from .resample import bootstrap
 from .signal import prune_signal
 from .text.genericity import report as genericity_report
-from .text.ngram import KneserNey
+from .text.modelfile import load_background
 
 
 def _dimension_ratings(corpus: Corpus, dim: str, runs: list[str] | None = None):
@@ -97,8 +97,16 @@ def reliability_section(corpus: Corpus, resamples: int) -> tuple[str, dict]:
         lines += [
             "",
             f"At this sample size the interval for {', '.join(f'`{x}`' for x in spans_chance)} spans zero.",
-            "Whatever their point estimates, seven runs cannot distinguish them from chance, and the",
-            "honest reading of a dimension whose interval contains chance is that it is unmeasured.",
+            f"Whatever their point estimates, {len(multi)} double-scored pack(s) cannot distinguish them from",
+            "chance, and the honest reading of a dimension whose interval contains chance is that it is",
+            "unmeasured.",
+        ]
+    else:
+        lines += [
+            "",
+            "No dimension's interval spans zero. That is a recent state and a fragile one: it took",
+            f"{len(multi)} double-scored packs to get here and the narrowest interval is still wide enough",
+            "that one more pack could put a dimension back across the line.",
         ]
     return "\n".join(lines), data
 
@@ -133,9 +141,10 @@ def pooled_section(corpus: Corpus, resamples: int) -> tuple[str, dict]:
         f"  bootstrap over {len(multi)} run(s), {ci.defined}/{ci.resamples} resamples defined"
         + (f", interval width {ci.width:.2f}." if ci.width is not None else "."),
         "",
-        "The pooled figure is the stable one, because it averages 630 marks over nine dimensions.",
+        f"The pooled figure is the stable one, because it averages {len(pair_only)} marks over "
+        f"{len(corpus.dimensions)} dimensions.",
         "That stability is not reassurance: pooling is exactly what hides the per-dimension result",
-        "above, where one dimension sits at chance and another's interval spans it.",
+        "above, where a dimension at chance is averaged in with one that separates cleanly.",
     ]
     return "\n".join(lines), {"pooled_alpha": ci.estimate, "ci_lo": ci.lo, "ci_hi": ci.hi, "pair_only": s}
 
@@ -171,7 +180,7 @@ def build(root: str | Path = ".", resamples: int = 2000, model: str | Path | Non
     if model is not None:
         # Optional because the model is a build artifact, not repository content: a clean checkout
         # has no `models/` and the rest of the report must still run.
-        sections.append(genericity_report(corpus, KneserNey.load(model), resamples=resamples))
+        sections.append(genericity_report(corpus, load_background(model), resamples=resamples))
 
     header = [
         "# Corpus analysis",
@@ -193,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", default=".", help="repository root holding config/ and evals/")
     ap.add_argument("--resamples", type=int, default=2000, help="bootstrap resamples")
     ap.add_argument("--json", action="store_true", help="machine readable")
-    ap.add_argument("--model", default=None, help="a trained background model; adds the genericity section")
+    ap.add_argument("--model", default=None, help="a trained background model (Kneser-Ney, transformer or LSTM); adds the genericity section")
     args = ap.parse_args(argv)
 
     text, data = build(args.root, args.resamples, model=args.model)

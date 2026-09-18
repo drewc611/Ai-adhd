@@ -160,3 +160,56 @@ marginal frames past that point produce restatements, not new directions.
 The phases above are driven by hand from the skill or the CLI. `docs/OS.md` describes the
 kernel that drives them unattended: runs as processes, tasks as leased threads, hosts as
 workers. Same phase functions, same invariants, no model call anywhere in the kernel.
+
+## The kernel: running the four phases unattended
+
+The four phases can run unattended. `src/os.ts` is a kernel over run directories: it owns
+state, leases, phase advancement, the D5 gate, and cancellation, and it never calls a model.
+
+```mermaid
+stateDiagram-v2
+  [*] --> awaiting_confirm: submit
+  awaiting_confirm --> cancelled: cancel, nothing spent
+  awaiting_confirm --> running: confirm
+
+  state "running" as running {
+    [*] --> diverge
+    diverge --> critique_a: every branch returned
+    critique_a --> critique_b: blind scores in
+    critique_b --> deepen: clusters and trap sweep in
+  }
+
+  running --> done: every survivor answered
+  running --> done_run_level: monoculture or scatter
+  running --> cancelled: cancel, at any point
+  running --> aborted: hash mismatch, third lease expiry, contract violation
+
+  done --> [*]
+  done_run_level --> [*]
+  cancelled --> [*]
+  aborted --> [*]
+```
+
+A cancel is not a discard. Every branch that already returned is rendered as a partial,
+marked UNSCORED, with the pruned block absent and said to be absent, so a reader who has
+learned to look for that block is told why there isn't one.
+
+Hosts supply inference by claiming tasks and returning artifacts, over MCP or the CLI:
+
+<details>
+<summary><b>The syscalls</b>, over MCP or the CLI</summary>
+
+```
+adhd os submit --problem p.txt --decision '{"problem_class":"design_decision"}'   # preview, awaiting_confirm
+adhd os confirm <run_id>                                                           # branch tasks claimable
+adhd os claim --worker w1        # -> {agent, brief, continues}; spawn that agent with the brief
+adhd os return <task_id> --file out.yaml --worker w1   # kernel validates and advances the run
+adhd os status <run_id> | adhd os result <run_id> | adhd os cancel <run_id>
+```
+
+The same verbs are MCP tools (`adhd_submit`, `adhd_confirm`, `adhd_claim`, `adhd_return`,
+`adhd_status`, `adhd_result`, `adhd_cancel`, `adhd_list`), so any MCP host can submit work and
+any Claude Code session running the `adhd-worker` skill can execute it. `docs/OS.md` has the
+process model and the syscall table.
+
+</details>

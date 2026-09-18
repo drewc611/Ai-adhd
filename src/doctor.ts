@@ -13,8 +13,10 @@ import { join } from "node:path";
 import { STAGE_AGENT, STAGE_TOOLS } from "./super/index.js";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "./config.js";
-import { TRAP_IDS } from "./schema.js";
+import { RecordedExpectationSchema, TRAP_IDS } from "./schema.js";
+import { frameReach, recordedDraws } from "./frames.js";
 import { auditFixtures } from "./eval.js";
+import { readJsonIf } from "./read.js";
 
 export type Severity = "error" | "warn";
 
@@ -136,6 +138,47 @@ function checkPlugin(cfg: Config): Finding[] {
       if (!(tools as readonly string[]).includes(t))
         out.push({ severity: "error", check: "tools", message: `agents/${agent}.md declares ${t} and no stage kind grants it` });
   }
+  // D42. `agents/` is read only when the plugin is installed, and a session opened straight on a
+  // clone installs nothing. `.claude/agents/` is the directory such a session does read, so a
+  // shipped agent missing from the mirror is an agent that does not exist as far as a dispatch is
+  // concerned: the spawn is refused on the name, before the permit above is ever consulted.
+  const shipped = Array.isArray(manifest["agents"]) ? (manifest["agents"] as string[]).map((a) => a.replace(/^\.\/agents\//, "")) : [];
+  const mirrorDir = join(cfg.root, ".claude", "agents");
+  if (!existsSync(mirrorDir))
+    out.push({ severity: "error", check: "plugin", message: ".claude/agents does not exist, so a session opened on this repository resolves none of the agents a run dispatches to; run node scripts/sync-claude-dir.mjs" });
+  else {
+    const mirrored = readdirSync(mirrorDir).filter((f) => f.endsWith(".md"));
+    for (const file of shipped) {
+      if (!mirrored.includes(file))
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} is missing, so ${file.replace(/\.md$/, "")} resolves to no agent without the plugin installed; run node scripts/sync-claude-dir.mjs` });
+      else if (read(join(mirrorDir, file)) !== read(join(cfg.root, "agents", file)))
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-dir.mjs` });
+    }
+    for (const file of mirrored)
+      if (!shipped.includes(file))
+        out.push({ severity: "error", check: "plugin", message: `.claude/agents/${file} is not shipped by plugin.json; a maintenance agent in the mirror is loaded by every session opened on this repository` });
+  }
+
+  /*
+   * D44. The other half of the same path, and the half that matters more. `skills/adhd/SKILL.md` is
+   * the run procedure — it is what spawns the agents D42 made resolvable — and it is plugin-only in
+   * exactly the same way they were. A session with the agents and without the skill has the pieces
+   * of a run and no way to start one.
+   */
+  const shippedSkills = Array.isArray(manifest["skills"]) ? (manifest["skills"] as string[]).map((x) => x.replace(/^\.\/skills\//, "")) : [];
+  for (const name of shippedSkills) {
+    const at = join(cfg.root, ".claude", "skills", name, "SKILL.md");
+    if (!existsSync(at))
+      out.push({ severity: "error", check: "plugin", message: `.claude/skills/${name}/SKILL.md is missing, so /${name} does not exist in a session opened on this repository; run node scripts/sync-claude-dir.mjs` });
+    else if (read(at) !== read(join(cfg.root, "skills", name, "SKILL.md")))
+      out.push({ severity: "error", check: "plugin", message: `.claude/skills/${name}/SKILL.md has drifted from skills/${name}/SKILL.md; run node scripts/sync-claude-dir.mjs` });
+  }
+  const skillMirror = join(cfg.root, ".claude", "skills");
+  if (existsSync(skillMirror))
+    for (const name of readdirSync(skillMirror))
+      if (!shippedSkills.includes(name))
+        out.push({ severity: "error", check: "plugin", message: `.claude/skills/${name} is not shipped by plugin.json` });
+
   for (const a of maintenance) {
     if (!onDisk.includes(a)) continue;
     const body = read(join(cfg.root, "agents", `${a}.md`)) ?? "";
@@ -144,6 +187,16 @@ function checkPlugin(cfg: Config): Finding[] {
   }
   return out;
 }
+
+/** The four agents a run dispatches to. None of them may reach what another one wrote. */
+const ISOLATED_AGENTS = ["adhd-branch", "adhd-branch-search", "adhd-critic", "adhd-deepen"] as const;
+
+/**
+ * Permits that both resolve in a Claude Code host and cannot read the run directory. This is the
+ * whole list, and it is short on purpose: every other tool name is either a filesystem tool or
+ * unproven to launch. `adhd-branch-search` has spawned on exactly this pair.
+ */
+const RESOLVING_PERMITS = ["WebSearch", "WebFetch"];
 
 /**
  * Do the agent definitions grant the tools the frames ask for?
@@ -168,12 +221,79 @@ function checkToolGrants(cfg: Config): Finding[] {
         check: "tools",
         message: `${cfg.frames.frames.filter((f) => f.tools.includes(t)).map((f) => f.id).join(", ")} ask for ${t} and adhd-branch-search does not grant it; the branch would reason without it and look like a frame that chose not to search`,
       });
-  // The reverse: a filesystem tool anywhere in a branch agent would let a branch read a sibling.
-  for (const f of readdirSync(join(cfg.root, "agents")).filter((x) => x.startsWith("adhd-branch"))) {
-    const body = read(join(cfg.root, "agents", f)) ?? "";
-    for (const forbidden of ["Read", "Grep", "Glob", "Task", "Agent"])
-      if (new RegExp(`^\\s*tools:.*\\b${forbidden}\\b`, "m").test(body))
-        out.push({ severity: "error", check: "tools", message: `agents/${f} grants ${forbidden}; a branch that can read the run directory can read its siblings, which is the one thing the architecture prevents` });
+  for (const f of ISOLATED_AGENTS) {
+    const body = read(join(cfg.root, "agents", `${f}.md`)) ?? "";
+    if (!body) {
+      out.push({ severity: "error", check: "tools", message: `agents/${f}.md does not exist and a run dispatches to it` });
+      continue;
+    }
+    const declared = (/^\s*tools:\s*(.+)$/m.exec(body)?.[1] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+
+    // A filesystem tool would let one of these read what a sibling wrote.
+    for (const forbidden of ["Read", "Write", "Edit", "Grep", "Glob", "Bash", "Task", "Agent", "NotebookEdit"])
+      if (declared.includes(forbidden))
+        out.push({ severity: "error", check: "tools", message: `agents/${f}.md grants ${forbidden}; an isolated agent that can read the run directory can read its siblings, which is the one thing the architecture prevents` });
+
+    /*
+     * And the defect that shipped: a permit nobody checked would resolve. `adhd-branch`,
+     * `adhd-critic` and `adhd-deepen` all declared `TodoWrite, TaskList`, and this host answers
+     * "unrecognized [TodoWrite]; recognized but matched no tools in this session [TaskList]" and
+     * refuses the spawn. The three agents that *are* the architecture could not start, every
+     * recorded run fell back to `general-purpose` — which grants everything, including Read —
+     * and `doctor` printed no errors the whole time.
+     *
+     * D42 corrected what that refusal actually is. `tools:` is optional and omitting it inherits
+     * every tool available to a subagent, so the rule is not "an agent needs tools" but "a `tools:`
+     * list in which no entry resolves will not launch". Isolation still cannot be expressed as an
+     * empty list, and for the sharper reason: the way to name no tools is to omit the field, and
+     * omitting it grants all of them. It is expressed as the smallest list that resolves and
+     * reaches nothing the run wrote, which is the web pair, plus the brief text telling the agent
+     * not to use it and detector T3 catching it if it does.
+     */
+    if (!declared.length)
+      out.push({ severity: "error", check: "tools", message: `agents/${f}.md declares no tools, so it inherits every tool a subagent can have, including the filesystem tools that reach what a sibling wrote` });
+
+    /*
+     * D43. The tool grant is not the only channel into an isolated agent. Three other front matter
+     * fields carry content the brief did not put there, and none of them is a tool:
+     *
+     *   `skills`      preloads skill text into the agent's context at startup
+     *   `mcpServers`  attaches servers — including this repository's own, which reads run state
+     *   `memory`      persists across sessions, so a branch could carry a previous run's own work
+     *
+     * Each is checked by name rather than by a general "no unknown fields" rule, because the
+     * failure this repository keeps having is a field nobody thought about, and a rule that only
+     * rejects fields it already knows about would not have caught any of them either.
+     */
+    /*
+     * And the channel that was open the whole time. A subagent loads the project's CLAUDE.md
+     * unless it says not to, and this project's CLAUDE.md contains "Branches never see siblings.
+     * Add a test that fails if any brief contains another branch's output, the branch count, or
+     * the phrase 'so far'" and "a system that spawns seven subagents". A probe confirmed a branch
+     * quotes both back verbatim without using a tool. The test that guards the brief was doing its
+     * job; the branch count was arriving by a door nobody had checked.
+     */
+    if (!/^\s*omitClaudeMd:\s*true\s*$/m.test(body.split("---")[1] ?? ""))
+      out.push({
+        severity: "error",
+        check: "tools",
+        message: `agents/${f}.md does not set omitClaudeMd: true, so it loads CLAUDE.md, which states the branch count and names the isolation this agent is the isolation of`,
+      });
+
+    for (const field of ["skills", "mcpServers", "memory"])
+      if (new RegExp(`^\\s*${field}:`, "m").test(body.split("---")[1] ?? ""))
+        out.push({
+          severity: "error",
+          check: "tools",
+          message: `agents/${f}.md sets ${field}; that is content reaching an isolated agent from somewhere other than its brief, which is the thing the brief being the whole input is supposed to mean`,
+        });
+    for (const t of declared)
+      if (!RESOLVING_PERMITS.includes(t))
+        out.push({
+          severity: "error",
+          check: "tools",
+          message: `agents/${f}.md declares ${t}, which is not a permit known to resolve. An isolated agent's tools must be a non-empty subset of ${RESOLVING_PERMITS.join(", ")}: anything else either reaches the run directory or fails to launch`,
+        });
   }
   return out;
 }
@@ -241,6 +361,75 @@ function checkRouting(cfg: Config): Finding[] {
       out.push({ severity: "warn", check: "routing", message: `class ${id} wants ${n} branches from ${c.frames.length} primary frames, so ${n - c.frames.length} come from alternates on every run of this class` });
   }
   for (const f of cfg.frames.frames) if (!reachable.has(f.id)) out.push({ severity: "warn", check: "routing", message: `${f.id} is named by no class, primary or alternate, so no problem can route to it` });
+
+  // Being named is weaker than being reachable, and the difference is a whole frame. The check
+  // above passes any frame appearing in some class's `alternates`, but a class whose default `n` is
+  // at most the length of its primary list never draws an alternate at all — so a frame that is
+  // only ever an alternate is named six times and dispatched never. `FIRST_PRINCIPLES` was in that
+  // position and `--stats` could only report it as having no runs, which is what bad luck also looks
+  // like. This asks the real selector instead.
+  //
+  // A fixture states a class and lets routing choose, so an unreachable frame cannot have one, and a
+  // run that never dispatches it cannot produce evidence for or against keeping it. That is a
+  // decision rather than a defect, which is why this warns and names where the decision lives.
+  const reach = frameReach(cfg);
+  for (const id of reach.unreachable_at_default) {
+    if (!reachable.has(id)) continue; // already reported above, for a blunter reason
+    const f = reach.frames.find((x) => x.frame === id)!;
+    const named = Object.values(cfg.routing.classes).filter((c) => c.action === "run" && c.alternates.includes(id)).length;
+    out.push({
+      severity: "warn",
+      check: "routing",
+      message:
+        `${id} is an alternate in ${named} class(es) and primary in none, so no class dispatches it at its default n` +
+        (reach.proved_unreachable.includes(id) ? " — by construction, not by sampling" : ` in ${reach.seeds} seeded shuffles`) +
+        (f.blocked_by.length ? `; ${f.blocked_by.join(", ")} hold${f.blocked_by.length === 1 ? "s" : ""} its axis (${f.axis}) in the primary lists` : "") +
+        ". Route it or retire it: see docs/RETIREMENT.md and `adhd frames --reach`",
+    });
+  }
+  return out;
+}
+
+/**
+ * What an overlay changed, reported rather than assumed (D33).
+ *
+ * A merge nobody can see is the failure mode the item warned about: the loaded library is one file
+ * plus another and every report downstream speaks as though it were one file. `loadConfig` already
+ * refuses a merge that breaks a cross-check, so this is not validation — it is the line that tells a
+ * reader of `adhd frames` or `adhd why` which definitions they are reading.
+ */
+function checkOverlay(cfg: Config): Finding[] {
+  const o = cfg.overlay;
+  if (!o) return [];
+  const out: Finding[] = [
+    {
+      severity: "warn",
+      check: "overlay",
+      message:
+        `${o.path} (${o.hash}) is applied: ` +
+        [
+          o.replaced_frames.length ? `${o.replaced_frames.length} frame(s) replaced (${o.replaced_frames.join(", ")})` : null,
+          o.added_frames.length ? `${o.added_frames.length} added (${o.added_frames.join(", ")})` : null,
+          o.replaced_classes.length ? `${o.replaced_classes.length} routing class(es) replaced (${o.replaced_classes.join(", ")})` : null,
+          o.added_classes.length ? `${o.added_classes.length} class(es) added (${o.added_classes.join(", ")})` : null,
+          o.replaced_dimensions.length ? `${o.replaced_dimensions.length} rubric dimension(s) replaced (${o.replaced_dimensions.join(", ")})` : null,
+        ]
+          .filter(Boolean)
+          .join("; ") +
+        ". Every frame_hash below is the merged definition, and a recorded run carries this overlay hash so it can be traced back.",
+    },
+  ];
+  // A replaced frame keeps its id and changes its `frame_hash`, which is exactly what `--drift`
+  // reports as "the definition has changed since". That reading is right about the definition and
+  // wrong about the cause, so it is worth saying once here rather than leaving a reader to infer it.
+  if (o.replaced_frames.length)
+    out.push({
+      severity: "warn",
+      check: "overlay",
+      message:
+        `\`adhd frames --drift\` will report ${o.replaced_frames.join(", ")} as changed for any run recorded under a different library. ` +
+        "That is the definition genuinely differing, not a rewrite of history: compare the plan's overlay hash before concluding a frame was edited.",
+    });
   return out;
 }
 
@@ -260,6 +449,42 @@ function checkCorpus(cfg: Config): Finding[] {
     for (const b of plan.branches ?? [])
       if (!existsSync(join(run, b.artifact_path)))
         out.push({ severity: "warn", check: "corpus", message: `${d} planned ${b.frame} and ${b.artifact_path} is absent; that branch returned nothing, which is not the same as scoring badly` });
+  }
+
+  /*
+   * D41. Which recordings say what actually produced them?
+   *
+   * `plan.json` records the agent a run intended for each branch. Every recorded run carries
+   * `"agent": "adhd-branch"` and that agent could not launch in any host tried, so for all fifteen
+   * the field is an intention that was not met and nothing anywhere says so. A warning rather than
+   * an error because the recordings predate the file and rewriting them would destroy the evidence;
+   * what it must not do is read as clean.
+   */
+  const undispatched = readdirSync(dir)
+    .filter((d) => statSync(join(dir, d)).isDirectory() && existsSync(join(dir, d, "plan.json")) && !existsSync(join(dir, d, "dispatch.json")))
+    .sort();
+  if (undispatched.length)
+    out.push({
+      severity: "warn",
+      check: "corpus",
+      message: `${undispatched.length} recording(s) do not say which subagent type produced them, so their plan.json \`agent\` field is an intention rather than a fact: ${undispatched.join(", ")} (D41)`,
+    });
+
+  /*
+   * A `replicate_of` pointing at nothing is silent otherwise: `recordedDraws` leaves the run as its
+   * own draw, so the rates go back to counting it twice and the report reads the same as before the
+   * field was added. That is exactly the state backlog 99 exists to prevent, so it is an error.
+   */
+  const draws = recordedDraws(dir);
+  for (const d of readdirSync(dir).sort()) {
+    if (!statSync(join(dir, d)).isDirectory()) continue;
+    const e = readJsonIf(join(dir, d, "expected.json"), (v) => RecordedExpectationSchema.parse(v));
+    const target = e?.replicate_of;
+    if (!target) continue;
+    if (!existsSync(join(dir, target)))
+      out.push({ severity: "error", check: "corpus", message: `${d} declares replicate_of ${target} and no such recorded run exists, so it is counted as an independent draw` });
+    else if (draws.get(d) === d)
+      out.push({ severity: "error", check: "corpus", message: `${d} declares replicate_of ${target} and did not resolve to a draw; the chain is circular` });
   }
   return out;
 }
@@ -326,6 +551,7 @@ const CHECKS: { name: string; run: (cfg: Config) => Finding[] }[] = [
   { name: "routing against the library", run: checkRouting },
   { name: "recorded corpus shape", run: checkCorpus },
   { name: "fixture assertions", run: checkFixtureAssertions },
+  { name: "config overlay", run: checkOverlay },
 ];
 
 export function doctor(cfg: Config): DoctorReport {

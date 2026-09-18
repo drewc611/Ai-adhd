@@ -1,0 +1,118 @@
+# The wide path, which has never run. Backlog 8.
+#
+# `enumerate_options` is the last run class in config/routing.yaml with no fixture, and it is the
+# only one whose `n` is not 5: seven branches drawn from a primary list of nine, seven briefs, and a
+# critic pack twice the size of any this repository has recorded. None of that has been exercised.
+#
+# This asserts the compiler rather than a run, which is fixtures 008 through 011's precedent, and
+# the assertions are the ones the wide path is actually about: that seven branches are dispatched
+# rather than five, that seven frames still sit on seven distinct axes under D6, and that a brief
+# does not grow when there are more siblings it must not mention. The run does not exist yet and the
+# harness reports that rather than a pass.
+id: "014"
+name: queue-options
+problem_class: enumerate_options
+seed: 14
+prompt: |
+  We run background jobs on a cron that shells out to a Python script, and it has started
+  overlapping with itself. I want to see a few different directions before we commit to one. What
+  are the options?
+
+why: |
+  Seven branches is not five branches with two more. Three things change and none had a check.
+
+  **`n` comes from the class, not from a default.** `enumerate_options` sets `n: 7` in
+  `config/routing.yaml` and every other run class derives 5. A compile that fell back to
+  `max_branches` would produce a working plan, a correct hash, seven verbatim briefs' worth of
+  content in five files, and nothing would have noticed. `branches_expected` exists because of this
+  fixture: the `compiles: true` path checked the hash, the verbatim passthrough and the brief size,
+  and never the branch count, so the one property the wide path is for was the one property it could
+  not assert.
+
+  **The axis rule has to hold with more frames.** D6 says a run never carries two frames on one
+  axis. At n=5 out of a primary list of five that is trivially true. At n=7 out of nine it is a real
+  constraint the selector has to satisfy, and `distinct_axes` is the check — also new, also free, and
+  also never made before.
+
+  **A brief gets no bigger when there are more siblings to not mention.** Isolation is a property of
+  each brief on its own, so seven briefs should be the same size as five. If brief size grew with the
+  branch count, something in the brief would be describing the run, which is the one thing a branch
+  may not know. The ceiling is set above what the renderer produces so that a change in that
+  direction fails here rather than in a token bill.
+
+  The problem itself is deliberately a weak one: overlapping cron jobs have an obvious answer, and
+  the asker has already said they want directions rather than a recommendation. That combination is
+  what `enumerate_options` is for and it is also the combination most likely to produce a
+  monoculture, so the run this fixture is waiting for may say something about fixture 012 as well.
+
+must_surface:
+  - id: why_it_started
+    trap: T1
+    description: |
+      The job did not always overlap, so something crossed a line: the data grew, the script got
+      slower, the window got tighter, a dependency started taking longer. An answer that reaches
+      straight for mutual exclusion has treated a changed runtime as a missing lock. Registered
+      before any run of this fixture, as E10 requires.
+    any_of:
+      - "(why|what) (it |they |the job )?(started|began|changed|now)"
+      - "(runtime|duration|takes longer|slower|grew|growing|got slower)"
+      - "(exceeds?|exceeded|longer than|outgrown|outgrew|past) (the |its )?(interval|period|schedule|window|cadence)"
+      - "(data|volume|backlog|input|table|queue) (has )?(grew|grown|growing|increased|got bigger)"
+      - "when did (it|this) start"
+  - id: the_skipped_work
+    trap: T7
+    description: |
+      A lock makes the second invocation exit, and the work that invocation would have done is
+      dropped or deferred. An answer that stops at "take a lock" has silently chosen one of those
+      and told nobody which.
+      Registered before any run of this fixture.
+    any_of:
+      - "(skip|skipped|skipping|dropped|drops|lost|discard) (that |the |a |this )?(run|invocation|tick|execution|cycle|work)"
+      - "(catch|catches|catching) up"
+      - "(defer|deferred|queued|enqueue|backlog) (the |that |it)"
+      - "(never|not) (run|runs|executed|processed)"
+      - "silently (skip|exit|return|do nothing)"
+  - id: not_a_lock_problem
+    trap: T2
+    description: |
+      A job whose duration exceeds its period is not a job missing a lock; it is a job on the wrong
+      scheduler. Someone has to reject the framing that this is about preventing concurrency and say
+      the period, the work per run, or cron itself is the thing to change.
+      Registered before any run of this fixture.
+    any_of:
+      - "(wrong|not the right|not a) (tool|scheduler|abstraction|model|question|problem)"
+      - "(queue|worker|daemon|long[- ]running|continuous|event[- ]driven|streaming) (instead|rather than|not)"
+      - "(cron|schedule) is (the|not)"
+      - "stop (using )?cron"
+      - "(reduce|shrink|split|chunk|partition) the work (per|each)"
+      - "(lengthen|widen|increase) the (interval|period)"
+  - id: the_half_finished_run
+    trap: T7
+    description: |
+      A shell-out killed part way through leaves whatever it had already written. Whether a second
+      start, a timeout kill, or a lock takeover is safe depends on whether the script is idempotent
+      or resumable, and that question is not the same as the locking question.
+      Registered before any run of this fixture.
+    any_of:
+      - "idempoten"
+      - "(partial|half|part)[- ](written|finished|complete|done|way)"
+      - "(resume|resumable|restart|rerun|re-run) (safely|the job|it|from)"
+      - "(kill|killed|killing|terminate|terminated|SIGKILL|SIGTERM)[^.]{0,60}(mid|part|while|during)"
+      - "(stale|orphan|leftover) (lock|lockfile|pid|file|state)"
+  - id: who_notices
+    trap: T6
+    description: |
+      An overlapping job that starts silently skipping looks exactly like a healthy one from
+      outside. Someone other than the person writing the fix is named as needing to see it.
+      Registered before any run of this fixture.
+    any_of:
+      - "(alert|alerting|page|paged|pager|on[- ]call|monitor|monitoring|observab)"
+      - "(nobody|no one|no-one) (notices|knows|sees|would notice)"
+      - "(looks|appears|seems) (healthy|fine|normal|green|successful)"
+      - "(operator|sre|ops|whoever runs|the team that)"
+
+expect:
+  compiles: true
+  branches_expected: 7
+  distinct_axes: true
+  brief_bytes_max: 6000

@@ -103,9 +103,28 @@ export const DimensionSchema = z
     weight: z.number().positive(),
     question: z.string().min(1),
     anchors: z.record(z.string(), z.string()),
+    /**
+     * The rubric version this dimension stopped being scored in (D34). A run scored under an
+     * earlier version still includes it; the critic is no longer asked for it.
+     *
+     * Retiring rather than deleting is what keeps the recorded corpus readable. `validatePassA`
+     * rejects a dimension the rubric does not list, so deleting `foreclosure` outright made all
+     * seven recorded runs unreadable — not merely non-comparable — and took `replay`, `learn`,
+     * `why` and the viewer down with them. The dimension stays in the file, with its weight, as
+     * the record of what version 0 asked.
+     */
+    retired_in: z.number().int().positive().optional(),
   })
   .strict();
 export type Dimension = z.infer<typeof DimensionSchema>;
+
+/**
+ * The dimensions in force at a given rubric version. A run is scored with the set its own
+ * version declared, never with whatever the file says today.
+ */
+export function dimensionsAt(dimensions: Dimension[], version: number): Dimension[] {
+  return dimensions.filter((d) => d.retired_in === undefined || version < d.retired_in);
+}
 
 export const HardRulesSchema = z
   .object({
@@ -244,6 +263,27 @@ export const PlanSchema = z
     seed: z.number().int(),
     n: z.number().int(),
     allow_wide: z.boolean(),
+    /**
+     * The rubric version this run is scored under (D34). Optional, and absent means 0: every run
+     * recorded before the rubric had a second version ran under version 0, and a missing field
+     * says so as clearly as an explicit 0 would.
+     */
+    rubric_version: z.number().int().nonnegative().optional(),
+    /**
+     * Which library produced this plan, or null for the shipped one (D33). Optional so every run
+     * recorded before overlays existed still validates — those ran on the shipped library and a
+     * missing field says so as clearly as an explicit null would.
+     */
+    overlay: z
+      .object({
+        path: z.string(),
+        hash: z.string(),
+        replaced_frames: z.array(z.string()),
+        added_frames: z.array(z.string()),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     estimate: z
       .object({
         tokens_branches: z.number().int(),
@@ -315,14 +355,30 @@ export const FixtureSchema = z
          * `decline`, and of whether a run was recorded.
          */
         injection_warnings_min: z.number().int().positive().optional(),
+        // A fixture that asserts the compiler and nothing about a run, which fixture 008 established
+        // the precedent for: some properties are about dispatch rather than about reasoning, and
+        // waiting for a recorded run to check them means never checking them. `brief_bytes_max` is the
+        // one number worth pinning — a brief that grows without bound is how a long problem stops
+        // being dispatchable at all.
+        compiles: z.boolean().optional(),
+        brief_bytes_max: z.number().int().positive().optional(),
+        /**
+         * How many branches the plan must carry. Routing decides `n` from the class, and a
+         * `compiles: true` fixture could not check it — so the wide path, whose whole subject is
+         * that `n` is 7 and not 5, had no way to assert the one thing it is for. A compile that
+         * quietly fell back to five branches would have passed.
+         */
+        branches_expected: z.number().int().min(1).optional(),
+        /** Every dispatched frame sits on its own axis (D6). Free to check and never checked. */
+        distinct_axes: z.boolean().optional(),
       })
       .strict()
       .default({ decline: false, reason_includes: [] }),
   })
   .strict()
   // A run fixture with no must_surface asserts nothing and would pass on any output at all.
-  .refine((f) => f.expect.decline || f.expect.injection_warnings_min !== undefined || f.must_surface.length > 0, {
-    message: "must_surface is required unless expect.decline or expect.injection_warnings_min is set",
+  .refine((f) => f.expect.decline || f.expect.injection_warnings_min !== undefined || f.expect.compiles || f.must_surface.length > 0, {
+    message: "must_surface is required unless expect.decline, expect.injection_warnings_min or expect.compiles is set",
     path: ["must_surface"],
   })
   .refine((f) => !f.expect.decline || (f.must_surface.length === 0 && f.must_not.length === 0), {
@@ -331,11 +387,66 @@ export const FixtureSchema = z
   });
 export type Fixture = z.infer<typeof FixtureSchema>;
 
+/**
+ * What the host actually spawned, as opposed to what the plan asked for.
+ *
+ * `plan.json` records the agent a run *intends* for each task. Nothing recorded what it *got*, and
+ * that gap hid the defect D41 found for fifteen runs: `adhd-branch`, `adhd-critic` and
+ * `adhd-deepen` could not launch at all, every dispatch silently fell back to another agent type,
+ * and because a subagent type selects a system prompt, the critic ran the branch instructions.
+ * Twelve recorded runs and two decisions were written on top of that, and every one of their
+ * `plan.json` files still claims `"agent": "adhd-branch"`.
+ *
+ * A substitution is not forbidden — D41's own fallback reasoning is sound and a host that cannot
+ * launch one agent may legitimately use another. What is forbidden is doing it silently. An entry
+ * whose `actual` differs from its `planned` must say why, and the synthesis ships that to the
+ * reader the same way the pruned block does.
+ */
+export const DispatchEntrySchema = z
+  .object({
+    /** `branch:<FRAME>`, `critique:pass-a`, `critique:pass-b`, or `deepen:<FRAME>`. */
+    task: z.string().min(1),
+    planned: z.string().min(1),
+    actual: z.string().min(1),
+    /** Required when `actual` differs from `planned`. The refusal text, ideally verbatim. */
+    note: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const DispatchRecordSchema = z
+  .object({ entries: z.array(DispatchEntrySchema) })
+  .strict()
+  .superRefine((v, ctx) => {
+    for (const e of v.entries)
+      if (e.actual !== e.planned && !e.note)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${e.task}: planned ${e.planned} and spawned ${e.actual} with no note. A substitution is allowed; an unexplained one is not`,
+        });
+  });
+export type DispatchRecord = z.infer<typeof DispatchRecordSchema>;
+export type DispatchEntry = z.infer<typeof DispatchEntrySchema>;
+
 export const RecordedExpectationSchema = z
   .object({
     outcome: z.enum(["pass", "fail"]),
     note: z.string().optional(),
     /** A hand written consensus answer that exists to fail. Audited separately from real runs. */
     control: z.boolean().default(false),
+    /*
+     * The id of the run this one deliberately repeats: same fixture, same seed, briefs identical,
+     * recorded to measure what moves when nothing does (backlog 4). Two treatments follow from it
+     * and they are not the same treatment, which is why this field exists rather than a filter.
+     *
+     * For a *rate* — pruned in n of m, held the recommendation in n of m — a replicate is not an
+     * independent observation. `001-seed3-repeat` is fixture 001 at seed 3 declining to pick
+     * `LEDGER` for the second time, and counting it twice is how `LEDGER` became the first frame
+     * ever to meet a retirement criterion (backlog 99). Rates collapse a replicate group to one
+     * draw.
+     *
+     * For *reliability* — inter-rater agreement, alpha, the noise floor — more samples of the same
+     * pack is exactly what is wanted and nothing collapses.
+     */
+    replicate_of: z.string().optional(),
   })
   .strict();

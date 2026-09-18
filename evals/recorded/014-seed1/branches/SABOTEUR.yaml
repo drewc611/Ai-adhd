@@ -1,0 +1,119 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: SABOTEUR
+position: >-
+  Replace file locking with a TTL lease held in the datastore the job already writes to, make
+  every run idempotent and resumable on a work-item key, and alarm on staleness of the last
+  successful completion rather than on overlap.
+reasoning: |
+  1. The obvious answer.
+
+  The obvious answer is to wrap the cron entry in `flock -n /var/lock/job.lock`, or to have the
+  Python script drop a PID file and exit if one exists. It is one line, it is free, and it makes
+  the overlap stop today.
+
+  It assumes four things about the world. That exclusion on this box is exclusion everywhere,
+  because there is exactly one box and there always will be. That a process holding the lock is
+  a process doing work. That a run either completes or leaves nothing behind. And that when a
+  run is skipped, someone finds out, because cron mails the output to a mailbox a human reads.
+
+  All four are assumptions about the world being tidy, and the world is not.
+
+  2. Three ways that gets violated.
+
+  (a) The lock stops being global. Someone builds an AMI from that host and scales to two. Or
+  the job moves into a container and /var/lock is per-container. Or an operator copies the
+  crontab to the staging box to test it, and staging's config still points at the production
+  database. Now two runners each hold a lock, each correctly, and neither knows about the other.
+  The lock was never guarding the machine. It was supposed to be guarding the database, and it
+  never touched the database.
+
+  (b) The holder wedges instead of dying. The script makes an HTTP call to a dependency with no
+  timeout set, and that dependency accepts the connection and then says nothing forever. The
+  process is alive, so the lock is held, so every subsequent cron firing exits immediately and
+  quietly with status 1. The overlap is cured perfectly. So is the work. Nothing runs for eleven
+  days and the only evidence is a skipped-run message in a mail spool nobody has opened since
+  the last person who owned this left.
+
+  (c) The run is killed mid-write. The OOM killer, a deploy, a node drain, a spot reclaim. flock
+  releases cleanly on process death, which is the correct behaviour and here it is the
+  dangerous one. The next firing starts on top of half-written state: rows inserted but not
+  marked done, a file uploaded but not renamed, a counter incremented twice. Mutual exclusion
+  promised that two runs would not overlap. It never promised that one run plus the corpse of
+  another would be safe, and that is the actual failure mode people see.
+
+  3. Cheapest to cause, most expensive to recover.
+
+  (a). It costs one `scp` of a crontab, or one autoscaling group with a minimum of two, and it
+  passes code review because there is no code. Recovery is the expensive one because the damage
+  is silent and interleaved. You cannot tell from the data which writer wrote what, so you are
+  reconstructing intended state from logs that were not written to be a ledger. (b) costs a
+  restart once you find it. (c) costs one repair script. (a) costs an archaeology project, and
+  you only start it after a downstream number looks wrong.
+
+  4. What survives, and what it does not.
+
+  What survives all three is moving the exclusion and the recovery into the shared resource
+  itself, because the shared resource is the only thing all the runners can see.
+
+  Take the lease out of the filesystem and put it in the datastore the job already writes to: a
+  single row with owner id, run id, environment name, and expires_at, acquired with a
+  conditional write, renewed by a heartbeat while the run works. Two hosts now contend against
+  the same row, so (a) is covered. The row carries the environment, so a job that believes it is
+  staging refuses to take a lease stamped production, which is the copy-to-the-wrong-environment
+  attack.
+
+  Put a hard wall-clock ceiling on the run: `timeout` in the cron line, and per-call timeouts on
+  every socket the script opens. A hang becomes a crash, the heartbeat stops, the lease expires,
+  and the next run proceeds. That converts (b) from indefinite silent starvation into one lost
+  cycle.
+
+  Make the unit of work idempotent and keyed. Each item gets a stable key, each write is an
+  upsert or is guarded by a uniqueness constraint, and progress is recorded in the same
+  transaction as the work. A run that is killed halfway leaves items that are either done or
+  untouched, and the next run resumes. That is (c).
+
+  Then change what you alert on. Overlap is the symptom you noticed; it is not the thing that
+  hurts. Alert on "the last successful completion is older than N intervals" and on "M
+  consecutive runs exited because they could not get the lease". The first alarm is the one that
+  would have caught eleven days of silence, and it is the alarm the obvious answer does not have
+  because the obvious answer's failure mode looks exactly like success.
+
+  What it does not survive: lease expiry under a live holder. A paused VM, a long stop-the-world
+  pause, or a network partition between the runner and the datastore will let the TTL lapse
+  while the original process is still alive and still writing. The second runner takes the lease
+  in good faith and now there are two, each certain it is alone. Idempotent keyed writes shrink
+  the blast radius to nearly nothing for anything commutative, but they do not save a
+  read-modify-write counter, and they do not save an external side effect with no idempotency
+  key on the far side, such as an outbound payment or an email. Surviving that needs fencing
+  tokens that the storage layer itself rejects when stale, and a plain database plus a Python
+  script does not give you that. If this job sends money or sends mail, this design is not
+  sufficient and you should say so out loud rather than discover it.
+forecloses:
+  - >-
+    Local mutual exclusion as the mechanism, meaning flock on a lock file or a PID file. It
+    cannot coordinate two hosts, two containers, or two environments, and those are the cases
+    that actually corrupt data.
+  - >-
+    Fixing the schedule instead of the correctness, meaning lengthening the interval, staggering
+    start times, or splitting the cron entry. Any of those work until one run is slow once.
+  - >-
+    Having the new run kill the old one, for example a pkill in the cron line. That guarantees a
+    half-finished run at a time you chose, and it is only safe if the work is already idempotent,
+    at which point you did not need it.
+falsifier: >-
+  Run two copies of the script concurrently against a staging copy of the datastore with the same
+  inputs, then diff the resulting rows and count the external side effects. If the result is
+  identical to a single run and nothing was sent or charged twice, then overlap is harmless here,
+  the lease and the alarms are pure overhead, and this position is wrong. Cheaper still, check
+  whether the job is already pinned to a singleton scheduler such as a Kubernetes CronJob with
+  concurrencyPolicy Forbid, in which case the exclusion problem is solved outside the script and
+  only the staleness alarm is worth keeping.
+missing_actor: >-
+  The owner of the datastore or downstream service the script writes to, who was never named
+  because the problem was framed as a scheduling question. They can add a uniqueness constraint
+  or an idempotency key on the written records, which turns an undetected double run into a loud
+  failure at the storage layer at zero cost to the cron job, and does so regardless of which
+  locking scheme is chosen.
+confidence: medium
+```

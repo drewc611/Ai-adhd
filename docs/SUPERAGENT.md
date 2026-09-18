@@ -120,7 +120,7 @@ which is exactly what a mission running on a dirty tree does not have.
 found two real holes the first time it ran.
 
 `review` originally reused `adhd-critic` and `diverge` named `adhd-branch`. Both are run agents
-whose grant is fixed by D4 at `TaskList` and nothing else, so the stage grants either had to be
+whose grant is fixed by D4 at a single launch permit and nothing else, so the stage grants either had to be
 empty or had to widen an agent whose emptiness is the point.
 
 `build` and `verify` were one agent. A tool grant is per agent, so one agent serving both kinds

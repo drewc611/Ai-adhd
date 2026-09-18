@@ -1,0 +1,58 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: FRAME_BREAKER
+position: >-
+  Stop choosing timeout constants and instead stamp every inbound request with a deadline at the
+  edge, propagate the remaining budget through every outbound call, and let each HTTP attempt's
+  timeout be whatever is left of that budget.
+reasoning: |
+  1. The load bearing assumption. The question assumes the unit of decision is a number attached
+  to a client: connect, read, total, one value each, chosen once, correct forever. That smuggles in
+  three things. It assumes the timeout is a property of the client rather than of the call being
+  made, so the same client serves a user-facing page render and a background reconcile with one
+  setting. It assumes the failure being prevented is "this one call hung", when the failures that
+  actually take systems down are a caller that gave up while the callee kept working, a chain of
+  hops each politely waiting 30 seconds so the outermost waits two minutes, and retries that fire
+  after the requester is already gone and triple the load on the thing that was merely slow. And it
+  assumes a timeout firing is an ending, when it is the start of the interesting part: retry or not,
+  safe to retry or not, shed or queue, what the user sees.
+  2. Who benefits from it being unexamined. The owner of the service you are calling. As long as
+  every caller privately picks a constant, nobody has to publish a latency SLO, and nobody can be
+  held to one. A p99 that drifts from 200ms to 1.4s never shows up as a broken promise, it shows up
+  as your timeout being "too aggressive". It also flatters everyone in the room: a constant is a
+  one-line diff that closes a ticket and passes review, so the end-to-end latency contract stays
+  unowned, which is exactly the state where an incident is possible and nobody's fault.
+  3. What the question is actually about. Budget and cancellation. Given that a user or a job has a
+  finite amount of patience, how is that amount divided across the hops, who is told when it runs
+  out, and who stops working. Timeouts are the local projection of that budget. Derived, they are
+  right by construction and follow the call. Chosen, they are a guess that is wrong the first time
+  the dependency changes shape.
+  4. First concrete action. Tomorrow: add ingress middleware that puts an absolute deadline on the
+  request context, one number per entry point, picked from the product promise, not from the
+  dependency. Wrap the HTTP client so every call computes per-attempt timeout from remaining budget
+  divided by attempts left, refuses to start a call when under a floor, and sends the remaining
+  budget as a header. Make retries spend from that budget and require an idempotency key. Then emit
+  one metric per dependency, budget consumed as a fraction, so the next argument about latency is
+  about a distribution instead of a constant.
+forecloses:
+  - >-
+    A shared default timeout in config, tuned once to cover the worst dependency, applied to every
+    call the service makes.
+  - >-
+    Fixed retry policies: three attempts with backoff, independent of how much of the caller's
+    deadline is left, which is the retry storm you get for free with per-client constants.
+  - >-
+    Treating a circuit breaker as the answer, where calls run unbounded and the breaker is expected
+    to notice afterwards.
+falsifier: >-
+  Pull the last three latency incidents in this system. If none of them involved a caller that had
+  already given up while work continued, a chain where the inner waits exceeded the outer patience,
+  or retries amplifying load on a slow dependency, then the budget machinery buys nothing here and a
+  constant was the right answer. Cheaper still, check the call graph: if no request path has more
+  than one outbound hop and the dependency's p99.9 sits far under any plausible constant, I am wrong.
+missing_actor: >-
+  The owner of the upstream service you are calling. They can publish a latency SLO you can size a
+  budget against, and honor the remaining-budget header by cancelling server-side work once the
+  caller's deadline has passed, which is the half of the problem no client-side number can reach.
+confidence: high
+```

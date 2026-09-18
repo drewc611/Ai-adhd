@@ -1,0 +1,17 @@
+{
+  "tokens": 111871,
+  "wall": "630s from compile",
+  "by_phase": {
+    "diverge": 57223,
+    "critique_a": 24365,
+    "critique_b": 30283,
+    "deepen": 0
+  },
+  "by_frame": {
+    "ACTOR_CENSUS": 12020,
+    "DOOR_KEEPER": 12164,
+    "LEDGER": 11786,
+    "FRAME_BREAKER": 10897,
+    "MINIMALIST": 10356
+  }
+}

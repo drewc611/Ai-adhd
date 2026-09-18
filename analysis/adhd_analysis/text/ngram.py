@@ -145,6 +145,10 @@ class KneserNey:
         disc = self._discount_for(k, c) if c else 0.0
         return max(c - disc, 0.0) / stats.total + gamma * backoff
 
+    def describe(self) -> str:
+        """One line naming the model class and its shape, for a report that takes any of them."""
+        return f"Modified Kneser-Ney, order {self.order}, vocabulary {len(self.vocab):,}, {sum(len(t) for t in self.counts):,} n-grams"
+
     def logprob_terms(self, ids: Iterable[int]) -> list[tuple[float, bool]]:
         """Per-position natural-log probability, and whether that position's target is a real word.
 

@@ -12,7 +12,7 @@ import {
   type PassB,
 } from "./schema.js";
 import type { Config } from "./config.js";
-import { ContractError, CriticRefusal, HashMismatch } from "./errors.js";
+import { ContractError, CriticRefusal, HashMismatch, RunAbort } from "./errors.js";
 
 // ---- the routing decision --------------------------------------------------------------
 
@@ -209,11 +209,29 @@ export function validateBranchArtifact(text: string, expectedHash: string, expec
   try {
     raw = parseYamlLoose(text);
   } catch (e) {
-    return { ok: false, frame: expectedFrame, violations: [`not valid YAML: ${(e as Error).message}`], raw: text };
+    // D30: an artifact that will not parse aborts the run, the same as one carrying no hash.
+    //
+    // This used to prune, and backlog 84 is the argument that the split had no defence. A document
+    // with no `problem_hash` aborts because nothing shows it addressed *this* problem; an
+    // unparseable document shows strictly less than that, and was treated more leniently. The
+    // lenient case was the one where less is known.
+    //
+    // It also moved an arithmetic nobody decided to move. `monoculture_fraction` is 0.8, so one
+    // cluster of four is a monoculture at n=4 and sits exactly on the threshold at n=5 — pruning a
+    // branch changed the denominator of a run-level verdict silently.
+    //
+    // The pruned block still ships the parser's own message: the reason travels on the abort, which
+    // is where a reader now looks for it.
+    throw new RunAbort(
+      `branch ${expectedFrame} returned text that is not valid YAML: ${(e as Error).message}. ` +
+        "An artifact that cannot be parsed cannot be shown to have addressed this problem, which is " +
+        "the same reason a missing problem_hash aborts. Run invalidated.",
+      "UNPARSEABLE",
+    );
   }
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
   if (typeof got !== "string" || got !== expectedHash) {
-    throw new HashMismatch(expectedHash, String(got), `branch ${expectedFrame}`);
+    throw new HashMismatch(expectedHash, got, `branch ${expectedFrame}`);
   }
   const r = BranchArtifactSchema.safeParse(raw);
   if (!r.success) {
@@ -253,7 +271,7 @@ function refusalReason(raw: unknown, pass: "A" | "B"): string | null {
 export function validatePassA(text: string, expectedHash: string, letters: string[], dimensionIds: string[]): PassA {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
-  if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass A");
+  if (got !== expectedHash) throw new HashMismatch(expectedHash, got, "critic pass A");
   const refused = refusalReason(raw, "A");
   if (refused !== null) throw new CriticRefusal("A", refused);
   const r = PassASchema.safeParse(raw);
@@ -276,7 +294,7 @@ export function validatePassA(text: string, expectedHash: string, letters: strin
 export function validatePassB(text: string, expectedHash: string, frameIds: string[], minEvidenceWordsOnFire = 0): PassB {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
-  if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), "critic pass B");
+  if (got !== expectedHash) throw new HashMismatch(expectedHash, got, "critic pass B");
   const refusedB = refusalReason(raw, "B");
   if (refusedB !== null) throw new CriticRefusal("B", refusedB);
   const r = PassBSchema.safeParse(raw);
@@ -325,7 +343,7 @@ export function validatePassB(text: string, expectedHash: string, frameIds: stri
 export function validateDeepen(text: string, expectedHash: string, expectedFrame: string): DeepenArtifact {
   const raw = parseYamlLoose(text);
   const got = (raw as { problem_hash?: unknown } | null)?.problem_hash;
-  if (got !== expectedHash) throw new HashMismatch(expectedHash, String(got), `deepen ${expectedFrame}`);
+  if (got !== expectedHash) throw new HashMismatch(expectedHash, got, `deepen ${expectedFrame}`);
   const r = DeepenArtifactSchema.safeParse(raw);
   if (!r.success) throw new ContractError(`deepen ${expectedFrame}`, r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`));
   if (r.data.frame !== expectedFrame) throw new ContractError(`deepen ${expectedFrame}`, [`frame field is ${r.data.frame}`]);

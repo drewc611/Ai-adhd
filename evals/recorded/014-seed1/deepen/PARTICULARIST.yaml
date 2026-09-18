@@ -1,0 +1,62 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: PARTICULARIST
+verdict: defend
+response: |
+  The objection lands three hits of very different weight, and only one of them touches the
+  load-bearing claim. Taking them in reverse order of damage.
+
+  The multi-host argument is correct about flock and wrong about this job. It is true that a
+  descriptor lock guards an inode on one filesystem and that a copied crontab, an autoscaled image,
+  or a container with its own lock directory produces two correct lock-holders that cannot see each
+  other. But the position was never that flock is a distributed mutex; it was that flock -n is the
+  cheapest instrument that keeps a duration curve on screen. The problem says the job started
+  overlapping "with itself" - a fleet that scaled from one to two boxes produces overlap that starts
+  on a date, at a cause, and gets described as "two boxes are both running it", not as a job
+  overlapping itself. More to the point, the objection's implied alternative - a lease in the
+  datastore keyed to the work rather than the host - is a larger build that solves a correctness
+  problem nobody in the problem statement has reported, and it still does not tell you that the
+  runtime is climbing. Scope limit accepted and now stated: this holds while one host runs the
+  crontab, and the day a second one does, the mechanism is void rather than degraded. That is a
+  condition to write down, not a reason to skip the instrument.
+
+  The crash-mid-write argument is true and out of scope. Exclusion is not safety; a run killed by the
+  OOM killer, a deploy, or a node drain drops the lock cleanly and the next firing starts on top of
+  half-written state. I never claimed otherwise, and my own missing-detail note flagged shared-state
+  corruption as the thing I was deliberately deciding without. Crash safety is idempotency or a
+  write-ahead marker in the script, and it is a separate piece of work whose absence is not an
+  argument against installing the instrument today. A job that currently overlaps is already exposed
+  to exactly this and worse; flock -n strictly reduces the exposure.
+
+  The wedged-holder argument is the one that costs me, because it does not attack the mechanism, it
+  attacks the readout, and the readout is the whole position. I claimed the skip count is your
+  measurement of how far runtime has crossed the interval. It is not, because the skip count is
+  consistent with two different worlds: runtime at 1.2x interval, and one process hung on a socket
+  with no timeout since a fortnight ago. Those are the exact two hypotheses the instrument exists to
+  separate, and a refusal counter cannot separate them. That is a genuine defect, and the objection's
+  own remedy is the right one and is cheap: alarm on the age of the last successful completion, which
+  is a different quantity from the count of refusals and is already recoverable from the same
+  artifact my falsifier reads. Adding it does not change the shape of the position - refuse rather
+  than queue, be loud about it, keep the duration visible - it repairs the gauge. So the position
+  stands with the gauge repaired and the single-host condition written on it, which is a defence that
+  cost something rather than a clean one.
+revised_position: >-
+  Wrap the cron line in `flock -n` that exits non-zero into somewhere a human reads, and pair the
+  skipped-run count with an alarm on the age of the last successful completion, because refusals and
+  completions are different signals and only the two together distinguish a runtime that is crossing
+  the interval from a holder that has wedged - and record that this mechanism is valid only while one
+  host owns the crontab, so the day it is baked into an image, containerised, or staged against
+  production, the lock is void and the question reopens as a lease keyed to the work.
+revised_falsifier: >-
+  Pull the completion record - the output file's mtime, the target table's max updated_at, the log's
+  append timestamps - back a month or two, and read it twice. Read backwards - if the gap between
+  consecutive completions has sat above the cron interval since the first day in the record rather
+  than widening over recent weeks, nothing started, somebody only recently started looking, and this
+  position is wrong; you want an interval change or a queue, not an instrument. Read forwards - that
+  same record is the completion-age alarm, and if it ever shows a rising skip count while completions
+  have stopped entirely, the refusal counter was reading a wedge and the skip count alone was never
+  the measurement I claimed it was. And if any interval in that record contains two completions
+  stamped by different hosts, the single-host premise is already false and the flock mechanism is
+  void today rather than later.
+confidence: medium
+```

@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { cfg } from "./helpers.js";
+import { interRaterCorpus, weightSensitivity } from "../src/learn.js";
 
 const README = readFileSync(join(cfg.root, "README.md"), "utf8");
 
@@ -25,7 +26,20 @@ test("every mermaid fence in the README is closed and declares a diagram type", 
   const opens = (README.match(/^```mermaid$/gm) ?? []).length;
   const blocks = mermaidBlocks(README);
   assert.equal(blocks.length, opens, "an unclosed mermaid fence would swallow the rest of the page");
-  assert.ok(blocks.length >= 4, `expected at least 4 diagrams, found ${blocks.length}`);
+  assert.ok(blocks.length >= 1, "the page should carry at least one diagram");
+  /*
+   * This used to assert `blocks.length >= 4`, which is not what the test is called and not a
+   * property of a correct page. It was a page-length floor wearing a correctness test's name, and
+   * it fired when the README was cut from 655 lines to 216. What actually breaks a reader is a
+   * fence that declares no type: mermaid renders nothing and the block shows as blank.
+   */
+  for (const b of blocks) {
+    const first = b.split("\n").map((l) => l.trim()).find((l) => l.length > 0) ?? "";
+    assert.ok(
+      /^(flowchart|graph|stateDiagram(-v2)?|sequenceDiagram|classDiagram|erDiagram|journey|gantt|pie|gitGraph|mindmap|timeline|quadrantChart|C4Context)\b/.test(first),
+      `a mermaid block opens with ${JSON.stringify(first.slice(0, 40))}, which is not a diagram type`,
+    );
+  }
   for (const b of blocks) {
     const first = b.split("\n").find((l) => l.trim())!.trim();
     assert.match(first, /^(flowchart|graph|stateDiagram-v2|sequenceDiagram|classDiagram)\b/, `unknown diagram type: ${first}`);
@@ -44,9 +58,13 @@ test("every frame id a diagram names is in the library", () => {
 });
 
 test("the kernel states a diagram names are states the kernel actually reaches", () => {
+  // The diagram moved to docs/ARCHITECTURE.md with the rest of the kernel section when the README
+  // was cut to a product page. The guard follows the content: what matters is that a published
+  // state machine names states src/os.ts reaches, not which file carries it.
   const os = readFileSync(join(cfg.root, "src", "os.ts"), "utf8");
-  const state = mermaidBlocks(README).find((b) => b.trimStart().startsWith("stateDiagram"));
-  assert.ok(state, "the operating system section should carry a state diagram");
+  const arch = readFileSync(join(cfg.root, "docs", "ARCHITECTURE.md"), "utf8");
+  const state = mermaidBlocks(arch).find((b) => b.trimStart().startsWith("stateDiagram"));
+  assert.ok(state, "docs/ARCHITECTURE.md should carry the kernel state diagram");
   const named = new Set<string>();
   for (const m of state!.matchAll(/^\s*(\w+)\s*-->\s*(\w+)/gm)) {
     named.add(m[1]!);
@@ -119,8 +137,27 @@ test("a test count the README states is the count the suite actually has", () =>
 });
 
 test("the layout block lists every top-level directory a reader would look for", () => {
-  const block = README.match(/^## Layout\n\n```\n([\s\S]*?)```/m)?.[1];
-  assert.ok(block, "the README should carry a layout block");
+  /*
+   * Found by shape rather than by heading. This used to key off the literal `## Layout`, so
+   * renaming the section to "Where things live" made the guard report the block missing rather
+   * than checking it — a rename silently disabling a test is worse than the drift it watches for.
+   * A layout block is the fenced block whose lines name directories, and nothing else here looks
+   * like that.
+   */
+  const fenced: string[] = [];
+  let open: string[] | null = null;
+  for (const line of README.split("\n")) {
+    if (line.startsWith("```")) {
+      if (open) {
+        fenced.push(open.join("\n"));
+        open = null;
+      } else open = [];
+      continue;
+    }
+    open?.push(line);
+  }
+  const block = fenced.find((b) => b.split("\n").filter((l) => /^\w[\w-]*\/\s/.test(l)).length >= 3);
+  assert.ok(block, "the README should carry a layout block listing the top-level directories");
   const onDisk = readdirSync(cfg.root, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith(".") && !["node_modules", "dist", "coverage", "runs"].includes(d.name))
     .map((d) => d.name);
@@ -186,6 +223,45 @@ test("every backlog item marked built names something that exists", () => {
     for (const m of note.matchAll(/`((?:docs|src|test|evals|assets|config|prompts)\/[\w./-]+)`/g))
       assert.ok(existsSync(join(cfg.root, m[1]!)), `a built note names ${m[1]}, which is not there`);
   }
+});
+
+/**
+ * The other direction, which had no check and cost real work.
+ *
+ * The test above asks whether an item *claimed* built names something real. Nothing asked whether an
+ * item still open names something that already exists — so `adhd why`, `adhd diff`, `adhd lint`, the
+ * kernel's token budget, run priority, journal compaction and the TTY progress line all sat open in
+ * this file after they were built. Picking twenty items to do and finding seven of them already done
+ * is the cheap version of that mistake; building one of them again is the expensive version.
+ *
+ * Scoped to `adhd <command>` in an item's own title, which is the claim strong enough to check
+ * mechanically. An item whose title names a command the CLI has is either done or badly titled, and
+ * both want editing.
+ */
+test("no open backlog item names a command the CLI already has", () => {
+  const backlog = readFileSync(join(cfg.root, "docs", "BACKLOG.md"), "utf8");
+  const cli = readFileSync(join(cfg.root, "src", "cli.ts"), "utf8");
+  const commands = new Set([...cli.matchAll(/\.command\("([\w-]+)/g)].map((m) => m[1]!));
+
+  const stale: string[] = [];
+  for (const line of backlog.split("\n")) {
+    const item = line.match(/^(\d+)\. (.*)$/);
+    if (!item || item[2]!.startsWith("~~")) continue;
+    // An item *proposes* a command when its bolded title **is** that command — "**`adhd why <run>
+    // <frame>`.**" — which is how every built one in this file was written. A title that merely names
+    // a command is reasoning from it, not asking for it.
+    //
+    // I got this wrong twice before settling here, both times in the direction the check exists to
+    // catch: a rule firing on something it was not about. Taking the whole line flagged item 68, whose
+    // title is "Recalibrate `tokens_per_branch_estimate`" and which cites `adhd cost` as evidence on
+    // the same line. Taking the bolded title flagged item 70, "Two fixture assertions that `adhd lint`
+    // flags", which is about two assertions and not about the linter.
+    const proposed = item[2]!.match(/^\*\*`adhd ([a-z][\w-]*)/)?.[1];
+    if (proposed && commands.has(proposed)) {
+      stale.push(`item ${item[1]} proposes \`adhd ${proposed}\`, which exists`);
+    }
+  }
+  assert.deepEqual(stale, [], `the backlog is stale:\n  ${stale.join("\n  ")}`);
 });
 
 // ---- badges --------------------------------------------------------------------------------
@@ -265,12 +341,19 @@ test("the README's fixture 001 rates are the rates the audit computes", async ()
   const items = auditFixtures(cfg).items.filter((i) => i.fixture === "001" && i.kind === "must_surface");
   assert.ok(items.length >= 4, "fixture 001 lost its must_surface items");
 
-  const table = README.split("\n").filter((l) => /^\|/.test(l));
+  /*
+   * The table moved to docs/WRITEUP.md, which is where the honest reading of the corpus lives and
+   * where the README's Status section now points. The guard follows it: a published rate has to be
+   * the rate the audit computes, wherever it is published. The second half below stays pointed at
+   * the README, because overstating on the front page is the failure this test was written for.
+   */
+  const writeup = readFileSync(join(cfg.root, "docs", "WRITEUP.md"), "utf8");
+  const table = writeup.split("\n").filter((l) => /^\|/.test(l));
   for (const i of items) {
     const rate = `${i.real_matched}/${i.real_total}`;
     assert.ok(
       table.some((l) => l.includes(`| ${rate} |`) || l.includes(`| **${rate}** |`)),
-      `the audit rates 001/${i.item} at ${rate} and no README table row states it`,
+      `the audit rates 001/${i.item} at ${rate} and no docs/WRITEUP.md table row states it`,
     );
   }
 
@@ -281,4 +364,146 @@ test("the README's fixture 001 rates are the rates the audit computes", async ()
       !/properties of one sample, not of the frame library/.test(README),
       "an assertion only some real runs surface is being described as a property of one sample",
     );
+});
+
+/**
+ * The worked example quotes real command output, which is the only thing that makes it worth
+ * having and also the thing that rots. A renderer change, a reworded detector, a new frame name:
+ * any of them turns a quoted block into a confident lie, and a document whose whole claim is
+ * "every block here is what it printed" fails harder than one that never claimed it.
+ *
+ * Checked mechanically rather than by rereading: the blocks that come from files on disk are
+ * compared to those files, and the hash is compared to the plan that produced it.
+ */
+test("the worked example still quotes what the run actually says", () => {
+  const doc = readFileSync(join(cfg.root, "docs", "WORKED-EXAMPLE.md"), "utf8");
+  const runDir = join(cfg.root, "evals", "recorded", "001-first-run");
+  const plan = JSON.parse(readFileSync(join(runDir, "plan.json"), "utf8")) as { problem_hash: string };
+
+  // The hash appears four times in the document and is the one claim everything else rests on.
+  const quoted = [...doc.matchAll(/sha256:[0-9a-f]{64}/g)].map((m) => m[0]);
+  assert.ok(quoted.length >= 3, "the worked example should quote the hash");
+  for (const h of new Set(quoted)) assert.equal(h, plan.problem_hash, "a hash in the worked example is not this run's");
+
+  // Each bullet of the pruned block, as the synthesis actually renders it today.
+  const synth = readFileSync(join(runDir, "synthesis.md"), "utf8");
+  const block = synth.slice(synth.indexOf("## Pruned, with reason"));
+  const bullets = block.split("\n").filter((l) => l.startsWith("  - detector output:"));
+  assert.equal(bullets.length, 2, "001-first-run prunes two frames");
+  for (const b of bullets) assert.ok(doc.includes(b), `the worked example's pruned block has drifted:\n${b.slice(0, 120)}`);
+
+  // And the brief excerpt, which is what shows a branch is handed no sibling.
+  const brief = readFileSync(join(runDir, "briefs", "LEDGER.md"), "utf8");
+  assert.ok(doc.includes(brief.split("\n").slice(0, 5).join("\n")), "the quoted brief opening has drifted");
+});
+
+/**
+ * And the isolation claim the document makes about that brief is the one a reader is most likely
+ * to take on trust, so it is checked against the brief rather than asserted in prose.
+ */
+test("the brief the worked example quotes really does name no sibling", () => {
+  const runDir = join(cfg.root, "evals", "recorded", "001-first-run");
+  const brief = readFileSync(join(runDir, "briefs", "LEDGER.md"), "utf8");
+  for (const f of cfg.frames.frames) {
+    if (f.id === "LEDGER") continue;
+    assert.ok(!new RegExp(`\\b${f.id}\\b`).test(brief), `${f.id} appears in LEDGER's brief`);
+  }
+  assert.ok(!/so far/i.test(brief));
+  assert.ok(!/\b(five|5) branches\b/i.test(brief), "the brief states the branch count");
+});
+
+/**
+ * `docs/WRITEUP.md` states what the evidence supports, and the whole value of it is that its
+ * unflattering numbers are as current as its flattering ones. A writeup whose negative results
+ * have quietly gone stale is worse than none: it reads as honesty and is not.
+ *
+ * The numbers are recomputed from the same functions the CLI calls, so this fails when the corpus
+ * grows or a scoring changes, which is exactly when the document needs rereading.
+ */
+test("the writeup's numbers are the numbers the corpus has now", () => {
+  const doc = readFileSync(join(cfg.root, "docs", "WRITEUP.md"), "utf8");
+
+  const agree = interRaterCorpus(cfg);
+  assert.ok(doc.includes(`${agree.runs.length} runs and ${agree.cells} scored cells`) || doc.includes(`pooled over ${agree.runs.length} runs and ${agree.cells} scored cells`),
+    `the writeup should say ${agree.runs.length} runs and ${agree.cells} scored cells`);
+  assert.ok(doc.includes(`${Math.round(agree.exact * 100)}% exact agreement`), `pooled exact agreement is ${Math.round(agree.exact * 100)}%`);
+  // The claim that rankings moved in every run is the load-bearing one.
+  assert.equal(agree.runs.filter((r) => r.report.ranking_changed).length, agree.runs.length, "the writeup says the ranking changed in all of them");
+
+  const sens = weightSensitivity(cfg);
+  // The writeup said "All N contested decisions were settled by two anchor points or fewer" until
+  // `001-seed3` arrived at 0.1042 and broke it. The claim is now a count of the near-ties rather
+  // than a universal, so the doc has to state both halves and this checks both.
+  const near = sens.margins.filter((m) => m.margin <= 2 / 48 + 1e-9);
+  const wide = sens.margins.filter((m) => m.margin > 2 / 48 + 1e-9);
+  assert.ok(
+    doc.includes(`${near.length} of the ${sens.margins.length} contested decisions`),
+    `${near.length} of ${sens.margins.length} contested decisions are near-ties and the writeup does not say so`,
+  );
+  // And the exception has to be named, with its margin, or the paragraph reads as the old universal.
+  for (const w of wide) {
+    assert.ok(doc.includes(w.run), `${w.run} is settled by ${(w.margin * 48).toFixed(1)} anchor points and the writeup does not name it`);
+    assert.ok(doc.includes(w.margin.toFixed(4)), `the writeup does not quote ${w.run}'s margin of ${w.margin.toFixed(4)}`);
+  }
+  assert.equal(sens.flips.length, 0, "the writeup says no representative changed under a +/-1 move");
+
+  // Recorded runs, and the subset carrying a score.
+  const recorded = readdirSync(join(cfg.root, "evals", "recorded")).filter((d) => statSync(join(cfg.root, "evals", "recorded", d)).isDirectory());
+  const scored = recorded.filter((d) => existsSync(join(cfg.root, "evals", "recorded", d, "score.json")));
+  const word = (n: number) => ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"][n] ?? String(n);
+  assert.match(doc, new RegExp(`# What ${word(recorded.length)} runs show`), `the title should say ${recorded.length}`);
+  assert.ok(doc.includes(`${word(scored.length)} with a \`score.json\``), `${scored.length} runs carry a score.json`);
+
+  // The test count it quotes for the mechanics claim.
+  const tests = readdirSync(join(cfg.root, "test")).filter((f) => f.endsWith(".test.ts"))
+    .reduce((n, f) => n + (readFileSync(join(cfg.root, "test", f), "utf8").match(/^test\(/gm) ?? []).length, 0);
+  assert.ok(doc.includes(`${tests} tests`), `the writeup's test count has drifted: suite has ${tests}`);
+});
+
+/**
+ * A heading is a claim about its contents, and this one was false for a month.
+ *
+ * `docs/BACKLOG.md` section 9 is titled "Hygiene, done" and opens "Findings from a full sweep, all
+ * fixed". Items 70 onward were appended after it with no heading of their own, so sixteen open items
+ * — six of them decisions waiting on the owner — sat under a heading asserting they were finished.
+ * Nothing read them as open because nothing had to: a reader trusts the heading.
+ *
+ * The mechanical shape of the bug is that new items are appended at the end of the file, so the
+ * section holding the highest-numbered item is the one they land in. If that section claims to be
+ * done, the next item appended is mis-filed by construction.
+ */
+test("the backlog section holding its highest-numbered item does not claim to be finished", () => {
+  const lines = readFileSync(join(cfg.root, "docs", "BACKLOG.md"), "utf8").split("\n");
+  let section = "";
+  let highest = { n: 0, section: "" };
+  const items: { n: number; section: string; struck: boolean }[] = [];
+  for (const line of lines) {
+    if (line.startsWith("## ")) section = line.slice(3).trim();
+    const m = /^(\d+)\. (.*)$/.exec(line);
+    if (!m) continue;
+    const n = Number(m[1]);
+    items.push({ n, section, struck: m[2]!.startsWith("~~") });
+    if (n > highest.n) highest = { n, section };
+  }
+  assert.ok(items.length > 50, "the backlog should have items to check");
+  assert.ok(
+    !/\bdone\b/i.test(highest.section),
+    `item ${highest.n} is the highest in the file and sits under "${highest.section}", which claims to be finished — so the next item appended lands there too`,
+  );
+});
+
+test("every open backlog item sits under a section that does not claim to be done", () => {
+  const lines = readFileSync(join(cfg.root, "docs", "BACKLOG.md"), "utf8").split("\n");
+  let section = "";
+  const misfiled: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("## ")) section = line.slice(3).trim();
+    const m = /^(\d+)\. (.*)$/.exec(line);
+    // Section 9's entries are records of fixes rather than asks, so they carry no `~~` — there was
+    // no original ask to strike. That is why they are exempted by name rather than by shape: the
+    // shape is indistinguishable from an open item, which is precisely the hole this pair closes.
+    if (!m || section.startsWith("9. Hygiene")) continue;
+    if (/\bdone\b/i.test(section) && !m[2]!.startsWith("~~")) misfiled.push(`${m[1]} under "${section}"`);
+  }
+  assert.deepEqual(misfiled, [], "open items are filed under a heading claiming they are done");
 });

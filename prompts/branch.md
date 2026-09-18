@@ -41,16 +41,29 @@ Return exactly this YAML and nothing else. No preamble, no prose outside the blo
 ```yaml
 problem_hash: {{problem_hash}}
 frame: {{frame.id}}
-position: <one sentence, committal, of the form "do X". No hedge.>
+position: >-
+  <one sentence, committal, of the form "do X". No hedge.>
 reasoning: |
   <why, from inside the frame. Answer the probes above in order. Plain language.>
 forecloses:
-  - <a real option this position rules out>
-  - <another>
-falsifier: <a specific, cheap observation that would prove this position wrong>
-missing_actor: <a party who can act on this system that the problem did not name, and the action they can take. Or null.>
+  - >-
+    <a real option this position rules out>
+  - >-
+    <another>
+falsifier: >-
+  <a specific, cheap observation that would prove this position wrong>
+missing_actor: >-
+  <a party who can act on this system that the problem did not name, and the action they can take.>
 confidence: <low | medium | high>
 ```
+
+Every field carrying prose is folded with `>-`, and that is not decoration. A value written on the
+key's own line ends at the first `: ` inside it, so "Cheaper still: find one incident report"
+parses as a nested mapping and the whole artifact is rejected. That has happened in a real run and
+cost it. Keep the `>-` and the two-space indent and you can write any sentence you like, colons
+included.
+
+If there is no omitted actor, write `missing_actor: null` on one line, without the `>-`.
 
 `forecloses` and `falsifier` are mandatory. A position that rules nothing out and cannot be
 proven wrong is a summary, not a position, and will be discarded.

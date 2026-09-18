@@ -114,10 +114,23 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
   const briefDir = opts.briefDir ?? "briefs";
   const artifactDir = opts.artifactDir ?? "branches";
 
+  // D32: the estimate is the observed maximum, and its shape is the measured one.
+  //
+  // `tokens_per_branch_estimate` is the diverge cost of one branch. The other two phases are
+  // proportions of it taken from `adhd cost`, which reports 49% diverge, 30% critique and 21%
+  // deepen over the five runs that record a phase breakdown. The old model used `tpb * n` for the
+  // critic and `tpb * ceil(n / 2)` for deepen, giving 38/38/23 — it over-weighted the critic by a
+  // third and under-weighted diverge, so the preview was wrong in shape as well as in size.
+  //
+  // The size was wrong by 2.6x to 3.3x across seven runs, always low. A consent gate that quotes a
+  // third of the spend is not an estimate, it is a misrepresentation, and the choice between mean
+  // and maximum is not a statistical one: a user who consented to 156,000 tokens and spent 519,482
+  // was misled, and being misled upward costs them nothing. So the figure is set from the worst run
+  // observed rather than the average one, and the preview says "up to" for the same reason.
   const tpb = cfg.routing.defaults.tokens_per_branch_estimate;
   const tokens_branches = tpb * n;
-  const tokens_critic = tpb * n; // reads every artifact twice, writes little
-  const tokens_deepen = tpb * Math.ceil(n / 2);
+  const tokens_critic = Math.round(tokens_branches * 0.61); // 30/49, measured
+  const tokens_deepen = Math.round(tokens_branches * 0.43); // 21/49, measured
 
   const briefs: CompiledBrief[] = frames.map((f) => ({ frame: f.id, text: renderBranchBrief(cfg, problem, hash, f) }));
   const isolation = briefs.flatMap((b) => checkBriefIsolation(b.text, b.frame, cfg.frames.frames, { problem }));
@@ -131,6 +144,15 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
     seed,
     n,
     allow_wide: allowWide,
+    // D34: which rubric version this run will be scored under. Stamped here for the same reason
+    // `frame_hash` and `overlay` are: the run carries its own contract, so a later retirement
+    // cannot silently rescore it. Absent on every run recorded before D34, which read as 0.
+    rubric_version: cfg.rubric.version,
+    // D33: which library produced this plan. Null on the shipped one. `frame_hash` already says what
+    // each frame was, and this says where the definitions came from — the pair is what lets
+    // `adhd frames --drift` tell "the definition changed since" apart from "that install runs an
+    // overlay", which are different facts and used to be one message.
+    overlay: cfg.overlay ? { path: cfg.overlay.path, hash: cfg.overlay.hash, replaced_frames: cfg.overlay.replaced_frames, added_frames: cfg.overlay.added_frames } : null,
     estimate: { tokens_branches, tokens_critic, tokens_deepen, tokens_total: tokens_branches + tokens_critic + tokens_deepen },
     branches: frames.map((f) => ({
       frame: f.id,
@@ -185,7 +207,11 @@ export function previewText(result: CompileResult): string {
     `frames, in dispatch order:`,
     ...plan.branches.map((b) => `  ${b.frame.padEnd(17)} axis=${b.axis.padEnd(14)} agent=${b.agent}${b.tools.length ? `  tools=${b.tools.join(",")}` : ""}`),
     ``,
-    `estimate (order of magnitude): ${plan.estimate.tokens_total.toLocaleString()} tokens`,
+    // "up to", not "about". The figure is the worst of seven recorded runs rather than their mean
+    // (D32), and a gate whose number is an average is exceeded half the time. "Order of magnitude"
+    // was the old label and it described the old figure honestly: 156,000 against a real 407,000 to
+    // 519,000 was an order of magnitude and not an estimate.
+    `estimate: up to ${plan.estimate.tokens_total.toLocaleString()} tokens`,
     `  branches ${plan.estimate.tokens_branches.toLocaleString()}  critic ${plan.estimate.tokens_critic.toLocaleString()}  deepen ${plan.estimate.tokens_deepen.toLocaleString()}`,
     ``,
     `Nothing has been spent. Confirm the text above is exactly what you meant before any branch is spawned.`,

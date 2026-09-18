@@ -10,52 +10,87 @@ cd analysis
 pip install -e '.[dev]'
 python -m adhd_analysis --root ..              # the report
 python -m adhd_analysis --root .. --json       # the same numbers, machine readable
-pytest                                         # 58 tests
+pytest                                         # 246 tests, the whole suite
 ```
 
 ## Why this exists
 
-Every headline figure in the repository is a point estimate over seven runs. 79% critic
-agreement. A 3.0x cost ratio. Per-frame prune rates out of two or three appearances. An
+Every headline figure in the repository is a point estimate over seven double-scored packs. 81%
+critic agreement. A 3.0x cost ratio. Per-frame prune rates out of two or three appearances. An
 orthogonality rate of 2 in 3. `docs/EXPERIMENTS.md` says those are single-sample noise and
 `docs/RETIREMENT.md` refuses to act on one of them for that reason, but neither says *how*
 uncertain, because nothing had computed it.
 
 Two things follow from computing it.
 
-**79% agreement is not 79% reliability.** Percent agreement counts matches and never asks how
-many of those matches chance explains. Krippendorff's alpha does. Over the same 630 marks:
+**81% agreement is not 81% reliability.** Percent agreement counts matches and never asks how
+many of those matches chance explains. Krippendorff's alpha does. Over the same 305 marks:
 
 | dimension | alpha | 95% interval | % exact | ceiling | distinct values |
 |---|---|---|---|---|---|
-| `reversibility` | **+0.850** | [+0.73, +0.94] | 76% | 19% | 4 |
-| `assumption_attack` | +0.773 | [+0.57, +0.91] | 70% | 50% | 3 |
-| `specificity` | +0.731 | [+0.43, +0.94] | 84% | 14% | 3 |
-| `reasoning_carries` | +0.678 | [+0.68, +0.70] | 98% | 94% | 3 |
-| `actor_coverage` | +0.557 | [+0.34, +0.71] | 84% | 36% | 2 |
-| `falsifiability` | +0.517 | [+0.16, +0.82] | 82% | 76% | 3 |
-| `substance` | +0.508 | [+0.31, +0.65] | 76% | 69% | 3 |
-| `committal` | +0.402 | [-0.05, +0.68] | 86% | 86% | 3 |
+| `reversibility` | **+0.875** | [+0.78, +0.95] | 80% | 18% | 4 |
+| `specificity` | +0.732 | [+0.48, +0.95] | 85% | 15% | 4 |
+| `assumption_attack` | +0.709 | [+0.48, +0.87] | 70% | 50% | 4 |
+| `reasoning_carries` | +0.675 | [+0.68, +0.68] | 98% | 96% | 3 |
+| `actor_coverage` | +0.649 | [+0.50, +0.76] | 85% | 45% | 3 |
+| `committal` | +0.562 | [+0.26, +0.85] | 87% | 80% | 3 |
+| `substance` | +0.469 | [+0.22, +0.65] | 77% | 76% | 3 |
+| `falsifiability` | +0.383 | [+0.06, +0.63] | 80% | 78% | 3 |
 | `foreclosure` | **-0.017** | [-0.04, +0.00] | 96% | 94% | 2 |
 
 The two orderings invert. `foreclosure` is second-best by percentage and last by alpha: the
 critics agree 96% of the time because 94% of its marks are the same mark, and corrected for
-chance that agreement is worth nothing. `reversibility` is third from the bottom by percentage
-and first by alpha, because the thing the critics agree about actually varies.
+chance that agreement is worth nothing. `reversibility` is near the bottom by percentage and
+first by alpha, because the thing the critics agree about actually varies.
 
 That is D8 finding 5 arriving from a second direction and with a sign on it. Finding 5 identified
 `foreclosure` and `reasoning_carries` as scoring the output contract and the D4 tool allowlist
 rather than the reasoning, and reached that conclusion from ceiling rates. Alpha reaches it
 without being told which dimensions to suspect.
 
-**`committal` and `foreclosure` have intervals that contain zero.** Whatever their point
-estimates, seven runs cannot distinguish them from chance. A dimension whose interval spans
-chance is unmeasured, not weak.
+**`foreclosure` is the only dimension whose interval contains zero, and it is already retired.**
+It was two: `committal` sat at +0.402 on [-0.05, +0.68] over five double-scored packs, and backlog
+98 was open on whether to retire it. E11 added a second scoring to two more packs for an unrelated
+reason and `committal` moved to +0.562 on [+0.26, +0.85], clear of chance. Two packs did what the
+item expected ten to do, so the 0.402 was thin evidence rather than a dead dimension. A dimension
+whose interval spans chance is unmeasured, not weak, and that now describes exactly one.
 
 **All nine dimensions push the same way on whether an artifact is pruned.** `learn --correlation`
 already reports max |r| = 0.51, so no two dimensions are redundant with each other. Fit a
 logistic regression on all nine and every coefficient is negative. That is one latent factor
 wearing nine names, and a pairwise correlation matrix has no column that could show it.
+
+## The model that ships
+
+`analysis/models/background.tf.gz`, 5.5 MB, committed. Everything else under `analysis/models/`
+is a build artifact and gitignored; the large Kneser-Ney models run to 70–163 MB and a tool whose
+language scoring needs a 2.4 GB local build is a tool nobody runs from a clone.
+
+| | |
+|---|---|
+| class | decoder-only transformer over numpy, written from scratch |
+| shape | d_model 128, 2 layers, 4 heads, context 128, 1,459,456 parameters |
+| vocabulary | 8,192 types, min_count 3, OOV rate 0.045 |
+| trained on | 7,322 documents: 6,330 RFCs, 615 PEPs, 323 EIPs, 54 ERCs |
+| seen | 11,997,184 tokens, 2,929 steps, one epoch, 33 minutes on one CPU |
+| final loss | 4.154 |
+| fingerprints | corpus `fe6d302c4a82d43b`, vocabulary `974095d096ea80af` |
+
+It is small because it is committed, and committed because a background model nobody can load is
+the state this repository was already in: the transformer was added in D20, gradient-checked, and
+then handed to nothing, because `genericity.py` was written against `KneserNey` and called methods
+a transformer does not have. Use it with:
+
+```
+cd analysis && python3 -m adhd_analysis --root .. --model models/background.tf.gz
+```
+
+**It is not the best model here and is not meant to be.** The shipped Kneser-Ney reaches held-out
+perplexity 25.82 on 64M tokens; this saw 12M and one epoch. What it is for is making the genericity
+section runnable from a clean checkout. Train a better one with
+`python3 -m adhd_analysis.text.train_transformer --help`, point `--model` at it, and the report
+names whichever model produced it — `describe()` carries the shape into the output so a figure can
+never be quoted without the model that made it.
 
 ## The model, and what it is not
 
@@ -172,6 +207,11 @@ pruned, `split` recorded.** Every discount row is a real modified-Kneser-Ney est
 0.75 fallback. **Held-out perplexity 25.82** on 366 frozen documents, 3,443,116 tokens, 0.91% OOV,
 fingerprint `1446762140db7f1a`, `truncated: null`.
 
+**Every figure below is post-D26**, re-measured on the corpus with this repository's own prose excluded.
+D27 has the before and after: nothing moved by more than 3%, no ratio left its registered band, and the
+shipped 25.82 reproduced to two decimals across 73,496 fewer training tokens. The frozen held-out set
+never contained that prose, so removing it changed what the models read and not what they were asked.
+
 25.65 appears in D19 and is superseded rather than beaten. It was measured under an ASCII-only
 tokenizer that learned `Löwis` as `l` and `wis`, across a fifth of the corpus; a different
 tokenization is a different vocabulary over the same text, so the two are different measurements.
@@ -186,20 +226,28 @@ fixes took it 3.35x from where it started. `python -m adhd_analysis.text.train_t
 and `scripts/score_heldout.py` scores either class by reading the model file's own format header.
 
 **D21 records what it is worth, which is less than the n-gram.** Held at the same 8,192-word
-vocabulary on the same 20M tokens, one epoch, 1.46M parameters: **64.1** against Kneser-Ney's **30.7**,
-a 2.09x loss inside the band E6 registered before running. The same Kneser-Ney over the full 64.4M
-tokens scores 19.9 and is *refused* against both, because the top 8,192 words of 64.4M tokens and of
-20M share only 82.6% of their types — a fixed vocabulary cap is not a fixed vocabulary.
+vocabulary on the same 20M tokens, one epoch, 1.46M parameters: **64.29** against Kneser-Ney's
+**30.95**, a 2.077x loss inside the band E6 registered before running. The same Kneser-Ney over the
+full 64.4M tokens scores 19.94 and is *refused* against both, because the top 8,192 words of 64.4M
+tokens and of 20M share only 82.6% of their types — a fixed vocabulary cap is not a fixed vocabulary.
 
 Two numbers from that run worth carrying: **90% of the transformer's OOV is the 8,192 ceiling rather
 than `min_count`** (63,697 types met the frequency floor and were cut by the cap anyway), and the
-transformer saw **18,343,512 real tokens to the control's 20,000,029**, an 8.3% disadvantage from the
-`<s>`/`</s>` its materialised array carries. Neither covers 2.09x.
+transformer saw **18,341,790 real tokens to the control's 20,000,294**, an 8.3% disadvantage from the
+`<s>`/`</s>` its materialised array carries. Neither covers 2.077x.
+
+**D28 then removed the excuse in all of this.** Every figure in the two paragraphs above is a
+comparison at 8,192 types, a vocabulary reached by *capping the n-gram*, and nothing in D21 said
+whether the transformer's loss was the architecture or the cap. E9's cell D is the transformer at the
+n-gram's own 148,114 types: **142.41** against the shipped model's **25.82**, a 5.516x loss, with the
+pair accepted because both sit at 0.915101% out-of-vocabulary — identical to every digit, since both
+draw the same types. At its own vocabulary it loses by more, not less. Cell D read 3.51x less text,
+which is quoted with the figure everywhere it appears.
 
 **A third model class in D24: an LSTM, and it loses to both.** `text/lstm.py`, from scratch over numpy
 with BPTT written by hand. At d128/2 layers — 1,311,744 parameters against the transformer's 1,459,456,
-and 274 training tokens apart — it scores **159.3**: 2.49x worse than the transformer, 5.18x worse than
-the n-gram. E7 predicted it would land between them and was wrong by 2.7x, which is the informative
+and 274 training tokens apart — it scores **154.81**: 2.408x worse than the transformer, 5.00x worse
+than the n-gram. E7 predicted it would land between them and was wrong by 2.7x, which is the informative
 direction: **attention is doing substantial work at 20M tokens**, so E6's result is about transformers
 rather than about neural language models generally.
 
@@ -209,10 +257,64 @@ the architecture's one edge over the transformer bought almost nothing here. And
 faster** than the transformer despite stepping sequentially through time, which says more about what
 dominates cost in numpy at this shape than about recurrence.
 
+**D25 prices the thing all three of those comparisons depend on.** Every figure above is an
+all-targets perplexity, which charges each out-of-vocabulary target as a prediction of `<unk>`, and
+`comparable_heldout` had refused pairs whose OOV rates differ by more than one percentage point without
+anyone knowing what a percentage point was worth. E8 measures it: four Kneser-Ney models on one
+20,000,139-token read, differing in nothing but the cap.
+
+| cap | types | held-out OOV | **all targets** | in-vocabulary only |
+|---|---|---|---|---|
+| 8,192 | 8,192 | 5.797% | **30.95** | 32.51 |
+| 16,384 | 16,384 | 4.044% | **35.52** | 36.22 |
+| 32,768 | 32,768 | 3.063% | **39.31** | 39.22 |
+| none | 71,603 | 2.391% | **42.77** | 41.76 |
+
+**-3.391 perplexity points per percentage point of OOV** at an r-squared of 0.977, and the round
+threshold was **3.3x too loose**. `allowed_oov_gap` sizes the refusal from the perplexities in hand —
+0.30 points at this sweep's own base — floored just above E4's sound 0.22-point comparison and capped at
+the old 0.01 so E8 tightens the guard everywhere and loosens it nowhere.
+
+The threshold takes the worst of the six pairwise slopes rather than the fit, and **not because the
+pre-registered test chose it.** That test was a 2x pairwise spread: these cells measure **1.972x** here
+and measured **2.005x** on the corpus that still had this repository's prose in it, straddling the line
+on a 0.105% change. A rule whose verdict flips on a change three orders of magnitude smaller than the
+effect it rules about is a coin toss, so the worst case is taken unconditionally as its conservative
+side. `oov_slope.py` records `slope_used: "worst_pairwise"` and reports `linear` wired to nothing.
+
+The in-vocabulary column corrects the reason. `<unk>` is **cheaper** than the average real token at
+8,192 types and **dearer** at 71,603, crossing over near 3% OOV, while all-targets perplexity rises
+throughout — so the discount the comment blamed is real, small, and sign-changing, and the dominant
+term is the rare words a cap used to hide.
+
+`scripts/oov_slope.py` is the measurement — it scores a list of models both ways, fits the slope, reads
+the pairwise slopes, and derives the threshold — and `scripts/score_heldout.py --in-vocabulary-only`
+does the second reading on its own.
+
+E8 also caught the corpus moving underneath it. Its registered arithmetic predicted 71,883 uncapped
+types and the first run said 71,934, because `docs/` **was** a corpus source and the commit carrying the
+registration edited `docs/EXPERIMENTS.md`. **Writing the registration changed the corpus it was about**,
+which invalidated the plan to reuse E6's cell A′ and cost a retrain. Writing up the result did it again
+and worse, landing each cell of a retrain on a different corpus digest, so **D26 took that prose out of
+every measurement** and the table above is the re-measurement — one digest, `080865e040e7b88d`, across
+all four cells. `analysis/records/e8-v*-pre-d26.json` hold the first measurement and agree closely.
+
+Models carry a `corpus_fingerprint` over the token stream they read now, the n-gram trainer records
+`vocabulary_covers_counts`, and `comparable_training` refuses two models that did not read the same text.
+Equal token counts are not equal tokens.
+
 D17 then asks what that competence is made of. A model with `pep` removed from the library entirely
 scores **153.53** on the same 31 held-out PEPs the shipped model scores **54.30** on: reading a genre
 is worth about **2.83x** on that genre, so this is much more an RFC model than a model of technical
-prose. Per genre it runs 24.8 on RFCs, 54.3 on PEPs, 103.7 on EIPs. The artifacts the genericity
+prose.
+
+**D25 retroactively refuses that pair, and it is quoted here anyway because the refusal is the point.**
+`comparable_heldout` returned `None` when D17 was written and does not now: the OOV gap is 1.60
+percentage points against the 0.53 those perplexities can carry. By E8's slope the vocabulary
+difference alone could account for **8.2 of the 99.2 points**, 8.3% of the gap, so the finding is very
+likely to survive — it is not currently defensible *as stated*. Reading the two models' headers then
+found the larger problem: the pair was never controlled at all, `min_count` 2 against 3.
+`evaluate(shared_vocabulary=...)` is the method that settles it, and backlog 77 is the retrain. Per genre it runs 24.8 on RFCs, 54.3 on PEPs, 103.7 on EIPs. The artifacts the genericity
 measure scores are in none of those genres, which is why that report says to name the corpus or not
 quote the number.
 

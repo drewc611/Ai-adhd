@@ -97,9 +97,15 @@ def test_the_shipped_manifest_trains_on_a_clean_checkout(tmp_path):
     """
     lib = Library.load(MANIFEST)
     described = lib.describe()
-    always = [d for d in described if d["name"] in {"repo-docs", "repo-prompts", "repo-readme"}]
+    # The always-present sources are exactly the ones the manifest marks mutable, read off the manifest
+    # rather than named here. They are what makes a clean checkout trainable at all, and after D26 they
+    # are also the only sources no measurement may read. This test trains on the full library on
+    # purpose, which is what the CLI's `--include-mutable-sources` exists for: a smoke test proving the
+    # pipeline runs, producing numbers nobody should quote.
+    always = [d for d in described if d["name"] in lib.mutable_names()]
     assert [d["name"] for d in always] == ["repo-docs", "repo-prompts", "repo-readme"]
     assert all(d["files"] > 0 for d in always), always
+    assert not lib.stable().mutable_names(), "stable() left a mutable source in"
 
     optional = {d["name"]: d for d in described} .get("rfc")
     assert optional is not None, "the manifest no longer declares the fetched corpus"

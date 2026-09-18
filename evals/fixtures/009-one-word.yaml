@@ -1,0 +1,26 @@
+# The shortest problem that is still a problem. Backlog 16.
+#
+# "The compiler should still hash and dispatch it" is the whole claim, and it is about dispatch
+# rather than about reasoning, so this asserts the compiler and needs no recorded run — the precedent
+# fixture 008 set for the D5 gate. What would break here is not a crash: it is a problem short enough
+# that some future brief renderer decides there is nothing worth sending, and five branches receive a
+# frame and no question.
+id: "009"
+name: one-word
+problem_class: design_decision
+seed: 9
+prompt: "Retries?"
+
+why: |
+  A one-word problem is where verbatim passthrough is easiest to lose. Every temptation the compiler
+  has — expand it, restate it, ask a clarifying question, pad it into a sentence a model will answer
+  better — produces a brief that no longer contains the bytes the hash was taken over, and
+  `problem_hash` is the only thing that would notice. So the assertion is the same one D2 rests on,
+  made at the size where it is least likely to hold: the problem reaches every brief byte for byte.
+
+  It is also the cheapest possible check that routing does not collapse on a short prompt. A
+  `design_decision` is a run class, not a length, and "Retries?" is a real question a person asks.
+
+expect:
+  compiles: true
+  brief_bytes_max: 8000

@@ -1,0 +1,75 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: ACTOR_CENSUS
+position: >-
+  Stop choosing timeout constants and make the client take an inherited absolute deadline: read the
+  remaining budget from the inbound request, pass the remainder minus elapsed time to every
+  downstream hop, and wire caller disconnect to a real socket abort.
+reasoning: |
+  1. Who can act on this system, and how fast and how cheaply.
+
+  - The human at the keyboard waiting on the response: presses cancel, hits refresh, or resubmits
+    the form. Under a second, free.
+  - Me, the developer holding the config: edits a number. One deploy, minutes to hours.
+  - The operator on call: raises or lowers the limit mid-incident, or trips a breaker. Minutes if
+    it is dynamic config, a full deploy if it is a literal in the code.
+  - The caller of my service (another service, with its own deadline): abandons the request at its
+    own limit. Automatic, free, and it does not tell me.
+  - The upstream service I am calling: accepts the connection and then stalls indefinitely. Free,
+    and it does not have to be malicious. A full worker queue does it.
+  - The reverse proxy, load balancer, or mesh sidecar between us: severs the connection at its own
+    default, commonly 60 seconds, with zero coordination with my code.
+  - The retry loop, scheduler, or cron above me: re-issues the same request. Free, and it
+    multiplies every socket I am still holding.
+  - An attacker: opens connections and reads a byte per second to pin my connection pool. Pennies.
+  - The person who pays: every held thread-second is billed; they act by capping concurrency,
+    instance count, or the bill itself.
+  - The DNS resolver and the TLS handshake: hang before the read timeout is even armed.
+  - The library maintainer who chose the default, which in most clients is no timeout at all.
+
+  2. Named versus omitted. The problem names exactly one actor, "I", the developer with the config
+  file, plus one object, the client. Everyone above is omitted, most consequentially the caller,
+  the human, the proxy in the middle, and the retry loop.
+
+  3. Fastest and cheapest of the omitted: the human at the keyboard. One keystroke, under a second,
+  no cost, and it does not reduce load, it doubles it. Second place is the proxy, which acts with
+  no human involved at all and silently wins every disagreement with whatever number I pick.
+
+  4. The design when the impatient caller is the primary control. If the human gives up before my
+  timeout fires, my number is decoration: I am still holding a socket, a thread, a pool slot, and
+  an upstream transaction for work nobody will read, while their retry has already started a second
+  copy. So the timeout stops being a property of my client and becomes a budget I inherit. Take the
+  deadline (or remaining milliseconds) off the inbound request; at the true edge, synthesize it from
+  what the human will actually tolerate. Store it as an absolute instant, not a duration, so it
+  cannot be reset by accident at each hop. Pass the remainder, minus elapsed, to every call I make.
+  Refuse to start a call that cannot plausibly finish inside the remainder, and fail immediately
+  instead of hopefully. Bind client disconnect to cancellation that genuinely closes the socket.
+  Constants survive only as floors for the phases a deadline cannot sensibly govern and for calls
+  with no inbound deadline: a small fixed fence on connect and TLS (a second or two, since a
+  handshake that slow will not get faster), and a pool-acquire timeout so queueing shows up as
+  queueing. Finally, find out what the proxy's limit actually is and keep every derived deadline
+  strictly under it, so my code emits the error with a trace id rather than the proxy emitting a
+  naked 504 that tells nobody anything.
+forecloses:
+  - >-
+    A single tuned read timeout in config. The incident review that ends in "change 30s to 10s" is
+    off the table, because there is no longer one number to change.
+  - >-
+    Unconditional retries inside the client. A retry becomes legal only when the inherited deadline
+    still has room, so "always retry twice with backoff" is ruled out.
+  - >-
+    Sharing one client between user-facing calls and background jobs. Work with no caller has no
+    deadline to inherit, so it needs its own separately and explicitly bounded client.
+falsifier: >-
+  Add one counter: on every timeout firing, record whether the caller's connection was still open,
+  and grep the ingress config and the call path for any deadline or remaining-budget value being
+  passed in. If most timeouts fire with the caller already gone (nothing to inherit downstream of a
+  vanished caller) and nothing upstream ever passes a deadline because this is a single edge hop,
+  then there is no budget to propagate and plain constants are correct. One counter and an
+  afternoon.
+missing_actor: >-
+  The human at the keyboard, who can press cancel or refresh in under a second at zero cost,
+  orphaning the in-flight request and doubling load on the very upstream the timeout was meant to
+  protect.
+confidence: medium
+```

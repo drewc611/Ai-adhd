@@ -1,0 +1,108 @@
+{
+  "budget": {
+    "counts": {
+      "ceilings": {
+        "max_ngrams": 60000000,
+        "max_rss_mb": 11000,
+        "max_seconds": 2400.0,
+        "max_tokens": 20000000
+      },
+      "checks": 997,
+      "peak_rss_mb": 3245,
+      "seconds": 185.8,
+      "stopped_because": "token ceiling: 20,000,007 >= 20,000,000",
+      "tokens": 20000007
+    },
+    "vocabulary": {
+      "ceilings": {
+        "max_ngrams": 60000000,
+        "max_rss_mb": 11000,
+        "max_seconds": 2400.0,
+        "max_tokens": 20000000
+      },
+      "checks": 997,
+      "peak_rss_mb": 3245,
+      "seconds": 185.81,
+      "stopped_because": "token ceiling: 20,000,007 >= 20,000,000",
+      "tokens": 20000007
+    }
+  },
+  "corpus_fingerprint": "080865e040e7b88d",
+  "discounts": [
+    [
+      0.2661,
+      0.8144,
+      1.2708
+    ],
+    [
+      0.6646,
+      1.1145,
+      1.4931
+    ],
+    [
+      0.7952,
+      1.1951,
+      1.4676
+    ],
+    [
+      0.692,
+      1.3179,
+      1.5347
+    ]
+  ],
+  "documents": 7322,
+  "min_count": 3,
+  "model": "models/e8c-v1.kn.gz",
+  "ngrams": 13284057,
+  "oov_rate": 0.02496,
+  "order": 4,
+  "python": "3.11.15",
+  "seconds": 185.8,
+  "sentences": 899889,
+  "sources": [
+    {
+      "bytes": 335047210,
+      "files": 6330,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "rfc",
+      "path": "analysis/corpora/rfc",
+      "split": "train"
+    },
+    {
+      "bytes": 11785368,
+      "files": 615,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "pep",
+      "path": "analysis/corpora/pep",
+      "split": "train"
+    },
+    {
+      "bytes": 3016476,
+      "files": 323,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "eip",
+      "path": "analysis/corpora/eip",
+      "split": "train"
+    },
+    {
+      "bytes": 882724,
+      "files": 54,
+      "frozen": "8e2d77cbe8901b1e",
+      "name": "erc",
+      "path": "analysis/corpora/erc",
+      "split": "train"
+    }
+  ],
+  "split": {
+    "frozen": "8e2d77cbe8901b1e",
+    "side": "train"
+  },
+  "tokens_seen": 20000007,
+  "vocab_size": 16384,
+  "vocab_truncated": {
+    "tokens": 409500,
+    "types": 55219
+  },
+  "vocabulary_covers_counts": true,
+  "vocabulary_fingerprint": "080865e040e7b88d"
+}

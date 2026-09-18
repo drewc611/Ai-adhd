@@ -103,18 +103,21 @@ brief needs. The brief also states its grant so a mismatch is visible.
 
 One wrinkle, found against the Claude Code docs after the first real run: the host refuses to
 launch an agent with zero tools, and `tools: []` is treated as zero. So `adhd-branch`,
-`adhd-critic`, and `adhd-deepen` carry exactly one tool, `TaskList`, which is read only,
-touches no file, reaches no network, and spawns nothing. It is a launch permit, not a
-capability.
+`adhd-critic`, and `adhd-deepen` carry exactly one tool as a launch permit, not a capability.
 
-**The launch permit rests on an untested claim, and this is the honest statement of it.** Read
-only, no file, no network and no spawn are all true and none of them is the question. The
-non-negotiable is that branches never see siblings, and what `TaskList` returns inside a running
-ADHD dispatch has never been observed. An attempt to check it from a subagent in this repository
-returned "tool unavailable", which settles nothing: that subagent was not a plugin agent
-declaring the grant. Until a real plugin run reports what it sees, treat this as the one
-isolation claim in the design that is argued rather than demonstrated. If it turns out to leak,
-the fix is a different launch permit, not a weaker rule.
+**That permit was `TaskList` and is `TodoWrite` since D36.** Read the amendment there: the old
+permit did not resolve at all in one real host, so the three agents could not be launched, and the
+claim below about what it might show a branch is now moot rather than open.
+
+**The launch permit rested on an untested claim, and D36 resolved it by removing the claim.** What
+follows is the statement as it stood, kept because the reasoning is what produced the fix: read
+only, no file, no network and no spawn were all true of `TaskList` and none of them was the
+question. The non-negotiable is that branches never see siblings, and what `TaskList` returns
+inside a running ADHD dispatch was never observed. An attempt to check it from a subagent in this
+repository returned "tool unavailable", which settled nothing: that subagent was not a plugin
+agent declaring the grant. The closing line was "if it turns out to leak, the fix is a different
+launch permit, not a weaker rule", and D36 is that fix, arrived at from the neighbouring failure
+— the permit did not leak, it did not load.
 
 `test/agents.test.ts` checks the grants as an **allowlist**, not a denylist. It was a denylist,
 naming filesystem and network tools, which left every tool nobody had thought of passing
@@ -1036,7 +1039,7 @@ The command allowlist matches the whole command string. Prefix matching on `npm 
 directions, and it failed immediately on the code that had just been written.
 
 `review` was mapped to `adhd-critic` and `diverge` to `adhd-branch`. Both are run agents whose
-grant is fixed by D4 at `TaskList` and nothing else, so the stage grants either had to be empty or
+grant is fixed by D4 at a single launch permit and nothing else, so the stage grants either had to be empty or
 had to widen an agent whose emptiness is the point. Fixed by giving `review` its own agent and
 `diverge` none.
 
@@ -2260,3 +2263,1322 @@ it is.
 
 `train_lstm.py` passes a model factory to the loop in `train_transformer.py` rather than copying it.
 One line differs between training the two classes, and now one line does.
+
+## D25. E8: a point of out-of-vocabulary is worth up to 5.2 perplexity points, and the threshold was 3.4x too loose
+
+**Asked.** Backlog 78, and a code comment that had promised this run since it was written:
+`comparable_heldout` refuses two all-targets perplexities whose held-out OOV rates differ by more than
+one percentage point, and nobody had ever measured what a percentage point was worth.
+
+**Resolved.** It is worth between 2.6 and 5.1 perplexity points on this corpus. The threshold is now
+derived from that rather than chosen, and the derivation makes it **3.3x tighter**.
+
+### The result
+
+Four Kneser-Ney models, order 4, `min_count` 3, one 20,000,007-token read of the train side of frozen
+set `8e2d77cbe8901b1e` — corpus digest `080865e040e7b88d`, no repository prose, D26 — scored on its 366
+held-out documents. The vocabulary cap is the only thing that moves.
+
+| cap | types | held-out OOV | **all targets** | in-vocabulary only |
+|---|---|---|---|---|
+| 8,192 | 8,192 | 5.797% | **30.95** | 32.51 |
+| 16,384 | 16,384 | 4.044% | **35.52** | 36.22 |
+| 32,768 | 32,768 | 3.063% | **39.31** | 39.22 |
+| none | 71,603 | 2.391% | **42.77** | 41.76 |
+
+Least squares over the four all-targets points: **-3.391 perplexity points per percentage point of
+OOV**, r-squared 0.977. Monotone, and steep: the whole range of this repository's vocabulary choices
+moves perplexity by 38%.
+
+These are the post-D26 figures. The sweep was measured twice — once on the corpus that still contained
+this repository's own prose and once without it, after that prose turned out to be why the run could not
+be repeated. The two agree closely, which is the reassuring part: 30.73 against 30.95 at the 8,192 cap,
+42.50 against 42.77 uncapped, on 0.105% less text. `analysis/records/e8-v*-pre-d26.json` hold the first
+measurement, and the section at the end of this entry is what happened in between.
+
+### The prediction was half right, which is the half that matters least
+
+E8 predicted the sign and the magnitude and one cell. The sign is right and the fitted magnitude is
+inside the registered 3-to-10 band. **The cell prediction is wrong**: V3 was registered at "between 45
+and 70 at roughly 2% held-out OOV" and came in at **42.77** at 2.391%, outside by 2.2 points.
+
+So the direction I argued for against backlog 78's "not obvious" was correct — more vocabulary is
+worse on all targets, reliably — and my sense of how much was 5% optimistic at the one point I was
+specific about. Worth saying plainly because the registration's whole purpose is that the specific
+claim is the falsifiable one. Both measurements of the sweep miss that range in the same direction, so
+it is not a corpus artefact.
+
+### The registered linearity test does not discriminate, and that is the more useful finding
+
+E8 registered a rule: "If the pairwise slopes disagree by more than 2x the relationship is not linear
+in OOV and the threshold is stated as a curve or as the worst case, not as one number."
+
+The six pairwise slopes are -2.610, -3.059, -3.471, -3.861, -4.384 and **-5.148**, a spread of
+**1.972x** — under the line, so the rule says use the fit. On the pre-D26 corpus the same four cells
+gave -2.583 to -5.179, a spread of **2.005x** — over the line, so the rule said use the worst case.
+
+**The two corpora differ by 0.105% and the rule's verdict flips between them.** A test whose answer
+turns on a change three orders of magnitude smaller than the effect it is ruling about is not selecting
+between the two numbers; it is a coin toss with a threshold painted on it. I registered it in good faith
+and it did not survive being run twice.
+
+So the threshold takes **the worst pairwise slope unconditionally**, and the reason is that it is the
+conservative side of a coin toss rather than that a rule chose it. `oov_slope.py` records
+`slope_used: "worst_pairwise"` and reports `linear` as a reading wired to nothing, with the comment
+saying why. Had the first sweep come in at 1.99x I would have used the fit and never learned this, which
+is the strongest argument available for measuring the same thing twice.
+
+It is also the right worst case rather than an arbitrary one. The steepest pair is 32,768 against
+71,603 — the *highest*-vocabulary pair, in both measurements. The marginal cost of a point of OOV is
+largest where OOV is smallest, which is the regime the shipped 148,353-type model sits in and the regime
+where a refusal matters most.
+
+### Half of the reason written beside the threshold was wrong
+
+The comment said the smaller vocabulary gets a discount because every OOV target is charged as a
+prediction of `<unk>` and `<unk>` is among the most frequent symbols a closed-vocabulary model holds.
+Scoring all four models over in-vocabulary targets only tests that directly, and it does not hold
+throughout:
+
+- At 8,192 types, dropping the OOV targets moves perplexity **up**, 30.95 to 32.51. `<unk>` was
+  cheaper than the average real token by 1.56 points. The discount is real.
+- At 71,603 types, dropping them moves perplexity **down**, 42.77 to 41.76. `<unk>` is now *dearer*
+  than the average real token.
+
+The crossover is near 3% OOV, and it is where it should be: `<unk>`'s training frequency *is* the OOV
+rate, so a model at 2.4% OOV holds `<unk>` as an uncommon symbol. Meanwhile all-targets perplexity
+rises monotonically across the whole sweep. **So the `<unk>` discount is real, small, and changes
+sign, and it is not the dominant term.** The dominant term is that a larger vocabulary has thousands
+more rare words left to predict instead of folding them into one symbol.
+
+The refusal was right. One of its two stated reasons was not, and at the vocabularies this repository
+actually ships it was the wrong one.
+
+### What the threshold is now
+
+`allowed_oov_gap(a, b)` in `evaluate.py`, clamped at both ends:
+
+    0.05 * min(perplexity_a, perplexity_b) / 5.148 / 100,  floored at 0.0023,  capped at 0.01
+
+Perplexity-relative because the measured slope is in absolute points and the question is what share of
+*this* comparison a vocabulary gap could account for. 5% of the smaller score is the judgement that
+remains, and it is now a judgement about one measured quantity rather than about an effect of unknown
+size. At E8's own base of 30.95 the gap comes out at **0.30 percentage points**, against the one
+percentage point it replaces.
+
+Both clamps earn their place:
+
+- **Floored just above E4's 0.22 points.** E4 compared `min_count` 2 against 3 at 0.63% and 0.85% OOV
+  and that comparison was sound. The derived gap clears the floor at any perplexity above about 23.7,
+  so it does not bind today — it is there so a future recalibration cannot silently invalidate E4. It is
+  0.23 rather than 0.22 for a reason recorded at the end of D26: set to E4's gap exactly, it refused E4.
+- **Capped at the old 0.01.** The derived gap grows with perplexity, and E8 measured the slope near
+  perplexity 31 on one model class. Letting it scale to E7's LSTM at 159.3 would grant a 1.5-point gap
+  on the strength of an experiment that never went near there. Capping at the previous unconditional
+  value makes E8 **a strict tightening at every perplexity and a loosening at none**, which is the
+  only honest direction for one experiment to move a guard.
+
+Nothing published moves. E6's A against A′ (4.71% against 5.80%) was refused before and is refused
+now. A′ against B, and both against E7's C, all sit at 5.798% and pass. E4 passes.
+
+### Writing the registration changed the corpus the registration was about
+
+E8 planned to reuse E6's cell A′ for the 8,192 point, and registered the expected uncapped type count
+as arithmetic from A′'s record: 8,192 kept plus 63,691 discarded is 71,883. The run reported
+**71,934**, fifty-one too many. (On the stable corpus of D26 it is 71,603, because the prose that caused
+the discrepancy contributed 331 types of its own.)
+
+The cause is that `docs/`, `prompts/` and `README.md` are sources in `corpora.yaml`. The commit
+carrying the E8 registration added 94 lines to `docs/EXPERIMENTS.md`, and D22 had added
+`docs/SECURITY-OPS.md` as a fourteenth document in `docs/` since A′ was trained. Together they moved
+the training read from 20,000,029 tokens to 20,000,139.
+
+**So the sweep as registered was invalid, and its own fixed reading said so.** The repair was to
+retrain the 8,192 cell rather than reuse A′, and it reproduced A′'s 30.7 to 0.03 perplexity points on a
+corpus 110 tokens and one whole document different — 0.1% against an effect of 38%.
+
+The part that is not reassuring is that **nothing in the code would have said a word.** The only
+reason it was caught is that a number had been registered in advance, and registering a number in
+advance is not a mechanism. So:
+
+- `sentence_tokens` now takes an optional digest and updates it with every token it yields, in order.
+- Both trainers record `corpus_fingerprint` and `vocabulary_fingerprint` from it.
+- The n-gram trainer records `vocabulary_covers_counts`, which makes mechanical a property this
+  module's docstring has asserted since it was written and nothing checked: that both passes read the
+  same prefix. Equal token counts were the only evidence, and equal token counts are not equal tokens.
+- `comparable_training(a, b)` refuses to treat two models as trained on the same text when they were
+  not, in the four ways that can happen.
+
+Over the token stream rather than over document content, deliberately. `HeldOut.fingerprint` hashes
+content and therefore cannot see a tokenizer change — the failure that moved the shipped baseline from
+25.65 to 25.82 with every other field agreeing. A digest over tokens cannot miss it, and it stops
+exactly where the budget stopped, which a per-document digest cannot do.
+
+Writing the test for it found two more things about the read, both worth knowing while looking at a
+digest. The ceiling is polled rather than enforced, so at the default 20,000-token interval a
+50-token ceiling over an 800-token corpus is never consulted. And `sentences()` splits on newlines
+rather than on sentence punctuation, so a document written as one long line is a single sentence that
+**no ceiling can cut**. The first version of that test made both mistakes at once and passed.
+
+### The fingerprint found a fixed point, and D26 closes it
+
+Retraining the four cells with the mechanism in place did **not** reproduce them, and it did something
+worse than drift: because the retrain ran while this file and `docs/EXPERIMENTS.md` were being written,
+each of the four cells read a *different* corpus. `analysis/records/e8-v*-drift.json` carry all four.
+
+| cell | corpus digest | types | n-grams against the scored run | tokens read |
+|---|---|---|---|---|
+| v0 | `eebd3264d2ed8810` | 8,192 | 12,392,247 (**+1**) | 20,000,139 |
+| v1 | `d995281acd1e576f` | 16,384 | 13,382,525 (**+2,440**) | 20,000,016 |
+| v2 | `ec1b44de8a26315d` | 32,768 | 14,128,112 (**+2,868**) | 20,000,007 |
+| v3 | `b81760427e2006be` | 71,961 (**+27**) | 14,870,934 (**+4,807**) | 20,000,007 |
+
+Four digests, monotone in write-up order, and `comparable_training` refuses all six pairs. **The
+mechanism's first real finding is that the run which built it was invalid.** A first estimate taken off
+v0 alone put the drift at one n-gram in 12.4 million; that was the cell retrained before most of this
+section existed, and quoting it would have understated the effect by three orders of magnitude.
+
+This is not an accident to tidy up. **A digest can never cover a corpus state that includes its own
+description.** Writing down a measurement changes the corpus the measurement came from, so re-deriving
+a published cell exactly is impossible by construction while the repository's own prose is training
+data — and worse, a long enough run cannot even hold one corpus still across its own cells.
+
+What E8's own numbers still support, stated exactly. The four **scored** cells were trained back to
+back with no document edited between them, they agree byte for byte on every source, they all read
+20,000,139 tokens, and the frozen held-out set contains no repository prose at all — 366 documents,
+every one `rfc/`, `pep/`, `eip/` or `erc/`. So the **sweep is internally valid and the slope stands.**
+The drift table above is what the corpus did *afterwards*, while the result was being written up.
+
+`cut_heldout.py` had already seen half of this. It has excluded these three sources from the frozen set
+since it was written, on the reasoning that "a frozen set fixes *which* documents are scored, it cannot
+fix what they say" — and then concluded: "They stay in the training half. Repository prose is legitimate
+training text; it is only unfit as a *test* set, and those are different jobs."
+
+**That conclusion is wrong, and the table above is why.** The hazard was never specific to the test set.
+Mutable text anywhere in a read makes the read unrepeatable, and a training read is the one thing every
+published figure depends on. D26 takes it out.
+
+## D26. The repository's own prose comes out of every measurement
+
+**Asked.** Fix it — the fixed point D25 found, where writing down a measurement changes the corpus the
+measurement came from.
+
+**Resolved.** `corpora.yaml` marks `repo-docs`, `repo-prompts` and `repo-readme` **`mutable: true`**, and
+no measurement reads a mutable source. The three entries stay in the manifest, because they are what
+makes a clean checkout trainable with nothing downloaded, and that property is worth keeping. What
+changes is that the trainers read `Library.stable()` unless `--include-mutable-sources` says otherwise.
+
+### The argument was already written down, and it stopped one step short
+
+`scripts/cut_heldout.py` has excluded these three sources from the frozen evaluation set since it was
+written. Its reasoning is exactly right: "A frozen set fixes *which* documents are scored. It cannot fix
+what they say, and these are the documents this repository rewrites." The first cut had put
+`docs/ARCHITECTURE.md` and `README.md` in the set, so recording a decision would have moved the next
+week's perplexity for a reason unrelated to the model, silently, because the fingerprint is over names.
+
+Then it concluded: **"They stay in the training half. Repository prose is legitimate training text; it is
+only unfit as a *test* set, and those are different jobs."**
+
+They are different jobs, and the hazard belongs to neither of them. It belongs to **repeatability**, and a
+training read needs that at least as much as a test set does. D25's table is the demonstration: retraining
+E8's four cells while E8's own write-up was being committed moved them by up to 4,807 n-grams and 27 types,
+landed each cell on a different corpus digest, and `comparable_training` refuses all six pairs. The
+mechanism's first real finding was that the run which motivated it could not be repeated.
+
+### What it costs, and what it does not
+
+**0.105% of the manifest by bytes** — 369,505 of 351,101,283 — so as data it is a rounding error. What it
+bought was licence comfort: it is the only source in the manifest whose terms are unambiguously this
+repository's own. That comfort is unaffected, because the entries remain and a clean checkout still trains
+on them; they are simply not what any published number comes from.
+
+Every figure measured before this change read that prose. Rather than leave them looking current:
+
+- **E8 is re-measured on the stable corpus.** It is the experiment in flight and the one whose numbers
+  this commit publishes, so it is the one that must not carry an asterisk.
+- **25.82, E6's four cells and E7's LSTM are pre-D26 measurements** and are marked as such where they are
+  quoted. Re-measuring them is real compute — the transformer alone is 2.33 hours per epoch — and backlog
+  82 is the item. Nothing about them is wrong; they read 0.105% more text than a run today would, and the
+  drift that matters is that they cannot be re-derived exactly.
+
+### Where the rule lives
+
+On the source, as `mutable: true`, and nowhere else. It had been a set literal in `cut_heldout.py` and
+repeated in two tests — three copies of one fact about the corpus, which is how copies of a fact start
+disagreeing. `Library.mutable_names()` and `Library.stable()` read the manifest, `cut_heldout.py` reads
+`mutable_names()`, and both tests read it too.
+
+The exclusion sits in the CLI rather than in `train()`. `train()` takes whatever library it is handed on
+purpose: E2b's leave-one-source-out evaluation depends on being able to hand it an arbitrary one. The CLI
+is what every measurement in this repository actually invokes, so that is where the default belongs, and
+`tests/test_corpus_fingerprint.py` asserts a CLI run's record names no mutable source.
+
+One case needed a real error rather than a silent empty read: a manifest whose every source is mutable now
+exits saying there is nothing repeatable to train on and naming the opt-in, instead of training on nothing.
+
+### A floating-point trap, caught by an existing test
+
+Setting the threshold floor to E4's gap exactly refused E4. `0.0085 - 0.0063` is `0.0022000000000000006`
+in binary floating point and the refusal is a strict `>`, so a floor of `0.0022` voided the comparison it
+was written to protect, by six parts in 10^19. `test_the_min_count_pair_e4_compared_stays_comparable`
+caught it on the first run after D25 changed that line. The floor is `0.0023` — just above E4's gap, with
+the reason recorded next to it, and `E4_GAP` now computed from the two rates rather than typed as a
+literal.
+
+## D27. Backlog 82: every pre-D26 figure re-measured, and every conclusion survives
+
+**Asked.** D26 took the repository's own prose out of every measurement, which left 25.82, E6's cells and
+E7's LSTM describing a corpus the manifest no longer reads. Backlog 82 is the re-measurement.
+
+**Resolved.** All of them, on the stable corpus. Nothing moved by more than 3%, no ratio left its
+registered band, and the shipped figure reproduced exactly.
+
+| cell | pre-D26 | **post-D26** | change |
+|---|---|---|---|
+| shipped Kneser-Ney, 148k types | 25.82 | **25.82** | −0.02% |
+| E6 cell A, cap 8,192, 64M tokens | 19.9 | **19.94** | +0.22% |
+| E6 cell A′, cap 8,192, 20M tokens | 30.7 | **30.95** | +0.81% |
+| E6 cell B, transformer | 64.1 | **64.29** | +0.29% |
+| E7 cell C, LSTM | 159.3 | **154.81** | −2.82% |
+
+All five on frozen set `8e2d77cbe8901b1e`, 366 documents, 3,443,116 tokens, fingerprint
+`1446762140db7f1a`, nothing truncated. The n-gram cells read corpus `de7c24b2218ad055` and the neural
+cells `50870d804f8abb03` — different digests because they read different amounts of the same corpus,
+which is what a 20M-token cap means.
+
+**A′ needed no run.** `e8-v0` is order 4, `min_count` 3, cap 8,192 on the train side of the same frozen
+set, which is A′'s configuration exactly, so E8's sweep had already re-measured it.
+
+### The conclusions
+
+| claim | pre-D26 | post-D26 | registered band |
+|---|---|---|---|
+| E6: A′ against B | 2.086x | **2.077x** | 1.5x–3x, holds |
+| E7: B against C | 2.485x | **2.408x** | — |
+| E7: A′ against C | 5.184x | **5.002x** | — |
+
+E7's registered prediction put C between 40 and 60. It is **154.81**, still outside by 2.6x and still on
+the side that narrows E6 to transformers rather than generalising it to neural models. Being wrong
+twice, in the same direction, on two corpora, is a stronger result than being wrong once.
+
+**The shipped model's 25.82 reproduced to two decimals** across 73,496 fewer training tokens and 239
+fewer vocabulary types. That is the most reassuring number here and it is worth saying why it is not
+luck: the frozen held-out set never contained repository prose, so removing that prose changes what the
+model read and not what it was asked.
+
+### What the re-measurement cost, in defects it found
+
+Three, none of them in the figures:
+
+- **D26 had missed a trainer.** `train_lstm.py` carries its own `main()` with its own copy of the
+  library selection, and D26 patched the other two. Cell C's first attempt trained on the prose — the
+  exact thing D26 exists to prevent, in the commit claiming to prevent it. Selection lives once in
+  `selection.py` now, with a test parameterised over all three entry points and another asserting no
+  trainer loads the library itself.
+- **`score_heldout.py` held two models at once.** Rebinding the loop variable frees the previous model
+  only after the next one is built, so four models peaked at cell A's 32.1M n-grams beside the shipped
+  model's 40.2M and the cgroup killed it at 13.9GB mid-load — no traceback, an empty JSON file. The
+  resident-set ceiling cannot catch that: it is polled inside `evaluate`, so it governs scoring and not
+  loading.
+- **Two ReDoS bounds had no teeth**, found while fixing a timing test that failed under the
+  re-measurement's own CPU load. At a 4x input ratio a deliberately quadratic scan ran 16.32x and
+  14.97x against a 20x bound, so both tests caught exponential blowup and waved quadratic through —
+  which is the shape a ReDoS takes. At 8x the cases separate and the bound is 30x between them.
+
+The figures were never wrong. Everything that was wrong was a mechanism around them, and all three
+surfaced only because the run actually ran.
+
+### Where the old numbers stay
+
+D21 and D24 keep their text. They record what was measured when they were written, the same treatment
+D19's 25.65 has and the same reason `former_ids` and `evals/replay-baseline.json` exist: a recorded
+result is what the reader was shown. This entry is what supersedes them, `analysis/records/b82-*.json`
+carry the new runs, and the pre-D26 markers come off the READMEs because the figures they warned about
+no longer describe anything published.
+
+---
+
+## D28. E9: the transformer loses by 5.52x at the n-gram's own vocabulary, so the cap was not the excuse
+
+**Asked.** D21 measured the transformer losing to Kneser-Ney by 2.09x, and to get there E6 had to
+match the vocabularies by *capping the n-gram* to 8,192 types. Both models were then answering a
+question neither would have chosen, and nothing in D21 or D24 said whether the transformer's loss was
+the architecture or the cap it had been forced into. Backlog 79 is the cell that removes the excuse:
+the transformer at 148,114 types, the shipped model's own vocabulary, made affordable by a sampled
+softmax at training time and scored under the full normalised distribution.
+
+**Resolved. It loses by more.**
+
+| | shipped Kneser-Ney | cell D transformer |
+|---|---|---|
+| types | 148,114 | 148,114 |
+| training tokens | 64,347,232 | 18,341,790 |
+| held-out OOV | 0.915101% | 0.915101% |
+| **held-out perplexity, all targets** | **25.815** | **142.408** |
+| ratio | — | **5.516x** |
+
+Both on frozen set fingerprint `1446762140db7f1a`, 366 documents, 3,443,116 tokens, 3,411,608 in
+vocabulary, neither truncated. `comparable_heldout` accepts the pair: the OOV rates are not close but
+*identical to every digit*, because both models draw the same types and the same tokens therefore fall
+outside on the same set. The gap is zero against a 0.2507% budget.
+
+That acceptance is the entire point of the cell. E6's comparison was possible only by handicapping the
+n-gram; this one needs no handicap, and the conclusion it reaches is the stronger version of D21's:
+**the 8,192-type cap was not flattering the n-gram.** Given its own vocabulary the transformer does
+worse, not better.
+
+### The three things this does not say
+
+**It is not 5.52x on equal text.** Cell D read 18,341,790 tokens against the shipped model's
+64,347,232 — 3.51x less — because the run was capped at 20M training tokens by an amendment made
+before any result existed, on a measured 4.7-hour full epoch in a container that had already restarted
+once mid-run. The figure is "a transformer on 3.5x less text loses by 5.5x". Whether it closes the gap
+on equal text is unanswered and this cell cannot answer it.
+
+**The training signal was a noisy estimate of the loss being minimised.** The sampled-softmax gap is
+**0.679 nats** — final training loss 4.6145 under the estimator against 3.9352 under the full softmax
+on the same batch. Scoring never uses the estimator, so the 142.41 is unaffected, and this is why D2's
+"a sampled softmax at scoring time is a different measurement wearing the same name" was worth two
+hours of wall clock. But a cell trained against the full softmax might land elsewhere, and that is the
+honest caveat, not a footnote.
+
+**It says nothing about the two transformers.** The amendment claimed capping cell D bought a
+comparison against E6's cell B at the same text and different vocabularies. `comparable_heldout`
+refuses that pair — 5.80% against 0.92% OOV, a 4.88% gap against the 0.62% those perplexities carry,
+so up to 25.1 of the 78.1 points between 64.285 and 142.408 are the vocabulary rather than the model.
+The registered claim was checkable, was checked, and was wrong. The rescue is `shared_vocabulary`, and
+it is exact here because cell B's 8,192 types are a strict subset of cell D's 148,114 with zero
+B-only types.
+
+**Restricted, the answer is 1.291x and not 2.215x.** Re-scored over the same 8,192 targets, cell B is
+**69.120** and cell D is **89.229**, and `comparable_heldout` accepts that pair. **58.0 of the 78.1
+points between them — 74% — was the question rather than the model.** Both figures move in opposite
+directions, which is the mechanism: cell B *rises* from 64.285 because it loses `<unk>` targets that
+were cheap for it, and cell D *falls* from 142.408 because it stops being charged for 140,000 rare
+types it alone had to predict. Neither model changed.
+
+What survives is the real effect and it is modest: **a transformer carrying 140,000 rare types is
+1.29x worse at the common ones** than one that spent all its capacity on 8,192. Capacity dilution
+exists, and the refused comparison overstated it by 1.7x.
+
+None of this touches the 5.516x above. That pair needed no restriction: both models already sat at the
+same 0.915101% out-of-vocabulary, which is why the cell was worth running.
+
+### What the cell found besides its number
+
+**A model this repository trained could not be loaded by this repository.** `MAX_LINE_BYTES` was a
+64MB constant justified by a comment about an 8,192 × 128 matrix; cell D's `tok` line is 204,355,608
+bytes, and every other line in the file is under 1MB. Exactly one line in the format scales with
+vocabulary and nothing had ever pushed on it. The bound is derived from the header's declared shape
+now — safe because the header is validated and its parameter count checked against a memory ceiling
+before any body line is read, and a *tightening* for every earlier model, since 8,192 × 128 derives
+25MB against the flat 64MB it replaces.
+
+**The scoring default would have reported a prefix as a perplexity.** `score_heldout.py` defaults
+`--max-seconds` to 3600; cell D's scoring needs about 122 minutes, measured at 471 positions per
+second before launch. The default would have stopped at 60 minutes with `truncated` set, and that
+number would have been compared against the shipped model's complete one.
+
+**`evaluate(shared_vocabulary=...)` had no route from a shell.** Built under backlog 77 for exactly
+the comparison E9 needed, and nothing on `score_heldout.py`'s command line could pass it. It takes
+`--shared-vocabulary MODEL` now.
+
+**The pre-registration slipped by fifteen seconds.** The training process started 09:20:10 and the
+amendment commit landed 09:20:25, against a rule in `docs/EXPERIMENTS.md` saying that file is not
+edited after a run starts. No result existed at either moment and no reading changed. Recorded while
+cell D was at step 4,400 of 4,882, before any number existed, because a discipline reported only when
+the breach is serious is not a discipline.
+
+### The shipped model
+
+Unchanged, and now for a better-supported reason than D21 had. The background model stays Kneser-Ney.
+
+---
+
+## D29. Backlog 76: pruning costs 1.355x on held-out text, not the 2.9x D14 recorded, and my prediction was wrong
+
+**Asked.** D14 priced count-pruning at **2.9x** perplexity — 17.4 against 6.06 — and D16 then
+established that both of those are memorisation scores: each model trained on the whole manifest and
+was scored on a stride of it. A ratio between two numbers that measure nothing about unseen text is
+not a measurement of anything, so `agents/adhd-governor.md` has said since then not to quote 2.9x as
+measured. Backlog 76 is the re-measurement.
+
+**Resolved. 1.355x.**
+
+| | unpruned | pruned |
+|---|---|---|
+| n-grams | 40,206,913 | **16,412,030** (40.8% kept, `prunes` 2) |
+| types | 148,114 | 148,114 |
+| training tokens | 64,347,232 | 64,347,232 |
+| corpus digest | `de7c24b2218ad055` | `de7c24b2218ad055` |
+| held-out OOV | 0.915101% | 0.915101% |
+| **held-out perplexity** | **25.815** | **34.973** |
+
+Both on frozen set `8e2d77cbe8901b1e`, fingerprint `1446762140db7f1a`, 3,443,116 tokens, neither
+truncated. `comparable_heldout` accepts the pair and the OOV gap is exactly zero, because pruning
+removes n-grams and not types — the vocabulary is untouched, so the two models are asked the identical
+question. The unpruned cell is `b82-shipped` unchanged, which is why only one run was needed.
+
+### The prediction was wrong, and the direction is the interesting part
+
+Backlog 76 recorded, before running: *"the real cost is **larger** than 2.9x, because a pruned model
+has less of the tail to memorise and also less to generalise from."* It is **less than half** of it.
+
+The reason is the one D16 already gave and I did not follow through. Pruning deletes the count-1
+n-grams — the ones seen exactly once in training. On a memorisation test those are precisely what the
+score asks about, because the test text *is* the training text, so deleting them looks catastrophic
+and 2.9x is what that looks like. On text the model has never seen, an n-gram seen once in training
+was mostly not going to recur anyway. **2.9x measured how much memorisation the pruning destroyed**,
+which is exactly the quantity D16 said those two numbers were made of.
+
+So the correction is larger than a re-measurement: the old figure was not merely unverified, it was
+measuring a different thing, and the argument for why the true cost would be *higher* was reasoning
+about the memorisation case without noticing it.
+
+**What stays true.** Pruning is still not free — a third more perplexity for 59% fewer n-grams is a
+real trade and the governor should still present it as one. What changes is the size, and that the
+number is now about unseen text.
+
+### A gap the run found in the record
+
+`--max-ngrams` does not truncate the corpus read, as its name suggests and as I assumed until I read
+the counting loop: it triggers **count-1 pruning**, dropping every singleton n-gram, up to three
+times. Both b76 cells read all 64.5M tokens with `stopped_because: null`.
+
+Nothing on the training record said whether a model had been pruned. `ngrams` alone cannot tell a
+small model from a pruned one, and the two original b76 cells differ by 24M n-grams with nothing on
+either record explaining why. `TrainingRecord.prunes` now carries it — the same gap `min_count` had,
+fixed the same way, and this decision is the one that needed it.
+
+The original b76 pair is superseded rather than used: those models predate the corpus fingerprint, and
+their token counts differ by 846 and their vocabularies by one type, so `comparable_training` would
+refuse them. They read different text, which is the D26 hazard, and it is why this decision retrained
+rather than scored what was on disk.
+
+---
+
+## D30. Backlog 84: an unparseable branch artifact aborts the run, like every other artifact that shows nothing
+
+**Asked.** Item 37 found the kernel treating four shapes of malformed artifact two different ways. An
+artifact carrying no `problem_hash` — prose, an empty file, a document of the wrong shape — aborts the
+run. An artifact that will not parse at all was *pruned*: it cost one branch and the run continued on
+four. Item 37 recorded the split as intentional rather than deciding it, and backlog 84 is the
+decision.
+
+**Resolved. Both abort.** `validateBranchArtifact` throws `RunAbort("UNPARSEABLE")` on a parse
+failure, alongside the `HASH_MISMATCH` the other three already raised.
+
+### Why the split had no defence
+
+**The lenient case was the one where less is known.** A missing hash aborts because nothing shows the
+branch addressed *this* problem. An artifact that will not parse shows strictly less than that: not a
+wrong answer to the right problem, not an answer at all. Treating it more gently inverted the
+severity of the two.
+
+**And it moved an arithmetic nobody chose to move.** `monoculture_fraction` is 0.8. One cluster of
+four branches is a monoculture at n=4 and sits exactly *on* the threshold at n=5, so pruning a branch
+silently changed the denominator of a run-level verdict. A run that lost a branch to a parse error was
+scored under a different rule from the one its plan was written for, and nothing said so.
+
+### What is kept
+
+**The parser's own message, down to the column.** It travels on the abort reason now rather than in
+the pruned block — `branch DOOR_KEEPER returned text that is not valid YAML: ... at line 1, column 12`
+— and the reason states why this is an abort and not a prune, because a reader who knew the old
+behaviour needs the argument and not only the new verdict.
+
+**Two distinct codes**, because the fixes differ. `HASH_MISMATCH` means a branch answered without
+echoing what it was asked. `UNPARSEABLE` means there is nothing there to check. Same outcome,
+different thing to go and look at.
+
+**`ALL_INVALID` stays reachable** from a pack whose artifacts parse and fail the schema, which is a
+third failure and not this one.
+
+### What this costs, stated plainly
+
+One flaky subagent now ends a run that has already paid for four branches. That is a real cost and it
+is the argument the other way. It is accepted because the alternative is a run scored under a rule its
+plan did not declare, and because D5 means the spend was consented to for a five-branch run rather
+than for whatever subset came back parseable.
+
+### The tests that changed
+
+Three tests in `test/malformed.test.ts` pinned the old behaviour and now pin the new, with the reason
+for the change in place. That file is the record of both: item 37 established what the kernel did,
+this decision establishes what it should do, and the diff between them is the argument.
+
+---
+
+## D31. Backlog 77: reading the genre is worth 3.04x, more than D17's 2.83x, and the vocabulary was hiding it
+
+**Asked.** D17 measured **2.83x** between a model that read 584 PEPs and one that read none, on the
+same 31 held-out PEPs, and attributed all of it to reading the genre. Three things were wrong with
+that pair. `min_count` was **2 against 3**, so the never-seen model carried *more* rare words and the
+out-of-vocabulary gap was that difference plus the PEP difference added together. One model trained on
+the whole manifest and the other on no split at all. And D25 retroactively **refuses** the comparison:
+1.60 percentage points of OOV is three times what those perplexities can carry.
+
+Backlog 77 is the controlled re-measurement.
+
+**Resolved. 3.036x, and the correction runs the other way from the one I expected.**
+
+| | shipped, read 584 PEPs | nopep, read none | ratio |
+|---|---|---|---|
+| all targets | 53.422 | 147.467 | 2.760x — **refused** |
+| **restricted to the shared vocabulary** | **49.066** | **148.983** | **3.036x — comparable** |
+
+Both on the 31 held-out PEPs of frozen set `8e2d77cbe8901b1e`, 128,856 tokens, neither truncated, both
+at `min_count` 3, both on the train side of the same split. `nopep` is `corpora.yaml` with the `pep`
+source removed and nothing else changed.
+
+### The gap widens under restriction, which is the finding
+
+E9's analogous decomposition shrank a 2.215x to 1.291x, because most of that gap was the vocabulary.
+Here it goes **2.760x to 3.036x**. Restricting both models to the words they share does not excuse the
+never-seen model; it convicts it further.
+
+The two figures move in opposite directions and each says something:
+
+- **`shipped` falls 53.422 → 49.066.** The targets dropped are words in its vocabulary and not in
+  `nopep`'s — the 6,215 PEP-specific types. Its perplexity *improves* when those are removed, so those
+  words were harder than its average even though it had read them. Knowing a rare word is not the same
+  as predicting it.
+- **`nopep` rises 147.467 → 148.983.** The shared set is its entire vocabulary, so the only targets
+  dropped are ones it would have scored as `<unk>`, and losing them costs it. `<unk>` was cheap, which
+  is the same behaviour E8 measured and E9's cell B showed.
+
+So the answer to the question backlog 77 asked — is the gap vocabulary or modelling — is **mostly
+modelling, and the vocabulary was flattering the weaker model.** D17's 2.83x understated its own
+finding. The claim survives and gets stronger.
+
+### The confound that remains, stated because it is real
+
+`nopep` read **61,708,634** tokens against shipped's 64,347,232 — **4.1% less** text, because removing
+a source removes its words. Part of 3.036x is less text rather than the missing genre, and this pair
+cannot separate those. It is a much smaller asymmetry than E9's 3.5x and it is not zero.
+
+(4.1%, not 4.3%. I wrote 4.3% first, which is how much *more* shipped read than `nopep` — a different
+quantity with the same two numbers in it. The test below this decision recomputes the figure from the
+records and caught it.)
+
+The honest scope: this measures what a model loses by never seeing a genre *and* reading 4.1% less
+text. Holding the token count fixed would mean padding from another source, which changes the mixture
+and introduces a different confound.
+
+### What this does not rescue
+
+`nopep.kn.gz` and `background.kn.gz`, the original D17 pair, stay refused and are superseded rather
+than reinterpreted. Their OOV gap is real and `comparable_heldout` is right to refuse them; this
+decision replaces the measurement instead of arguing with the refusal.
+
+---
+
+## D32. Backlog 68 and 69: the consent gate quotes the observed maximum, and the critic is still not told it may refuse
+
+Two decisions about what the product promises, taken together because both turn on the same
+question: what does a user get told before something irreversible happens.
+
+### Backlog 68: the gate quotes the worst run, not the average one
+
+**Asked.** `adhd cost` showed the D5 preview quoting **2.6x to 3.3x under** what a run costs, across
+seven runs, always low. Setting the figure to the mean makes half of future runs exceed the quote.
+
+**Resolved. The observed maximum, and the preview says "up to".**
+
+`tokens_per_branch_estimate` moves from **12,000 to 51,000**. A five-branch preview now reads
+**520,200** against the worst run on record, **519,482**.
+
+The choice is not statistical. A consent gate is a promise, and a user who agreed to 156,000 tokens
+and spent 519,482 was misled; being misled *upward* costs them nothing. "Order of magnitude" was the
+old label and it described the old figure honestly — 156,000 against a real 407,000 to 519,000 *is* an
+order of magnitude, and was not an estimate.
+
+**The shape was wrong too, and that was the part nobody had noticed.** The old model priced the critic
+at `tpb * n` and deepen at `tpb * ceil(n / 2)`, giving 38/38/23. `adhd cost` measures **49% diverge,
+30% critique, 21% deepen** over the five runs that record a breakdown. So the critic was over-weighted
+by a third and diverge under-weighted, and a total that is right with components that are wrong tells a
+user the wrong thing about which phase to stop before. The components are now proportions of the
+measured split.
+
+**`adhd cost` no longer accuses a gate that has been fixed.** The recorded estimate in each
+`cost.json` is what that run was *quoted*, from the config as it stood then, so the historical ratio
+stays 3.0x forever. The report now also prices the current config against the worst recorded run and
+says which number is which. A warning that outlives its cause is noise, and this is the second one
+this session — the governor's 2.9x caution was the first.
+
+**Three tests.** That the gate never quotes below the worst run on record, which fails when a new run
+exceeds it and is therefore the trigger to raise the figure again; that the components match the
+measured split rather than an invented one; and that the preview says "up to". Verified by reverting
+the config: the first fails with `the gate quotes 122,400 for n=5 against a recorded run of 519,482`.
+
+### Backlog 69: the critic is not told it may refuse
+
+**Asked.** Nothing in `prompts/` mentions refusing, and a test asserts that. The handler catches a
+refusal a critic produces unprompted. Should the option be offered explicitly?
+
+**Resolved. No, and the reason is where the trap lives.** The critique phase is where T1 — the
+consensus trap this repository exists to catch — gets caught. An escape hatch a critic is *told about*
+is easier to take than scoring, and the one place the system cannot afford an easier option is the
+place doing the work.
+
+The argument the other way is real and is recorded rather than dismissed: a critic with no way to say
+"these two artifacts are byte-identical" may invent a score, and an invented score is worse than a
+refusal. What makes the balance fall this way is that the capability already exists — `criticRefusal`
+recognises an unprompted refusal in two shapes and the run handles it — so the choice is only whether
+to *advertise* it. Keeping it unadvertised means a critic reaches for it when scoring is genuinely
+impossible rather than when it is merely hard.
+
+**Nothing changes in code.** The test asserting `prompts/` never mentions refusal stays, and now has a
+decision behind it instead of an absence.
+
+---
+
+## D33. Backlog 71: config overlays, where a reused id replaces the base definition whole
+
+**Asked.** `adhd init` copies the shipped `config/`, which forks it: a team that scaffolds gets the
+library with eleven runs of evidence behind it and then has no way to pull later improvements. An
+overlay fixes that, and its merge semantics are a genuine decision rather than a detail — each answer
+changes what `frame_hash` means for a run under a merged library, and one of them quietly makes
+`adhd frames --drift` unable to say which definition ran.
+
+**Resolved. A reused id replaces the base definition entirely.** Frames, routing classes and rubric
+dimensions all merge by id; nothing merges field by field.
+
+`config/overlay.yaml` under the root, `$ADHD_OVERLAY`, or `--overlay <file>` — in that precedence
+order, reversed. The conventional path matters: an overlay nobody remembers to pass is a fork with
+extra steps.
+
+### Why whole replacement, and what it costs
+
+A field-wise merge makes the definition that ran a function of two files and a merge order, and
+`frame_hash` exists to answer "is this the same definition". Whole replacement keeps that answerable —
+the loaded frame is one object from one file.
+
+The cost is real and was chosen rather than overlooked: **an overlay that wants to change one probe
+must restate the stance, the attacks, the tools and the forbidden list.** That is verbose on purpose. A
+one-line override of a stance is exactly the edit whose provenance nobody can reconstruct six months
+later.
+
+### The provenance the item warned about
+
+The plan records `overlay: { path, hash, replaced_frames, added_frames }`, or `null` on the shipped
+library. Together with the `frame_hash` already on every branch, that separates two facts the drift
+report used to conflate: **"this definition changed since"** and **"that install runs an overlay"**.
+`adhd doctor` says so in two lines — what the overlay replaced, and that `--drift` will report those
+frames as changed against a run from a different library, which is the definition genuinely differing
+rather than a rewrite of history.
+
+`overlay` on the plan schema is optional as well as nullable, so every run recorded before overlays
+existed still validates. Those ran on the shipped library and a missing field says so as clearly as an
+explicit null.
+
+### Two things the build found
+
+**A merged library is cross-checked as a library, not as a base plus a patch.** The overlay is applied
+*before* `crossCheck`, so an overlay whose routing class names a frame it did not define fails at load
+with the same message a hand-edited config would produce. Validating the base and then patching it
+would have let that through.
+
+**Reporting every restated definition as a replacement defeats the report.** An overlay is written by
+copying a list and editing one entry, so most of what it names is identical to the base. The first
+version counted all ten rubric dimensions as replaced when one weight moved — the same failure the
+report exists to prevent, with extra words. Frames now compare by `frame_hash` and everything else by
+canonical JSON, so the report lists only what actually differs. A test pins that an overlay restating
+the library unchanged reports nothing.
+
+### The one silent failure whole replacement does not close
+
+An overlay that edits the rubric without moving `version` is **refused**. `score.json` records
+`rubric_version`, and two installs writing the same version over different weights makes every
+cross-install pass A total look comparable when it is not. The check fires only on a genuine change,
+so restating the rubric unchanged is allowed.
+
+---
+
+## D34. A retired rubric dimension, and the version a run is scored under
+
+Backlog 60 asked for `foreclosure` to be dropped. Its evidence is strong: Krippendorff's alpha
+-0.017 with a 95% interval of [-0.04, +0.00] on 96% exact agreement, so the dimension is unmeasured
+rather than weak, and the output contract already refuses an empty `forecloses`, so the validator
+enforces what the dimension was scoring.
+
+**Decision:** retire it rather than delete it, and score every run under the rubric version it
+declares. Resolved 2026-09-15.
+
+Deleting it was tried first and reverted, because the cost the item recorded was not the cost.
+`validatePassA` rejects any dimension the current rubric does not list, so removing `foreclosure`
+did not make the seven recorded runs *non-comparable* — it made them **unreadable**. Thirteen tests
+failed across `replay`, `learn`, the rubric linter and the corpus rollup, and `adhd why` and the
+viewer went down with them. A rubric edit that silently destroys the archive is not a rubric edit.
+
+So the dimension stays in `config/critic-rubric.yaml`, with its weight, carrying `retired_in: 1`,
+and `dimensionsAt(dimensions, version)` is what everything asks for. A run scored at version 0 keeps
+`foreclosure` in numerator and denominator; a version 1 run has neither, and the critic is never
+asked for it. `plan.json` stamps `rubric_version` at compile for the same reason it stamps
+`frame_hash` and `overlay` (D33): the run carries its own contract, so a later retirement cannot
+rescore it. A plan without the field reads as 0, which every run recorded before today is.
+
+`adhd validate` now says "8 rubric dimensions scored at rubric v1 (1 retired: foreclosure)", because
+"9 dimensions" and "8 scored" are different facts and the bare count overstated the rubric by
+exactly the dimensions nothing reads.
+
+**What this does not do.** It does not drop the dimension, which is what the item asked for, and the
+difference is worth stating: the file still contains it and a reader still meets it. The nearest
+honest thing to dropping it was retiring it, and the reason is that seven runs were scored with it.
+`reasoning_carries` — the other half of item 60, near-constant at 3 because twelve of thirteen
+frames have no web tools — is untouched and the item stays open for it.
+
+---
+
+## D35. FIRST_PRINCIPLES gets its own axis and a primary slot
+
+Backlog 85, three ways out, and the one chosen turned out not to be one of them.
+
+**Decision:** split the axis, and add the frame to `strategy`'s primary list with `n: 6`, displacing
+nothing. Resolved 2026-09-15.
+
+**The axis split was right and fixes nothing.** MECHANIC asks how the thing works; FIRST_PRINCIPLES
+refuses to look at how anything works and derives from what the solved problem requires. Those are
+opposite operations on one subject, which is not one axis, so `derivation` is now its own. The cost
+is zero: `frame_hash` covers `axis`, and no recorded run contains this frame.
+
+But the frame was never unreachable *because* of the axis. It was unreachable because it sat in no
+class's primary list, and every run class's `n` is at or below its primary length, so no seed ever
+draws an alternate. `adhd frames --reach` said exactly that in the sentence under its own table and
+the backlog item read the sentence above it. Split the axis and leave the rest alone and the frame is
+still dispatched by nothing. A test now pins that: put it back on `mechanism` and it stays reachable,
+because the slot is what reachability rests on.
+
+**Nothing was displaced to make room, and that was the expensive part of the choice.** The obvious
+frame to demote was `PRIOR_ART`: pruned in both its appearances, the lowest mean pass A in the
+corpus at 0.68, and the only frame that has ever fired T3 — which is the trap FIRST_PRINCIPLES
+attacks, so the swap would have read as principled. It is also the wrong move.
+`docs/RETIREMENT.md` sets a five-run floor and exempts a frame that asks the question nobody else
+asks even when pruned; `PRIOR_ART` has two appearances, so demoting it would have destroyed the
+evidence needed to judge it, using the thinness of that evidence as the reason. So the slot is
+additive and the bill is paid in spend: a `strategy` run is six branches, the D5 preview quotes
+about 624,000 tokens against 520,000, and `strategy` is the only class that pays it.
+
+It goes in `strategy` because `PRIOR_ART` is primary there and is the T3 offender, and the frame that
+attacks a trap belongs in the same run as the trap, not in a different one. That co-occurrence is
+also the data D6's orthogonality check needs and has never had for this frame, which is the other
+thing a run of `strategy` now buys.
+
+---
+
+## D36. The launch permit is TodoWrite
+
+D4 gave the three zero-capability agents one tool, `TaskList`, so the host would launch them, and
+recorded the residual risk as the design's one isolation claim that was argued rather than
+demonstrated: what `TaskList` shows a branch inside a running dispatch had never been observed.
+
+The neighbouring failure arrived instead. In a Claude Code remote session, spawning `adhd-branch`
+is refused with "would be spawned with zero tools — refusing. Its tools list resolved to nothing:
+recognized but matched no tools in this session [TaskList]". The name is recognised and resolves to
+nothing, so the permit does not leak — it does not load, and the three core agents cannot be
+dispatched at all. Loading `TaskList` into the parent session first changes nothing; subagent grants
+resolve against a fixed set that excludes it. `adhd-branch-search` launches in the same session and
+reports exactly `WebSearch, WebFetch`, so this is specific to the one tool chosen because it does
+nothing.
+
+**Decision:** the permit is `TodoWrite`, and the run procedure probes it before spending. Resolved
+2026-09-15.
+
+`TodoWrite` writes the spawned agent's own checklist. It reads nothing, touches no file, reaches no
+network and spawns nothing — and because it reads nothing, D4's open question disappears rather than
+moving: there is no sibling state for it to show. That is the improvement, and it is the reason to
+prefer it over any permit chosen only for being inert.
+
+**This was not verified when it was written, it has since been measured, and it was wrong.** Agent
+definitions are read at session start, so editing `agents/adhd-branch.md` mid-session had no effect:
+after the change the refusal still named `TaskList`. The next session read the new definition and
+refused differently — **"unrecognized [TodoWrite]"** where `TaskList` had been "recognized but matched
+no tools in this session". So this host knows the name `TaskList` and will not grant it to a subagent,
+and does not know `TodoWrite` at all. Picking a single replacement on reasoning failed for the second
+time, in a second way.
+
+D38 is the correction: two candidate names rather than one, and a fallback ladder for the host that
+resolves neither, which is the case here. The argument for `TodoWrite` over `TaskList` still stands on
+its merits — it reads nothing, so it retires D4's open question rather than moving it — and it is now
+one of two rather than the only one.
+
+What carries the cost meanwhile is a precondition, not a hope. `skills/adhd/SKILL.md` gains step 1b:
+before diverge, spawn one `adhd-branch` whose whole prompt asks for the word OK. If the host refuses,
+the run stops at the gate with nothing spent and the message names D4 and this decision. The step
+exists because a real run reached diverge on a host where the permit resolved to nothing and the only
+symptom was a row of identical refusals after the plan had been approved.
+
+It also says what not to do about it: substituting `general-purpose` is the user's call, never a
+silent workaround, because that agent carries the filesystem tools D4 refuses on the grounds that a
+branch which can read the run directory can read its siblings. Every recorded run was dispatched that
+way, which is disclosed in the README and is the standing exception rather than a precedent.
+
+---
+
+## D37. Prose fields in the branch contract are folded
+
+The seed 3 dispatch of fixture 001 aborted at critique with three of five artifacts unparseable, and
+one cause: `position`, `falsifier` and `missing_actor` were plain YAML scalars, so a value ending up
+with a second `: ` inside it parses as a nested mapping. "A second, equally cheap falsifier: the
+would-have-retried counter", "Cheaper still: find one production incident report", "Equally
+falsifying: if deadline-exceeded work is a rounding error". 262,788 tokens, nothing scored.
+
+Counting the archive says how eleven runs survived it. Across 39 branch artifacts there are 117
+values in those three fields. None is folded. 106 are bare plain scalars and **not one carries an
+internal `: `.** Eleven runs of coincidence. The other 11 are quoted and exactly one needed to be,
+so quoting is a habit 9% of values have rather than a property the contract secures — which is the
+sharpest evidence the contract is at fault, because it showed these fields as bare `<placeholder>`
+text and branches copy the shape they are shown.
+
+**Decision:** every prose field in the contract is folded with `>-`. Resolved 2026-09-15.
+
+`position`, `falsifier`, `missing_actor` and the `forecloses` items. `problem_hash`, `frame` and
+`confidence` stay plain because each is a closed vocabulary that cannot contain prose. `reasoning`
+was folded from the start and has never once failed to parse, which is the evidence: the folded field
+works and the unfolded ones survived on luck. `forecloses` items are folded too, though no recorded
+item has ever carried an internal `: ` — 104 recorded and 15 from seed 3, none risky — because
+closing the class costs nothing and closing three instances closes nothing.
+
+**The fix is free because it changes what the contract asks for and not what the validator accepts.**
+`src/validate.ts` is untouched, so all 39 recorded artifacts still parse and still validate, and no
+recorded run becomes unreadable. That is the opposite of what the same kind of change did to the
+rubric in D34, and the difference is which side of the contract moved.
+
+The two rejected options, and why. Requiring quoting is what the contract already implied, and three
+branches out of five did not do it; asking harder is not a mechanism. Parsing those fields leniently
+in the validator keeps every recorded run byte-comparable and puts a YAML-shaped guess where the
+contract is, which is the hole D30 closed — a run scored on a repaired artifact is scored under a
+rule its plan never declared.
+
+`missing_actor` is the one nullable prose field and a folded scalar cannot be null, so the contract
+says to write `missing_actor: null` on one line without the `>-`. D30 is unchanged: an artifact that
+will not parse still aborts the run. What changes is that the contract no longer makes that outcome a
+matter of punctuation.
+
+The abort message that fired was correct and useless to the branch that caused it, so the contract
+now carries the reason in the brief itself — and writing that sentence tripped the isolation guard,
+because the first draft said "three of five branches" and a brief may never carry the branch count.
+
+---
+
+## D38. The permit is a pair, and the fallback is the web agent, never general-purpose
+
+D36 replaced one launch permit with another on reasoning and was wrong, the same way D4's original
+choice was wrong: a single tool name that the host has to resolve is a single point of failure, and it
+has now failed twice in two different ways. `TaskList` is recognised in a Claude Code remote session
+and not grantable to a subagent; `TodoWrite` is not recognised there at all.
+
+Measuring what *is* grantable settled the design. Every agent in this plugin that launches here holds
+grants from `{Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch}`, and every agent that does
+not hold a task-management grant. So in this host **the grantable set is exactly the tools D4
+forbids** — which sounds like a dead end and is not, because the tools are not equally dangerous.
+
+**Decision:** the permit is `TodoWrite, TaskList`, and a host that resolves neither falls back to
+`adhd-branch-search`. Resolved 2026-09-15.
+
+The grant is the union of whichever names the host resolves. Both are inert, so the union is inert
+wherever it lands, and a host with either one can launch the three isolated agents. That is the whole
+of the permit change.
+
+**The fallback is the part that matters, and it turns on an inversion.** The non-negotiable is that
+branches never see siblings. Rank the grantable tools against *that* rule rather than against D4's
+tool-purity rule and the order reverses:
+
+- `Read`, `Glob`, `Grep` reach the run directory, where a sibling's artifact is a file. They break it.
+- `WebSearch` and `WebFetch` cannot reach the local filesystem at all. They do not.
+- `general-purpose`, which **every one of the twelve recorded runs used**, carries `Read`. It breaks it.
+
+So dispatching a plain branch as `adhd-branch-search` is *strictly safer on the rule the architecture
+rests on* than what every recorded run has done. The cost is stance purity, which is a real D4 concern
+and a lesser one: a frame whose `tools` is `[]` reaches an agent that could search, and D4's reason for
+withholding search is that a branch which goes looking has left its frame. The brief still tells it it
+has no tools. The substitution is disclosed with the synthesis rather than buried.
+
+`skills/adhd/SKILL.md` carries the ladder: the permit if it resolves, `adhd-branch-search` for branches
+and deepen if it does not, and stop and tell the user if neither is available. `general-purpose` is
+named as the thing not to reach for.
+
+**The critic is exempt and this is where D4 over-generalised.** D4 gave all three agents the same grant
+because all three "should have no tools", but the critic is *meant* to see every artifact — the host
+pastes them into its prompt — and pass A is blinded by redaction, not by tool grants. A
+filesystem-capable agent is therefore harmless for the critic. The rule binds branches and deepen
+passes, which must never learn what a sibling said, and it never bound the critic at all.
+
+**Verified, for the first time in the project.** Three branches of run `20260915065417-7e664e` were
+dispatched on rung 2 as `adhd-branch-search`, launched, and returned three valid artifacts with zero
+contract violations at critique. Item 54 asked for the plugin agents to be exercised as plugin agents;
+this is that, through a documented rung, on an agent whose grant cannot reach a sibling artifact.
+
+**One thing the run did not settle, and the check that partly answers it.** Each of the three
+reported `tool_uses: 1`, and the counter does not say which tool, so whether any of them actually
+searched is unknown. Running `adhd traps` over all three artifacts afterwards, which is what the run
+procedure now requires for rung 2, **fires nothing**: T3, T4 and T5 all clean. T3's detector is
+"remove every citation, does a chain of reasoning remain", so a branch that searched and leaned on
+what it found would have fired it. None did. That is not proof none searched — a branch that searched
+and did not use the result reads identically to one that never searched — but it is the difference
+that would have mattered, and it came back clean on the first rung-2 run. Branches dispatched as
+`general-purpose` reported 1 as well, and a bare diagnostic probe reported 0, so the count is not
+simply the hand-back. Whether rung 2 costs stance purity in practice or only in principle needs a
+counter that names the tool, and nothing here has one. Recorded as open rather than assumed either
+way.
+
+---
+
+## D39. `reasoning_carries` stays, because a ceiling is not the same as unmeasured
+
+Item 60 named two "ceiling dimensions" and treated them as one case. D34 retired `foreclosure` and
+left the other half open as item 92, which assumed the same answer was coming. The numbers say
+otherwise, and they were available the whole time.
+
+Chance-corrected reliability over the recorded corpus, worst first:
+
+| dimension | alpha | 95% interval | agreement | ceiling rate | distinct values |
+|---|---|---|---|---|---|
+| `foreclosure` | **-0.017** | **[-0.036, 0.000]** | 0.96 | 0.943 | 2 |
+| `committal` | **0.402** | **[-0.054, 0.683]** | 0.86 | 0.840 | 3 |
+| `substance` | 0.508 | [0.306, 0.645] | 0.76 | 0.707 | 3 |
+| `falsifiability` | 0.517 | [0.156, 0.820] | 0.82 | 0.747 | 3 |
+| `actor_coverage` | 0.557 | [0.341, 0.710] | 0.84 | 0.387 | 2 |
+| `reasoning_carries` | **0.678** | **[0.678, 0.700]** | 0.98 | 0.947 | 3 |
+| `specificity` | 0.731 | [0.428, 0.937] | 0.84 | 0.147 | 3 |
+| `assumption_attack` | 0.773 | [0.570, 0.915] | 0.70 | 0.520 | 3 |
+| `reversibility` | 0.850 | [0.734, 0.938] | 0.76 | 0.187 | 4 |
+
+**Decision:** keep `reasoning_carries` unchanged. Resolved 2026-09-15.
+
+`foreclosure` and `reasoning_carries` sit at almost the same ceiling — 0.943 against 0.947 — and are
+nothing alike underneath. `foreclosure`'s interval contains zero, so raters agreeing 96% of the time
+told you nothing they would not have told you by guessing. `reasoning_carries` reaches alpha 0.678
+with an interval that excludes zero comfortably, which puts it above `committal`, `substance`,
+`falsifiability` and `actor_coverage`. It is one of the better-behaved dimensions in the rubric. The
+ceiling rate was doing all the work in item 60's framing and it is the one statistic that cannot
+distinguish prevention from dead weight.
+
+**Still true at seven double-scored packs.** E11 added a second scoring to `001-seed3` and
+`001-seed3-repeat`, which is 80 more marks than this table was computed on, and nothing here changed
+its sign: `foreclosure` is still the only interval reaching zero, `reasoning_carries` is still
+mid-pack at 0.675, and the dimension this decision set aside as the real case — `committal` — lifted
+to **+0.562 on [+0.26, +0.85]** and cleared chance as well. The table above is left at the numbers
+the decision was made on.
+
+**The ceiling has a mechanism, and it is the same one `docs/RETIREMENT.md` records for T3.**
+`reasoning_carries` scores the citation trap. T3 has fired exactly once in the corpus, on `PRIOR_ART`,
+the only frame carrying `WebSearch` and `WebFetch` — twelve of thirteen frames have no tools, so they
+have nothing to cite, so they score 3. That is a detector that is untriggered rather than useless, and
+the way to move it is to run the frames that attack it under the conditions they need, not to delete
+the dimension that reads it.
+
+**The conditional option is worse than it sounds, for a reason unrelated to the evidence.** Scoring a
+dimension only for tool-bearing frames would vary the dimension set *between branches inside one run*.
+Pass A aggregates as a weighted mean normalised by total weight, so two branches scored on different
+denominators are not comparable to each other, and comparing branches within a run is the one thing
+pass A exists to do. D34's `retired_in` varies the set across rubric *versions*, which is safe because
+every branch in a run shares a version. Per-branch variation is a different mechanism and a broken one.
+
+**What this promotes instead.** `committal` is now the dimension with `foreclosure`'s problem: alpha
+0.402 on an interval of [-0.054, 0.683] that contains zero, at 84% ceiling. D34 noted the interval in
+passing; nothing acted on it because item 60 had named the wrong second dimension. It is registered as
+backlog 98, and it is a harder case than `foreclosure` was, because 0.402 is a point estimate worth
+something and the interval is wide rather than pinned at zero. That difference is a corpus-size
+problem, not a rubric problem, and the honest move is more runs before a retirement.
+
+## D40. An exact pass A tie ships the alphabetically first frame, and says so
+
+**The decision.** When two survivors in a cluster hold the same pass A score, the representative is
+the one whose frame id sorts first, and `score.json` carries a run-level note saying the rubric did
+not separate them. Previously `src/score.ts` left the comparator at 0 on a tie; `Array#sort` is
+stable, so the frame that shipped was whichever one the critic happened to list first in its cluster.
+
+**What made it visible.** `001-seed3-repeat` produced the corpus's first exact tie: `ACTOR_CENSUS`
+and `FRAME_BREAKER` both at 0.8810 in `propagated_deadline_budget`. Eight prior runs never tied, so
+the behaviour had never been exercised.
+
+**The two code paths already disagreed, which is how this is a defect and not a preference.**
+`src/learn.ts` has always ranked with `|| x.localeCompare(y)` and its comment says plainly that an
+exact tie "is not a close decision, it is no decision". So `adhd learn --sensitivity` reported
+`ACTOR_CENSUS over FRAME_BREAKER  0.0000` for a run whose synthesis had shipped `FRAME_BREAKER`. One
+of the two had to be wrong about what the system does.
+
+**Alphabetical wins because the alternative is not deterministic in the sense D3 means.** A critic's
+ordering of members inside a cluster is model output. Deriving the shipped recommendation from it
+makes the run's most visible field depend on a list order that the seed does not fix and that nothing
+validates. Alphabetical is equally arbitrary and entirely determined by the frame library, so a
+replay reproduces it.
+
+**The note is the part that matters more than the rule.** Either tiebreak is arbitrary; what was
+wrong was doing it silently. The note names the cluster, names the frame that shipped, and says it
+shipped because its id sorts first rather than because it scored higher. A reader who takes the
+recommendation on trust should be told when the rubric abstained, which is the same reason the pruned
+block always ships.
+
+**What was not done.** `001-seed3-repeat`'s deepen was re-run under the fixed rule so the recording
+is internally consistent: the representative, the deepen brief and the deepen artifact all name the
+same frame. The earlier `FRAME_BREAKER` deepen artifact is not in the recording. Nothing else in the
+corpus changes, because no other run has a tie to break.
+
+## D41. The launch permit is the web pair, because a permit that cannot launch is not a permit
+
+**Decision:** `adhd-branch`, `adhd-critic` and `adhd-deepen` grant `WebSearch` and `WebFetch`,
+identical to `adhd-branch-search`. D38's fallback ladder is deleted. Resolved 2026-09-15.
+
+D4 withheld tools from the isolated agents. D36 found the host refuses to launch an agent with zero
+tools and chose `TodoWrite` as the smallest inert permit. D38 could not test it, because agent
+definitions load at session start, and added `TaskList` alongside on the theory that a host
+resolving either one could launch.
+
+**Neither resolves, and the spawn is refused outright.** Asked to launch `adhd-branch`, this host
+answers: `unrecognized [TodoWrite]; recognized but matched no tools in this session [TaskList]`.
+Not degraded — refused. The three agents that are the architecture have never started.
+
+**What the fallback actually cost, which nobody priced.** D38's answer was to dispatch to
+`adhd-branch-search` instead, and for branches that is close to harmless: the brief is the whole
+input either way and the two bodies say nearly the same thing. For the critic it is not. A subagent
+type selects a *system prompt*, so dispatching the critique phase to `adhd-branch-search` runs the
+branch instructions — "reason from inside the frame, return the YAML" — with the critic's brief
+pasted in as a user message. `agents/adhd-critic.md` says something quite different: score blind,
+do not infer the frame, and *run every detector mechanically, for every branch and every trap,
+eight records per branch, no gaps, a gap rejects the pass*. **None of that has been in force in any
+of the fifteen recorded runs.**
+
+That is the most economical explanation on offer for the finding backlog item 4 recorded as the
+repository's headline result. Divergence reproduced across an identical replay and adjudication did
+not: one critic fired T7 twice and pruned two of five, the other fired nothing and pruned none, on
+byte-identical artifacts. An instruction to sweep mechanically and reject gaps is exactly the thing
+whose absence produces that, and it was absent. The finding is not withdrawn — the two runs happened
+and the prune sets differ — but its cause is now a live hypothesis with a test, which is the first
+time it has had one.
+
+**Why the web pair rather than something cleaner.** The permit has to clear two bars at once: it
+must not reach what another agent in the run wrote, and it must resolve. Filesystem tools fail the
+first. Every other name tried fails the second. `WebSearch` and `WebFetch` clear both, and the
+evidence is direct rather than argued — `adhd-branch-search` spawns on exactly this list.
+
+**What is given up, stated rather than buried.** A frame whose `tools` grant is empty is now
+dispatched to an agent that *could* search. D4 withheld search because a branch that goes looking has
+left its frame, and that reason still holds; what changes is that the enforcement is no longer the
+capability. It is the brief, which tells the agent it has a permit and must not use it, and T3, the
+citation trap, whose detector asks whether a chain of reasoning survives removing every citation.
+This is precisely the trade D38 wrote down as rung 2 and then only reached for on failure. D41 says
+it is the design, because rung 1 was never available.
+
+**Isolation is unchanged, and that is the point.** "Branches never see siblings" is a CLAUDE.md
+non-negotiable and no web tool reaches a run directory. What this repository had before D41 was that
+guarantee held by an agent that could not start, with every recorded run falling back to
+`general-purpose` — which grants `Read`, `Glob` and `Grep`. The guarantee was weaker in practice than
+it now is on paper.
+
+**The permit was the symptom. The defect is that nothing recorded which agent actually ran.**
+
+`plan.json` records the agent a run *intends* for each task. Nothing recorded what it *got*, so a
+dispatch that fell back left no trace in the run directory, in the artifacts, or in the synthesis.
+That is how a silent substitution survived twelve recorded runs and two decisions written on top of
+them, and why all fifteen recordings still carry `"agent": "adhd-branch"` for branches that agent
+never produced.
+
+So a run now writes `dispatch.json`: one entry per task, with `planned`, `actual`, and a `note`
+that is **required** whenever the two differ. A substitution is allowed — the fallback reasoning is
+sound and a host that cannot launch one agent may legitimately use another — and an unexplained one
+is refused by the schema. Substitutions ship in the synthesis the way the pruned block does, because
+a run whose critic was not the critic is a run whose scoring means something else, and the person
+acting on the recommendation is the one who needs to know.
+
+The fifteen existing recordings are exempt and the exemption is narrow. Appending a section to all
+of them would rewrite the corpus item 4's finding rests on to suit a feature added afterwards, and
+`adhd replay` caught exactly that attempt when it was tried. They render byte-identically; `adhd
+doctor` names all eleven that carry a plan and no dispatch record, so the gap is reported rather
+than papered over.
+
+**What catches this next time.** `adhd doctor` checks each isolated agent's permit against the list
+of names known to resolve, and errors on a permit outside it or on an empty one. `test/agents.test.ts`
+names `TodoWrite` and `TaskList` specifically, because both shipped, both read as inert, both passed
+every check in the repository, and neither could launch.
+
+---
+
+## D42. The shipped agents are mirrored into `.claude/agents`, because `agents/` is a plugin path
+
+**Decision:** `scripts/sync-claude-agents.mjs` copies the nine agents `plugin.json` ships into
+`.claude/agents/`, and `adhd doctor`, `test/agents.test.ts` and the library workflow each fail on
+drift. Resolved 2026-09-16.
+
+D41 changed the permit on `adhd-branch`, `adhd-critic` and `adhd-deepen` from `TodoWrite, TaskList`
+to `WebSearch, WebFetch`, and said the evidence was direct: `adhd-branch-search` spawns on exactly
+that list. The next session was asked to spawn all three and prove it.
+
+**All three were refused, and not on the permit.** The message was
+`Agent type 'adhd:adhd-branch' not found. Available agents: claude, claude-code-guide, Explore,
+general-purpose, Plan, statusline-setup` — the same for the critic and the deepen agent. That list
+is the host's built-ins and nothing else. `adhd-branch-search` is not in it either.
+
+**`agents/` is only read when the plugin is installed.** A Claude Code session opened on a clone of
+this repository installs no plugin, so every name in `skills/adhd/SKILL.md` step 1b, step 2 and step
+3 resolves to no agent at all. The spawn fails on the *name*, before the host ever looks at what
+`tools:` says. Every permit decision from D36 onward — `TodoWrite`, then `TodoWrite, TaskList`, then
+the web pair — was argued, shipped and checked inside a repository where the argument could not be
+reached.
+
+**This is the more economical explanation of the thing D41 explained.** D41 attributed fifteen runs
+of `general-purpose` dispatch to a permit that would not resolve. The permit was never consulted.
+What the recorded runs show is a host that could not find the agents, and an operator substituting
+the one agent type that exists — which is exactly what D38 said was the user's call and never a
+silent workaround, happening silently, fifteen times, because the failure looked like a tool problem
+and was a path problem. D41's reading of the critic's absence still stands and is unaffected:
+`adhd-critic.md` has never executed either way, and "none of that has been in force in any of the
+fifteen recorded runs" is if anything better supported now.
+
+**Why a copy and not the directory itself.** `agents/` is named by `plugin.json`, by `package.json`'s
+`files`, by twelve messages in `src/doctor.ts`, by three test files and by the library workflow's path
+filter. Moving it to satisfy a host convention would rewrite all of that to make one loader happy.
+Nor is it a symlink: a symlinked directory is one more thing that has to be true about the host's
+loader, and the entire cost of D36 through D41 was assuming something about the loader and shipping
+before finding out.
+
+**What the copy costs, stated rather than buried.** Two files hold the same bytes and can disagree.
+Three separate checks now fail when they do, and each names `node scripts/sync-claude-agents.mjs` in
+the failure, because a drift check whose message does not say how to fix it is a check people learn
+to re-run rather than read. The maintenance agents stay out of the mirror for the reason `plugin.json`
+leaves them out: `adhd-trainer` carries `Bash`, and a session that merely opened this clone should not
+find it in its agent list.
+
+**What catches this next time.** Nothing in this repository could have caught it, which is the
+finding. Every check asked whether `agents/*.md` existed, was well formed, and declared a permitted
+tool, and every one of them passed while the agents were unreachable. `adhd doctor` now asks the
+different question — whether the definition is somewhere a session without the plugin will read it —
+and `evals/d41-spawn-proof.md` and `evals/d42-spawn-proof.md` are the before and after, each written
+by the session that ran the probe rather than the session that made the change.
+
+**This one was measured before it was written down.** A second session was opened on the branch
+carrying the mirror and asked to spawn all four dispatch names. All four returned `OK` on the first
+attempt, with no refusal and no substitution. Its enumeration of available agents is the mirror's
+nine and not `agents/`'s eleven: `adhd-governor` and `adhd-trainer` are absent, which is the mirror
+being read rather than the plugin directory.
+
+**The documented loader agrees, and says one more thing.** Claude Code resolves subagents in a fixed
+precedence: managed settings, then `--agents`, then `.claude/agents/`, then `~/.claude/agents/`, and
+a plugin's `agents/` directory last and only where the plugin is enabled. So the mirror outranks the
+plugin copy when both are present. That is safe only because the two are byte-identical, which is
+what the drift check is actually protecting — not tidiness.
+
+**And it corrects the premise the whole permit chain rested on.** `tools:` is optional. Omitting it
+inherits every tool available to subagents; the refusal D36 read as "the host refuses to launch an
+agent with no tools" is the narrower rule that a `tools:` list *in which no entry resolves* fails to
+launch. The two are not the same, and the difference is the one that matters here: the empty-permit
+agent D4 wanted was never expressible, because the way to ask for no tools is to omit the field, and
+omitting it grants all of them. D41's web pair therefore stands, but on this argument rather than the
+one recorded — it is the smallest allowlist that resolves, not a workaround for a host that will not
+take an empty one. Backlog item 103 carries the consequence: `agents/adhd-branch.md` tells the agent
+in its own system prompt that the permit exists "because the host refuses to launch an agent with no
+tools", and that sentence is now known to be false.
+
+---
+
+## D43. The isolated agents stop loading CLAUDE.md, because CLAUDE.md states the branch count
+
+**Decision:** `adhd-branch`, `adhd-branch-search`, `adhd-critic` and `adhd-deepen` set
+`omitClaudeMd: true`, and `adhd doctor` and `test/boundary.test.ts` reject any of them that does not.
+The same agents may not set `skills`, `mcpServers` or `memory`. Resolved 2026-09-16.
+
+D42 sent a session to read the documented loader, and the loader documents more than the path that
+D42 fixed. A subagent inherits the project's `CLAUDE.md` unless its own definition opts out, and this
+repository's `CLAUDE.md` contains, in its "Non negotiable in review" section:
+
+> Branches never see siblings. Add a test that fails if any brief contains another branch's output,
+> **the branch count**, or the phrase "so far".
+
+and, in "Do not":
+
+> A system that spawns **seven subagents** and gives the user no way out fails its own fixture 001.
+
+**A branch quoted both back, from context, without using a tool.** `evals/d43-context-leak-baseline.md`
+is the transcript. Asked what was in its context, `adhd-branch` named `/home/user/Ai-adhd/CLAUDE.md`,
+quoted its first five lines verbatim, quoted the sibling rule, quoted the orchestrator rule, and
+quoted the seven-subagent sentence. It had `WebSearch` and `WebFetch` and used neither.
+
+**The test that guards the brief was never wrong and never enough.** `test/docs.test.ts` asserts that
+`LEDGER`'s brief names no other frame, contains no "so far", and does not state the branch count. It
+passes, and it has always passed. The branch count reached the branch anyway, through the project
+instructions, in all fifteen recorded runs. A non-negotiable enforced on one channel and open on
+another is not enforced; it is documented.
+
+**What it cost, which is not nothing and not everything.** A branch that knows it is one of seven
+under a distorted frame has been told the shape of the experiment it is inside. That is the demand
+characteristic the whole architecture is built to avoid, and D2's claim — that a subagent's separate
+context window *is* the isolation mechanism — was true about siblings and false about the room. What
+it does not do is give a branch any sibling's output, so "branches never see siblings" survives
+literally. The weaker claim that does not survive is that a branch knows nothing about the system it
+is in.
+
+**Measured, not argued.** `evals/d43-context-leak-proof.md` runs the same probe on the changed agents
+with `adhd-researcher` as a control. `adhd-branch` and `adhd-critic` answer NO to all of it and can
+quote none of it; `adhd-researcher`, which does not carry the flag and legitimately works in the
+repository, still quotes the first five lines, the sibling rule, the orchestrator rule and the count.
+One flag, two agents changed, one unchanged, and the difference is the flag.
+
+**The three other doors, closed at the same time and for the same reason.** `skills` preloads text
+into a subagent at startup, `mcpServers` attaches servers — this repository ships one that reads run
+state — and `memory` persists across sessions, so a branch could arrive carrying what it wrote last
+time. None is a tool, so none would have been caught by the D4 tool check that sits next to them.
+They are banned by name rather than by a rule against unknown fields, because a rule that rejects
+only the fields already thought of would not have caught `omitClaudeMd` either, and did not.
+
+**Also recorded, because it retires a question rather than answering it.** All three probed agents
+report one tool they do not declare: `SubagentHandback`, the channel a subagent replies on. So no
+subagent ever had zero tools, in any host, under any of D36 through D41. The empty permit those five
+decisions were reaching for did not exist to be reached for.
+
+**What catches this next time.** Nothing did, again, and that is the second time in two decisions.
+Every check in this repository asked about the tool grant, because the tool grant is what D4 wrote
+down. The checks now ask about the front matter fields that carry content without being tools, and
+the honest statement of the limit is that the list is still a list of doors somebody thought of.
+
+---
+
+## D44. The skills are mirrored too, because a dispatchable agent with no procedure is not a run
+
+**Decision:** `scripts/sync-claude-agents.mjs` becomes `scripts/sync-claude-dir.mjs` and mirrors
+`skills/` into `.claude/skills/` alongside the agents. `adhd doctor`, `test/agents.test.ts` and the
+library workflow fail on a missing or drifted skill. Resolved 2026-09-16.
+
+D42 found that `agents/` is read only where the plugin is enabled, mirrored it, and proved the four
+dispatch names resolve. It stopped there. `skills/` is the same kind of directory, read under the
+same condition, and `skills/adhd/SKILL.md` is the run procedure — the thing that spawns the agents
+D42 had just made spawnable.
+
+**So the state D42 shipped was four dispatchable agents and no way to dispatch them.** A session
+opened on this clone had `adhd-branch`, `adhd-critic`, `adhd-deepen` and `adhd-branch-search` in its
+agent list and no `/adhd` in its skill list. The half that was fixed is the half that cannot start
+anything on its own; `SKILL.md` step 1b, step 2 and step 3 are where the spawns live.
+
+**It was found the same way the first half was: by looking at the list.** The session that wrote D43
+restarted, its own available-skills listing had no `adhd` in it, and the agent listing did. That is
+the entire diagnosis, and it was available at the moment D42 was declared proven — the proof session
+was asked about agents and answered about agents.
+
+**The general shape, since this is now three for three.** D42, D43 and D44 are all one defect: the
+repository describes itself to a plugin host, and is opened by sessions that are not one. `agents/`,
+`skills/` and the CLAUDE.md a subagent inherits are three instances, found in that order, each after
+shipping a fix for the previous one and calling it done. What `plugin.json` names is the list of
+things this applies to, which is why the mirror is derived from `plugin.json` rather than from a
+directory listing: a fourth entry added there is mirrored without anyone remembering to.
+
+**Measured, like the two before it.** `evals/d44-skill-proof.md` is a probe session that loaded the
+mirror and read back its own startup listing: `adhd`, `adhd-worker` and `superagent` are all there,
+and all three are listed unprefixed. The absence of a prefix is the part that identifies the source —
+a plugin skill lists as `adhd:adhd` — so these came from `.claude/skills/`, and the same session saw
+`adhd-branch` and `adhd-critic` in its agent listing. A run has its entry point and its subagent
+types in one session for the first time.
+
+**What is still not checked.** That a mirrored skill *works* — that `/adhd` drives a run to a
+synthesis — is not established by any of this. The probe read a listing; a listing says a name
+resolved, not that the procedure behind it runs. Backlog 103 is the standing version of that
+complaint.
+
+**And the third surface, which is not mirrored and is not a mirroring problem.** `plugin.json` also
+declares an MCP server, `${CLAUDE_PLUGIN_ROOT}/bin/adhd-mcp.mjs`, and it is plugin-only in exactly
+the way the other two were: there is no `.mcp.json`, so a session opened on this clone does not have
+the `adhd` MCP tools, which `skills/adhd-worker/SKILL.md` names as one of its two ways to reach the
+kernel. It is left open deliberately. A `.mcp.json` is not a copied file: it makes every session
+opened on this repository launch a server at startup, and on a fresh clone with no `dist/` and no
+`node_modules` the launcher exits with its diagnostic every time. Noisy startup on every clone
+against an unreachable deliverable is a trade with two defensible sides, which by the rule at the top
+of `CLAUDE.md` makes it the owner's call and not a commit. Backlog item 104.

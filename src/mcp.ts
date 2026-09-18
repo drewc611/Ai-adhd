@@ -8,8 +8,9 @@ import { pathToFileURL } from "node:url";
 import { knownFrameIds, loadConfig } from "./config.js";
 import { runPhase } from "./run.js";
 import { trapsReport } from "./traps.js";
-import { formatEvalReport, runEval } from "./eval.js";
-import { axisCoverage, frameHealth, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
+import { auditFixtures, formatEvalReport, runEval } from "./eval.js";
+import { assertionHistory, regressionGate } from "./fixtures.js";
+import { axisCoverage, forbiddenAudit, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, listFrames, orthogonality } from "./frames.js";
 import { openKernel, recordRun } from "./os.js";
 
 const text = (s: string, isError = false) => ({ content: [{ type: "text" as const, text: s }], isError });
@@ -61,21 +62,48 @@ export function buildServer(): McpServer {
 
   server.registerTool(
     "adhd_eval",
-    { description: "Replay recorded runs against fixture assertions.", inputSchema: { fixtures_dir: z.string().optional(), recorded_dir: z.string().optional(), root: z.string().optional() } },
-    async (a) => wrap(() => formatEvalReport(runEval(loadConfig(a.root), { fixturesDir: a.fixtures_dir, recordedDir: a.recorded_dir }))),
+    {
+      description:
+        "Replay recorded runs against fixture assertions. Default is the full report. audit=true reports which assertions discriminate a real run from its negative control, which is the only thing that says whether an assertion measures anything; history=true reports which runs have ever held each assertion; gate=true fails when an assertion that used to hold on a run stops holding on it. " +
+        // `--update` rewrites evals/assertion-baseline.json and is deliberately not offered here. A
+        // gate whose baseline the caller can silently move is not a gate, and a host driving this
+        // over MCP is exactly the caller who would move it by accident. The CLI keeps it, where a
+        // person types it on purpose.
+        "The CLI's --update, which rewrites the gate's baseline, is not available here on purpose: a gate whose baseline the caller can move is not a gate.",
+      inputSchema: {
+        fixtures_dir: z.string().optional(),
+        recorded_dir: z.string().optional(),
+        audit: z.boolean().optional(),
+        history: z.boolean().optional(),
+        gate: z.boolean().optional(),
+        root: z.string().optional(),
+      },
+    },
+    async (a) =>
+      wrap(() => {
+        const cfg = loadConfig(a.root);
+        const opts = { fixturesDir: a.fixtures_dir, recordedDir: a.recorded_dir };
+        if (a.audit) return auditFixtures(cfg, opts).text;
+        if (a.history) return assertionHistory(cfg, opts).text;
+        if (a.gate) return regressionGate(cfg, { ...opts, update: false }).text;
+        return formatEvalReport(runEval(cfg, opts));
+      }),
   );
 
   server.registerTool(
     "adhd_frames",
     {
       description:
-        "List the frame library, or report how it has behaved across recorded runs. Exactly one report at a time: stats=true for per-frame prune, fold and recommendation rates with detector fire counts; orthogonality=true for pairwise co-clustering (D6); health=true for docs/RETIREMENT.md's five criteria counted, which reports and never concludes; axes=true for frames per axis and the axes no run has exercised; collisions=true for frame labels that are also ordinary prose, which the pass A redactor removes from artifacts that did not write them.",
+        "List the frame library, or report how it has behaved across recorded runs. Exactly one report at a time: stats=true for per-frame prune, fold and recommendation rates with detector fire counts; orthogonality=true for pairwise co-clustering (D6); health=true for docs/RETIREMENT.md's five criteria counted, which reports and never concludes; axes=true for frames per axis and the axes no run has exercised; collisions=true for frame labels that are also ordinary prose, which the pass A redactor removes from artifacts that did not write them; drift=true for recorded runs that used a frame whose definition has changed since; forbidden=true for which `forbidden` entries a recorded run has violated and how many have no mechanical form at all; reach=true for whether routing can dispatch each frame at its class's default n, which asks the selector rather than the corpus.",
       inputSchema: {
         orthogonality: z.boolean().optional(),
         stats: z.boolean().optional(),
         health: z.boolean().optional(),
         axes: z.boolean().optional(),
         collisions: z.boolean().optional(),
+        drift: z.boolean().optional(),
+        forbidden: z.boolean().optional(),
+        reach: z.boolean().optional(),
         recorded_dir: z.string().optional(),
         root: z.string().optional(),
       },
@@ -87,6 +115,9 @@ export function buildServer(): McpServer {
         if (a.health) return frameHealth(cfg, a.recorded_dir).text;
         if (a.axes) return axisCoverage(cfg, a.recorded_dir).text;
         if (a.collisions) return labelCollisions(cfg, a.recorded_dir).text;
+        if (a.drift) return frameDrift(cfg, a.recorded_dir).text;
+        if (a.forbidden) return forbiddenAudit(cfg, a.recorded_dir).text;
+        if (a.reach) return frameReach(cfg).text;
         return a.orthogonality ? orthogonality(cfg, a.recorded_dir).text : listFrames(cfg);
       }),
   );

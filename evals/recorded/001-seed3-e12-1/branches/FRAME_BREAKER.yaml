@@ -1,0 +1,59 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: FRAME_BREAKER
+position: >-
+  Define the end-to-end failure-handling policy for this call chain (deadline
+  budget, retry/backoff rules, circuit breaker behavior) before setting any
+  timeout number, and derive the timeout from that policy instead of picking
+  it first.
+reasoning: |
+  1. The load-bearing assumption is that a timeout is a single tunable value
+  you can look up or guess correctly in isolation — that "what number goes in
+  this field" is itself the problem to solve. It treats the timeout as a
+  standalone client-config task, disconnected from what the caller does when
+  the call actually times out.
+
+  2. That framing benefits whoever wants to ship fast without doing the
+  harder design work: the asker under time pressure gets to close the ticket
+  with a number instead of a policy, and any team that wants to avoid facing
+  retry storms, cascading failures, or deadline-budget math benefits from
+  never examining it. A quick number feels like resilience without being
+  resilience.
+
+  3. If the assumption is false, the real question isn't "what number" but
+  "what should happen when this call doesn't finish in time, and how much
+  total time does the caller's caller actually have." That's a question
+  about deadline propagation across the whole call chain, retry/backoff and
+  idempotency rules, and what a circuit breaker or fallback does when the
+  dependency is slow — not a property of one HTTP client.
+
+  4. The first concrete action tomorrow is to map the call chain: write down
+  the total time budget the top-level request can tolerate before it fails
+  the user, subtract the budget already consumed by upstream hops, and use
+  what's left to set this client's timeout. At the same time, write the
+  retry policy (is this call idempotent, how many retries, what backoff) and
+  what the caller does on timeout (fail fast, fallback, queue). The timeout
+  value falls out of that document; it is not chosen first.
+forecloses:
+  - >-
+    Copying a "safe default" timeout (e.g. 30s) from a blog post or library
+    docs without checking it against the caller's actual deadline budget.
+  - >-
+    Setting one timeout value and treating retries, circuit breaking, and
+    fallback behavior as a separate, later concern.
+  - >-
+    Using the same timeout for every environment or call site regardless of
+    how much of the parent request's time budget is already consumed
+    upstream.
+falsifier: >-
+  Pull the incident/postmortem logs from the last time this dependency was
+  slow or unavailable; if the system degraded cleanly (no retry
+  amplification, no cascading timeouts up the call chain, callers got fast
+  clean errors) even though no deadline budget or retry policy was ever
+  documented, this position is wrong and a bare timeout number was
+  sufficient.
+missing_actor: >-
+  The on-call/SRE owner of the downstream service being called, who can
+  publish or negotiate a documented latency SLA for the endpoint; without
+  that number the caller's deadline budget is a guess, and this actor was
+  never named as someone to consult before setting the timeout.
+confidence: medium

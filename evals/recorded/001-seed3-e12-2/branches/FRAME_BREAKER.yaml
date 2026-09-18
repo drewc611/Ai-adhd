@@ -1,0 +1,48 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: FRAME_BREAKER
+position: >-
+  Stop looking for a single timeout value to set on the client object; instead define
+  a per-operation deadline budget and retry/idempotency policy for each distinct call
+  this client makes, driven by the caller's own request deadline.
+reasoning: |
+  1. The load-bearing assumption is that "timeouts" is a property of the client itself:
+  one connect/read number, chosen once at construction, that will be correct for every
+  call the client ever makes. The question treats timeout-setting as a configuration
+  lookup problem ("what number goes here") rather than a design problem tied to what
+  each call actually does.
+  2. That framing benefits whoever wants the ticket closed fast: the asker under
+  deadline pressure, the library authors who ship a "sane default" so nobody has to
+  think about it, and future on-call engineers who inherit a single magic constant
+  instead of a documented policy. A single number is easy to write down and easy to
+  point at when things go wrong ("we set it to 30s, not our fault"), which is exactly
+  why it survives unexamined.
+  3. If the assumption is false, the real question is not "what number" but "what
+  should happen when each specific downstream call doesn't return in time" — which
+  depends on whether that call is idempotent, how expensive a retry is, what SLA the
+  caller itself is operating under, and how the timeout should propagate from the
+  top-level request deadline down through this client. That's a per-operation
+  contract problem, not a client-config problem.
+  4. The first concrete action: enumerate every distinct operation this client
+  performs (list the endpoints/methods it calls), and for each one record whether it
+  is idempotent/retry-safe, what its expected latency envelope is, and what the caller
+  should do on expiry (retry with backoff, fail fast, circuit-break). Then wire the
+  client to accept a deadline/context passed down from the top-level request rather
+  than a hardcoded constant, so timeout behavior is derived per-call instead of fixed
+  per-client.
+forecloses:
+  - >-
+    Picking one universal number (e.g. "30s connect, 60s read") on the client
+    constructor and considering the problem solved.
+  - >-
+    Treating timeout configuration as a one-time setting made at client setup rather
+    than something derived per call from the caller's own deadline.
+falsifier: >-
+  Audit the actual call sites that use this client: list every distinct operation and
+  check whether they differ in idempotency, retry-safety, or urgency. If every single
+  one turns out to have identical failure cost and latency SLA, a single client-level
+  timeout is in fact correct and this position is wrong.
+missing_actor: >-
+  The owner of the downstream service this client talks to, who can publish a
+  documented per-endpoint latency SLA; the caller should request or look up that
+  documentation and set per-operation budgets against it instead of guessing a number.
+confidence: medium

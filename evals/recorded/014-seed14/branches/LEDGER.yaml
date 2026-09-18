@@ -1,0 +1,94 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: LEDGER
+position: >-
+  Wrap the existing cron line in `flock -n` and, in the same change, emit two numbers per run - run duration and skipped-because-locked - with an alert that fires when duration exceeds half the cron interval, before choosing any scheduler.
+reasoning: |
+  1. What the obvious answer costs, in what currency, paid by whom, when.
+
+  There are two obvious answers and both have payers who are not in this
+  conversation.
+
+  The first obvious answer is "move it to a real scheduler" - Airflow, Celery
+  beat, a Kubernetes CronJob with concurrencyPolicy: Forbid, a managed workflow
+  service. The currency is operational surface and on-call sleep, and the payer
+  is whoever carries the pager eighteen months from now, when the scheduler
+  itself is the thing that broke at 3am. A cron line has roughly one failure
+  mode. A scheduler has a database, a web UI, a worker pool, a version upgrade
+  path, and a team that has to know all of it. The bill arrives long after the
+  decision, which is exactly when nobody remembers the decision was optional.
+  There is also a bill in engineering weeks paid immediately by the team, taken
+  out of whatever else they were going to ship this quarter.
+
+  The second obvious answer is "just add a lockfile and move on". The currency
+  there is user trust and correctness, and the payer is whoever consumes the
+  job's output. A bare lock does not make the job finish faster. It converts a
+  visible symptom - two copies stomping on each other - into an invisible one:
+  runs silently not happening. The overlap was an alarm. Locking without
+  telemetry is disconnecting the alarm.
+
+  2. Which cost is invisible from where the asker is standing.
+
+  The asker is standing at the cron host, where the pain is "two processes at
+  once". From there the second cost is completely invisible, and it is the
+  larger one. Overlap is not the disease. Overlap is proof that the job's
+  runtime has grown past its interval - the job was always going to cross that
+  line, and it just did. Whatever is downstream of this job has been getting
+  slower and slower data for some time and has no way to say so. Once a lock
+  is in place, that staleness stops producing any signal at all, and the first
+  person to notice will be a customer or an analyst reading a stale number and
+  believing it. That is trust, spent by people who never knew there was a cron
+  job. It is also the one currency here that cannot be topped up with money.
+
+  There is a third invisible line item nobody prices: the asker asked for "a
+  few different directions before we commit". The evaluation itself costs
+  engineering attention, and a migration proposal is expensive to evaluate
+  precisely because it is plausible. The cheap option protects that budget too.
+
+  3. The cheapest option that still resolves the pain.
+
+  `flock -n /var/lock/thisjob.lock` in front of the existing command in the
+  crontab, plus writing the run duration and the skip count somewhere that can
+  be alerted on. That is one edited crontab line and a handful of lines in the
+  script. It resolves the stated pain completely and immediately: no two copies
+  ever run again. It requires no new service, no new dependency, no deploy
+  pipeline change, and nothing new to learn. Critically, `-n` and not `-w`:
+  `-w` queues the overlapping run, which buys you a backlog that grows without
+  bound and a thundering herd on recovery, paid by the host at the worst
+  possible moment.
+
+  The metric is not a nice-to-have bolted on. Without it this is the second
+  obvious answer, the one that bills the downstream consumer.
+
+  4. What that option costs instead, and is the trade explicit.
+
+  It costs on-call attention, and I want that stated plainly rather than
+  buried: the alert I am proposing will fire, probably within weeks, because
+  the runtime is already near the interval or the overlap would not have
+  happened. Someone will have to own that page. I am deliberately moving the
+  bill from the invisible column - silently stale data, paid by downstream
+  consumers who cannot see it - to the visible column, paid by the team, in
+  daylight, in an amount they can read off a graph. That is the trade, and it
+  is the whole recommendation. I am the one recommending it, and the team on
+  call is who pays for my recommendation.
+
+  It also costs a small amount of future rework: if the numbers show the job
+  genuinely needs concurrency across hosts, or needs a dependency graph, the
+  flock wrapper gets thrown away. That is a few lines of shell, discarded with
+  a week of real runtime data bought in exchange. The scheduler migration
+  bought without that data is a guess with a maintenance contract attached.
+forecloses:
+  - >-
+    Migrating to a distributed scheduler or job queue now - Airflow, Celery, Temporal, a managed workflow service - as the first move. This position says that decision has to be bought with runtime data, not with the overlap incident.
+  - >-
+    Any queueing form of the lock (`flock -w`, or a scheduler's Replace/Allow concurrency policy), which trades overlap for an unbounded backlog and hands the bill to the host and the recovery window.
+  - >-
+    Making the script idempotent and letting the copies run concurrently. That is real engineering work spent to make the symptom survivable while leaving the growing runtime entirely unmeasured.
+  - >-
+    Shortening or lengthening the cron interval as the fix. Retuning the interval without measuring duration is guessing at a number that is already observable.
+falsifier: >-
+  Pull one week of the job's actual run durations from existing logs (timestamps on first and last log line will do). If p95 duration already exceeds the cron interval, this position is wrong - locking would mean the job is permanently skipping rather than occasionally skipping, and the real bill is capacity or partitioning, not concurrency control. The second cheap check that would falsify it: if the script already takes a row-level or per-item lock, or writes idempotently, then the overlap is harmless noise and adding a lock buys nothing while removing the parallelism that was keeping up.
+missing_actor: >-
+  The downstream consumer of this job's output - the dashboard, the report, the API, or the customer reading the number. They were not named in the problem and they are the party actually paying for staleness. Their available action is to state a freshness requirement in hours, which turns "is it acceptable to skip a run?" from an engineering guess into an arithmetic check and settles the scheduler question without a debate.
+confidence: high
+```

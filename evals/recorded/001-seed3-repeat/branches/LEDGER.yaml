@@ -1,0 +1,83 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: LEDGER
+position: >-
+  Derive the timeout from the deadline you inherited rather than from how fast the dependency
+  usually is: a ~1s connect timeout, an overall request deadline at least a second shorter than
+  your own caller's deadline, and at most one jittered retry drawn from a shared retry budget,
+  because the bill for getting this wrong is paid in pager sleep by whoever is on call and in
+  amplified load by the team running the service you are calling.
+reasoning: |
+  1. What the obvious answer costs, in what currency, paid by whom, when.
+
+  The obvious answer is a number that feels safe - 30 seconds, or whatever the library ships
+  with, which in several popular clients is no timeout at all - plus "retry 3 times" because
+  retries look free. Neither is free. Every in-flight slow request holds a connection, a
+  thread or task, a buffer, and a slot in the pool; the currency is capacity and queueing
+  latency. Retries are worse: three layers each retrying three times is twenty-seven requests
+  arriving at the dependency at exactly the moment it is least able to serve them, and that
+  bill is paid by a team that never saw this line of config. The asker pays none of it on the
+  day they write it. It is paid months later, at 3am, all at once, by the on-call engineer and
+  by every user queued behind a saturated pool.
+
+  2. Which of those costs is invisible from where the asker is standing.
+
+  From a desk, a request either works or it does not, so four ledger entries never appear.
+  First, the queue: a long timeout does not make one request slow, it makes every later
+  request slow. Second, retry amplification, which is invisible because each layer's retries
+  look reasonable on their own. Third, the caller's deadline - if the user's browser or the
+  upstream service gave up at 5 seconds, every second this client spends after that is pure
+  waste, burning capacity on a result nobody can still receive. Fourth, and most expensive
+  because nobody budgets it, human attention: a dependency that hangs instead of failing
+  produces an ambiguous incident, and ambiguous incidents cost hours, not minutes.
+
+  3. The cheapest option that still resolves the pain in the question.
+
+  The pain is "I do not know what number to put here." The cheapest resolution is to stop
+  picking a number and start subtracting. Take the deadline handed to you - a propagated
+  context, a request header, or failing that the user-facing SLO for whatever entry point this
+  sits behind - subtract the work you still have to do after the call returns, and what is
+  left is the budget. Connect timeout is a separate and much smaller number, around 1 second
+  inside a datacenter and a few across the internet, because handshake latency is bimodal: it
+  is fast or the host is gone, and waiting longer buys nothing. Retry only if budget remains,
+  with jitter, under a cap expressed as a fraction of total requests rather than per-call. If
+  nothing upstream propagates a deadline, one afternoon of plumbing to make it propagate is
+  cheaper than every tuning session that follows.
+
+  4. What that option costs instead, and whether the trade is explicit.
+
+  It costs engineering time to thread the deadline through the call path, and it converts some
+  requests that would eventually have succeeded into fast failures, which raises the visible
+  error rate and forces someone to write the fallback or degraded path. That is the trade,
+  stated plainly: a request that fails fast and frees its resources is cheaper than one that
+  succeeds after the person waiting has left. Two more entries belong on the bill and are
+  mine to name. The dependency's owners lose the accidental load-testing that generous client
+  timeouts provided, so their true latency tail becomes visible - which is a cost to them this
+  quarter and a saving to everyone later. And my recommendation costs the asker a conversation
+  with that team, which is a real price paid in their calendar, not a rounding error.
+forecloses:
+  - >-
+    One global timeout constant applied to every dependency and retuned whenever it hurts,
+    which ignores that different calls sit behind different deadlines.
+  - >-
+    Exponential backoff with independent retries at every layer, which is the common default
+    and which bills the dependency during its own incident.
+  - >-
+    Setting the read timeout from the dependency's p99 latency alone, with no reference to who
+    upstream is still waiting.
+  - >-
+    Leaving the library default or an infinite timeout in place on the theory that slow is
+    always preferable to failed.
+falsifier: >-
+  Look at one thing - the call graph directly above this client. If nothing upstream has a
+  deadline because this is a cron, a batch job, or an offline pipeline where no caller is
+  waiting on the result, then there is no budget to inherit, the invisible payer I named does
+  not exist, and a long flat timeout with bounded concurrency is the cheaper answer. Reading
+  the entry point settles it in ten minutes and costs nothing.
+missing_actor: >-
+  The team that operates the service being called - they can publish a real latency histogram
+  and enforce server-side concurrency limits returning 429 with Retry-After, which removes the
+  client's guesswork entirely and stops well-meaning client retries from arriving as a denial
+  of service during their next incident.
+confidence: medium
+```

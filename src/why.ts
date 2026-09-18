@@ -13,6 +13,7 @@ import { UsageError } from "./errors.js";
 import { DeepenArtifactSchema, PassASchema, PlanSchema, type PassA, type Plan } from "./schema.js";
 import { forwardFrameIds, type ScoreResult, type ScoredCluster, type ScoredFrame } from "./score.js";
 import { unfence } from "./validate.js";
+import { readJsonIf } from "./read.js";
 
 export interface FrameStanding {
   /** Weighted pass A total, and where it sat inside its own cluster. */
@@ -40,6 +41,7 @@ export interface WhyReport {
   text: string;
 }
 
+/** Text files of a run. JSON goes through `readJsonIf`, which treats an empty file as absent. */
 const read = <T>(p: string, f: (raw: string) => T): T | null => (existsSync(p) ? f(readFileSync(p, "utf8")) : null);
 
 /**
@@ -65,10 +67,10 @@ export function explainFrame(cfg: Config, runDir: string, frameId: string): WhyR
   const frame = history[0]!;
   const isFrame = (id: string | null | undefined) => id !== null && id !== undefined && history.includes(id);
 
-  const plan = read<Plan>(join(runDir, "plan.json"), (r) => PlanSchema.parse(JSON.parse(r)));
-  const score = read<ScoreResult>(join(runDir, "score.json"), (r) => forwardFrameIds(cfg, JSON.parse(r) as ScoreResult));
+  const plan = readJsonIf<Plan>(join(runDir, "plan.json"), (v) => PlanSchema.parse(v));
+  const score = readJsonIf<ScoreResult>(join(runDir, "score.json"), (v) => forwardFrameIds(cfg, v as ScoreResult));
   const passA = read<PassA>(join(runDir, "critic", "pass-a.yaml"), (r) => PassASchema.parse(parseYaml(unfence(r))));
-  const blindMap = read<Record<string, string>>(join(runDir, "critic", "blind-map.json"), (r) => JSON.parse(r) as Record<string, string>);
+  const blindMap = readJsonIf<Record<string, string>>(join(runDir, "critic", "blind-map.json"));
   const deepenPath = history.map((id) => join(runDir, "deepen", `${id}.yaml`)).find((p) => existsSync(p)) ?? join(runDir, "deepen", `${frame}.yaml`);
   const deepenRaw = read(deepenPath, (r) => DeepenArtifactSchema.parse(parseYaml(unfence(r))));
   const synthesis = read(join(runDir, "synthesis.md"), (r) => r);

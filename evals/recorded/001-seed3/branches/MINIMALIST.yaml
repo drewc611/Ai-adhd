@@ -1,0 +1,66 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MINIMALIST
+position: >-
+  Set one client-wide total request timeout of 5 seconds and change nothing else.
+reasoning: |
+  1. The pain that made someone type this. Nobody asks about timeouts while things are working.
+  Either a request hung and took a thread, a worker, or a page with it, or someone read the
+  client's docs and noticed the default is "wait forever". The felt pain is unbounded waiting:
+  one slow dependency can occupy a caller indefinitely. It is not "my timeout values are
+  suboptimal". That would be a tuning question, and tuning questions do not get asked in this
+  shape.
+
+  2. The smallest intervention that removes it. One number, one place: a total deadline on the
+  whole request, set as the client's default, 5 seconds. Total, not connect-plus-read-plus-write,
+  because the pain is total waiting and a single budget is the only one that actually bounds it;
+  the split budgets can each be finite while the sum is not. 5 seconds because it is comfortably
+  above any healthy call this client is likely making and comfortably below a human's patience or
+  a load balancer's own cutoff, so a wrong guess fails in the direction of a rare spurious error
+  rather than a hang. One line of config. No per-call arguments, no per-endpoint table, no retry
+  policy.
+
+  3. What this deliberately leaves unfixed. Slow-but-under-budget calls, which still degrade the
+  caller. The endpoint that legitimately needs 30 seconds, which will now break and announce
+  itself. Streaming or long-poll paths, same. Retries, so a timeout is still a user-visible error
+  rather than a recovered one. Connection pool exhaustion under load. Deadline propagation, so a
+  caller with 1 second left still lets this client spend 5. Cancellation of the work already
+  started upstream. Every one of these is acceptable right now because none of them is why the
+  question was asked, and each is cheaper to fix once you have a bound and can see which ones
+  actually bite. An unbounded wait hides all of them; a crude bound makes them show up as
+  discrete, named failures.
+
+  4. When the larger fix becomes necessary, and how you would know. Two signals, both free. If
+  the timeout starts firing on requests that were going to succeed — errors clustered on one
+  endpoint while the rest are quiet — that endpoint has a different latency shape and now earns
+  its own number, and only that endpoint. If the timeout fires broadly and clients retry by
+  reflex (users reloading, a caller wrapping you), you need retries with backoff and a cap
+  before you need better timeout values, because an unmanaged retry storm is worse than the
+  original hang. Absent either signal, the one number is done and further work on it is
+  invention.
+forecloses:
+  - >-
+    A per-endpoint or per-operation timeout table, including separate connect, read, and write
+    budgets; one total number replaces all of it until a specific endpoint proves it needs its
+    own.
+  - >-
+    Retry with backoff, jitter, and a circuit breaker on top of the client. The first timeout
+    failure stays a visible error, deliberately, because a visible error is information and a
+    silent retry is not.
+  - >-
+    Deadline or cancellation propagation from the inbound request through this client, which
+    would make the timeout a computed remaining budget rather than a constant.
+falsifier: >-
+  Pull the existing latency distribution for calls this client already makes — one dashboard
+  query, or a grep of request-duration logs for the last week. If the healthy p99 is anywhere
+  near 5 seconds, or if any routine call legitimately runs longer, a single 5-second default
+  turns working traffic into errors and this position is wrong. Equally falsifying: the client
+  library or the framework around it already applies a finite default deadline, in which case
+  the hang has some other cause and this change fixes nothing.
+missing_actor: >-
+  The team operating the upstream service being called. They already know their own latency
+  distribution and their own server-side timeout, and can hand over both in one message, which
+  turns the 5 seconds from a guess into a derived number — and if their server cuts off at 2
+  seconds, the client timeout barely matters.
+confidence: medium
+```

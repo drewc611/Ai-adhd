@@ -33,7 +33,7 @@ from typing import Iterable, Iterator
 import numpy as np
 
 from .budget import Budget
-from .modelfile import ModelFileRefused, body_lines, bounded_int, read_header, read_vocabulary
+from .modelfile import surprisal_from_logprob_terms, ModelFileRefused, body_lines, bounded_int, line_bound_for, read_header, read_vocabulary
 from .tokenize import BOS, EOS, UNK, Vocab
 
 #: What `load` allows itself when no `Budget` says otherwise. Same reasoning as the transformer's.
@@ -237,6 +237,22 @@ class LSTM:
 
     # ---- scoring, duck-typed against KneserNey ---------------------------------------------------
 
+    def surprisal(self, ids: list[int]) -> list[float]:
+        """Per-token surprisal in bits, the contract `KneserNey.surprisal` set.
+
+        Here so that anything taking a background model takes this one too. See
+        `modelfile.surprisal_from_logprob_terms` for why the end-of-sequence term is dropped.
+        """
+        return surprisal_from_logprob_terms(self.logprob_terms(ids))
+
+    def describe(self) -> str:
+        """One line naming the model class and its shape, for a report that takes any of them."""
+        c = self.config
+        return (
+            f"LSTM, d_model {c.d_model}, {c.n_layers} layer(s), vocabulary {len(self.vocab):,}, "
+            f"{sum(a.size for a in self.params.values()):,} parameters"
+        )
+
     def logprob_terms(self, ids: Iterable[int]) -> list[tuple[float, bool]]:
         """Per-position natural log probability and whether the target is a real word.
 
@@ -314,7 +330,7 @@ class LSTM:
             meta = head.get("meta", {})
             m = cls(config, vocab, meta if isinstance(meta, dict) else {})
             seen: set[str] = set()
-            for line in body_lines(fh, path):
+            for line in body_lines(fh, path, line_bound_for(max(p.size for p in m.params.values()))):
                 parts = line.rstrip("\n").split("\t")
                 if len(parts) != 3:
                     raise ModelFileRefused(f"{path}: a parameter line has {len(parts)} fields, expected 3")

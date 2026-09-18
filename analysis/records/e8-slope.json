@@ -1,0 +1,149 @@
+{
+  "fit": {
+    "intercept": 50.105,
+    "linear": true,
+    "pairwise": [
+      {
+        "a": "e8c-v0.kn.gz",
+        "b": "e8c-v1.kn.gz",
+        "d_oov_points": -1.7529,
+        "d_perplexity": 4.5744,
+        "slope": -2.61
+      },
+      {
+        "a": "e8c-v0.kn.gz",
+        "b": "e8c-v2.kn.gz",
+        "d_oov_points": -2.7339,
+        "d_perplexity": 8.3623,
+        "slope": -3.059
+      },
+      {
+        "a": "e8c-v0.kn.gz",
+        "b": "e8c-v3.kn.gz",
+        "d_oov_points": -3.4058,
+        "d_perplexity": 11.8215,
+        "slope": -3.471
+      },
+      {
+        "a": "e8c-v1.kn.gz",
+        "b": "e8c-v2.kn.gz",
+        "d_oov_points": -0.981,
+        "d_perplexity": 3.7879,
+        "slope": -3.861
+      },
+      {
+        "a": "e8c-v1.kn.gz",
+        "b": "e8c-v3.kn.gz",
+        "d_oov_points": -1.6529,
+        "d_perplexity": 7.2471,
+        "slope": -4.384
+      },
+      {
+        "a": "e8c-v2.kn.gz",
+        "b": "e8c-v3.kn.gz",
+        "d_oov_points": -0.6719,
+        "d_perplexity": 3.4592,
+        "slope": -5.148
+      }
+    ],
+    "pairwise_spread": 1.972,
+    "r_squared": 0.97712,
+    "slope_perplexity_per_oov_point": -3.391
+  },
+  "points": [
+    {
+      "all_targets": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3243509,
+        "oov_rate": 0.057973,
+        "perplexity": 30.9473,
+        "tokens": 3443116
+      },
+      "in_vocabulary_only": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3243509,
+        "oov_rate": 0.057973,
+        "perplexity": 32.5079,
+        "tokens": 3443116
+      },
+      "load_seconds": 46.0,
+      "model": "e8c-v0.kn.gz",
+      "vocab_size": 8192
+    },
+    {
+      "all_targets": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3303863,
+        "oov_rate": 0.040444,
+        "perplexity": 35.5217,
+        "tokens": 3443116
+      },
+      "in_vocabulary_only": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3303863,
+        "oov_rate": 0.040444,
+        "perplexity": 36.2206,
+        "tokens": 3443116
+      },
+      "load_seconds": 48.4,
+      "model": "e8c-v1.kn.gz",
+      "vocab_size": 16384
+    },
+    {
+      "all_targets": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3337640,
+        "oov_rate": 0.030634,
+        "perplexity": 39.3096,
+        "tokens": 3443116
+      },
+      "in_vocabulary_only": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3337640,
+        "oov_rate": 0.030634,
+        "perplexity": 39.2198,
+        "tokens": 3443116
+      },
+      "load_seconds": 53.1,
+      "model": "e8c-v2.kn.gz",
+      "vocab_size": 32768
+    },
+    {
+      "all_targets": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3360773,
+        "oov_rate": 0.023915,
+        "perplexity": 42.7688,
+        "tokens": 3443116
+      },
+      "in_vocabulary_only": {
+        "documents": 366,
+        "fingerprint": "1446762140db7f1a",
+        "in_vocabulary": 3360773,
+        "oov_rate": 0.023915,
+        "perplexity": 41.7552,
+        "tokens": 3443116
+      },
+      "load_seconds": 57.0,
+      "model": "e8c-v3.kn.gz",
+      "vocab_size": 71603
+    }
+  ],
+  "threshold": {
+    "derived_gap": 0.003006,
+    "floor_bound": false,
+    "floor_gap": 0.0023,
+    "read_at_perplexity": 30.9473,
+    "relative_budget": 0.05,
+    "slope_used": "worst_pairwise",
+    "threshold_gap": 0.003006,
+    "worst_pairwise_slope": 5.148
+  }
+}

@@ -1,0 +1,48 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "The position is one sentence with the verb set and no hedge: pick a single conservative round-number timeout now instead of tuning per-signal values." }
+    falsifiability: { score: 3, evidence: "The falsifier is a cheap week-one log check for a >1% rate of premature timeouts, and finding that would directly kill the blanket-value position." }
+    specificity: { score: 0, evidence: "The reasoning is generic pick-a-round-number-now advice that never touches any detail unique to this problem statement, which itself supplies none." }
+    assumption_attack: { score: 0, evidence: "The branch accepts that a single client-level timeout value is the right kind of fix and never questions that frame." }
+    reasoning_carries: { score: 3, evidence: "The four numbered steps are self-derived from the described pain with no citation or appeal to authority anywhere." }
+    actor_coverage: { score: 2, evidence: "The missing_actor (downstream owner publishing an SLA) is named with a concrete action, but the blanket-value position does not actually depend on that actor doing anything." }
+    reversibility: { score: 1, evidence: "It only gestures at the distinction by calling precision a distinct, later problem without ordering any recommendations around cost of reversal." }
+    substance: { score: 2, evidence: "Stripped of framing it is still a workable claim (bound the hang now, tune later) but reads close to what a rushed engineer would already do." }
+  B:
+    committal: { score: 2, evidence: "The position packs two required actions (size from pool budget, never ship without retry/circuit-breaker) into one sentence, which is forceful but compound rather than a single clean Do X." }
+    falsifiability: { score: 2, evidence: "The falsifier requires a sustained load test to observe pool saturation, which is relevant and would change the position but is not cheap." }
+    specificity: { score: 0, evidence: "The pool-budget-not-downstream-latency argument is generic engineering guidance that never depends on any detail from this bare problem statement." }
+    assumption_attack: { score: 1, evidence: "It names the assumption behind copying a generic timeout value and argues against it but never actually tests it against an observation." }
+    reasoning_carries: { score: 3, evidence: "The four-step chain about pool exhaustion and retry storms is argued from first principles with no external authority invoked." }
+    actor_coverage: { score: 2, evidence: "The missing downstream team is named with a real action (publish SLO, add load shedding) but the recommended timeout sizing is explicitly designed to not depend on them." }
+    reversibility: { score: 1, evidence: "It mentions an ongoing attention cost and an explicit trade-off but never frames the recommendation as an order of cheap-then-expensive moves." }
+    substance: { score: 3, evidence: "Flatly restated -- size timeouts to your own capacity and always pair them with a bounded retry/circuit-breaker -- is still a substantive, non-obvious claim." }
+  C:
+    committal: { score: 2, evidence: "The single sentence directs defining a policy before picking a number, which is a real decision but functions partly as a process escape hatch that defers the actual value." }
+    falsifiability: { score: 2, evidence: "The falsifier depends on postmortem logs existing and showing clean degradation, which is observable and relevant but contingent and not cheap to obtain." }
+    specificity: { score: 0, evidence: "Nothing in the deadline-budget-and-retry-policy argument depends on any concrete detail from the problem, which supplies none to begin with." }
+    assumption_attack: { score: 3, evidence: "It explicitly names the load-bearing assumption that a timeout is a standalone tunable value and the derive-from-policy answer follows directly from rejecting it." }
+    reasoning_carries: { score: 3, evidence: "The mapped-call-chain argument is entirely self-contained reasoning with no citations to strip." }
+    actor_coverage: { score: 2, evidence: "The on-call/SRE owner is named with a concrete action (publish an SLA) but the policy-first position does not hinge on that actor acting." }
+    reversibility: { score: 0, evidence: "There is no discussion anywhere of cheap-reversible versus expensive-committed moves." }
+    substance: { score: 2, evidence: "Restated flatly -- work out the failure-handling policy before choosing a number -- is sound but reads as a process reminder rather than a sharp concrete claim." }
+  D:
+    committal: { score: 2, evidence: "The position is a semicolon-joined sequence (derive from data, keep config-overridable, freeze only after canary) that is decisive but multi-part rather than a single unhedged directive." }
+    falsifiability: { score: 3, evidence: "The falsifier -- canary retry-rate spikes or reconciliation finds duplicate writes -- is cheap to observe during the very rollout the position prescribes and would directly indict it." }
+    specificity: { score: 0, evidence: "The reversible-vs-irreversible analysis is generic to any timeout decision and never touches a detail specific to this problem." }
+    assumption_attack: { score: 1, evidence: "It implicitly assumes all timeout sub-decisions carry equal risk and reframes around reversibility rather than testing an assumption from the question itself." }
+    reasoning_carries: { score: 3, evidence: "The ordered idempotency-then-data-then-canary argument is built entirely from first principles without any cited authority." }
+    actor_coverage: { score: 2, evidence: "The downstream owner who could publish a latency budget is named with an action, but the position is explicitly designed to work from the caller's own metrics regardless." }
+    reversibility: { score: 3, evidence: "The entire recommendation is an explicit sequence ordered by cost of reversal -- idempotency check, then data, then config-driven canary, only then the one-way freeze." }
+    substance: { score: 3, evidence: "Flatly stated -- measure real latency, keep values configurable, only lock defaults in after a canary confirms them -- remains a genuinely useful, concrete claim." }
+  E:
+    committal: { score: 3, evidence: "The one sentence commits to a specific split (generous client safety net, per-call deadline at the call site) with clear verbs and no hedge returning the choice to the reader." }
+    falsifiability: { score: 3, evidence: "The falsifier -- checking whether existing call sites all tolerate an identical budget -- is a cheap code-review-level check that would directly overturn the per-call-deadline claim if true." }
+    specificity: { score: 0, evidence: "The caller-budget argument is a generic design pattern that never depends on any concrete detail this problem statement supplies." }
+    assumption_attack: { score: 3, evidence: "It explicitly names the assumption that the client's static config is the whole story, tests it by cataloguing omitted actors, and the per-call-deadline answer follows from naming the caller." }
+    reasoning_carries: { score: 3, evidence: "The actor enumeration and design argument is entirely self-derived with no citation or authority anywhere in the chain." }
+    actor_coverage: { score: 3, evidence: "The caller is named with a concrete, instant action (attach a per-call context deadline) and the entire position is explicitly built to depend on that actor doing it." }
+    reversibility: { score: 0, evidence: "There is no discussion of cheap-reversible versus expensive-committed moves anywhere in the argument." }
+    substance: { score: 3, evidence: "Restated flatly -- keep the shared client's timeout loose and let each call site set its own deadline -- is a real, still-useful architectural claim independent of the framing." }

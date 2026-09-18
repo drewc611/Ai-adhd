@@ -1,3 +1,4 @@
+import { dimensionsAt } from "../src/schema.js";
 import { test } from "node:test";
 import { stringify } from "yaml";
 import assert from "node:assert/strict";
@@ -33,7 +34,7 @@ test("fenced YAML from a chatty subagent is accepted", () => {
 
 test("pass A must have every letter x every dimension", () => {
   const letters = ["A", "B", "C"];
-  const dims = cfg.rubric.dimensions.map((d) => d.id);
+  const dims = dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).map((d) => d.id);
   const good = passA(H, letters);
   assert.ok(validatePassA(yaml(good), H, letters, dims));
   const missing = passA(H, letters);
@@ -162,7 +163,7 @@ test("a critic that declines to score is reported as a refusal, not as malformed
   // reason someone should read before rerunning; malformed output is a contract violation to fix.
   const H = "sha256:" + "a".repeat(64);
   const letters = ["A", "B"];
-  const dims = cfg.rubric.dimensions.map((d) => d.id);
+  const dims = dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).map((d) => d.id);
 
   const explicit = `problem_hash: ${H}\npass: A\nrefused: true\nreason: two artifacts are byte-identical, so blind scoring would be scoring one text twice\n`;
   assert.throws(
@@ -186,7 +187,7 @@ test("a half-scored pack calling itself a refusal is still a contract violation"
   // The one shape that could hide a real failure behind the new path. Anything carrying the
   // fields a real pass has is validated as a real pass, whatever it calls itself.
   const H = "sha256:" + "b".repeat(64);
-  const dims = cfg.rubric.dimensions.map((d) => d.id);
+  const dims = dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).map((d) => d.id);
   const half = `problem_hash: ${H}\npass: A\nrefused: true\nreason: partway through\nscores:\n  A:\n    ${dims[0]}:\n      score: 2\n      evidence: something\n`;
   assert.throws(() => validatePassA(half, H, ["A", "B"], dims), (e: Error) => e.name === "ContractError");
 });
@@ -195,7 +196,7 @@ test("a refusal never masks a hash mismatch", () => {
   // Order matters: paraphrase drift invalidates the run whatever the critic then says about it.
   const H = "sha256:" + "c".repeat(64);
   const wrongHash = `problem_hash: sha256:${"d".repeat(64)}\npass: A\nrefused: true\nreason: anything\n`;
-  assert.throws(() => validatePassA(wrongHash, H, ["A"], cfg.rubric.dimensions.map((d) => d.id)), (e: Error) => e.name === "HashMismatch");
+  assert.throws(() => validatePassA(wrongHash, H, ["A"], dimensionsAt(cfg.rubric.dimensions, cfg.rubric.version).map((d) => d.id)), (e: Error) => e.name === "HashMismatch");
 });
 
 test("nothing in prompts/ invites the critic to refuse", () => {

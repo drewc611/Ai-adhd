@@ -1,0 +1,68 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: ACTOR_CENSUS
+verdict: defend
+response: |
+  The objection lands one real hit and I am paying for it. The hit is the costing: I rejected
+  the queue-and-workers rewrite because it costs a deploy, then bundled a rewrite of the
+  script's core commit loop into my own proposal and called the whole thing a five-line change.
+  That is inconsistent and the objection is right to name it. So I split the proposal at the
+  price line the objection drew, and I keep the cheap half: flock, a lock file carrying PID and
+  start time, a loud non-zero logged outcome when a run exits because the lock was held, the
+  run's duration written on every exit, and one documented command to run it by hand.
+  Idempotent resumability moves out of the first move and into the same cost bucket as the
+  queue rewrite, where it gets decided by data rather than by assertion.
+
+  That concession is not a fold, because it resolves the objection's other two prongs rather
+  than conceding them, and because the frame's answer is unchanged. Take the self-undercutting
+  argument. It only works while both halves are in: if every unit commits idempotently and
+  resumably, then yes, the lock demotes to resource optimisation. Drop the resumability rewrite
+  and the lock is a correctness mechanism again, straightforwardly - two copies of a
+  non-idempotent job must not run at once. The objection's two strongest prongs are in tension
+  with each other. It cannot simultaneously be true that the expensive half is unaffordable and
+  that the cheap half is pointless because the expensive half makes it redundant. Choosing the
+  cheap half answers both at once.
+
+  The trend prong is cheaper to answer than the objection assumes, and it is answered by the
+  half I kept, not the half I dropped. Logging the run duration on every exit and logging every
+  lock-held skip is the trend record. That is the same data my own falsifier asks for - thirty
+  runs of start and end timestamps - and today it does not exist, which is why nobody saw the
+  crossing coming. The guard is what creates the instrument. Saying the design "records nothing
+  about the trend" is only true of a version of the design that omits the logging I specified,
+  and at 3am the difference between reading "held since Tuesday 04:00, last twelve runs skipped"
+  and reading nothing is the whole intervention.
+
+  The shell-access prong is not an objection to the position, it is the position's own stated
+  collapse condition, written into the falsifier before the objection arrived. I agree with it
+  completely. It changes status: it stops being a falsifier to check afterwards and becomes a
+  precondition to verify first. If the cron fires inside an ephemeral container or a managed
+  scheduler, my primary actor does not exist, the census has to be rerun against whoever the
+  fastest real controller is - probably whoever can redeploy, or whoever holds the scheduler
+  console - and the design that follows will not be this one. Under ACTOR_CENSUS that is the
+  correct behaviour, not a failure of it.
+
+  What survives is the frame's claim, which the objection never engaged: the fastest and
+  cheapest actor on this system is the human at a shell, they are omitted from the statement,
+  and the first change should be the one that makes their intervention correct rather than the
+  one that makes the schedule elegant. The objection disputed the price of my design. It did not
+  dispute my census.
+revised_position: >-
+  Ship only the cheap half now - flock plus a lock file recording holder PID and start time, a
+  loud non-zero logged skip when the lock is held, and every run's duration logged on exit - so
+  the on-call human can see who holds the job, kill or rerun it by hand, and accumulate the
+  runtime trend data that decides whether the expensive idempotent-resumable rewrite is needed
+  at all.
+revised_falsifier: >-
+  Precondition first, because it is fatal rather than merely disconfirming: verify that a human
+  can get a shell on the host that fires the cron. On an immutable container, a managed
+  scheduler, or a box only a build pipeline can reach, the primary actor does not exist and this
+  design must be rebuilt around whoever the fastest real controller is. If that holds, the
+  position is wrong if the duration log it installs shows median runtime steadily above the cron
+  interval rather than spiking above it, because then the lock converts overlap into permanent
+  silent skipping, the job never completes again, and the problem is throughput and belongs in
+  the queue rewrite. Note the reversal the objection forced: this check no longer runs once
+  before the change, it runs continuously after it, because the change is what produces the data,
+  and a skip rate that climbs across weeks is the signal to spend the money I declined to spend
+  here.
+confidence: medium
+```

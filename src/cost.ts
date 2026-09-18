@@ -158,9 +158,27 @@ export function costReport(cfg: Config, recordedDir = join(cfg.root, "evals", "r
   if (withEstimate.length) {
     const meanRatio = withEstimate.reduce((a, r) => a + r.ratio!, 0) / withEstimate.length;
     lines.push(`total ${num(total)} actual against ${num(totalEstimate)} estimated, mean ${meanRatio.toFixed(1)}x over ${withEstimate.length} run(s).`);
-    lines.push(
-      `The D5 gate shows the estimate, so a mean this far from 1.0 is the gate quoting a figure ${meanRatio > 1 ? "well under" : "well over"} what the run costs. \`tokens_per_branch_estimate\` in config/routing.yaml is what sets it.`,
-    );
+
+    // The recorded estimate is what each run was *quoted*, from the config as it stood then. After a
+    // recalibration those two things part company, and reporting only the historical ratio leaves
+    // this command accusing a gate that has already been fixed — which is how a warning outlives its
+    // cause. So the current config is priced here too, against the worst run on record, because the
+    // worst run is the bar D32 set for the gate.
+    const worst = Math.max(...withEstimate.map((r) => r.tokens));
+    const nowFor = (n: number) => {
+      const branches = cfg.routing.defaults.tokens_per_branch_estimate * n;
+      return branches + Math.round(branches * 0.61) + Math.round(branches * 0.43);
+    };
+    const ns = [...new Set(withEstimate.map((r) => r.n))].filter((n): n is number => n !== null);
+    const nowQuoted = Math.max(...ns.map(nowFor));
+    if (nowQuoted >= worst)
+      lines.push(
+        `The gate quotes ${num(nowQuoted)} today for the largest of these (n=${ns.reduce((a, b) => (nowFor(b) > nowFor(a) ? b : a))}), against a worst recorded run of ${num(worst)} — so the ratio above is what these runs were quoted, not what a run is quoted now. D32 set the figure from the maximum rather than the mean.`,
+      );
+    else
+      lines.push(
+        `The D5 gate shows the estimate, so a mean this far from 1.0 is the gate quoting a figure ${meanRatio > 1 ? "well under" : "well over"} what the run costs. The gate quotes ${num(nowQuoted)} today against a worst recorded run of ${num(worst)}. \`tokens_per_branch_estimate\` in config/routing.yaml is what sets it.`,
+      );
   }
   return { runs, total, total_estimate: totalEstimate, by_phase: byPhase, unbroken, text: lines.join("\n") };
 }

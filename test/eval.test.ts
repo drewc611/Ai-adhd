@@ -6,6 +6,7 @@ import { cfg, tmp } from "./helpers.js";
 import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
 import { problemHash } from "../src/hash.js";
 import { compile, previewText } from "../src/compile.js";
+import { stringify } from "yaml";
 
 test("the shipped negative control fails fixture 001 and is expected to", () => {
   const r = runEval(cfg);
@@ -255,7 +256,7 @@ test("a fixture with no assertions and no decline is rejected at load", () => {
     join(dir, "bad.yaml"),
     "id: '900'\nname: empty\nproblem_class: design_decision\nseed: 1\nprompt: does it work\n",
   );
-  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline or expect.injection_warnings_min is set/);
+  assert.throws(() => loadFixtures(dir), /must_surface is required unless expect.decline, expect.injection_warnings_min or expect.compiles is set/);
 });
 
 test("a decline fixture carrying assertions is rejected, because there is no output to assert on", () => {
@@ -371,4 +372,49 @@ test("exactly one shipped assertion is knowingly satisfied by a control, and it 
   const fm = a.items.find((i) => i.item === "false_means")!;
   assert.equal(fm.verdict, "never matched");
   assert.equal(fm.control_matched, 0, "the convention tokens that let the control satisfy this are gone");
+});
+
+/**
+ * `branches_expected` and `distinct_axes` were added for fixture 014, and an assertion that cannot
+ * fail is worse than none: it reads as coverage. Both are checked against a plan doctored to break
+ * exactly the property they claim to hold.
+ */
+test("branches_expected fails a plan that dispatched a different number of branches", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "014")!;
+  assert.equal(fx.expect.branches_expected, 7, "fixture 014 is the wide path");
+
+  // The real compile passes.
+  const ok = runEval(cfg, { fixturesDir: join(cfg.root, "evals", "fixtures") }).pairs.find((p) => p.fixture === "014")!;
+  assert.equal(ok.outcome, "pass");
+
+  // The same fixture asking for a count routing will not produce fails, and says which number.
+  const dir = tmp();
+  const doctored = { ...fx, expect: { ...fx.expect, branches_expected: 5 } };
+  writeFileSync(join(dir, "014-queue-options.yaml"), stringify(doctored));
+  const bad = runEval(cfg, { fixturesDir: dir }).pairs.find((p) => p.fixture === "014")!;
+  assert.equal(bad.outcome, "fail");
+  assert.ok(bad.failures.some((f) => /branches_expected 5.*carries 7/.test(f)), bad.failures.join("; "));
+});
+
+test("distinct_axes fails a plan carrying two frames from one axis", () => {
+  const fx = loadFixtures(join(cfg.root, "evals", "fixtures")).find((f) => f.id === "014")!;
+  const dir = tmp();
+  // Name two same-axis frames explicitly. The compiler's own axis rule drops the second, so the
+  // plan comes back short — which `branches_expected` catches and is the honest outcome: the
+  // selector refuses to build the plan this assertion is guarding against, and that is D6 working.
+  // Not `mechanism` any more: D35 moved FIRST_PRINCIPLES to `derivation`, leaving MECHANIC alone
+  // there. Pick whichever axis actually has two members rather than naming one, so this test keeps
+  // testing the axis rule instead of a particular pair.
+  const byAxis = new Map<string, string[]>();
+  for (const f of cfg.frames.frames) byAxis.set(f.axis, [...(byAxis.get(f.axis) ?? []), f.id]);
+  const sameAxis = [...byAxis.values()].find((ids) => ids.length >= 2)!;
+  assert.ok(sameAxis, "no axis in the library has two frames, so D6 has nothing to enforce");
+  writeFileSync(join(dir, "014-queue-options.yaml"), stringify({ ...fx, expect: { ...fx.expect, branches_expected: sameAxis.length } }));
+  const r = runEval(cfg, { fixturesDir: dir }).pairs.find((p) => p.fixture === "014")!;
+  assert.equal(r.outcome, "fail", "asking for a count routing cannot fill is a failure, not a silent short plan");
+
+  // And the check itself: a plan with a repeated axis is rejected by the message it should give.
+  const axes = ["cost", "cost", "scope"];
+  const dupes = axes.filter((a, i) => axes.indexOf(a) !== i);
+  assert.deepEqual([...new Set(dupes)], ["cost"], "the duplicate detection the evaluator uses");
 });

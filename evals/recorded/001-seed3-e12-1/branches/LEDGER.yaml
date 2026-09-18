@@ -1,0 +1,63 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: LEDGER
+position: >-
+  Set connect/read timeouts from your own thread and connection pool budget,
+  not from the downstream's average latency, and never ship a timeout without
+  a bounded retry policy and circuit breaker attached to it.
+reasoning: |
+  1. The obvious answer is a single number copied from a blog post or a
+  neighboring service's config (often "30s" for everything, or no timeout at
+  all because the client library default is "off"). That answer's cost is
+  paid in connection-pool exhaustion and thread starvation, and it is paid by
+  the on-call engineer of the calling service, at the worst possible moment:
+  during a downstream outage, when every in-flight request hangs for the full
+  window and the pool fills with zombie requests, taking healthy traffic down
+  with it. The currency is on-call sleep and cascading incident scope, not
+  money, and the bill arrives hours after the config was merged and forgotten.
+
+  2. What's invisible from where the asker stands: they're picking a knob for
+  one client, but a timeout that fires without a retry budget or circuit
+  breaker just converts a hang into a fast failure and then lets the caller
+  retry immediately and repeatedly. That retry traffic is a bill the asker's
+  own service never sees on its dashboards — it's paid by the downstream
+  service, whose degraded instance now gets hammered by retry storms from
+  every client that just "fixed" its timeouts the same day. The asker
+  experiences their own fix as a clean success; the payer is a team they
+  don't monitor.
+
+  3. The cheapest option that still resolves the actual pain (client threads
+  hanging forever) is to size the timeout to protect the caller's own
+  capacity — pool size, SLA to its own callers — rather than trying to guess
+  the downstream's "normal" latency from the outside. This reuses numbers the
+  team already owns (their pool size, their SLA) instead of inventing a
+  latency model for a service they don't operate, and it caps the blast
+  radius of a slow dependency without needing coordination with the
+  downstream team first.
+
+  4. The explicit trade: a timeout set to protect your own pool will be
+  shorter than some legitimate slow-but-successful downstream responses, so a
+  bounded fraction of real requests get cut off and surfaced as errors. That
+  cost is paid by end users, in trust/friction currency, as occasional
+  visible failures instead of invisible unbounded hangs. It is a better trade
+  only because it's bounded, monitorable, and shows up on a dashboard someone
+  can act on — but it still requires someone to actually watch that error
+  rate and tune the retry budget, which is an ongoing attention cost the
+  asker has to now own, not a one-time config edit.
+forecloses:
+  - >-
+    copying a single generic timeout value from another service's config or
+    a library default without checking it against your own pool size
+  - >-
+    treating the timeout as the whole fix and adding unlimited or
+    immediate retries to paper over requests that now fail faster
+falsifier: >-
+  Run a load test that holds downstream latency above your configured
+  timeout for a sustained period; if your service's thread/connection pool
+  still saturates and you still see a full outage rather than a bounded,
+  monitored error rate, the position is wrong.
+missing_actor: >-
+  The downstream API's owning team, who can publish a documented p99 latency
+  SLO for clients to time out against and add server-side load shedding so
+  that client-side retries triggered by your new timeouts don't amplify into
+  a retry storm on their side.
+confidence: medium

@@ -1,0 +1,5 @@
+{
+  "outcome": "fail",
+  "note": "E12, cell 2 of 2 (backlog 102). Fixture 001 at seed 3, re-run with fresh branches and a fresh critic subagent, everything else held as cell 1 held it. All five branches again fired T1 in pass B and the run again pruned to zero survivors; deepen again refused. Trap-sweep agreement against cell 1 is 39 of 40 (frame x trap) records -- the single disagreement is ACTOR_CENSUS/T2 -- and both runs pruned all five branches, an identical prune set. Fails must_surface retry_target_questioned and must_not triple_only / no_verdict for the same structural reason as cell 1 (no recommendation exists to carry the language or the imperative sentence the checks look for); this time must_surface human_cancel passes, which cell 1 did not. must_surface trap_named, retry_cost, and every 'expect' assertion pass. Same fixture, same seed, same briefs as 001-seed3, a different session -- a draw, not an independent appearance (backlog 99). See docs/EXPERIMENTS.md E12.",
+  "replicate_of": "001-seed3"
+}

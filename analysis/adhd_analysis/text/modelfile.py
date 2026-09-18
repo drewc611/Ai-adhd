@@ -32,9 +32,22 @@ from .tokenize import Vocab
 #: refuses a bomb long before it is memory worth worrying about.
 MAX_HEADER_BYTES = 16 * 1024 * 1024
 
-#: One n-gram or one parameter tensor per line. A `tok` matrix of 8,192 x 128 at six significant
-#: figures is about 10MB, so this bounds a line without bounding a legitimate model.
+#: One n-gram per line, for formats whose lines do not scale with a declared shape. The n-gram
+#: model is the case: one n-gram and its probabilities per line, bounded by the order.
+#:
+#: This used to bound parameter tensors too, and the comment beside it read "a `tok` matrix of
+#: 8,192 x 128 at six significant figures is about 10MB, so this bounds a line without bounding a
+#: legitimate model". That was true of every model that existed when it was written and false the
+#: first time one did not: E9's cell D is 148,114 x 128, its `tok` line is 204,355,608 bytes, and
+#: the file refused to load a model this repository had just spent two hours training. A constant
+#: that happens to exceed the largest model so far is not a bound on anything; it is a record of
+#: what had been trained by then. See `line_bound_for`.
 MAX_LINE_BYTES = 64 * 1024 * 1024
+
+#: Bytes allowed per written float when a line bound is derived from a declared shape. Six
+#: significant figures with a sign, an exponent and a separator is about 14; 24 is generous enough
+#: that no legitimate value is refused and small enough that the bound still means something.
+BYTES_PER_VALUE = 24
 
 #: Total decompressed size. The largest model this repository has trained is 163MB on disk and about
 #: 1.5GB decompressed; 8GB refuses a bomb while leaving room for one several times larger than any
@@ -70,19 +83,38 @@ def read_header(fh: TextIO, path: Path, what: str) -> dict:
     return head
 
 
-def body_lines(fh: TextIO, path: Path) -> Iterator[str]:
+def line_bound_for(values: int) -> int:
+    """The largest legitimate line for a tensor of `values` floats, plus its name and shape.
+
+    Derived rather than constant, because the largest line in a parameter file is the size the file's
+    own header declares it to be. A caller reaches this only after that header has been validated and
+    its parameter count checked against a memory ceiling, so an inflated `vocab_size` is refused
+    before it can inflate this — the shape is not trusted here, it is already bounded.
+
+    For every model this repository had trained before E9 this is *tighter* than the constant it
+    replaced: 8,192 x 128 derives 25MB against a flat 64MB. It is looser only where the declared
+    model is genuinely larger, which is the case the constant got wrong.
+    """
+    return values * BYTES_PER_VALUE + 1024
+
+
+def body_lines(fh: TextIO, path: Path, max_line_bytes: int = MAX_LINE_BYTES) -> Iterator[str]:
     """The rest of the file, bounded per line and in total.
 
     `for line in fh` reads one line however long it is, and however many there are. Both are numbers
-    the file chooses.
+    the file chooses. `max_line_bytes` lets a caller that has already validated a declared shape pass
+    the bound that shape justifies, via `line_bound_for`.
     """
     total = 0
     while True:
-        line = fh.readline(MAX_LINE_BYTES + 1)
+        line = fh.readline(max_line_bytes + 1)
         if not line:
             return
-        if not line.endswith("\n") and len(line) > MAX_LINE_BYTES:
-            raise ModelFileRefused(f"{path}: a line exceeds {MAX_LINE_BYTES:,} bytes decompressed")
+        if not line.endswith("\n") and len(line) > max_line_bytes:
+            raise ModelFileRefused(
+                f"{path}: a line exceeds {max_line_bytes:,} bytes decompressed"
+                + ("" if max_line_bytes == MAX_LINE_BYTES else ", the bound its own declared shape allows")
+            )
         total += len(line)
         if total > MAX_TOTAL_BYTES:
             raise ModelFileRefused(
@@ -131,3 +163,58 @@ def read_vocabulary(fh: TextIO, path: Path, *, max_types: int | None = None) -> 
         dropped_types=0,
         dropped_tokens=0,
     )
+
+
+#: Every model class this package can train, keyed by the `format` marker it writes into its own
+#: header line. Adding a class here is what makes it usable everywhere a background model is taken.
+BACKGROUND_FORMATS = {
+    "adhd-kn-1": ("..text.ngram", "KneserNey"),
+    "adhd-tf-1": ("..text.transformer", "Transformer"),
+    "adhd-lstm-1": ("..text.lstm", "LSTM"),
+}
+
+
+def load_background(path, budget=None):
+    """Load a trained background model, whichever class wrote it.
+
+    Three model classes ship and all three duck-type each other where the scoring machinery touches
+    them: `vocab`, `meta`, `logprob_terms`. Nothing that consumes a background model needs to know
+    which one it got, and until now every caller hard-coded `KneserNey.load`, so the transformer
+    D20 added could be trained and then used by nothing. A model nobody can point at a corpus is a
+    research artifact, not a component.
+
+    Dispatch is on the `format` marker each class already writes into its header, so the file says
+    what it is and the caller does not have to guess from a filename.
+    """
+    import gzip
+    import importlib
+    from pathlib import Path
+
+    p = Path(path)
+    with gzip.open(p, "rt", encoding="utf-8") as fh:
+        fmt = read_header(fh, p, "header").get("format")
+    if fmt not in BACKGROUND_FORMATS:
+        raise ModelFileRefused(
+            f"{p}: header says format {fmt!r}, which is not a background model this package trains. "
+            f"Known: {', '.join(sorted(BACKGROUND_FORMATS))}"
+        )
+    module, cls = BACKGROUND_FORMATS[fmt]
+    return getattr(importlib.import_module(module, __package__), cls).load(p, budget)
+
+
+def surprisal_from_logprob_terms(terms):
+    """Per-token surprisal in bits, from the one method every model class here shares.
+
+    `KneserNey` has carried `surprisal` since the beginning and the genericity report is written
+    against it; the transformer and the LSTM only ever exposed `logprob_terms`, which is why a
+    trained transformer could not be handed to the report that needs a background model.
+
+    The trailing term is dropped. Both `logprob_terms` implementations append `</s>` and score it,
+    while `KneserNey.surprisal` stops at the last real token, so keeping it would make the two model
+    classes disagree by one end-of-sequence probability on the same text. Dropping it means the
+    figure means the same thing whichever model produced it, which is the only reason to have a
+    shared surface at all.
+    """
+    import math
+
+    return [-lp / math.log(2) for lp, _ in list(terms)[:-1]]

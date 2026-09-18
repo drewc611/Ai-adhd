@@ -1,0 +1,48 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "The position is one sentence, 'Set one overall request timeout... and stop there,' with an explicit verb and no hedge." }
+    falsifiability: { score: 2, evidence: "The falsifier requires observing a shift in production failure/hang rates over time, which is observable and would change the position but is not a cheap single check." }
+    specificity: { score: 0, evidence: "The reasoning is a generic 'start with one timeout, add granularity only once evidence demands it' template that would apply unchanged to any bare timeout question." }
+    assumption_attack: { score: 2, evidence: "It names the asker's assumption that granular per-phase/per-endpoint timeouts are needed and argues against it, but does not run an actual test, only a hypothetical future log check." }
+    reasoning_carries: { score: 3, evidence: "No citation or authority is invoked anywhere; the argument runs purely on inferred incident mechanics." }
+    actor_coverage: { score: 3, evidence: "The missing actor (on-call/observability owner) is named with a concrete action (add timeout-failure metrics) that the step-4 trigger explicitly depends on." }
+    reversibility: { score: 1, evidence: "It sequences 'fix now, expand later' but never frames the choice explicitly in terms of cheap-to-reverse versus expensive-to-reverse moves." }
+    substance: { score: 3, evidence: "Flattened, the claim 'set one global timeout and only add complexity once data shows it's wrong' is still a plain, useful stance with no rhetorical angle propping it up." }
+  B:
+    committal: { score: 3, evidence: "'Set explicit connect and read timeouts derived from... p99... and cap retries' is a single compound directive with no hedge returning the choice to the reader." }
+    falsifiability: { score: 3, evidence: "The falsifier is a cheap, specific load-test comparison of timeout-caused failure rate against measured p99 that would directly indicate the value is wrong." }
+    specificity: { score: 0, evidence: "The p99-anchoring and retry-cap advice is a standard pattern that would transfer unchanged to virtually any client-timeout question, since the problem supplies no distinguishing detail." }
+    assumption_attack: { score: 2, evidence: "It names and argues against the assumption that a generous or default timeout is 'safe,' but the pushback is cost analysis rather than an actual test with a result." }
+    reasoning_carries: { score: 3, evidence: "The chain (pool exhaustion, cascading cost, retry multiplication) is argued from mechanics alone with no external authority cited." }
+    actor_coverage: { score: 2, evidence: "The downstream-owning team is named with an action (publish an SLA) but the position's own timeout-setting method (measure p99 yourself) does not strictly depend on that actor acting." }
+    reversibility: { score: 1, evidence: "It notes an 'ongoing cost' of retuning as latency shifts but never contrasts this against a harder-to-undo move or uses reversibility to order steps." }
+    substance: { score: 3, evidence: "Flattened to 'measure the dependency, timeout short, cap retries,' the claim remains a plain, defensible piece of advice with no dependence on its framing." }
+  C:
+    committal: { score: 2, evidence: "The position spans two clauses ('stop looking... instead define...') describing a policy-building process rather than one crisp actionable sentence, which softens the directness." }
+    falsifiability: { score: 3, evidence: "The falsifier (audit call sites for identical idempotency/latency) is cheap, specific, and would flip the position back to a single timeout if it came out negative." }
+    specificity: { score: 0, evidence: "The per-operation-budget framing is a generic architectural stance that would be offered for any 'what timeout do I set' question regardless of details, since the problem gives none." }
+    assumption_attack: { score: 3, evidence: "It explicitly identifies the load-bearing assumption ('timeouts is a property of the client itself, one number for every call') and the falsifier's audit result is what the answer is made to hinge on." }
+    reasoning_carries: { score: 3, evidence: "The argument runs on incentive analysis (who benefits from a single magic constant) with no external authority cited." }
+    actor_coverage: { score: 3, evidence: "The downstream service owner is named with an action (publish per-endpoint SLA) and the position's per-operation budgets are explicitly to be set 'against that documentation instead of guessing.'" }
+    reversibility: { score: 0, evidence: "There is no discussion anywhere of cheap-to-change versus expensive-to-change moves." }
+    substance: { score: 3, evidence: "Flattened to 'don't use one client-wide number, budget per operation based on idempotency and caller deadline,' it remains a substantive, standard engineering claim." }
+  D:
+    committal: { score: 2, evidence: "The position bundles three actions (measure, commit to architecture, keep values as config) in one long sentence, which reads as more than one directive rather than a single clean verb." }
+    falsifiability: { score: 2, evidence: "The falsifier requires a full day of instrumentation plus load testing before it could flip the position, so it is observable and relevant but not cheap." }
+    specificity: { score: 0, evidence: "The one-way/two-way-door framing is a generic decision-analysis template applied to timeouts that would hold for almost any config-vs-architecture question, independent of the bare problem's details." }
+    assumption_attack: { score: 1, evidence: "It reframes the question around reversibility but never explicitly names or tests an assumption the original question made; the architecture claim is asserted, not tested against a stated assumption." }
+    reasoning_carries: { score: 3, evidence: "The one-way/two-way-door argument is built entirely from inferred failure costs and detection latency, with no citation." }
+    actor_coverage: { score: 2, evidence: "The downstream owner is named with an action (state their SLA) but it is framed as a shortcut ('let you skip a day of measurement') rather than something the position depends on." }
+    reversibility: { score: 3, evidence: "The entire position is a sequence explicitly ordered by which moves are cheap two-way doors (measure, config tuning) versus the one expensive one-way door (deadline-propagation architecture)." }
+    substance: { score: 3, evidence: "Flattened to 'measure real latency, keep values configurable, but commit early to deadline propagation because retrofitting it later is expensive,' the claim survives without its door metaphor." }
+  E:
+    committal: { score: 3, evidence: "The position is one sentence, 'Set explicit, short timeouts on every phase... sized to bound... a stalled or adversarial peer,' with a clear verb and no escape hatch." }
+    falsifiability: { score: 3, evidence: "The falsifier is a cheap, specific check (does an existing proxy/load balancer already enforce a tighter cutoff) that would directly undercut treating the attacker as the binding constraint." }
+    specificity: { score: 0, evidence: "The per-phase, adversarial-peer framing is a generic security-hardening template that would be produced for any HTTP-client timeout question regardless of the (nonexistent) problem specifics." }
+    assumption_attack: { score: 3, evidence: "It explicitly tests the assumption that the upstream is well-behaved by treating a stalled/adversarial peer as the binding case, and the falsifier's outcome (an existing proxy already covers this) would directly overturn the position." }
+    reasoning_carries: { score: 3, evidence: "The actor-by-actor cost/speed comparison is argued from first principles with no authority or citation invoked." }
+    actor_coverage: { score: 3, evidence: "The attacker is named with a concrete zero-cost action (open a connection and withhold bytes) and the entire per-phase timeout position is built to bound exactly that actor's leverage." }
+    reversibility: { score: 0, evidence: "There is no discussion of cheap-versus-expensive-to-reverse moves anywhere in the reasoning." }
+    substance: { score: 3, evidence: "Flattened to 'set short per-phase timeouts because a stalled or malicious peer can hold a socket open almost for free,' the claim is plain, defensible advice independent of its actor-inventory framing." }

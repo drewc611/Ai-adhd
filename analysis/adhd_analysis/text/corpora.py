@@ -38,6 +38,20 @@ class Source:
     jsonl_field: str | None = None
     max_bytes_per_file: int = 32 * 1024 * 1024
     required: bool = True
+    #: True when a commit to this repository can change this source's text.
+    #:
+    #: `cut_heldout.py` has excluded these from the frozen evaluation set since it was written, on the
+    #: reasoning that a frozen set fixes which documents are scored and cannot fix what they say. It
+    #: then concluded they were fine to train on, because a test set and a training set are different
+    #: jobs. **E8 measured that conclusion wrong.** Writing E8's result up moved a retrain of its own
+    #: four cells by up to 4,807 n-grams and 27 types, gave each cell a different corpus digest, and
+    #: made `comparable_training` refuse all six pairs — so a mutable source makes a training read
+    #: unrepeatable, and a training read is what every published figure rests on. D25 has the table,
+    #: D26 the decision.
+    #:
+    #: A field on the source rather than a set of names in two scripts, because it is a fact about the
+    #: corpus and `corpora.yaml` is where facts about the corpus live.
+    mutable: bool = False
 
     def files(self) -> Iterator[Path]:
         if not self.path.exists():
@@ -134,18 +148,49 @@ class Library:
                 yield s.name, ident, doc
 
     def describe(self) -> list[dict]:
+        """What a training record says it was trained on.
+
+        Paths are relative to the repository whenever they are inside it. A record is checked in,
+        so an absolute path in one is both a leak of whoever trained it and a line that means
+        nothing on any other machine — `test_no_record_carries_an_absolute_path` fails the suite
+        over it. The in-repo sources were always written relative in `corpora.yaml` and so looked
+        fine; the fetched ones resolve under `analysis/corpora/` and did not, which stayed hidden
+        until a record trained on them was committed for the first time.
+        """
+        root = Path(__file__).resolve().parents[3]
         out = []
         for s in self.sources:
+            path = Path(s.path)
+            try:
+                shown = path.resolve().relative_to(root)
+            except ValueError:
+                shown = path  # genuinely outside the repository; record it as given
             files = list(s.files())
             out.append(
                 {
                     "name": s.name,
-                    "path": str(s.path),
+                    "path": str(shown),
                     "files": len(files),
                     "bytes": sum(f.stat().st_size for f in files),
                 }
             )
         return out
+
+    def mutable_names(self) -> set[str]:
+        """The sources a commit to this repository can rewrite."""
+        return {s.name for s in self.sources if s.mutable}
+
+    def stable(self) -> Library:
+        """This library without the sources a commit can rewrite.
+
+        What every measurement reads. A run over mutable text cannot be repeated — see `Source.mutable`
+        and D26 — and a figure that cannot be re-derived is a figure nobody can check.
+
+        Returns a library with no sources rather than raising when everything is mutable, because the
+        caller that cares (a trainer) gives a better error than this can: it knows whether the corpus
+        it wanted was missing or excluded.
+        """
+        return Library([s for s in self.sources if not s.mutable])
 
     @classmethod
     def load(cls, manifest: str | Path, root: str | Path | None = None) -> Library:
@@ -171,6 +216,7 @@ class Library:
                     jsonl_field=e.get("jsonl_field"),
                     max_bytes_per_file=int(e.get("max_bytes_per_file", 32 * 1024 * 1024)),
                     required=bool(e.get("required", True)),
+                    mutable=bool(e.get("mutable", False)),
                 )
             )
         if not sources:

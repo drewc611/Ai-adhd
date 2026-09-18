@@ -20,6 +20,38 @@ from pathlib import Path
 
 import yaml
 
+def unfence(text: str) -> str:
+    """Strip a markdown code fence around a YAML document.
+
+    This mirrors `unfence` in src/validate.ts index lookup for index lookup, and it has to: a
+    branch returns its artifact as its final message, the host writes that message unedited, and
+    both sides then read the same bytes. They ran in separate CI jobs with nothing comparing them
+    and they disagreed — this side used `rfind`, which cuts at a backtick run anywhere in the body
+    rather than at a closing fence on its own line. `evals/artifact-loader-cases.json` is the
+    contract both now assert against. Backlog 96.
+
+    Not a regular expression, for the reason the TypeScript side gives: every regex spelling of
+    "fence, info string, body, fence" has two quantifiers that can match the same character, which
+    is quadratic on input that is by construction an untrusted final message.
+    """
+    open_at = text.find("```")
+    if open_at == -1:
+        return text
+    # The info string runs to the end of that line, whatever it says: yaml, yml, or nothing.
+    body_start = text.find("\n", open_at + 3)
+    if body_start == -1:
+        return text
+    close = text.find("\n```", body_start)
+    if close == -1:
+        return text
+    return text[body_start + 1 : close]
+
+
+def load_artifact(path: Path):
+    """Parse a recorded artifact, fenced or not."""
+    return yaml.safe_load(unfence(path.read_text())) or {}
+
+
 # Raters are files, in this order. `pass-a.yaml` is the one that shipped; the rest were scored
 # later from the same blind brief, by fresh critics instructed to read no other file.
 RATER_FILES = ["pass-a.yaml", "pass-a.rater2.yaml", "pass-a.rater3.yaml", "pass-a.rater4.yaml"]
@@ -124,7 +156,7 @@ def load(root: str | Path = ".") -> Corpus:
             p = run_dir / "critic" / name
             if not p.exists():
                 continue
-            doc = yaml.safe_load(p.read_text())
+            doc = load_artifact(p)
             for letter, row in (doc.get("scores") or {}).items():
                 for dim, cell in row.items():
                     scores[(run, rater, letter, dim)] = int(cell["score"])

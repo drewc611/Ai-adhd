@@ -1,0 +1,21 @@
+{
+  "tokens": 558877,
+  "wall": "not measured",
+  "reported_tasks": 10,
+  "of_tasks": 10,
+  "by_phase": {
+    "diverge": 394752,
+    "critique_a_and_b": 101162,
+    "deepen": 62963
+  },
+  "by_frame": {
+    "ACTOR_CENSUS": 55299,
+    "NIGHT_OPERATOR": 56478,
+    "LEDGER": 56158,
+    "PARTICULARIST": 54573,
+    "SABOTEUR": 58761,
+    "MECHANIC": 57889,
+    "MINIMALIST": 54798
+  },
+  "note": "Every task reported. The critic figure is one resumed agent covering both passes. by_frame is diverge. Deepen covers two survivors' representatives. Wall clock is not comparable: driven by hand alongside the seed 14 run of the same fixture."
+}

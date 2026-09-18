@@ -1,0 +1,115 @@
+```yaml
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: DOOR_KEEPER
+position: >-
+  Set a 2s connect timeout, a 5s per-attempt read timeout, a 10s total deadline, and no retries
+  today, then ship the deadline-propagation and idempotency-key work that lets you raise retries
+  later without a rewrite.
+reasoning: |
+  1. What can be undone in an afternoon, and what cannot be undone at all?
+
+  The numbers themselves are the cheapest thing in this whole decision. Connect timeout, read
+  timeout, total deadline, pool acquisition timeout, keep-alive idle — every one of those is a
+  config value. If 5s is wrong you find out and change it to 8s before lunch. Treat them as
+  two way doors and stop agonizing over the exact integer. Whether retries are on, and how
+  many, is almost as cheap, one flag, but it has a nastier failure mode so I am holding it
+  back deliberately rather than because it is hard to reverse.
+
+  The doors that do not swing both ways are not numbers at all, and this is the part the
+  question as asked walks straight past. First: whether a deadline travels with the request.
+  If the caller's remaining budget is not threaded through your client into the downstream
+  call, you have to change every call site and every signature to add it later. That is a
+  refactor, not a config change. Second: whether the requests you send are safe to send twice.
+  Idempotency keys are a wire-format and server-side-storage commitment; once a partner or
+  another team is on the old contract you cannot quietly add them. Third: the timeout values
+  you publish to other people. A number in your own config is reversible; the same number in
+  an SLA, a partner contract, or a client library shipped to devices you do not control is
+  effectively permanent, because lowering it later breaks callers who built on the old
+  behaviour. Fourth, softer but real: the client library itself, if it has no deadline concept
+  at all, since swapping HTTP libraries mid-life is a multi-week migration.
+
+  2. For each one way door, cost of being wrong and detection latency.
+
+  No deadline propagation: cost is the failure everyone learns about the expensive way. The
+  downstream hangs, your threads or connections pile up behind it, and a slow dependency turns
+  into your own outage. Detection latency is the worst kind — months, until the first real
+  dependency brownout, and you discover it during the incident rather than before. Retrying on
+  top of no propagation is worse: your retries multiply load on a service that is already sick.
+
+  No idempotency: cost is duplicate side effects — double charges, double sends, double writes.
+  Detection latency is weeks to never, because it only shows up on the timeout-then-retry path,
+  which is rare, and the duplicates surface as customer complaints and reconciliation breaks
+  rather than as errors in your logs. This is precisely why I will not turn retries on today.
+
+  Published timeouts: cost is being locked into a latency budget you cannot meet as the system
+  grows, or breaking every caller when you tighten it. Detection latency is long, the first
+  renegotiation or the first breaking change.
+
+  Wrong integers, for contrast: cost is some avoidable timeouts or some slow requests. Detection
+  latency is hours — your p99 latency and timeout-rate graphs show it the same day. That gap,
+  hours versus months, is the entire argument for spending the effort on structure instead of
+  on picking the perfect number.
+
+  3. The cheap reversible experiment.
+
+  You cannot pick a timeout from taste; a timeout is a claim about a latency distribution you
+  should go measure. So: instrument the call with a latency histogram and set the timeout
+  absurdly high for a week — 30s, high enough that it almost never fires. Now you have the real
+  p50, p99, p99.9, and you know the shape of the tail, which is the thing that matters. Set the
+  read timeout somewhere above p99.9 of successful responses; if p99.9 is already near your
+  total budget, the answer is not a longer timeout, it is that this call does not belong on the
+  synchronous path. The same week of data tells you whether slowness is one bad instance (retry
+  helps) or the whole dependency (retry hurts). Second cheap experiment, an afternoon: in
+  staging, point the client at a server that accepts connections and never responds, and watch
+  what your pool does. That tells you whether a hung downstream takes you down, which is the
+  actual thing timeouts exist to prevent.
+
+  4. The ordering.
+
+  Walk the two way doors first. Today, set the four values above — deliberately conservative,
+  no retries — because having some deadline beats having none and none is where most clients
+  start. In the same change, add the latency histogram and the connection-pool saturation
+  metric, and run the hung-server test in staging. That is one afternoon and it is all
+  reversible.
+
+  Then, before the one way door, spend the week collecting the distribution. With that data in
+  hand take the irreversible steps in this order: thread the deadline through your call
+  signatures and subtract elapsed time at each hop, because everything else depends on it; then
+  add idempotency keys to every non-GET call; then, and only then, turn on one retry with
+  jitter, gated by a budget of roughly ten percent of traffic; then, last, publish a number to
+  anyone outside your team, and publish it as a number you have measured with slack on top.
+  The timeout values are the thing you can always change. The shape of the client is the thing
+  you cannot, so buy the shape first with information and treat the numbers as a dial you will
+  turn many times.
+forecloses:
+  - >-
+    Turning on retries today. The common default of two or three retries with a generous timeout
+    is ruled out until idempotency keys exist and a retry budget caps the amplification, because
+    a retry on a non-idempotent call is a duplicate side effect and a retry on a sick dependency
+    is a self-inflicted load multiplier.
+  - >-
+    Copying a timeout from the library default, a blog post, or another service in the fleet.
+    This position says the number must come from your own measured latency distribution, which
+    means you cannot finish the decision today.
+  - >-
+    A single global timeout for all calls through this client. Per-route budgets follow from the
+    deadline-propagation commitment, so one shared value is off the table.
+  - >-
+    Publishing or committing to any latency number externally before the week of data exists.
+falsifier: >-
+  One week of the latency histogram shows p99.9 of successful responses above 5s, or the
+  timeout-error rate after the change exceeds the pre-change error rate by any visible margin.
+  Either observation says the 5s read timeout is cutting off responses that would have
+  succeeded, and the number was set by taste rather than by the distribution. Equally
+  falsifying in the other direction: the staging hung-server test shows the pool drains and
+  recovers cleanly with no deadline propagation at all, which would mean the expensive
+  structural work I front-loaded is not buying what I claimed.
+missing_actor: >-
+  The team that owns the service on the other end of this client. They hold the server-side
+  timeout, the load shedding, and the idempotency-key storage, and if their server timeout is
+  longer than your client timeout you will abandon requests that they keep executing — duplicate
+  work you will never see. They can tell you the real latency distribution and their own budget
+  in one conversation, which is cheaper than your week of measurement, and they are the only
+  party who can make retries safe by honoring an idempotency key.
+confidence: medium
+```

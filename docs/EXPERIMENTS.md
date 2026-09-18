@@ -30,6 +30,15 @@ So the one experiment splits into two, and they answer different questions.
 Fixture 001 at seed 2. Same problem, same five frames, different dispatch order and a fresh
 sample from every branch and critic.
 
+**The frames being the same is forced, not chosen, and that was established after the fact.**
+`design_decision` lists exactly five primary frames and resolves `n` to five, so the seeded
+shuffle can only permute dispatch order: no seed selects a different set, and the reading below
+about "one sample" is therefore about branch and critic sampling at a fixed frame set. Seed 3,
+compiled on 2026-09-14, drew the same five a third time. Of the six run classes only
+`enumerate_options` can vary a frame set by seed — nine primaries at `n=7`, so the shuffle drops
+two and which two is the seed's — so a reseed experiment that varies *which frames appear* has to
+be run there and cannot be run on 001 at any seed. Backlog 89 and 91.
+
 **What it measures.** How much of a finding is the machinery and how much is noise. Every
 number quoted anywhere in this repo about one run is uninterpretable without this.
 
@@ -98,6 +107,50 @@ frame set; they were one sample.
 > Left standing rather than rewritten, per this file's own rule — a registered reading that turned
 > out half right is worth more than a tidy one.
 
+### E1a result amended by seed 3, 2026-09-15
+
+Recorded as `evals/recorded/001-seed3`. A third seed on the same frame set, and it separates the two
+items cleanly.
+
+| assertion | seed 1 | seed 2 | seed 3 | alt frames | rate | depends on |
+|---|---|---|---|---|---|---|
+| `human_cancel` | ok | **miss** | ok | ok | 3/4 | the sample |
+| `retry_cost` | ok | ok | ok | **miss** | 3/4 | the frame set |
+| `retry_target_questioned` | ok | ok | ok | **miss** | 3/4 | the frame set |
+| `trap_named` | ok | ok | ok | ok | 4/4 | — |
+
+**The registered reading holds for `human_cancel`, with its sign reversed.** "It was never a property
+of the frame set; it was one sample" is confirmed — but seed 2 was the outlier, not seed 1. The item
+holds on two of three seeds *and* under a whole new frame set, so the frame library produces it
+reliably and one draw in four missed it. Reading a single reseed as the truth and the original as the
+fluke was the available inference at two runs and it was backwards.
+
+**`retry_cost` and `retry_target_questioned` are frame-set properties, which is stronger than E1b
+could say.** Both hold on all three seeds and miss only where the frames changed. E1b established
+that `retry_cost` was not "one sample"; with a third seed it is positively a property of `LEDGER` and
+`ACTOR_CENSUS` being dispatched, and `alt frames` dispatches neither.
+
+**What actually fails at seed 3 is `pruned_traps_include_any T1,T2,T3`.** Only T7 fired, on
+`FRAME_BREAKER` and `ACTOR_CENSUS`. That expectation has now held on one run out of four — the run it
+was written against — which makes it the seed-1 artifact the original E1a table was reaching for when
+it named the wrong two items.
+
+**Two things this run establishes that are not about E1a**, both first occurrences in the corpus:
+
+- **The token gate held.** Quoted 520,200 under D32, cost 485,412: 0.9x, where all seven runs quoted
+  under the old 156,000 figure cost 2.6x to 3.3x. The "up to" wording is doing what it was changed to
+  do. Diverge ran 57,054 per branch against the 51,000 estimate, 12% over, and the total still came
+  in under because critique and deepen were cheaper than the measured proportions predicted.
+- **The rubric separated a contested decision.** `DOOR_KEEPER` over `MINIMALIST` by 0.1042, four to
+  five anchor points, against four earlier contested decisions at one or two. `docs/WRITEUP.md`'s
+  "close enough that any of them could ship" now covers four cases out of five rather than all of
+  them, which is the first evidence that the narrowness is a property of particular packs rather than
+  of the rubric.
+
+Caveat on the whole comparison, per backlog 89: a reseed of fixture 001 cannot change its frame set,
+because `design_decision` has exactly five primaries at n=5. All three seeds drew the same five and
+varied only dispatch order and sampling. The frame-set column is `001-altframes`, which is one run.
+
 The prune set moved as hard:
 
 | frame | seed 1 | seed 2 |
@@ -127,6 +180,79 @@ found the thing; the critic threw it away.
   prune rate for a frame swung from 0 to 1.
 - The D8 agreement figures stand, because those compared two critics on one fixed pack. This
   varies the pack. They measure different things and neither rescues the other.
+
+### E1a completed by the same-seed repeat, 2026-09-15
+
+Recorded as `evals/recorded/001-seed3-repeat`, run `20260915071403-7e664e`. Backlog item 4: fixture
+001 at seed 3 a second time, with everything the compiler reads held fixed. All five briefs were
+confirmed byte-identical to `001-seed3`'s before dispatch, and branches, critic and deepen were
+dispatched the same way, so the only variable is the session.
+
+**E1a was never a seed experiment.** It varied the seed and the session at once and attributed the
+whole difference to the seed. Hold the seed and the same thing happens:
+
+| comparison | seed | pruned, before | pruned, after |
+|---|---|---|---|
+| seed 1 → seed 2 | changed | 2 of 5 | 4 of 5 |
+| seed 3 → this run | **held** | 2 of 5 | **0 of 5** |
+
+Same magnitude of swing, in the opposite direction, with the seed constant. Nothing E1a observed
+needs the seed to explain it, and on fixture 001 the seed cannot vary the frame set anyway, so what
+is left for it to change is dispatch order. Every sentence in the E1a results above that reads a
+difference as a seed effect should be read as a session effect instead. The readings themselves
+survive — `human_cancel` really does hold on three of four draws, `retry_cost` really is a property
+of `LEDGER` and `ACTOR_CENSUS` being dispatched — because those are counts over draws, and a draw is
+a session whether or not the seed also moved.
+
+**The floor, in numbers.** Two quantities move very differently and the pipeline treats them alike.
+
+| quantity | movement across the repeat |
+|---|---|
+| pass A per frame | `ACTOR_CENSUS` +0.048, `DOOR_KEEPER` −0.024, `LEDGER` −0.024, `FRAME_BREAKER` 0, `MINIMALIST` 0 |
+| detectors fired | T7 twice → **none at all** |
+| clusters | 2 → 3 |
+| prune set | `{ACTOR_CENSUS, FRAME_BREAKER}` → `{}` |
+| recommendation holder | `DOOR_KEEPER` → `FRAME_BREAKER` |
+
+**Pass A is the stable part.** Mean absolute move 0.019, largest 0.048, two of five frames identical
+to four decimal places. A gap of 0.05 between two frames in one run is at the floor and means
+nothing; `DOOR_KEEPER` over `MINIMALIST` at 0.104 in `001-seed3` is twice the floor and is the first
+scored decision in the corpus that clears it. `adhd diff` has printed "until the run-to-run noise
+floor is measured, a move this size cannot be called signal" since it was built. It is measured now,
+and the threshold is roughly 0.05.
+
+**The trap sweep is the unstable part, and it is the part that prunes.** Identical artifacts,
+identical detector text, identical rubric: one critic fired T7 twice and the other fired nothing.
+This is not a scoring wobble, it is a binary that decides whether a branch reaches the user. Three of
+this run's four failed fixture assertions are one event — with nothing pruned, `pruned_min`,
+`pruned_traps_include_any` and `trap_named` all have nothing to read.
+
+So the pruned block, which `CLAUDE.md` requires always ships and which the seed-3 amendment above
+called "the strongest corroboration anywhere in the corpus, removed entirely on T7", is the least
+reproducible output the system has. Both readings stand: the block is where the interesting material
+is, *and* whether any given branch appears in it is close to a coin flip at n=1. Those are
+compatible and both are uncomfortable.
+
+**What survived untouched.** The blind letter mapping, as the shared seed should give. The
+three-member cluster `{FRAME_BREAKER, ACTOR_CENSUS, LEDGER}`, which reproduced exactly under a
+different name. And the branch positions themselves — `DOOR_KEEPER` returned "2s connect, 5s
+per-attempt read, 10s total deadline, no retries" almost verbatim from a separate context window.
+**Divergence reproduces; adjudication does not.** That is the opposite of where the design put its
+risk, which was all on isolation.
+
+**Consequences.**
+
+- Any claim resting on a single run's prune set is a claim about one draw of a coin. That includes
+  every per-frame prune rate in `frames --stats`, which the seed-3 amendment already flagged, and it
+  now has a mechanism rather than a suspicion.
+- `docs/RETIREMENT.md`'s five-run floor is not enough for a prune-rate claim and was never meant to
+  carry one. Retirement reads reach and orthogonality, not prune rate, which is the right design for
+  the reason just measured.
+- Pass A differences under 0.05 are noise. Two of the four contested decisions `docs/WRITEUP.md`
+  describes as "close enough that any of them could ship" are under that, so the phrase is not
+  modesty, it is accurate.
+- The D8 critic-agreement figures are untouched: they held the pack fixed and varied the critic,
+  which is the same experiment from the other side and gets the same answer.
 
 ### E1b result, 2026-09-07
 
@@ -653,3 +779,809 @@ so E6's conclusion narrows to the transformer rather than generalising to neural
 state-carrying advantage this registration flagged as flattering cell C closed about 6% of a gap set
 during training, and the follow-up registered to challenge a C win is unnecessary because there is no
 C win.
+
+## E8. What is a percentage point of out-of-vocabulary worth?
+
+**Registered 2026-09-14, before any cell ran.** `comparable_heldout` refuses two all-targets
+perplexities whose held-out OOV rates differ by more than **one percentage point**. That number is a
+judgement and the code says so in the comment beside it, which also names this run as the one that
+should replace it. Backlog 78 is the item; this is the registration.
+
+The reason a refusal is needed at all: an all-targets perplexity charges every OOV target as a
+prediction of `<unk>`, and `<unk>` is by construction among the most frequent symbols a
+closed-vocabulary model holds. A model that knows fewer words is therefore asked an easier question on
+a larger share of the same text. E6 needed the refusal — two Kneser-Ney models at the same
+`max_size` over 20M and 64M tokens land 1.09 points apart on held-out OOV and share only 82.6% of
+their 8,192 types.
+
+What nothing has measured is how large that discount actually is. Until it is measured, the threshold
+is a round number defending a real effect of unknown size, which is the same epistemic position as
+D14's 2.9x before D16 took it apart.
+
+### The cells
+
+One model class, one corpus, one training budget, one held-out set. **The vocabulary cap is the only
+thing that moves.**
+
+| cell | `max_vocab` | expected types | measured |
+|---|---|---|---|
+| A′ | 8,192 | 8,192 | **30.7** (E6, reused unchanged) |
+| V1 | 16,384 | 16,384 | to be measured |
+| V2 | 32,768 | 32,768 | to be measured |
+| V3 | none | ~71,883 | to be measured |
+
+Every cell is Kneser-Ney order 4, `min_count` 3, trained on the **train side of frozen set
+`8e2d77cbe8901b1e`** under a 20,000,000-token ceiling, and scored on that set's 366 held-out
+documents. A′ is E6's cell A′ at exactly this configuration, so it is reused rather than retrained —
+and because it is reused, a disagreement between V1/V2/V3 and A′ on anything other than vocabulary is
+a defect in this run rather than a finding.
+
+V3's expected size is arithmetic from A′'s record, not a guess: 8,192 kept types plus 63,691 types the
+cap discarded is **71,883 types that clear `min_count` 3 in the first 20M tokens**. If V3 reports a
+different number, the corpus read moved and the sweep is invalid.
+
+This sweep deliberately does **not** reach the shipped model's 148,353 types. That vocabulary comes
+from 64M tokens, and adding a cell that changes both the cap and the training size would reproduce
+exactly the confound E6 found in the cap-versus-vocabulary distinction. 148,353 types at 20M tokens
+does not exist to be measured.
+
+### Two readings, because one of them is confounded and the other is not
+
+**All targets** is the measurement the threshold governs, and it mixes two effects that pull against
+each other: raising the cap removes the cheap `<unk>` predictions, and it also gives the model real
+histories where it previously had `<unk> <unk>`. The net slope is the confounded quantity, and it is
+the *right* quantity for the threshold, because `comparable_heldout` is guarding against precisely
+that confounded difference.
+
+**In-vocabulary only** drops every OOV target from the sum. It isolates modelling ability from the
+`<unk>` discount, at the cost of each cell summing over a different target set — which is why
+`comparable_heldout` refuses those comparisons outright rather than tolerating a gap. Reported here as
+a decomposition of the net slope, never as a ranking.
+
+### The prediction
+
+Backlog 78 recorded no prediction on the grounds that the direction is not obvious. I disagree that it
+is unpredictable, so here is one that can be wrong.
+
+**All-targets perplexity rises as the cap rises.** The slope of perplexity against held-out OOV rate is
+**negative**: more OOV means a lower, flattered number. The reason is that the 63,691 types the cap
+discards are the tail — each is rare, each is expensive to predict, and the context they return to the
+model is worth less than the `<unk>` discount they cost.
+
+**Magnitude: between 3 and 10 perplexity points per percentage point of OOV**, read at A′'s base of
+30.7. Concretely, V3 lands between **45 and 70** at roughly 2% held-out OOV.
+
+If that holds, the current threshold is far too loose rather than too tight: one percentage point
+would be worth 10% to 30% of the score, and two models the function currently calls comparable could
+differ by more than E6's entire 2.086x effect. If the slope comes out under 1 point per point, the
+round number was generous and the refusal is close to decoration.
+
+### Fixed readings
+
+- **The threshold is re-derived from the fitted slope, and E4 must still pass.** E4 compared
+  `min_count` 2 against 3 on all targets at 0.63% and 0.85% OOV. That comparison was sound. A
+  threshold that refuses it is wrong however it was derived, so the derived value is floored at the
+  gap E4 needs and the floor is reported if it binds.
+- **The slope is fitted on all four points and also read pairwise.** A single pair is a difference,
+  not a slope. If the pairwise slopes disagree by more than 2x the relationship is not linear in OOV
+  and the threshold is stated as a curve or as the worst case, not as one number.
+- **A ceiling that binds voids the cell.** `stopped_because` decides, on both passes. A cell whose
+  token ceiling did not bind at 20,000,0xx read a different amount of text than A′ did.
+- **V3's type count is checked against 71,883 before its perplexity is read.** The arithmetic above is
+  a pre-registered prediction about the corpus, and it is cheaper to be wrong about it early.
+- **A truncated score voids the cell.** V3 is the largest model here and the one most likely to hit the
+  resident-set ceiling; `scripts/score_heldout.py` already exits 2 on truncation.
+- **Being outside the predicted range is the more useful outcome.** E7's registered range was wrong by
+  2.7x and that was worth more than a hit.
+
+**Result: D25 and D26. Half right, and the half that was wrong is the specific one.** The slope is
+negative as predicted and the fit of **-3.391 points per percentage point** (r-squared 0.977) is inside
+the registered 3-to-10 band, but V3 came in at **42.77**, below the registered 45-to-70 range. The four
+cells are 30.95 / 35.52 / 39.31 / 42.77 at 5.797% / 4.044% / 3.063% / 2.391% held-out OOV.
+
+The sweep was measured twice, and every fixed reading fired.
+
+**"V3's type count is checked against 71,883 before its perplexity is read."** The first measurement
+said **71,934**, and the cause is that `docs/` was a corpus source: the commit carrying this
+registration added 94 lines to this file, and `docs/SECURITY-OPS.md` had arrived since A′ was trained.
+**Writing the registration changed the corpus the registration was about.** The reading's verdict stood,
+the 8,192 cell was retrained rather than reused, and it reproduced A′ to 0.03 perplexity points.
+
+Writing up the *result* did it again and worse — each cell of a retrain landed on a different corpus
+digest — so **D26 took the repository's own prose out of every measurement** and the sweep above is the
+re-measurement on the stable corpus, one digest across all four cells. The pre-D26 figures are in
+`analysis/records/e8-v*-pre-d26.json` and agree closely: 30.73 against 30.95, 42.50 against 42.77.
+
+**"The slope is fitted on all four points and also read pairwise."** This is the reading that paid for
+itself. The stable corpus gives six pairwise slopes of -2.610 to -5.148, a spread of **1.972x** — under
+the 2x line, so the rule says use the fit. The pre-D26 corpus gave -2.583 to -5.179, a spread of
+**2.005x** — over it, so the rule said use the worst case. **The two corpora differ by 0.105% and the
+verdict flips.** So the registered test does not discriminate, the threshold takes the worst pairwise
+slope unconditionally as the conservative side of a coin toss, and `oov_slope.py` records
+`slope_used: "worst_pairwise"` with `linear` reported as a reading wired to nothing.
+
+**"E4 must still pass."** It does, and the floor needed correcting to make it: set to E4's gap exactly it
+refused E4 by six parts in 10^19, because `0.0085 - 0.0063` is `0.0022000000000000006` and the refusal is
+a strict `>`. The floor is 0.0023 and the derived gap is 0.3006 points at the 8,192 cell's perplexity, so
+the floor does not bind.
+
+The decomposition also corrected the reason written beside the threshold. Scoring every cell over
+in-vocabulary targets only puts `<unk>` **cheaper** than the average real token at 8,192 types (32.51
+against 30.95) and **dearer** at 71,603 (41.76 against 42.77), crossing over near 3% OOV, while
+all-targets perplexity rises monotonically throughout. The `<unk>` discount the comment named is real,
+small, and changes sign; the dominant term is rare words the cap used to hide.
+
+The threshold is now `allowed_oov_gap` in `evaluate.py` — 5% of the smaller perplexity divided by the
+worst measured slope, floored at E4's gap and capped at the old 0.01 so that E8 tightens the guard at
+every perplexity and loosens it at none.
+
+## E9. A transformer at the n-gram's vocabulary, via sampled softmax
+
+**Registered 2026-09-14, before any code was written.** Backlog 79 is the item and it says why this needs
+a registration rather than a run: reaching 148,114 types means changing the loss the model optimises,
+and a cell whose loss is not the loss every other cell used is a cell that has to declare itself.
+
+### The question E6 could not ask
+
+E6 held both classes at **8,192 types** because the output projection is `d_model x vocab_size` and
+every token's loss touches all of it. That is a real constraint and it bought a real comparison, but it
+also means every transformer figure in this repository describes a model that has never been asked the
+question the shipped model answers.
+
+Worse, the two cannot be compared even in principle. `comparable_heldout` refuses the shipped model at
+0.915% held-out OOV against cell A at 4.711% — a 3.80-point gap where D25 allows 0.23 — and it is right
+to: E8 measured that the vocabulary difference alone could account for **19.5 perplexity points** of
+whatever separates 19.9 from 25.8. At one vocabulary that refusal goes away.
+
+**So this is the first cell that could be compared to the shipped model on all targets.** That is the
+point of it.
+
+### The cell
+
+| cell | model | vocabulary | training tokens | measured |
+|---|---|---|---|---|
+| shipped | Kneser-Ney order 4, `min_count` 3 | 148,114 | 64,347,232 | **25.82** |
+| **D** | **transformer, d128, 2 layers, ctx 128** | **148,114** | **64,347,232** | to be measured |
+
+Same corpus read (`de7c24b2218ad055`), same `min_count` 3, same uncapped vocabulary, same frozen
+held-out set. The transformer's output projection is tied to its embedding, so at this vocabulary that
+one table is **18,958,592 parameters** against the 1.46M of every transformer cell so far.
+
+### What changes, stated precisely
+
+**Training** uses a sampled softmax: for each position the loss is computed over the target plus a
+shared set of negatives drawn log-uniformly over the frequency-sorted vocabulary, each logit corrected
+by `-log Q(id)`, with any negative that collides with the target masked out. That is an estimator of the
+full softmax loss, not the full softmax loss.
+
+**Evaluation does not change.** `logprob_terms` computes the full normalised distribution over all
+148,114 types, exactly as every other cell is scored. A sampled softmax at scoring time would be a
+different measurement wearing the same name, so the registered reading is that **cell D's perplexity is
+a true held-out perplexity and is comparable to the shipped model's.**
+
+### The prediction
+
+**D lands between 55 and 110**, a loss of **2.1x to 4.3x** against the shipped model's 25.82, and my
+point estimate is about 78 — roughly 3x.
+
+Two forces pull against each other and I do not know the crossover. The transformer gets **3.2x more
+text** than any transformer cell so far, and more data is the thing transformers are supposed to convert
+into quality better than an n-gram does: Kneser-Ney converts that same 3.2x into only 1.2x (30.95 to
+25.82), which is the shape of a model that has stopped learning from more of the same genre. Against
+that, the output space is **18x larger**, the tail it now has to predict is exactly the part a cap used
+to hide, and E8 measured that going from 8,192 to 71,603 types costs 38% of perplexity on its own.
+
+If D beats 25.82 the headline of this repository changes and D20's "needs somewhere north of 10^8 tokens
+before its perplexity beats a well-smoothed 5-gram" is wrong at 6.4 x 10^7. I do not expect that.
+
+### Fixed readings
+
+- **A ceiling that binds voids the cell.** `stopped_because` decides, on all three budgets, and
+  `epochs_completed` below 1.0 means D saw less text than registered.
+- **D is compared to the shipped model on all targets, and the comparison must not be refused.** Both
+  sit at 148,114 types on one corpus read, so their held-out OOV should agree to the digit. If
+  `comparable_heldout` refuses the pair, the cell is invalid rather than close — that refusal is the
+  whole reason this cell exists.
+- **The sampled-softmax gap is reported, not assumed away.** The final training loss is recorded twice,
+  once under the sampled estimator and once under the full softmax on the same batch. A large gap means
+  the number measures my estimator rather than the architecture, and it is the first thing to doubt.
+- **The backward pass is gradient-checked exhaustively against central differences**, on a fixed sample
+  set so the loss is deterministic, to the same standard D24 held the LSTM to. The sampled path is new
+  code on the one part of the model that carries 93% of its parameters.
+- **A loss is a result.** Being outside 55-to-110 in either direction is worth more than being inside.
+- **No shape, learning rate, sample count or token cap moves after a result is seen.**
+
+### E9 amended 2026-09-14, before any result was seen: a training cap, and why
+
+The cell as registered is **not reachable in this environment**. Measured rather than estimated: at
+148,114 types the step is ~1.0s — 684ms in `loss_and_grads_sampled` and 307ms in the optimiser — which
+puts one epoch over 64,347,232 tokens at about **4.7 hours**, in a container that has already restarted
+once mid-run and killed it.
+
+I looked for a faithful speedup first and did not find one. `np.add.at` on the tied embedding table was
+the obvious suspect and is 4.9ms; replacing it with a sort-and-`add.reduceat` scatter is **slower** at
+7.1ms. The real cost is the transformer body — 127ms for a forward pass of roughly 1.5 GFLOP, about 12
+GFLOP/s on a machine measured at 420 — and that is E6 cell B's cost too, not something this cell
+introduced. Making Adam sparse over the embedding table would help and is **not** faithful: dense Adam
+decays `m` and `v` for untouched rows, so a sparse version optimises a different objective and would be
+a different cell.
+
+**So the amendment is a token cap and nothing else.** `--max-train-tokens 20000000`, giving cell D
+about 18.3M real training tokens.
+
+The vocabulary is untouched, which is the point: the vocabulary pass still reads all 64,347,232 tokens
+and still produces exactly **148,114 types**, because that is what `min_count` 3 over the full training
+side yields. E9's claim was never about training size — it was that a transformer at the n-gram's
+vocabulary can be compared to the shipped model on all targets at last, and that still holds.
+
+**The new asymmetry, stated before the result and running against cell D.** The shipped model read
+64,347,232 tokens; cell D now reads about 18.3M. That is 3.5x less text, it is quoted with every cell D
+figure, and it means a loss is *weaker* evidence than it looks while a win would be *stronger*.
+
+It also buys a comparison the original could not make. Cell D and E6's cell B now train on the same
+~18.3M tokens and differ only in vocabulary — 8,192 against 148,114 — which is E8's question asked of a
+transformer instead of an n-gram.
+
+**The prediction moves with the training size, and this is the honest place to say so.** The registered
+55-to-110 assumed 3.2x more text than any transformer cell had seen. At 18.3M tokens I expect cell D
+between **90 and 200**, against cell B's 64.29 at the same text and one eighteenth of the vocabulary.
+The original 55-to-110 is recorded as superseded rather than deleted, and if cell D lands there anyway
+that is a result about how little the extra text was worth.
+
+### The amendment above was committed fifteen seconds after the run started
+
+Noted 2026-09-14, with cell D at step 4,400 of 4,882 and no result of any kind in existence. This
+file's own rule, six lines from the top, is that it "is not edited after a run starts, except to link
+the result", and the amendment breaks it: the training process started at 09:20:10 and the commit
+carrying the amendment landed at 09:20:25. I launched and then committed, rather than committing and
+then launching.
+
+**What the rule is for held; what the rule says did not.** The purpose of registering before the run
+is that no reading may be chosen in light of a result, and at 09:20:25 there was no result to choose
+in light of — the first progress line printed minutes later, and the first number that could move a
+prediction is the perplexity, which does not exist while this is being written. The token cap itself
+was derived from a timing measurement made before either moment, and the cap is in the command line
+that started at 09:20:10, so the run and the registration describe the same experiment.
+
+**It is recorded because the alternative is worse.** A fifteen-second gap is the exact size of
+violation that is easiest to not mention and most corrosive to mention selectively: the discipline is
+worth something only if it is reported when it is inconvenient and trivial, not only when it is
+serious. Anyone reading E9's result is entitled to know the registration landed after the process id.
+
+**No reading changes.** The prediction stays 90 to 200, the superseded 55-to-110 stays recorded, the
+fixed readings stay as registered, and this note adds nothing to what cell D is measured against. It
+was written before the number existed precisely so it cannot be read as an excuse constructed after
+seeing one.
+
+### E9 result, 2026-09-14
+
+**Cell D scores 142.41 against the shipped Kneser-Ney's 25.82. The n-gram wins by 5.52x, at the same
+vocabulary, on the same frozen set, with the comparison not refused.**
+
+| | shipped Kneser-Ney | cell D transformer |
+|---|---|---|
+| types | 148,114 | 148,114 |
+| training tokens | 64,347,232 | 18,341,790 |
+| held-out OOV | 0.915101% | 0.915101% |
+| **held-out perplexity, all targets** | **25.815** | **142.408** |
+| truncated | none | none |
+
+Both scored 3,443,116 tokens over 366 documents, 3,411,608 of them in vocabulary, on frozen-set
+fingerprint `1446762140db7f1a`.
+
+**The registered readings, in the order they were registered.**
+
+*A ceiling that binds voids the cell.* None bound. Training stopped on `epochs` at
+`epochs_completed` 0.99982, and both scorings report `truncated: null`. The cell is valid.
+
+*The comparison must not be refused.* It is not. The two OOV rates are not close, they are
+**identical to every digit** — 0.009151013210127124 against 0.009151013210127124 — because both
+models draw the same 148,114 types, so the same tokens fall outside on the same frozen set.
+`allowed_oov_gap` sized a budget of 0.2507% for these perplexities and the gap is zero. This was the
+whole reason the cell exists: E6 could not separate the architecture from the vocabulary, and this
+pair differs in nothing but architecture and how much text each read.
+
+*The sampled-softmax gap is reported, not assumed away.* It is **0.679 nats** — final training loss
+4.6145 under the sampled estimator against 3.9352 under the full softmax on the same batch, or 100.94
+against 51.17 as training perplexities. That is large, it runs in the direction that flatters nothing
+(the estimator reports the model as *worse* than it is), and it is the first thing to doubt. It does
+not touch the 142.41: scoring never uses the estimator, only the full normalised distribution, which
+is why D2's "a sampled softmax at scoring time is a different measurement wearing the same name" was
+worth the extra two hours of wall clock. What the gap does mean is that **the training signal cell D
+learned from was a noisy estimate of the loss it was minimising**, and a cell trained against the
+full softmax might land elsewhere. That is the honest caveat on this number and it is not small.
+
+*A loss is a result.* 142.41 lands **inside** the amended 90-to-200 band and **outside** the original
+55-to-110, which is recorded as superseded rather than deleted. The amendment moved the band because
+the token cap cut the training text, not because a result had been seen; that it lands inside the
+amended band and above the original is what you would expect if the cap mattered, and is weak
+evidence that it did.
+
+**The asymmetry, quoted here as registered.** Cell D read 18,341,790 tokens; the shipped model read
+64,347,232. **3.51x less text.** The 5.52x is therefore not "a transformer loses to an n-gram by
+5.5x" — it is "a transformer on 3.5x less text loses by 5.5x". Whether the transformer closes the
+gap on equal text is not answered here and this cell cannot answer it: the full epoch that would
+answer it is 4.7 hours of training on this machine, measured, in a container that has already
+restarted once mid-run.
+
+**What it does answer**, and the reason backlog 79 was worth doing: **the vocabulary was not the
+explanation.** E6 found the transformer losing at 8,192 types and left open whether that was the
+architecture or the 18x smaller vocabulary it had been forced into. At the n-gram's own vocabulary,
+against the n-gram's own OOV rate, on the n-gram's own frozen set, it loses by more, not less. The
+gap E6 measured was not an artefact of the cap.
+
+**A defect the cell found, which is worth as much as the number.** Cell D trained for two hours and
+then could not be loaded by its own loader: `MAX_LINE_BYTES` was a 64MB constant justified by a
+comment about an 8,192 x 128 matrix, and cell D's `tok` line is 204,355,608 bytes. Every other line
+in the file is under 1MB, so exactly one line in the format scales with vocabulary and nothing had
+ever pushed on it. The bound is derived from the header's declared shape now, which tightens it for
+every model that existed before this one. A constant that happens to exceed the largest model so far
+is not a bound; it is a record of what had been trained by then.
+
+**And a second one, in the tooling around it.** `score_heldout.py` defaults `--max-seconds` to 3600.
+Cell D's scoring needs about 122 minutes, measured at 471 positions per second before it was
+launched. The default would have stopped it at 60 minutes and reported a prefix score with
+`truncated` set — a number that looks like a perplexity, is not one, and would have been compared to
+the shipped model's full score. The ceiling was raised for this scoring run and the reading
+`truncated: null` above is what confirms it did not bind.
+
+#### The amendment's second claim was wrong, and the tool said so
+
+The amendment above wrote: "It also buys a comparison the original could not make. Cell D and E6's
+cell B now train on the same ~18.3M tokens and differ only in vocabulary — 8,192 against 148,114 —
+which is E8's question asked of a transformer instead of an n-gram."
+
+**Differing only in vocabulary is precisely what makes them incomparable.** `comparable_heldout`
+refuses the pair:
+
+> these were scored at 5.80% and 0.92% out-of-vocabulary, a gap of 4.88% against the 0.62% these
+> perplexities can carry. E8 measured a point of out-of-vocabulary at up to 5.1 perplexity points on
+> this corpus, so the vocabulary difference alone could account for 25.1 points of whatever separates
+> 64.3 from 142.4
+
+The naive reading is 64.285 against 142.408, a 2.215x loss for the larger vocabulary. Of the 78.1
+points between them, up to 25.1 are the vocabulary rather than the model — so the ratio is not a
+ratio, and E8's whole point is that a model can lower its perplexity by knowing fewer words.
+
+I wrote that claim into the amendment on the way to the run and the machinery built to catch exactly
+this caught it. That is the discipline working rather than failing: the registration was checkable,
+it was checked, and it was wrong.
+
+**The rescue, and it is exact.** Cell B's 8,192 types are a strict subset of cell D's 148,114 —
+verified, zero B-only types, same frequency ordering — so `shared_vocabulary` restricts both sums to
+the same targets and neutralises the gap completely rather than approximately. That is what
+`evaluate(shared_vocabulary=...)` was built for under backlog 77, and the comparison it enables was
+unreachable from a shell until now: nothing on `score_heldout.py`'s command line could pass it. It
+takes `--shared-vocabulary MODEL` as of this result.
+
+The restricted comparison asks a sharper question than the one the amendment claimed: **given the
+same targets, is a transformer that also had to model 140,000 rare words worse at the common ones
+than one that spent all its capacity on 8,192?** That is capacity dilution, and it is a better
+question than the one refused.
+
+#### The shared-vocabulary result: capacity dilution is real and is 1.291x, not 2.215x
+
+Both cells re-scored over the same 8,192 targets, contexts untouched, `restricted_to_types: 8192` on
+both records, neither truncated, same frozen set.
+
+| | cell B, 8,192 types | cell D, 148,114 types |
+|---|---|---|
+| all targets | 64.285 | 142.408 |
+| **restricted to the shared 8,192** | **69.120** | **89.229** |
+
+`comparable_heldout` accepts the restricted pair — that path exists precisely so this decomposition
+can be made — and the answer is **1.291x**, against the naive **2.215x** the refused comparison would
+have reported.
+
+**Most of the apparent gap was the question, not the model.** 58.0 of the 78.1 points between the two
+cells, **74% of it**, disappears when both are asked about the same words. What remains is the real
+effect: a transformer carrying 140,000 rare types is **1.29x worse at the common ones** than one that
+spent all its capacity on 8,192. Capacity dilution exists and is modest.
+
+**Both numbers move, in opposite directions, and that is the mechanism.** Cell B *rises* 64.285 →
+69.120: it loses the `<unk>` targets that were cheap for it, because `<unk>` is common in its training
+by construction. Cell D *falls* 142.408 → 89.229: it stops being charged for 140,000 rare types it
+alone had to predict. Neither model changed; the question did.
+
+**The refusal's own estimate was conservative, in the safe direction.** Its message said the
+vocabulary difference "could account for 25.1 points of whatever separates 64.3 from 142.4". The
+measured displacement is 58.0 points — more than twice that — so refusing was even more warranted than
+the message claimed. The two figures are related and not the same quantity: 25.1 comes from E8's
+slope, fitted on *n-grams* at different caps and extrapolated here, while restriction changes the
+target set for both models rather than isolating an OOV term. That the extrapolation understates
+rather than overstates is worth knowing and is not evidence against E8.
+
+**What this does not rescue.** The 5.516x against the shipped n-gram is untouched: that pair needed no
+restriction, because both models already sat at the same 0.915101% out-of-vocabulary. D28's headline
+stands as measured.
+
+## E10. Does a finding survive a frame set the seed actually changed?
+
+**Registered 2026-09-15, before the runs. Backlog item 91.**
+
+E1a set out to ask whether a finding is a property of the frame library or of one draw, and could
+not: `design_decision` lists five primaries and resolves `n` to five, so a reseed of fixture 001
+permutes dispatch order and nothing else. Every frame is dispatched at every seed. E1b changed the
+frame set by naming one explicitly, which answers a different question — a hand-picked set is not
+a set the machinery would ever choose.
+
+`enumerate_options` is the only class where the two come apart. Nine primaries, `n: 7`, so the
+seeded shuffle drops two and which two is the seed's. Fixture 014 is the only fixture routed there.
+Compiled at four seeds without spending anything, it draws:
+
+| seed | dropped |
+|---|---|
+| 14 | `MECHANIC`, `MINIMALIST` |
+| 1 | `DOOR_KEEPER`, `FRAME_BREAKER` |
+| 2 | `FRAME_BREAKER`, `MINIMALIST` |
+| 3 | `FRAME_BREAKER`, `MECHANIC` |
+
+**The cells.** Seed 14 and seed 1. They share five frames — `ACTOR_CENSUS`, `LEDGER`,
+`NIGHT_OPERATOR`, `PARTICULARIST`, `SABOTEUR` — and swap two in each direction, which is the widest
+contrast available and the only pair among these four with no overlap in what it drops.
+
+**The assertions were written first and they were written from the problem.** Fixture 014 had none:
+it was a compile-only fixture asserting the wide path dispatches seven branches on seven axes. Five
+`must_surface` items were added in the commit that registers this experiment and before either run.
+They come from asking what a good answer to "our cron job started overlapping with itself" has to
+contain, not from reading the frame roster: why it started overlapping (`why_it_started`), what
+happens to the run a lock skips (`the_skipped_work`), that a job outrunning its period is on the
+wrong scheduler rather than missing a lock (`not_a_lock_problem`), whether a half-finished shell-out
+is safe to restart (`the_half_finished_run`), and that a job which silently skips looks healthy from
+outside (`who_notices`).
+
+### The predictions, so the result can be wrong
+
+Fixing which frame carries which item is the experiment. A prediction that names the frame *and* the
+direction is falsifiable in a way "the frame set matters" is not.
+
+| item | predicted carrier | holds at seed 14 | holds at seed 1 |
+|---|---|---|---|
+| `not_a_lock_problem` | `FRAME_BREAKER` | **yes** | **no** |
+| `the_half_finished_run` | `DOOR_KEEPER` | **yes** | no, or weakly via `SABOTEUR` |
+| `why_it_started` | `MECHANIC` | no, or weakly via `PARTICULARIST` | **yes** |
+| `the_skipped_work` | `MINIMALIST` | no | **yes** |
+| `who_notices` | `NIGHT_OPERATOR`, in both | yes | yes |
+
+`who_notices` is the control: `NIGHT_OPERATOR` is dispatched at both seeds, so an item it carries
+should hold at both, and if it misses at one the reading is session variance and not the frame set.
+
+### What would make this uninterpretable, stated now
+
+**Item 4 is the reason this section exists.** A same-seed repeat of fixture 001 moved the prune set
+from two of five to none of five with everything else held, so two runs differing by seed differ by
+session as well, and reading the whole difference as the frame set is the exact mistake E1a made.
+
+So only one class of reading is clean here, and it is clean for a mechanical reason rather than a
+statistical one: **a frame that was not dispatched cannot produce anything.** If
+`not_a_lock_problem` misses at seed 1 and the artifacts show `FRAME_BREAKER` absent, the miss is the
+frame set with certainty, because no sampling could have rescued it. That is the same form E1b
+established for `retry_cost`, and it is the only form two runs can support.
+
+Everything else is confounded and will be reported as confounded:
+
+- An item holding at both seeds says the frame set did not remove it. It does not say the frame set
+  is irrelevant, only that this pair does not test it.
+- An item missing at both says nothing in either set asks that question, which is a frame-library
+  gap of the kind fixture 002 found and not a seed result.
+- A **prune set** difference between the two runs is not readable at all. Item 4 measured that
+  quantity as unstable at n=1 with the seed held, so at different seeds it carries no information.
+- A **pass A** difference under 0.05 is inside the measured session floor and is not a seed effect.
+
+### Fixed readings
+
+- **If a predicted carrier is dispatched and the item still misses**, the prediction about that
+  frame was wrong and the frame does not reliably produce that question. That is a finding about the
+  frame library and it is recorded as one, not explained away.
+- **If an item holds at a seed whose predicted carrier was dropped**, another frame produces it,
+  and which one is named from the artifacts. That is evidence the library is more redundant than the
+  axis list suggests, and it belongs in D6's file rather than here.
+- **If `who_notices` misses at exactly one seed**, the control failed, this pair cannot separate
+  frame set from session on any item, and the experiment needs a same-seed replicate before
+  anything above is read.
+- **Two new scored runs join the corpus either way.** That is not the point of the experiment, but
+  `committal`'s interval (backlog 98) and every rate in `frames --health` are thin enough that it
+  is worth saying the runs count for something even if the predictions all fail.
+
+### E10 result, 2026-09-15
+
+Recorded as `evals/recorded/014-seed14` and `evals/recorded/014-seed1`. Both ran clean: 7 briefs on
+7 distinct axes, 14 valid artifacts, 0 contract violations, both under their own token quote at 0.8x.
+
+**Every prediction in the table is wrong, and they are wrong in the same direction.**
+
+| item | predicted carrier | branch artifacts that carry it |
+|---|---|---|
+| `who_notices` | `NIGHT_OPERATOR`, as the control | **14 of 14** |
+| `why_it_started` | `MECHANIC` | 13 of 14 |
+| `the_half_finished_run` | `DOOR_KEEPER` | 10 of 14 |
+| `the_skipped_work` | `MINIMALIST` | 9 of 14 |
+| `not_a_lock_problem` | `FRAME_BREAKER` | **0 of 14** |
+
+Four items are carried by most of the library and one by none of it. Nothing is carried by the
+frame it was predicted for and not by the others, which is the only shape that could have shown a
+frame-set effect.
+
+**So this pair cannot answer item 91's question, and the reason is not the one registered.** The
+section above pre-registered the session as the confound and named the one clean reading: a frame
+that was not dispatched cannot produce anything. That reading is unavailable here because no item
+depends on a single frame. An item carried by 14 of 14 artifacts holds under any frame set; an item
+carried by 0 of 14 misses under any frame set. Both seeds returned the same four-of-five result,
+and that identical outcome is evidence about the assertions rather than about the library.
+
+**`not_a_lock_problem` is a pattern failure, and the artifact proves it.** `FRAME_BREAKER` was
+dispatched at seed 14, named the load-bearing assumption outright — "overlap is not a defect in the
+scheduler", "the cron interval did not change; the job's runtime crossed it" — and prescribed
+bounding the work per run behind a stored watermark. That is exactly what the item asks for, written
+in none of the six registered wordings. E3's rule holds and the pattern was not widened after seeing
+which run failed. What the item measures today is a vocabulary, not a question.
+
+**The registered reading about carriers, applied honestly.** "If a predicted carrier is dispatched
+and the item still misses, the prediction about that frame was wrong and the frame does not reliably
+produce that question." The first half stands: the prediction was wrong. The second half does not
+follow here, because the frame produced the substance and the instrument could not see it. Recording
+it as a frame failure would be the more flattering reading of my own fixture and the false one.
+
+**The audit could not see any of this, and now it can.** `adhd eval --audit` has always asked
+whether the *negative control* satisfies an assertion, because an item the consensus answer passes
+is not measuring divergence. It never asked whether *every branch* satisfies it, which is the same
+defect arriving from the other side: an item every frame passes cannot vary with anything. The audit
+now carries a `branch` column and an `every branch` verdict, and it fires on `014/who_notices` at
+14 of 14 — the item that was written as this experiment's control. A control that every frame
+satisfies is not a control.
+
+**What the runs do establish, none of it about frame sets.**
+
+- **The wide path works.** First real dispatch at `n=7`, twice. Seven distinct axes both times,
+  0 contract violations across 14 artifacts, and 42 folded prose values with no plain ones —
+  including `014-seed14`'s `concurrencyPolicy: Forbid` inside a `forecloses` item, which is the
+  construct that aborted a run before D37.
+- **The token model holds off its fitting point.** `tokens_per_branch_estimate` was calibrated at
+  n=5 and quoted 728,280 at n=7; the runs cost 549,437 and 558,877, both 0.8x, the same shape as
+  n=5's 0.9x. The `adhd cost` guard was comparing an n=5 quote against runs at any n and had to be
+  made per-branch-count to notice.
+- **T7 is the whole detector story again.** Three firings at seed 14, two at seed 1, and nothing
+  else fired in either run. Across the corpus T7 now accounts for most of everything that has ever
+  fired, which makes the trap taxonomy's breadth largely decorative in practice.
+- **Item 4's floor did work immediately.** Pass A on the five shared frames moved by up to 0.07,
+  which `adhd diff` now reports as clearing the 0.05 session floor rather than hedging about it.
+  With the frame sets differing the tool still calls the pair confounded, correctly.
+- **Two frame labels are ordinary nouns and it cost something.** `frames --collisions` flagged
+  `LEDGER` and `SUCCESSOR`; `014-seed1`'s SABOTEUR wrote "logs that were not written to be a ledger"
+  and the critic read "written to be a [frame]". Backlog 100.
+
+**What item 91 still needs.** A fixture routed to `enumerate_options` whose assertions each depend
+on one frame — which means writing them against the frame library rather than against the problem,
+and that is the move this repo refuses for good reason. The alternative is the honest one: run the
+same seeds again and read *which frames appear*, not which assertions pass, since frame selection is
+deterministic from the seed and needs no assertion to observe. Item 91 stays open, restated.
+
+## E11. How much of the replicate's movement was the critic?
+
+**Registered 2026-09-15, before the second scorings. Backlog 98, downstream of item 4.**
+
+Item 4 re-ran fixture 001 at seed 3 with byte-identical briefs and found pass A moving by a mean
+of 0.019 and at most 0.048. That number is doubly confounded and the write-up did not say so
+plainly enough: the replicate has **different artifacts** (the branches were re-sampled) scored by
+a **different critic**. Both could be the whole story.
+
+D8 already measured the other half of the decomposition, on different packs: two critics on one
+fixed artifact set agree exactly on 79% of cells and within one point on 100%, and the ranking
+changed in every one of five runs. If that rate holds on this pair, the critic alone should
+account for most of a 0.019 mean move, and the branches will have produced material that is not
+just similar in position — as `DOOR_KEEPER`'s near-verbatim repeat already showed — but similar
+enough to score the same.
+
+**The cells.** A second, fresh critic scores the existing pass A packs of `001-seed3` and
+`001-seed3-repeat`, from the same `pass-a.brief.md` each run shipped on, written to
+`pass-a.rater2.yaml` beside the scoring the run used. Nothing is re-run and no branch is
+re-dispatched: the artifacts are fixed and only the scorer varies, which is the one comparison
+that isolates the critic.
+
+**Predictions, so the result can be wrong.**
+
+- **Within-pack across-critic exact agreement lands near 79%**, D8's pooled figure, on both packs.
+  If the wide spread of D8's per-run figures (69% to 89%) is really about the pack rather than the
+  corpus, these two — the same problem at the same seed — should land close to each other.
+- **The per-frame pass A totals move by at least as much across critics on one pack as they did
+  across the replicate.** That is the load-bearing prediction: it says the 0.019 is a critic
+  measurement and not a fact about the branches.
+- **The ranking changes in at least one of the two packs**, because it changed in five of five
+  runs under D8 and nothing here is different.
+
+**What would overturn it.** If within-pack across-critic movement is materially *smaller* than the
+replicate's 0.019, the branches genuinely diverged between sessions and item 4's floor is not a
+critic artefact. That is the more interesting outcome and the one the corroborating evidence
+argues against, which is why it is worth the two scorings.
+
+**Registered limits.** Two packs is not a rate, and both are the same problem, so nothing here
+generalises to other fixtures. Alpha is a corpus-level figure and 80 new cells against 225 will
+move `committal`'s interval without settling it; backlog 98 stays open on the terms it states.
+
+### E11 result, 2026-09-15
+
+Both cells ran. A fresh critic scored the existing pass A packs of `001-seed3` and
+`001-seed3-repeat` from the briefs those runs shipped on, written to `pass-a.rater2.yaml`.
+
+**One deviation, stated because it is the kind of thing that should not be silent.**
+`001-seed3`'s brief predates item 95, so its output block spelled `evidence: <one sentence>`
+unquoted — the construct item 95 fixed because it loses passes. Every scoring input was pasted
+verbatim: the problem, the hash, the rubric with its anchors, all five artifacts, the redaction
+notice. Only the output block was swapped for the quoted form. Nothing the critic scores was
+touched.
+
+**The load-bearing prediction holds, and it decides what item 4 measured.**
+
+| comparison | what varies | mean \|Δ\| | max \|Δ\| |
+|---|---|---|---|
+| `001-seed3` → `001-seed3-repeat` | session **and** artifacts **and** critic | 0.0190 | 0.0476 |
+| `001-seed3`, rater 1 → rater 2 | **critic only** | 0.0238 | 0.0476 |
+| `001-seed3-repeat`, rater 1 → rater 2 | **critic only** | 0.0238 | 0.0952 |
+
+Changing nothing but the scorer moves per-frame totals **more** than the entire replicate did.
+So item 4's 0.019 is a measurement of the critic, not a fact about the branches: two independent
+sets of branch artifacts, produced in different sessions from byte-identical briefs, score
+essentially the same, and what moved was who was scoring. That is the decomposition item 4 could
+not make, and it strengthens "divergence reproduces, adjudication does not" rather than softening
+it — the divergence half now has a control.
+
+**The first prediction is wrong on the level and right on the shape.** Both packs were predicted
+near D8's pooled 79%. They came in at **88%** and **85%**, the two highest n=5 packs in the corpus
+after `004-kernel-naming`. They are close to each other, which is what the prediction was really
+about, but both are above the pooled figure rather than at it, and the pooled figure has risen to
+81% because of them. Whatever makes a pack easy to agree on, these two share it — which is
+consistent with them being the same problem, and is one observation, not a mechanism.
+
+**The third prediction holds and then goes further.** The ranking changed in both packs, as D8's
+five-of-five said it would. In `001-seed3-repeat` **the representative changed too**, from
+`ACTOR_CENSUS` to `FRAME_BREAKER` — and that is the cluster D40 found tied at exactly 0.0000. A tie
+the rubric could not break is a tie a different critic breaks the other way, so the alphabetical
+tiebreak is not a formality: it decides which position reaches the user, and it decides it
+differently from how a second scorer would. Two of seven double-scored runs would now send a
+different position to deepen, up from one of five.
+
+**This raises the noise floor, and the old number was too small.** Item 4 set it at 0.05 from the
+replicate's 0.0476 maximum. A critic swap on fixed artifacts produced **0.0952**, twice that. Any
+real comparison between two runs carries both sources, so the floor is the larger:
+`PASS_A_NOISE_FLOOR` is **0.10**.
+
+That is uncomfortable where it should be. `001-seed3`'s `DOOR_KEEPER` over `MINIMALIST` at 0.1042
+and `014-seed1`'s `PARTICULARIST` over `MINIMALIST` at 0.1042 clear the new floor by four
+thousandths. `014-seed14`'s 0.0625, which E10 read as the wide path separating better, does not
+clear it at all and that reading is withdrawn. **The corpus contains no comfortably separated
+contested decision.** It contains two that scrape past a floor measured on two packs, and the
+honest statement of the rubric's discriminating power is that it has not yet been demonstrated.
+
+**Backlog 98 is answered, and the correction to it was the right one.** `committal` was at alpha
+0.402 on an interval of [−0.054, +0.683] that contained zero. With two more double-scored packs it
+is **+0.562 on [+0.26, +0.85]**, clear of zero. The item had said the interval narrows with scored
+runs; it does not, it narrows with double-scored packs, and going from eight scored runs to eleven
+moved it not at all while going from five double-scored packs to seven settled it. `foreclosure`,
+already retired, is now the only dimension whose interval spans zero.
+
+## E12. Does the trap sweep reproduce once the critic agent is actually in force?
+
+**Registered 2026-09-15, before any run. Downstream of D41 and of backlog item 4.**
+
+Item 4 is this repository's headline result: divergence reproduces and adjudication does not. Fixture
+001 at seed 3, re-run with byte-identical briefs, returned branch positions so close that
+`DOOR_KEEPER` repeated a timeout triple almost verbatim from a separate context window — and the
+critic fired T7 twice on one run and no detector at all on the other, pruning two of five against
+none of five.
+
+D41 found a cause that was not available when item 4 was written. A subagent type selects a system
+prompt, the permit on `adhd-critic` resolved nowhere, and D38's documented fallback dispatched the
+critique phase to `adhd-branch-search`. So the instructions in `agents/adhd-critic.md` — score blind,
+do not infer the frame, **run every detector mechanically, for every branch and every trap, eight
+records per branch, no gaps, a gap rejects the pass** — were not in force for any of the fifteen
+recorded runs. What ran instead was the branch system prompt with the critic's brief pasted in.
+
+An instruction to sweep mechanically and reject gaps is exactly the thing whose absence produces a
+sweep that fires twice on one pass and not at all on the next. That is a hypothesis, not a finding,
+and this is its test.
+
+**The cells.** Re-run fixture 001 at seed 3 twice more, on a host where `adhd-critic` launches, with
+everything else held as item 4 held it: same seed, same frame set, briefs confirmed byte-identical,
+same dispatch for the branches. The only change from item 4's pair is that the critique phase gets
+the critic agent rather than a substitute.
+
+**The readings, fixed now.**
+
+1. **Detector records per branch.** The contract asks for eight, one per trap, with evidence. Item
+   4's pair cannot be checked against this because the pass that would have enforced it never ran.
+   Under D41 a gap rejects the pass, so the first reading is whether the packs are even complete.
+2. **Prune-set agreement across the pair.** Item 4 went `{ACTOR_CENSUS, FRAME_BREAKER}` to `{}`. Any
+   overlap at all is movement toward reproducibility; identical prune sets would be the strong result.
+3. **Trap-sweep agreement, per trap, per branch.** Eight records times five branches is forty
+   comparisons per pair, against item 4's two-fired-versus-zero.
+4. **Pass A movement**, to check it stays inside the 0.10 noise floor E11 established, which would
+   say the critic change moved adjudication without moving scoring.
+
+**What would falsify the hypothesis.** A second pair that disagrees on the prune set as completely as
+item 4's did. That would mean the instructions were not what was missing, the sweep is unstable for
+some other reason, and D41 fixed a real defect that happens not to be this one. That outcome is
+worth as much as the confirming one and is the reason the readings are written down first.
+
+**What this cannot settle.** One pair is not a rate, exactly as item 4's was not. Two runs agreeing
+is consistent with a sweep that agrees four times in five, and nothing here distinguishes those.
+The honest ceiling on a confirming result is "the hypothesis survived its first test".
+
+**Cost.** Two runs of fixture 001 at n=5. `adhd cost` quotes the estimate at the D5 gate; the
+recorded runs of this fixture came in between 407k and 519k tokens each. Owner's call, for the same
+reason D5 exists.
+
+### The readings, run
+
+**Run 2026-09-18, owner's go-ahead given.** `evals/recorded/001-seed3-e12-1` and `-e12-2`. Same
+briefs as item 4's pair, confirmed byte-identical; `adhd-branch` and `adhd-critic` both launched as
+themselves, with `dispatch.json` recording every task and `planned` equal to `actual` throughout —
+the first pair of runs on this fixture where that is true rather than assumed.
+
+**1. Detector records per branch: complete, both cells.** `adhd run --phase critique` validated
+pass A at "5 letters x 8 dimensions" and pass B produced a full eight-trap row for every branch in
+both cells, no gaps, nothing rejected. The contract the critic was supposed to be following in all
+fifteen prior runs held on the first two runs where it could actually be checked.
+
+**2. Prune-set agreement: identical, and total.** Both cells pruned all five branches. Every
+branch fired T1 in pass B, both times. Against item 4's `{ACTOR_CENSUS, FRAME_BREAKER}` to `{}` —
+the two runs agreeing on nothing — this pair agrees on everything: the prune set, `{ALL FIVE}`,
+is the same set both times.
+
+**3. Trap-sweep agreement: 39 of 40.** Forty (branch, trap) records exist per cell (five branches,
+eight traps). Comparing cell 1 to cell 2 record by record, thirty-nine agree. The one disagreement
+is ACTOR_CENSUS/T2: cell 1's critic read it as not attacking the load-bearing assumption, cell 2's
+critic read a fresh ACTOR_CENSUS artifact as attacking it (the branches themselves are independent
+draws at each cell, not the same text re-scored, so this is a real place where two competent
+readings differed, not a scoring bug). T3, T4, T5 and T8 were unfired on every branch in both
+cells — thirty of forty records where nothing happened and both cells said so identically. Where
+item 4's pair disagreed on every fired detector, this pair disagrees on one cell in forty.
+
+**4. Pass A movement: past the floor, but not a clean comparison to E11's.** Composite pass A
+scores per frame, cell 2 minus cell 1: MINIMALIST +0.12, LEDGER +0.15, FRAME_BREAKER +0.12,
+DOOR_KEEPER −0.05, ACTOR_CENSUS +0.00. Three of five frames moved more than `PASS_A_NOISE_FLOOR`
+(0.10). E11 isolated critic-only noise by holding one set of artifacts fixed and swapping the
+critic; this pair cannot do that, because the branches are also a fresh draw at each cell.
+The movement here carries branch-content variance and critic-scoring variance together, and
+nothing in this pair separates them. What is real regardless of that confound: pass A's cardinal
+scores moved past the floor established for scoring noise alone, while pass B's structural verdict
+— which is the half that actually decides what gets pruned — barely moved at all. The cardinal
+numbers are noisier than the decision they feed.
+
+**The hypothesis is not falsified.** What would have falsified it was a second pair as
+disorganized as item 4's own — two runs disagreeing on the prune set the way `001-seed3` and
+`001-seed3-repeat` did. That did not happen. Both cells wiped out completely, in agreement,
+with the detector sweep landing on the same trap in the same place thirty-nine times out of forty.
+D41's fifteen prior runs never had `agents/adhd-critic.md`'s instructions in force; these two are
+the first that did, and adjudication reproduced.
+
+**What this pair still cannot settle.** One pair remains one pair. Near-total agreement between
+two runs is consistent with a sweep that agrees thirty-nine times in forty on this particular
+fixture and would disagree more on another; nothing here generalizes past fixture 001, seed 3.
+Pass A's movement past the noise floor is also a live question this pair raises rather than
+answers — E11 measured critic-only noise on fixed artifacts, and a version of that experiment
+run on E12-quality artifacts (real `adhd-branch` and `adhd-critic` dispatch, not
+`general-purpose`) has not been done.
+
+**What the pre-registration did not anticipate: a total wipeout is a result the fixture was not
+built to receive.** `must_not triple_only` and `must_not no_verdict` both trip on both cells,
+and `must_surface retry_target_questioned` fails on both — not because the run reasoned badly,
+but because "No recommendation. Every branch was pruned." is short, has no "do X" sentence, and
+the pruned block in `synthesis.md` carries only each branch's `position` and the critic's
+detector-evidence text, not its full `reasoning` — so language that exists in `branches/*.yaml`
+(DOOR_KEEPER's artifact discusses retry storms and duplicate side effects at length) never
+reaches the text these checks read. `must_surface human_cancel` disagreed between the two cells
+for the same reason, on incidental wording rather than on anything the trap sweep decided. Every
+`expect` assertion and `must_surface trap_named` passed on both: the checks that read the pruned
+block's structure (traps present, at least one pruned) are fine; the checks that assumed a
+recommendation exists to read are not built for the case where the honest answer is that nothing
+survived. `adhd eval` reports both cells `FAIL` against `expected.json`, correctly, since a fail
+recorded as observed is what an `outcome: "fail"` entry means — the finding is that two of the
+four failing checks are measuring the wrong thing for this outcome, not that the run did anything
+wrong. Filed as backlog item 105 rather than fixed here, because changing what a fixture's own
+checks mean is exactly the kind of thing this repository asks to be resolved with the user first.
+
+**Cost, actual.** 111,871 tokens (cell 1) and 120,402 tokens (cell 2), against a 520,200-token
+estimate for n=5 — `deepen`'s 109,650-token share of that estimate went unspent both times,
+because a run with nothing to deepen spends nothing there. `adhd cost` was not run against these
+because they predate a kernel `os.json`; `cost.json` in each recording carries the measured
+`by_phase` and `by_frame` breakdown by hand, in the same shape `adhd cost` reads.

@@ -1,0 +1,51 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+frame: MINIMALIST
+position: >-
+  Set one blanket timeout value on the client now, a conservative round
+  number, instead of tuning separate connect/read/write/pool values.
+reasoning: |
+  1. The pain is not "what is the mathematically correct timeout" — it is
+  "this client can currently hang forever, and that thought is now
+  uncomfortable." Someone noticed the default is unbounded (or unknown) and
+  wants the discomfort gone before they ship or before it bites them again.
+  2. The smallest thing that removes an unbounded wait is a bound. Any finite
+  number does that job. Picking one round, conservative value for the whole
+  client (e.g. "this call gets N seconds, period") solves the actual failure
+  mode — the request that never returns — without requiring the asker to
+  first gather the latency data that a well-tuned split of connect vs read
+  vs write timeouts would need. Precision is a distinct, later problem;
+  boundedness is the one in front of them now.
+  3. This deliberately leaves unfixed: no per-endpoint tuning, no separate
+  connect/read/pool timeout values, no retry or backoff policy, no decision
+  about what the caller does after a timeout fires, and no handling of
+  timeout-budget propagation to anything downstream. That's acceptable
+  because none of those problems exist yet in a form anyone can observe —
+  there's no data showing the blanket number is wrong, and building that
+  machinery now is guessing at shapes of failure nobody has seen.
+  4. The larger fix (splitting timeouts, adding retries, tuning per call)
+  becomes necessary once real traffic produces evidence: timeout errors on
+  calls that would have succeeded if given a bit longer, or an incident
+  where the blanket number was too loose and a hang propagated upward
+  anyway. You'd know because the logs would show timeout-caused failures as
+  a distinct, nonzero, recurring category — not because someone reasoned
+  their way to a better number in advance.
+forecloses:
+  - >-
+    Tuning connect, read, write, and pool timeouts as separate values right
+    now.
+  - >-
+    Designing a retry/backoff or circuit-breaker policy alongside the
+    timeout change.
+  - >-
+    Setting different timeout values per endpoint or per call before any
+    endpoint has shown it needs one.
+falsifier: >-
+  Within the first week of traffic, check logs for requests that hit the
+  timeout but would have succeeded given more time (e.g. the same call
+  retried manually completes past the cutoff) at a rate above roughly 1% —
+  if so, one blanket number is already wrong and needs splitting.
+missing_actor: >-
+  The owner of the downstream service being called, who could publish an
+  expected response-time SLA; the client-side timeout is currently a guess
+  because that number was never asked for.
+confidence: medium

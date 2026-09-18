@@ -33,14 +33,31 @@ const NETWORK = ["WebSearch", "WebFetch"];
  * reach other tasks, and any MCP tool reaches whatever its server does. "Branches never see
  * siblings" is a CLAUDE.md non-negotiable, so a new grant has to be argued for here first.
  *
- * TaskList is the launch permit from D4: Claude Code refuses to launch an agent with zero tools.
- * It is read only and reaches no file and no network. What it reveals about sibling tasks is
- * unverified; see D4. It is the one grant on this list that rests on an untested claim.
+ * The launch permit, D4 as amended by D36, D38 and now D41: the host refuses to launch an agent
+ * with no tools, so an isolated agent has to carry one, and the permit has to satisfy two things
+ * at once. It must not reach what another agent in the run wrote, and it must actually resolve.
+ *
+ * `TodoWrite` and `TaskList` satisfied the first and failed the second, and the failure was total:
+ * this host answers "unrecognized [TodoWrite]; recognized but matched no tools in this session
+ * [TaskList]" and refuses the spawn. D36 and D38 knew, and accepted a fallback to
+ * `adhd-branch-search`. What that costs was never priced: the fallback swaps the *system prompt*
+ * too, so `adhd-critic.md` — "run every detector mechanically, eight records per branch, no gaps" —
+ * has never executed in any recorded run. A critic scoring without its own instructions is the
+ * most economical explanation on offer for item 4's finding that the trap sweep does not reproduce
+ * while divergence does.
+ *
+ * So the permit is the web pair for all four. It resolves — `adhd-branch-search` has spawned on
+ * exactly this list — and it cannot open a sibling's artifact, which is the guarantee CLAUDE.md
+ * calls non-negotiable. The property given up is narrower and is named rather than hidden: a frame
+ * with no `tools` grant is now dispatched to an agent that *could* search. The brief tells it not
+ * to, and T3, the citation trap, is the mechanical detector for a branch that did. That is the same
+ * trade D38 wrote down as rung 2 of its fallback ladder; D41 promotes it into the definitions so
+ * rung 1 resolves and the ladder goes away.
  */
 const PERMITTED: Record<string, string[]> = {
-  "adhd-branch.md": ["TaskList"],
-  "adhd-critic.md": ["TaskList"],
-  "adhd-deepen.md": ["TaskList"],
+  "adhd-branch.md": ["WebFetch", "WebSearch"],
+  "adhd-critic.md": ["WebFetch", "WebSearch"],
+  "adhd-deepen.md": ["WebFetch", "WebSearch"],
   "adhd-branch-search.md": ["WebFetch", "WebSearch"],
 };
 
@@ -96,15 +113,40 @@ test("every agent grants exactly the tools it is permitted, and nothing else", (
   }
 });
 
-/** The two categories that matter most, named separately so a failure says which line was crossed. */
-test("no run agent carries a filesystem tool, and only the search agent carries network", () => {
+/**
+ * The line that actually matters, and the one that does not.
+ *
+ * Filesystem access is the one to hold: it is the only channel by which one isolated agent can
+ * read what another wrote, and "branches never see siblings" is the CLAUDE.md non-negotiable.
+ * Network access is not that channel — nothing in a run is published — so D41 spends it to buy a
+ * permit that launches. Keeping the old rule would have kept a cleaner-looking allowlist and three
+ * agents that cannot start.
+ */
+test("no run agent carries a filesystem tool, and every permit is one that resolves", () => {
   const dir = join(cfg.root, "agents");
   for (const f of Object.keys(PERMITTED)) {
     const t = tools(frontmatter(join(dir, f)));
     for (const bad of FILESYSTEM) assert.ok(!t.includes(bad), `${f} grants ${bad}: a channel to sibling artifacts`);
-    const net = t.filter((x) => NETWORK.includes(x));
-    if (f === "adhd-branch-search.md") assert.deepEqual(net.sort(), ["WebFetch", "WebSearch"]);
-    else assert.deepEqual(net, [], `${f} grants network tools`);
+    assert.ok(t.length > 0, `${f}: the host refuses to launch an agent with zero tools`);
+    assert.deepEqual(
+      t.filter((x) => !NETWORK.includes(x)),
+      [],
+      `${f} grants a permit outside the web pair. D41: a permit must both resolve and reach nothing the run wrote, and no other name is known to do both`,
+    );
+  }
+});
+
+/**
+ * The regression that matters more than the allowlist. `TodoWrite` and `TaskList` are the two
+ * names that shipped, looked inert, passed every check, and could not launch. Naming them keeps a
+ * future edit from reaching for the same class of tool because it reads as harmless.
+ */
+test("the two permits that silently failed to launch never come back", () => {
+  const dir = join(cfg.root, "agents");
+  for (const f of Object.keys(PERMITTED)) {
+    const t = tools(frontmatter(join(dir, f)));
+    for (const dead of ["TodoWrite", "TaskList"])
+      assert.ok(!t.includes(dead), `${f} grants ${dead}, which does not resolve in a Claude Code remote session. The agent would not start and the dispatch would silently fall back to another agent's system prompt`);
   }
 });
 
@@ -235,4 +277,61 @@ test("no mission agent can reach the network or start a run, and only the builde
   assert.ok(verifier.includes("Bash"), "the verifier cannot run the checks");
   const reviewer = tools(frontmatter(join(dir, "adhd-reviewer.md")));
   assert.ok(!reviewer.includes("Write") && !reviewer.includes("Bash"), "a reviewer that can fix what it finds never writes the objection down");
+});
+
+/**
+ * D42. `agents/` is only read when the plugin is installed. A session opened straight on this
+ * repository installs nothing, so every dispatch name in `skills/adhd/SKILL.md` resolved to no
+ * agent at all and the spawn was refused before any permit was looked at — which is why D41's
+ * permit fix could not be observed to change anything. `.claude/agents/` is the directory such a
+ * session reads, so the shipped agents are mirrored into it by `scripts/sync-claude-dir.mjs`.
+ *
+ * The mirror is a copy, so it can drift. This is the check that says so.
+ */
+test("the shipped agents are mirrored into .claude/agents, byte for byte", () => {
+  const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
+  const shipped = (p["agents"] as string[]).map((a) => a.replace(/^\.\/agents\//, ""));
+  const dir = join(cfg.root, ".claude", "agents");
+
+  assert.ok(existsSync(dir), ".claude/agents does not exist, so a session on this repository has no adhd agents");
+  for (const file of shipped) {
+    const mirror = join(dir, file);
+    assert.ok(existsSync(mirror), `.claude/agents/${file} is missing; run node scripts/sync-claude-dir.mjs`);
+    assert.equal(
+      readFileSync(mirror, "utf8"),
+      readFileSync(join(cfg.root, "agents", file), "utf8"),
+      `.claude/agents/${file} has drifted from agents/${file}; run node scripts/sync-claude-dir.mjs`,
+    );
+  }
+
+  // The maintenance agents stay out for the same reason plugin.json leaves them out: adhd-trainer
+  // has Bash and adhd-governor reads this repository's training records, and neither belongs in
+  // the agent list of a session that merely opened the clone.
+  const mirrored = readdirSync(dir).filter((f) => f.endsWith(".md"));
+  assert.deepEqual(mirrored.sort(), [...shipped].sort());
+});
+
+/**
+ * D44. And the skill, which D42 left behind. `/adhd` is the procedure that spawns the agents D42
+ * made resolvable, and it lived in the same plugin-only directory they did — so the fix left a
+ * session holding four dispatchable agents and no way to dispatch them. Project skills resolve from
+ * `.claude/skills/<name>/SKILL.md`, so the shipped skills are mirrored there too.
+ */
+test("the shipped skills are mirrored into .claude/skills, byte for byte", () => {
+  const p = JSON.parse(readFileSync(join(cfg.root, ".claude-plugin", "plugin.json"), "utf8")) as Record<string, unknown>;
+  const shipped = (p["skills"] as string[]).map((x) => x.replace(/^\.\/skills\//, ""));
+  const dir = join(cfg.root, ".claude", "skills");
+
+  assert.ok(existsSync(dir), ".claude/skills does not exist, so a session on this repository has no /adhd");
+  assert.ok(shipped.includes("adhd"), "plugin.json no longer ships the adhd skill");
+  for (const name of shipped) {
+    const at = join(dir, name, "SKILL.md");
+    assert.ok(existsSync(at), `.claude/skills/${name}/SKILL.md is missing; run node scripts/sync-claude-dir.mjs`);
+    assert.equal(
+      readFileSync(at, "utf8"),
+      readFileSync(join(cfg.root, "skills", name, "SKILL.md"), "utf8"),
+      `.claude/skills/${name}/SKILL.md has drifted; run node scripts/sync-claude-dir.mjs`,
+    );
+  }
+  assert.deepEqual(readdirSync(dir).sort(), [...shipped].sort());
 });

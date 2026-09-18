@@ -1,0 +1,75 @@
+```yaml
+problem_hash: sha256:bad9dcb705701f121abe594852d98e034d4dfafb48439d844790bfa72068519e
+frame: NIGHT_OPERATOR
+verdict: defend
+response: |
+  The objection is right about the mechanism and wrong about what the position was buying with it.
+  It costs me the mechanism. It does not reach the claim.
+
+  Take the correctness argument first, because it is the real one. A file descriptor is released by
+  the kernel no matter how the process dies; a row in Postgres is not, so the TTL has to stand in
+  for liveness, and a TTL cannot do that job. Short expiry lapses under a live holder during a
+  paused VM, a long GC, or a thirty-second partition, and hands the lease to a second runner while
+  the first is still writing. Long expiry converts one bad kill into a blocked window. Idempotent
+  keyed writes do not rescue a read-modify-write counter or an un-keyed call to something external,
+  and fencing tokens need enforcement at the storage layer, which is not what a cron box and a
+  Python script have. All of that is correct and I am not going to talk my way around it. My
+  position named the lease as the guard, and as a guard it is worse than the thing it foreclosed.
+
+  What the objection does not establish is that the guard and the handle have to be the same object.
+  That conflation is mine, not the objection's, and dropping it costs me the mechanism while leaving
+  the claim standing. Exclusion goes back to the kernel: flock on a fixed path, released on death,
+  crash, OOM kill, or power loss, with no expiry carrying any weight at all. Alongside it the job
+  writes a run record the responder can read from anywhere - host, PID, run id, started_at,
+  heartbeat - and reads one disable flag before it does any work. That record grants nothing. It
+  cannot hand a second runner permission it does not have, because permission lives in the fd. A
+  stale record is now a symptom to display, not a lease to mis-grant, which is exactly the failure
+  mode the objection built its case on and exactly the failure mode that disappears when the record
+  stops being authoritative. The verbs survive: see who holds it and since when, without guessing a
+  host; stop the job with a data change rather than a deploy; alert on the run outliving its
+  expected duration rather than on the pool exhaustion three hops downstream. "Break the lease"
+  narrows to "kill the holder you can now identify," which is a smaller promise and a true one.
+
+  This does narrow the position to one host. The objection's own logic says the same thing: if the
+  job ever runs on two boxes, no amount of TTL gets you safe exclusion without fencing, and the
+  answer is a real scheduler, not a better key. The problem as stated is a crontab shelling to a
+  Python script, so today the kernel primitive is available and correct. The day it is copied to a
+  second box, this position is void rather than degraded, and that is a cleaner boundary than the
+  one I originally drew.
+
+  The scope objection I largely granted before it was raised. My falsifier already said that if the
+  rotation has no write credentials on the datastore, the position is wrong as written tonight, and
+  that if the last three pages were all resolved by killing processes on an already-open host, the
+  external record is ceremony. The objection asserts those conditions; it does not establish them
+  any more than I did. The disagreement is only about where the burden sits, and under the revision
+  the cost of being wrong drops sharply: the run record and the disable flag are a table and an if
+  statement, not a locking design. If the rotation cannot write to a datastore, the kill switch
+  becomes a file on the host or whatever flag system they already operate. The requirement is a
+  control the responder can actually reach, not a particular store.
+
+  On rate, the objection is correct and aimed at a claim I did not make. A lock never fixes a job
+  slower than its interval; it only decides which firings are discarded. But the half of the
+  position the objection skipped is the half that touches the rate directly. "Held 47 minutes,
+  expected 4" is a rate detector, and a refusal that is counted and alerting is how anyone learns
+  the interval is now wrong. Silent discard is how the overlap in the problem statement went
+  unnoticed until it started overlapping visibly. Recording the discard is not a cosmetic
+  difference from not recording it.
+revised_position: >-
+  Do the exclusion with a kernel-released local lock so no expiry ever carries liveness, and pair it
+  with an externally readable run record (host, PID, run id, start time) plus a disable flag the
+  script checks before doing work, so the on-call can identify the holder, stop the job without a
+  deploy, and be paged on the run outliving its expected duration rather than on the downstream
+  damage - valid only while this job runs on exactly one host.
+revised_falsifier: >-
+  Two checks, either of which kills it. First, the one the objection sharpened: confirm this job can
+  only ever run on one host, since the kernel lock is the whole correctness argument and a second
+  box or a container copy voids the position outright rather than weakening it - at that point the
+  answer is a scheduler with real fencing, not a better record. Second, the operational one: pull
+  the last three pages that trace back to this job and check whether any responder needed to know
+  which host held it, stop the next run, or coordinate across machines. If every one was resolved by
+  killing processes on a box they already had open, the external record is ceremony and flock plus a
+  run-duration alert is the whole correct answer. Then check that the rotation can actually write
+  the disable flag wherever it lives; if they cannot, the kill switch is imaginary and the position
+  is wrong as written tonight.
+confidence: medium
+```

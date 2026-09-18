@@ -12,10 +12,25 @@ in the held-out half is out of vocabulary.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
+
+def _load_script(name: str):
+    """Import `analysis/scripts/<name>.py` by path, unambiguously. See the note at its use."""
+    import importlib.util
+    import sys
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
 
 from adhd_analysis.text.budget import Budget
 from adhd_analysis.text.corpora import Library, Source
@@ -434,12 +449,18 @@ def test_the_shipped_frozen_set_holds_out_no_document_a_commit_can_rewrite():
     The first cut of `analysis/heldout.json` put `docs/ARCHITECTURE.md` and `README.md` in the set,
     and those are rewritten whenever a decision is recorded — so writing one would have moved the
     next perplexity for a reason that has nothing to do with the model, silently, because the
-    fingerprint is over names. Repository prose stays in the training half, where mutating text is
-    harmless.
+    fingerprint is over names.
+
+    This docstring used to end "Repository prose stays in the training half, where mutating text is
+    harmless." **E8 measured that wrong** — writing up its result moved a retrain of its own four cells
+    by up to 4,807 n-grams and gave each cell a different corpus digest — so D26 keeps mutable text out
+    of the training read too, and the set of mutable sources now lives in `corpora.yaml` rather than in
+    a literal repeated across three files.
     """
     spec = json.loads((ROOT / "analysis" / "heldout.json").read_text())
     assert spec["documents"], "the shipped frozen set is empty"
-    mutable = {"repo-docs", "repo-prompts", "repo-readme"}
+    mutable = Library.load(ROOT / "analysis" / "corpora.yaml").mutable_names()
+    assert mutable, "the manifest marks nothing mutable, so this test proves nothing"
     offenders = [n for n in spec["documents"] if n.split("/")[0] in mutable]
     assert not offenders, f"the frozen set holds documents this repository rewrites: {offenders}"
     assert len(spec["fingerprint"]) == 16
@@ -625,3 +646,184 @@ def test_in_vocabulary_only_refuses_any_vocabulary_difference(tmp_path):
     # The same tenth of a point is tolerated on all targets, where the effect is continuous.
     allt = evaluate(model, held, Budget.smoke())
     assert comparable_heldout(allt, replace(allt, oov_rate=allt.oov_rate + 0.001)) is None
+
+
+def test_the_scoring_script_releases_each_model_before_loading_the_next(tmp_path, monkeypatch):
+    """Scoring several large models in one invocation used to hold two at once.
+
+    Rebinding the loop variable frees the previous model only *after* the next one is built, so the peak
+    is the sum of two. Backlog 82's re-measurement asked for four models in one call — cell A at 32.1M
+    n-grams beside the shipped model at 40.2M — and the cgroup killed it at 13.9GB mid-load, with no
+    traceback and an empty JSON file. That reads like a scoring failure rather than an allocation one,
+    which is the expensive part.
+
+    Asserted with a weak reference rather than by measuring memory: a test that needs 14GB is a test
+    nobody runs.
+    """
+    import weakref
+
+    # Loaded by path, not as `scripts.score_heldout`. There are two `scripts/` directories in this
+    # checkout — `analysis/scripts/`, which holds this module, and the repository root's, which
+    # holds shell — and which one the bare import resolves to depends on where pytest was started.
+    # From `analysis/` it found the right one; from the repository root, which is how the build
+    # brief says to run the suite, it found the shell directory and raised ModuleNotFoundError in
+    # this one test. `test_fetch_and_genericity.py` already loads its script this way.
+    ss = _load_script("score_heldout")
+
+    lib = _library(tmp_path, n=20)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3,
+                min_count=1, budget=Budget.smoke())
+
+    alive: list[weakref.ref] = []
+    real_load = ss.load
+
+    def tracking_load(path):
+        model, kind = real_load(path)
+        # Every previously loaded model must already be gone by the time the next one is built.
+        still = [r for r in alive if r() is not None]
+        assert not still, f"{len(still)} model(s) still held while loading {path.name}"
+        alive.append(weakref.ref(model))
+        return model, kind
+
+    monkeypatch.setattr(ss, "load", tracking_load)
+    monkeypatch.setattr(ss.Library, "load", staticmethod(lambda _m: lib))
+    monkeypatch.setattr(ss.FrozenSplit, "load", classmethod(
+        lambda cls, base, path, *, side: SplitLibrary(lib, every=10, side=side)
+    ))
+
+    code = ss.main([str(rec.model_path), str(rec.model_path), "--json"])
+    assert code == 0
+    assert len(alive) == 2, "both models should have been loaded"
+    assert all(r() is None for r in alive), "a model outlived the loop"
+
+
+# ---- backlog 77: one target set, so the difference is modelling rather than coverage -------------
+
+
+def test_a_shared_vocabulary_makes_two_models_comparable_at_different_oov_rates(tmp_path):
+    """What `in_vocabulary_only` cannot do, and backlog 77 asked for anyway.
+
+    D17 measures 2.83x between a model that read 584 PEPs and one that read none, on the same 31
+    documents, with OOV going 1.36% to 2.96% across the pair. Part of that gap is vocabulary and part is
+    modelling, and the item proposed separating them by scoring both `in_vocabulary_only` — which is
+    exactly what D25 refuses, because there each model sums over *its own* in-vocabulary targets and the
+    two numbers are two tests on different text.
+
+    Handing both models one set of words fixes it: same targets, so the remaining difference is how well
+    each predicts them.
+    """
+    lib = _library(tmp_path, n=40)
+    train_side = SplitLibrary(lib, every=10, side="train")
+    held = SplitLibrary(lib, every=10, side="heldout")
+    rec = train(train_side, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    words = [w for w in model.vocab.stoi if not w.startswith("<")]
+    shared = frozenset(words[: len(words) // 2])
+
+    whole = evaluate(model, held, Budget.smoke())
+    part = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke(),
+                    shared_vocabulary=shared)
+
+    assert whole.restricted_to_types is None
+    assert part.restricted_to_types == len(shared)
+    # The restriction narrows what is summed, never what is read: the OOV rate is over the same text.
+    assert part.oov_rate == pytest.approx(whole.oov_rate)
+    assert part.tokens == whole.tokens
+    # Two scores restricted to one set are comparable however far apart their own OOV rates are.
+    far = replace(part, oov_rate=part.oov_rate + 0.2, perplexity=part.perplexity * 3)
+    assert comparable_heldout(part, far) is None
+    # And a restricted score beside an unrestricted one is not.
+    why = comparable_heldout(part, whole)
+    assert why is not None and "shared vocabulary" in why
+
+
+def test_a_restricted_score_still_counts_the_sentence_end(tmp_path):
+    """`</s>` is in every vocabulary, so it is never what a restriction is about. Dropping it would make
+    a restricted score depend on sentence lengths rather than on words."""
+    lib = _library(tmp_path, n=20)
+    rec = train(SplitLibrary(lib, every=10, side="train"), tmp_path / "m.kn.gz", order=3,
+                 min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+    empty = evaluate(model, SplitLibrary(lib, every=10, side="heldout"), Budget.smoke(),
+                     shared_vocabulary=frozenset())
+    # Every real word excluded leaves exactly the sentence ends, so there is still something to score.
+    assert empty.restricted_to_types == 0
+    assert math.isfinite(empty.perplexity) and empty.perplexity > 0
+
+
+def test_every_model_class_satisfies_the_background_protocol(tmp_path):
+    """The integration that was missing, and the reason it was missing.
+
+    `genericity.py` is the T1 measure: it scores a branch artifact's prose against a model trained
+    on a document library, and low surprisal is prose predictable from everything else ever written
+    on the subject. It was typed and written against `KneserNey`, calling `surprisal`, `order` and
+    `counts`. The transformer has none of those three, so D20 could add a second model class,
+    gradient-check its backward pass, train it, and hand it to nothing.
+
+    What each class has to answer is now written down as `BackgroundModel` and checked here for all
+    of them, so a fourth class is usable the day it trains rather than after someone widens a type.
+    """
+    from adhd_analysis.text.lstm import LSTM
+    from adhd_analysis.text.ngram import KneserNey
+    from adhd_analysis.text.transformer import Transformer
+
+    from collections import Counter
+
+    from adhd_analysis.text.lstm import LSTMConfig
+    from adhd_analysis.text.tokenize import Vocab
+    from adhd_analysis.text.transformer import TransformerConfig
+
+    for cls in (KneserNey, Transformer, LSTM):
+        for method in ("logprob_terms", "surprisal", "describe"):
+            assert callable(getattr(cls, method, None)), f"{cls.__name__} has no {method}"
+
+    # Callable is not the same as working, and asserting only the former is how `describe` shipped
+    # calling `self.n_params` on a Transformer that has `self.params`. Each method is exercised on a
+    # real instance. Random weights are fine: what is under test is the surface, not the training.
+    words = "the timeout should be set to thirty seconds and then retried".split()
+    vocab = Vocab.build(Counter(words * 3), min_count=1)
+
+    lib = _library(tmp_path, n=20)
+    rec = train(lib, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    instances = [
+        KneserNey.load(rec.model_path),
+        Transformer(TransformerConfig(vocab_size=len(vocab), d_model=16, n_heads=2, n_layers=1, context=16), vocab),
+        LSTM(LSTMConfig(vocab_size=len(vocab), d_model=16, n_layers=1), vocab),
+    ]
+    for m in instances:
+        name = type(m).__name__
+        described = m.describe()
+        assert isinstance(described, str) and len(described) > 20, f"{name}.describe() returned {described!r}"
+        assert str(len(m.vocab)) in described.replace(",", ""), f"{name}.describe() does not state its vocabulary size"
+
+        probe = m.vocab.encode(words)
+        bits = m.surprisal(list(probe))
+        assert len(bits) == len(probe), f"{name}.surprisal gave {len(bits)} figures for {len(probe)} tokens"
+        assert all(b == b and b >= 0 for b in bits), f"{name}.surprisal returned a NaN or a negative"
+
+
+
+
+def test_surprisal_agrees_with_logprob_terms_on_the_model_that_has_both(tmp_path):
+    """`KneserNey` is the one class carrying both, so it is the one that can check the derivation.
+
+    The other two classes get `surprisal` from `surprisal_from_logprob_terms`. If that conversion is
+    wrong — the wrong log base, or the end-of-sequence term left in — every figure the genericity
+    report prints for a transformer is wrong by a constant and nothing else would catch it. The
+    n-gram's own two methods pin the conversion.
+    """
+    import math
+
+    from adhd_analysis.text.modelfile import surprisal_from_logprob_terms
+
+    lib = _library(tmp_path, n=20)
+    rec = train(lib, tmp_path / "m.kn.gz", order=3, min_count=1, budget=Budget.smoke())
+    model = KneserNey.load(rec.model_path)
+
+    ids = model.vocab.encode(["the", "quick", "brown", "fox"])
+    native = model.surprisal(ids)
+    derived = surprisal_from_logprob_terms(model.logprob_terms(ids))
+    assert len(native) == len(derived), "the derivation must emit one bit-figure per real token"
+    for a, b in zip(native, derived):
+        assert math.isclose(a, b, rel_tol=1e-9), f"surprisal {a} but the derivation gives {b}"

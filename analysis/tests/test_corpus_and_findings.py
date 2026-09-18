@@ -21,7 +21,7 @@ def corpus():
 
 
 def test_the_loader_reproduces_the_number_the_typescript_reports(corpus):
-    """79% exact over 225 cells, 100% within one point.
+    """81% exact over 305 cells, 100% within one point.
 
     The repository computes that in `src/learn.ts`. Reproducing it in Python from the same files
     is what makes everything else here trustworthy: a loader that quietly dropped a rater or
@@ -33,8 +33,8 @@ def test_the_loader_reproduces_the_number_the_typescript_reports(corpus):
         if rater in (1, 2)
     }
     s = summarise(pair_only, 3)
-    assert s["pairs"] == 225
-    assert round(s["percent_agreement"], 2) == 0.79
+    assert s["pairs"] == 305
+    assert round(s["percent_agreement"], 2) == 0.81
     assert s["within_one"] == 1.0
 
 
@@ -49,7 +49,40 @@ def test_frame_ids_are_forwarded_so_a_rename_is_not_a_tenth_frame(corpus):
 def test_negative_controls_are_not_loaded_as_runs(corpus):
     """A control is a hand-written answer with no plan and no score, not a run."""
     assert not any(a.run.endswith("-linear-cot") for a in corpus.artifacts)
-    assert len(corpus.runs) == 7
+    assert len(corpus.runs) == 13, "E12's pair are the twelfth and thirteenth; the four -linear-cot controls are still excluded"
+    # Fixture 014 dispatches seven branches, every other fixture five, so the corpus is no longer a
+    # multiple of five artifacts. Anything that divides by five is wrong from here on.
+    assert len([a for a in corpus.artifacts if a.run.startswith("014-")]) == 14
+
+
+def test_the_ninth_run_is_a_replicate_and_the_corpus_cannot_tell(corpus):
+    """Backlog 99, pinned so the gap is visible from the analysis side too.
+
+    `001-seed3-repeat` is `001-seed3` at the same seed with byte-identical briefs. For reliability
+    work that is exactly what is wanted -- more scorings of the same pack -- and every function in
+    this package treats it correctly. For any *rate over runs* it is one draw counted twice, and
+    nothing here knows the difference. This test exists so the next person to compute a per-frame
+    rate over `corpus.runs` finds the caveat rather than the number.
+
+    What makes the pair a replicate is the frame set and the problem, not the prose: the branches
+    are separate model samples and their positions differ, which is the whole reason the pair was
+    run.
+    """
+    assert "001-seed3" in corpus.runs and "001-seed3-repeat" in corpus.runs
+    frames = lambda run: {a.frame for a in corpus.artifacts if a.run == run}
+    assert frames("001-seed3") == frames("001-seed3-repeat"), (
+        "a replicate that dispatched a different frame set is not a replicate"
+    )
+    assert len(frames("001-seed3")) == 5
+    words = lambda run: {a.frame: a.words for a in corpus.artifacts if a.run == run}
+    first, second = words("001-seed3"), words("001-seed3-repeat")
+    assert any(first[f] != second[f] for f in first), (
+        "every artifact reproduced to the word, which would mean the pair is one sample and not two"
+    )
+    # And the finding the pair exists to carry: the trap sweep did not reproduce.
+    fired = lambda run: sorted(t for a in corpus.artifacts if a.run == run for t in a.fired)
+    assert fired("001-seed3-repeat") == [], "the repeat fired no detector on any frame"
+    assert len(fired("001-seed3")) >= 2, "001-seed3 fired at least twice on the same pack"
 
 
 def test_foreclosure_agrees_almost_always_and_measures_nothing(corpus):
@@ -124,7 +157,7 @@ def test_the_signal_model_is_grouped_by_run_and_never_scored_in_sample(corpus):
 
 def test_bootstrap_resamples_runs_and_reports_when_it_cannot(corpus):
     multi = corpus.multi_rated_runs()
-    assert len(multi) == 5
+    assert len(multi) == 7
 
     def alpha_over(runs):
         keep = set(runs)
@@ -175,6 +208,56 @@ def test_permutation_p_is_never_zero():
     assert p_same > 0.2, "identical distributions should not look significant"
 
 
+def test_the_analysis_readme_table_is_the_table_the_report_prints(corpus):
+    """The reliability table in `analysis/README.md` was hand-copied and nothing checked it.
+
+    Two second scorings arrived for E11 and every row moved. Six of the nine alphas in the README
+    were then wrong, `committal`'s interval had stopped containing zero while the paragraph under
+    the table still said it did, and the whole thing had been correct on the day it was written and
+    silently false ever since. Every other published figure in this repository is pinned; this one
+    was not, so it is pinned now, against the report rather than against a copy of it.
+
+    Alpha, percent agreement, ceiling rate and distinct values are deterministic. The bootstrap
+    interval is not, so only the fact it does or does not reach chance is asserted — which is the
+    half any sentence in the README is ever built on.
+    """
+    from adhd_analysis.report import reliability_section
+
+    _, table = reliability_section(corpus, resamples=400)
+    readme = (ROOT / "analysis" / "README.md").read_text()
+
+    row = re.compile(
+        r"^\| `([a-z_]+)` \| \*{0,2}([+-][\d.]+)\*{0,2} \| \[([+-][\d.]+), ([+-][\d.]+)\] "
+        r"\| (\d+)% \| (\d+)% \| (\d+) \|$",
+        re.M,
+    )
+    rows = {m[0]: m[1:] for m in row.findall(readme)}
+    assert set(rows) == set(table), f"the README table names {sorted(rows)}, the rubric has {sorted(table)}"
+
+    for dim, (alpha, lo, hi, exact, ceiling, distinct) in rows.items():
+        d = table[dim]
+        assert f"{d['alpha']:+.3f}" == alpha, f"{dim}: README says alpha {alpha}, report says {d['alpha']:+.3f}"
+        assert f"{d['percent_agreement']:.0%}" == f"{exact}%", f"{dim}: README says {exact}% exact, report says {d['percent_agreement']:.0%}"
+        assert f"{d['ceiling_rate']:.0%}" == f"{ceiling}%", f"{dim}: README says {ceiling}% ceiling, report says {d['ceiling_rate']:.0%}"
+        assert str(d["distinct"]) == distinct, f"{dim}: README says {distinct} distinct values, report says {d['distinct']}"
+        claims_chance = float(lo) <= 0.0 <= float(hi)
+        reaches_chance = d["ci_lo"] <= 0.0 <= d["ci_hi"]
+        assert claims_chance == reaches_chance, (
+            f"{dim}: the README interval [{lo}, {hi}] "
+            f"{'reaches' if claims_chance else 'clears'} chance and the report disagrees"
+        )
+
+    # And the two figures the prose above the table quotes.
+    pair_only = {
+        (f"{run}/{letter}/{dim}", rater): float(v)
+        for (run, rater, letter, dim), v in corpus.scores.items()
+        if rater in (1, 2)
+    }
+    s = summarise(pair_only, 3)
+    assert f"the same {s['pairs']} marks" in readme, f"the README quotes a mark count that is not {s['pairs']}"
+    assert f"{s['percent_agreement']:.0%} agreement is not" in readme
+
+
 def test_the_readme_badge_states_the_number_pytest_collects(request):
     """The badge says how many Python tests there are, and pytest is the only thing that knows.
 
@@ -186,3 +269,69 @@ def test_the_readme_badge_states_the_number_pytest_collects(request):
     m = re.search(r"/badge/python%20tests-(\d+)-", readme)
     assert m, "the README has no python tests badge"
     assert int(m.group(1)) == request.session.testscollected, "the badge has drifted from the suite"
+
+
+def test_unfence_matches_the_shared_cases_the_typescript_side_asserts_against():
+    """Backlog 96. Two loaders, two CI jobs, nothing comparing them, and they disagreed.
+
+    This side used rfind, which cuts at a backtick run anywhere in the body rather than at a
+    closing fence on its own line, so the first fenced recording broke the whole Python suite
+    while every TypeScript test stayed green. evals/artifact-loader-cases.json is the contract
+    both sides now assert against, and its expectations are hand-written rather than captured
+    from either implementation, so "both agree" cannot mean "both are wrong in the same way".
+    """
+    import json
+    from pathlib import Path
+
+    from adhd_analysis.corpus import unfence
+
+    root = Path(__file__).resolve().parents[2]
+    doc = json.loads((root / "evals" / "artifact-loader-cases.json").read_text())
+    assert len(doc["cases"]) >= 9, "the shared case file has been thinned"
+    for case in doc["cases"]:
+        assert unfence(case["text"]) == case["unfenced"], f"unfence disagrees with the shared case: {case['name']}"
+
+    names = [c["name"] for c in doc["cases"]]
+    assert any("not at line start" in n for n in names), "the case that caught the rfind divergence is gone"
+    assert any("seed 3 failure" in n for n in names), "the case that carries D37's failure is gone"
+
+
+def test_the_two_ceiling_dimensions_are_not_the_same_case(corpus):
+    """D39. Item 60 named two "ceiling dimensions" and assumed one answer covered both.
+
+    foreclosure and reasoning_carries sit at almost the same ceiling — 0.943 against 0.947 — and
+    are nothing alike underneath. foreclosure's interval contains zero, so 96% agreement told you
+    nothing guessing would not have. reasoning_carries reaches alpha 0.678 on an interval that
+    excludes zero, which puts it above committal, substance, falsifiability and actor_coverage.
+    The ceiling rate is the one statistic that cannot tell prevention from dead weight, and it was
+    doing all the work in the original framing.
+
+    If this fails, the corpus has moved and D39 needs rereading rather than the numbers nudging.
+    """
+    from adhd_analysis.report import reliability_section
+
+    _, table = reliability_section(corpus, resamples=200)
+    fore = table["foreclosure"]
+    reas = table["reasoning_carries"]
+
+    # Both at the ceiling, which is what made them look alike.
+    assert fore["ceiling_rate"] > 0.9 and reas["ceiling_rate"] > 0.9
+
+    # And separated by the statistic that matters.
+    assert fore["ci_hi"] <= 0.0 + 1e-9, "foreclosure's interval no longer reaches zero"
+    assert reas["ci_lo"] > 0.3, "reasoning_carries' interval now approaches chance; D39 rests on it not doing that"
+    assert reas["alpha"] > fore["alpha"] + 0.5
+
+    # reasoning_carries is mid-pack rather than worst, which is the whole finding.
+    ranked = sorted(table.items(), key=lambda kv: kv[1]["alpha"])
+    order = [name for name, _ in ranked]
+    assert order[0] == "foreclosure", f"foreclosure is no longer the worst dimension: {order}"
+    assert order.index("reasoning_carries") >= 4, f"reasoning_carries is no longer mid-pack: {order}"
+
+    # `committal` was read as carrying foreclosure's problem (backlog 98) on an interval that
+    # spanned chance at five double-scored packs. E11 added two more and it lifted clear, so the
+    # claim here is the opposite one: foreclosure is alone at the bottom, and the dimension that
+    # looked like the next candidate is measuring something after all.
+    assert table["committal"]["ci_lo"] > 0.0, "committal's interval spans chance again; backlog 98 reopens"
+    spans = [n for n, d in table.items() if d["ci_lo"] is not None and d["ci_lo"] <= 0.0 <= d["ci_hi"]]
+    assert spans == ["foreclosure"], f"exactly one dimension should still reach chance, got {spans}"
