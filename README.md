@@ -10,7 +10,7 @@
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml/badge.svg?branch=main" alt="train"></a>
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-508-2ea44f" alt="508 TypeScript tests"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-510-2ea44f" alt="510 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-246-2ea44f" alt="246 Python tests"></a>
   <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D44%20resolved-0969da" alt="D1 through D44 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
@@ -165,7 +165,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 agents/     four run subagents, five mission subagents, the trainer and its governor
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       508 tests over all of it
+test/       510 tests over all of it
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 assets/     the mark, the banner, the run explorer shell
 scripts/    demo.sh: what a clean checkout can show without a model

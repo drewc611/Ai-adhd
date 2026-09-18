@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { auditFixtures, runEval, loadFixtures } from "../src/eval.js";
+import { auditFixtures, runEval, loadFixtures, WIPEOUT_RECOMMENDATION } from "../src/eval.js";
 import { problemHash } from "../src/hash.js";
 import { compile, previewText } from "../src/compile.js";
 import { stringify } from "yaml";
@@ -66,6 +66,147 @@ test("paraphrase drift in a recorded run fails the hash check", () => {
   const r = runEval(cfg, { recordedDir: dir });
   const pair = r.pairs.find((p) => p.fixture === "001")!;
   assert.ok(pair.failures.some((f) => /problem_hash/.test(f)));
+});
+
+/**
+ * Backlog 105. `min_words_outside` and `must_be_imperative` were written to catch a shallow
+ * recommendation, not the absence of one, and a genuine total wipeout ("No recommendation.
+ * Every branch was pruned. The pruned block is the result.") is short and has no "do X"
+ * sentence, so it used to read to both checks exactly like the thing they exist to catch.
+ */
+test("a must_not check written to catch a shallow recommendation passes on the wipeout sentinel, and only that exact text", () => {
+  const dir = tmp();
+  const fixtures = join(dir, "fixtures");
+  const recorded = join(dir, "recorded");
+  mkdirSync(fixtures, { recursive: true });
+  const prompt = "Should we do it?";
+  writeFileSync(
+    join(fixtures, "903-wipeout-guard.yaml"),
+    [
+      'id: "903"',
+      "name: wipeout-guard",
+      "problem_class: design_decision",
+      "seed: 1",
+      `prompt: "${prompt}"`,
+      "must_surface:",
+      "  - id: says_x",
+      "    description: mentions the candidate action",
+      "    any_of: ['do it']",
+      "must_not:",
+      "  - id: triple_only",
+      "    description: more than a bare fact",
+      "    check: min_words_outside",
+      "    scope: recommendation",
+      "    pattern: \"\\\\d+\"",
+      "    min_words: 40",
+      "  - id: no_verdict",
+      "    description: an imperative sentence",
+      "    check: must_be_imperative",
+      "    scope: recommendation",
+      "expect: {}",
+    ].join("\n"),
+  );
+  const synth = (recommendation: string) =>
+    [
+      "# ADHD synthesis",
+      "## Recommendation",
+      "",
+      recommendation,
+      "",
+      "## Pruned, with reason",
+      "- **A**: do it anyway, against the trap sweep's objection.",
+      "  - traps: T1",
+      "  - detector output: T1: generic",
+      `problem_hash: \`${problemHash(prompt)}\``,
+    ].join("\n");
+  const write = (name: string, recommendation: string) => {
+    const rec = join(recorded, name);
+    mkdirSync(join(rec, "branches"), { recursive: true });
+    writeFileSync(join(rec, "plan.json"), JSON.stringify({ problem_hash: problemHash(prompt) }));
+    writeFileSync(join(rec, "synthesis.md"), synth(recommendation));
+  };
+  write("903-wipeout", WIPEOUT_RECOMMENDATION);
+  // Same shape, one word short of the sentinel: the guard must not fire on a text that merely
+  // resembles it, or the check stops measuring anything.
+  write("903-near-miss", "No recommendation. Every branch was pruned.");
+
+  const r = runEval(cfg, { fixturesDir: fixtures, recordedDir: recorded });
+  const wipeout = r.pairs.find((p) => p.recorded.endsWith("903-wipeout"))!;
+  assert.deepEqual(wipeout.failures, []);
+  assert.ok(wipeout.notes.some((n) => /wipeout sentinel; nothing shallow to catch/.test(n)));
+
+  const near = r.pairs.find((p) => p.recorded.endsWith("903-near-miss"))!;
+  assert.ok(near.failures.some((f) => f.startsWith("must_not triple_only")));
+  assert.ok(near.failures.some((f) => f.startsWith("must_not no_verdict")));
+});
+
+/**
+ * Backlog 105. `retry_target_questioned` (and any other `scope: all` item) reads `synthesis.md`
+ * plus the surviving branches' full artifacts, so a total wipeout — zero survivors — used to see
+ * only the rendered pruned block, never a pruned branch's `reasoning` field, however much of the
+ * question that field actually answered. A run with at least one survivor must not gain access
+ * to a pruned branch's raw reasoning just because this exists: that would let a rejected
+ * argument satisfy an assertion the delivered answer never surfaced.
+ */
+test("'all' scope falls back to every branch's full artifact only when none of them survived", () => {
+  const dir = tmp();
+  const fixtures = join(dir, "fixtures");
+  const recorded = join(dir, "recorded");
+  mkdirSync(fixtures, { recursive: true });
+  const prompt = "What should we do about it?";
+  writeFileSync(
+    join(fixtures, "904-scope-fallback.yaml"),
+    [
+      'id: "904"',
+      "name: scope-fallback",
+      "problem_class: design_decision",
+      "seed: 1",
+      `prompt: "${prompt}"`,
+      "must_surface:",
+      "  - id: says_zzqx",
+      "    description: only ever said in a branch's reasoning field",
+      "    any_of: ['zzqx-only-in-reasoning']",
+      "expect: {}",
+    ].join("\n"),
+  );
+  const synth = "# ADHD synthesis\n## Recommendation\nDo the obvious thing.\n## Pruned, with reason\n(none)\n";
+  // Only B's reasoning carries the phrase. A stands in for whichever branch survives, so a run
+  // where A is the survivor never sees B's reasoning unless the fallback wrongly engages.
+  const branchYaml = (frame: string, carriesPhrase: boolean) =>
+    [
+      `problem_hash: ${problemHash(prompt)}`,
+      `frame: ${frame}`,
+      "position: something",
+      "reasoning: |",
+      `  ${carriesPhrase ? "zzqx-only-in-reasoning, never rendered to synthesis.md." : "an argument that never uses the phrase."}`,
+      "forecloses: ['x']",
+      "falsifier: something",
+      "missing_actor: null",
+      "confidence: medium",
+    ].join("\n");
+  const write = (name: string, frames: string[], survivorFrame: string | null) => {
+    const rec = join(recorded, name);
+    mkdirSync(join(rec, "branches"), { recursive: true });
+    writeFileSync(join(rec, "plan.json"), JSON.stringify({ problem_hash: problemHash(prompt) }));
+    writeFileSync(join(rec, "synthesis.md"), synth);
+    for (const f of frames) writeFileSync(join(rec, "branches", `${f}.yaml`), branchYaml(f, f === "B"));
+    writeFileSync(
+      join(rec, "score.json"),
+      JSON.stringify({ frames: frames.map((f) => ({ frame: f, status: f === survivorFrame ? "survivor" : "pruned" })) }),
+    );
+  };
+  // Every branch pruned: nothing survived to be read from directly, so the fallback to every
+  // branch's full artifact is the only way B's reasoning is ever seen.
+  write("904-wipeout", ["A", "B"], null);
+  // A survives and does not carry the phrase; B is pruned and does. The survivor set is
+  // non-empty, so the fallback must not engage and B's reasoning must stay unseen.
+  write("904-has-survivor", ["A", "B"], "A");
+
+  const r = runEval(cfg, { fixturesDir: fixtures, recordedDir: recorded });
+  const wipeout = r.pairs.find((p) => p.recorded.endsWith("904-wipeout"))!;
+  assert.deepEqual(wipeout.failures, []);
+  const hasSurvivor = r.pairs.find((p) => p.recorded.endsWith("904-has-survivor"))!;
+  assert.ok(hasSurvivor.failures.some((f) => f.startsWith("must_surface says_zzqx")));
 });
 
 test("a fixture pattern anchored with ^ reads the start of the scope text, and a lookahead that matches nothing still counts as a match", () => {
