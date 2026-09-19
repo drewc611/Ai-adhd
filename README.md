@@ -187,6 +187,18 @@ Seventeen runs are recorded over five fixtures, with a linear chain-of-thought n
 per fixture that must fail, and three decline fixtures asserting that routing refuses a class
 rather than spending on it.
 
+The SuperAgent (`adhd super`) ran its first `deep` mission with live subagents in this
+repository's history: all seven stages, research through review, against
+[backlog item 105](docs/BACKLOG.md). [Item 73](docs/BACKLOG.md) asked whether a second research
+pass after divergence (`research_2`) catches a direction the mission committed to too early —
+this run didn't test that claim in the form it was asked, because `decide`'s own five-branch run
+committed to no direction at all: every frame was pruned, a legitimate outcome the design
+anticipates, not a bug in the mission. `research_2` still earned its token cost — its findings
+against the live codebase, not just the branches' own reasoning, are what the `build` stage's
+choice between two competing fixes actually rests on — but the corpus still has zero missions
+where the pass caught an early wrong commitment, which is the question item 73 asked. One real
+mission is one data point, not a resolved claim.
+
 **The honest reading of that corpus is in [`docs/WRITEUP.md`](docs/WRITEUP.md), and it is not
 flattering.** Three results decide how to read everything else:
 

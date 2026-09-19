@@ -778,12 +778,24 @@ the end is a record section they have been mis-filed — which is the whole of w
     `NPM_TOKEN` repository secret, which only the owner can add.** Until it is there, a tag fails
     at the npm step with that sentence. See `docs/DISTRIBUTION.md`.
 
-73. **A mission that runs the whole loop end to end** (evidence). Every part of the SuperAgent is
+73. ~~**A mission that runs the whole loop end to end** (evidence). Every part of the SuperAgent is
     tested and `adhd super` drives a real mission through plan, confirm, claim, a contract
     rejection, a retry and done. Nothing has yet run a `deep` mission with live subagents, so the
     stage graph's central claim — that a second research pass after the divergence catches the
     direction chosen too early — is a design argument and not a finding. It needs one real
-    mission, which costs real tokens, and is the owner's call for the same reason D5 exists.
+    mission, which costs real tokens, and is the owner's call for the same reason D5 exists.~~
+    **Run, with the owner's confirmation at plan time per D5: `backlog-105-fix`, a `deep` mission
+    against item 105, all seven stages with live subagents (research, decide, research_2, build,
+    verify, create, review), merged in PR #33.** The stage graph's central claim was not confirmed
+    in the form it was asked, and that is the finding rather than a gap in the run: `decide`'s own
+    five-branch ADHD pass committed to no direction at all (every frame pruned by the trap sweep,
+    a legitimate outcome the design anticipates), so there was no early wrong commitment for
+    `research_2` to catch. `research_2` still visibly mattered — its findings against the live
+    codebase, not just the branches' own reasoning, are what `build`'s choice between two competing
+    fixes actually rested on — but the corpus now has one mission and zero cases of the pass
+    catching a premature commitment. One real mission is one data point. See the README's Status
+    section and `missions/missions/backlog-105-fix/` (gitignored, mission-local) for the full
+    account.
 
 74. **Order 5, if the corpus ever shrinks or the runner grows** (owner's call). Held-out
     perplexity is best at order 5 (36.0 against 38.6) and it costs 9.2GB, past `Budget.weekly()`'s
