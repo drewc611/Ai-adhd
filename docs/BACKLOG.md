@@ -797,10 +797,15 @@ the end is a record section they have been mis-filed — which is the whole of w
     section and `missions/missions/backlog-105-fix/` (gitignored, mission-local) for the full
     account.
 
-74. **Order 5, if the corpus ever shrinks or the runner grows** (owner's call). Held-out
+74. ~~**Order 5, if the corpus ever shrinks or the runner grows** (owner's call). Held-out
     perplexity is best at order 5 (36.0 against 38.6) and it costs 9.2GB, past `Budget.weekly()`'s
     5120MB. At this corpus size order 4 is the only one that fits a hosted runner. A smaller corpus
-    or a larger runner changes the answer, and D13 has the measured table to re-decide from.
+    or a larger runner changes the answer, and D13 has the measured table to re-decide from.~~
+    **The runner grew: `ubuntu-latest` moved to 4-core/16GB in December 2023, and D13's 5120MB
+    ceiling never moved with it. Re-measured at the corpus size the token ceiling already binds at
+    (40M tokens, mutable sources excluded): order 5 peaks at 7,258MB against order 4's 4,123MB, and
+    scores 41.0 held-out perplexity against 46.4. `Budget.weekly()`'s `max_rss_mb` is now 9216 and
+    `train.yml`'s default order is 5. See D45.**
 
 75. **Rust RFCs and Kubernetes KEPs, if the network boundary may widen** (owner's call). Both
     licences are read and correct — MIT OR Apache-2.0 and Apache-2.0, better provenance than the

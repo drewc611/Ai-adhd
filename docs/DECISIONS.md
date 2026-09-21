@@ -3602,3 +3602,59 @@ opened on this repository launch a server at startup, and on a fresh clone with 
 `node_modules` the launcher exits with its diagnostic every time. Noisy startup on every clone
 against an unreachable deliverable is a trade with two defensible sides, which by the rule at the top
 of `CLAUDE.md` makes it the owner's call and not a commit. Backlog item 104.
+
+## D45. Order 5 for the weekly background model, because the runner grew and D13's ceiling did not
+
+**Decision:** `Budget.weekly()`'s `max_rss_mb` is now 9216, up from 5120, and `train.yml`'s
+`workflow_dispatch` `order` input defaults to `"5"`, up from `"4"`. Resolved 2026-09-21.
+
+Backlog item 74 asked for this if the corpus shrank or the runner grew, and named D13's table to
+re-decide from. The corpus has not shrunk — it is 68M tokens per D15, well past the 22.9M D13
+measured. The runner grew instead: GitHub's `ubuntu-latest` moved from 2-core/7GB to 4-core/16GB in
+December 2023, and D13's 5120MB ceiling — chosen to fit the old 7GB spec with margin — was never
+revisited against the new one.
+
+### What actually binds, re-measured on the real corpus with mutable sources excluded
+
+D13's table was 22.9M training tokens. That is no longer what a weekly run trains on: `Budget.
+weekly()`'s `max_tokens` (40,000,000) binds first, at the corpus size already cached in this
+repository's CI, and it binds regardless of order. Both orders below trained to that same 40M-token
+ceiling, scored on the same held-out set (`SplitLibrary`, every 20th document, `.stable()` applied
+before the split):
+
+| order | n-grams | held-out perplexity | peak RSS | training seconds |
+|---|---|---|---|---|
+| 4 | 12.4M | 46.4 | 4,123MB | 283 |
+| 5 | 24.8M | **41.0** | 7,258MB | 448 |
+
+Order 5 is not just cheaper relative to the new ceiling than D13 found it relative to the old one —
+it is the better model outright at this corpus size: 11.7% lower held-out perplexity than order 4,
+for 2.0x the n-gram table and 1.76x the peak RSS. Neither run's scoring pass was truncated; the OOV
+rate is identical between the two rows, which is only possible if both were scored on the same text.
+
+The held-out-perplexity step `train.yml` runs as a separate process after training, with a fresh
+`Budget.weekly()` and no extended wall-clock allowance, was checked separately: scoring the order-5
+model above against the same held-out split took 43 seconds against the governor's 1500-second
+ceiling, not truncated. The margin `compare_orders()` gives scoring internally (4x the training
+wall-clock, because a higher order is deeper per token) turned out not to be load-bearing at this
+corpus size; it is there for a corpus or order this repository has not measured yet.
+
+### Getting a comparable table required fixing a bug first
+
+The straightforward way to reproduce this — `python -m adhd_analysis.text.evaluate --orders 4,5` —
+does not give a comparable table, because `evaluate.py`'s CLI never applied D26's mutable-source
+exclusion. See the fourth-site addendum under D26 for the fix and the reasoning; this decision's
+numbers were measured after that fix, calling `compare_orders()` directly with a `.stable()` library
+before the CLI fix landed, then reproduced through the fixed CLI to confirm the two agree.
+
+### What was not changed
+
+`max_tokens` stays at 40,000,000. Backlog 74 named two different, separable changes — raising the
+memory ceiling so order 5 completes at the corpus size where training already truncates, and
+separately raising the token ceiling so training reads more of the now much larger corpus before
+truncating at all. Only the first is this decision. The second trades a real increase in CI wall
+clock and would need its own measurement of where perplexity actually plateaus; it is not resolved
+here and is not implied by this change.
+
+`max_seconds` (1500) and `max_ngrams` (12,000,000) are both unchanged and did not bind on either
+order in the measurement above.
