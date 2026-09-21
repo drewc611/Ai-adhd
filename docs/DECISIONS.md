@@ -2516,6 +2516,26 @@ is what every measurement in this repository actually invokes, so that is where 
 One case needed a real error rather than a silent empty read: a manifest whose every source is mutable now
 exits saying there is nothing repeatable to train on and naming the opt-in, instead of training on nothing.
 
+### A fourth site, found the same way `train_lstm.py` was
+
+`evaluate.py`'s `main()` — the multi-order comparison CLI, not one of the three single-model trainers —
+built its library with a bare `Library.load(args.manifest)` and offered no `--include-mutable-sources`
+flag at all. It went unpatched by the original change and uncovered by `test_the_selection_is_defined_once`,
+because it is not a `train_*` module and `TRAINER_CLIS` never named it.
+
+Found while backlog 74 tried to get a comparable order-4-vs-5 table: `python -m adhd_analysis.text.evaluate`
+run directly trained on `repo-docs`, `repo-prompts` and `repo-readme` alongside the real corpus, silently.
+`selection.py`'s mutable-source filter is now split into `stable_library()`, used by both `training_library()`
+(the single-model trainers, which also apply a held-out split) and `evaluate.py`'s CLI directly (which
+applies its own `--every` split across both sides afterward and has no use for `--held-out-file`). Fixed
+in the same commit that resolves backlog 74, with the same test shape `test_corpus_fingerprint.py` already
+used for the other three sites.
+
+No published table in this repository was produced by invoking `evaluate.py`'s CLI directly after D26 —
+D13 and D15 both predate D26 and are already marked pre-D26 measurements; E8's and backlog-82's tables came
+from scripts that built a `.stable()` library and called `compare_orders()` as a function, not through this
+CLI path. This closes the gap before a table was ever produced through it, rather than after.
+
 ### A floating-point trap, caught by an existing test
 
 Setting the threshold floor to E4's gap exactly refused E4. `0.0085 - 0.0063` is `0.0022000000000000006`

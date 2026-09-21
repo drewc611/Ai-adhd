@@ -25,10 +25,21 @@ MUTABLE_HELP = (
 )
 
 
-def add_library_arguments(ap: ArgumentParser) -> None:
-    """The corpus-selection flags every trainer takes."""
+def add_manifest_arguments(ap: ArgumentParser) -> None:
+    """The corpus-selection flag every measurement CLI takes, with no opinion on held-out splitting.
+
+    Split apart from `add_library_arguments` for `evaluate.py`'s `compare_orders`, which needs the
+    mutable-source exclusion but does its own `--every` stride across both sides of the split at once
+    — bolting on `--held-out-file`/`--held-out-every` there would give one CLI two ways to say the same
+    thing.
+    """
     ap.add_argument("--manifest", default="corpora.yaml")
     ap.add_argument("--include-mutable-sources", action="store_true", help=MUTABLE_HELP)
+
+
+def add_library_arguments(ap: ArgumentParser) -> None:
+    """The corpus-selection flags every single-model trainer takes."""
+    add_manifest_arguments(ap)
     ap.add_argument(
         "--held-out-file",
         default=None,
@@ -49,11 +60,12 @@ def add_library_arguments(ap: ArgumentParser) -> None:
     )
 
 
-def training_library(args: Namespace) -> Library:
-    """The library a measurement should read, given parsed CLI arguments.
+def stable_library(args: Namespace) -> Library:
+    """The library a measurement should read before any held-out split, given parsed CLI arguments.
 
-    Mutable sources are dropped unless asked for, then the held-out split is applied — in that order,
-    because a split wrapper has no `stable()` and reversing the two silently trains on everything.
+    Mutable sources are dropped unless asked for. Every measurement CLI in this package calls this —
+    `training_library` below for the single-model trainers, `evaluate.py`'s CLI directly for the
+    multi-order comparison, which applies its own `--every` split across both sides afterward.
     """
     library = Library.load(args.manifest)
     if not getattr(args, "include_mutable_sources", False):
@@ -81,6 +93,16 @@ def training_library(args: Namespace) -> Library:
                 + ". Put a corpus at the paths the manifest names, or pass --include-mutable-sources "
                 "for a smoke test whose numbers mean nothing. See D26."
             )
+    return library
+
+
+def training_library(args: Namespace) -> Library:
+    """The library a measurement should read, given parsed CLI arguments.
+
+    Mutable sources are dropped unless asked for, then the held-out split is applied — in that order,
+    because a split wrapper has no `stable()` and reversing the two silently trains on everything.
+    """
+    library = stable_library(args)
     # Imported here rather than at module scope: `evaluate` imports the trainers, and the other
     # direction at import time is a cycle.
     if args.held_out_file is not None:
