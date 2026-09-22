@@ -10,9 +10,9 @@
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml/badge.svg?branch=main" alt="train"></a>
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-510-2ea44f" alt="510 TypeScript tests"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-533-2ea44f" alt="533 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-247-2ea44f" alt="247 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D45%20resolved-0969da" alt="D1 through D45 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D46%20resolved-0969da" alt="D1 through D46 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -148,6 +148,13 @@ state, leases, phase advancement, the D5 gate and cancellation, and never calls 
 supply inference by claiming tasks and returning artifacts. The state machine and the syscall
 table are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/OS.md`](docs/OS.md).
 
+A fifth surface, `adhd serve`, is a local UI over the same kernel and the mission scheduler
+(`docs/SUPERAGENT.md`): a brain dump goes in, a `triage` mission segments it into quick tasks,
+notes and decisions, and a decision item can be run through the real frame library from the
+page. It is not a sixth way to call a model — it still calls none. Nothing moves off `pending`
+without a Claude Code session running `/superagent` and `/adhd-worker` pointed at the same
+`--os-root`/`--super-root`. See [D46](docs/DECISIONS.md).
+
 ## Reach for it when
 
 A design decision has more than one defensible answer. A bug is fuzzy and the first theory
@@ -165,7 +172,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 agents/     four run subagents, five mission subagents, the trainer and its governor
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       510 tests over all of it
+test/       533 tests over all of it
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 assets/     the mark, the banner, the run explorer shell
 scripts/    demo.sh: what a clean checkout can show without a model
@@ -181,7 +188,7 @@ Nothing under `src/` calls a model. Nothing under `analysis/` does either, and n
 ## Status
 
 Library, CLI, MCP server and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D45 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+`CLAUDE.md`. D1 through D46 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 Seventeen runs are recorded over five fixtures, with a linear chain-of-thought negative control
 per fixture that must fail, and three decline fixtures asserting that routing refuses a class

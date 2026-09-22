@@ -3658,3 +3658,113 @@ here and is not implied by this change.
 
 `max_seconds` (1500) and `max_ngrams` (12,000,000) are both unchanged and did not bind on either
 order in the measurement above.
+
+## D46. Brain-dump triage rides the mission scheduler, and one UI click auto-confirms it
+
+**Decision:** A new stage kind, `triage`, is added to `src/super/mission.ts`'s `StageKind`
+enum and a matching `triage` mission class to `MissionClass`, dispatching a new agent
+`agents/adhd-triage.md`. Its artifact (`items.yaml`) is validated against a `zod` schema
+(`src/triage.ts`) instead of the markdown `requires` headings every other stage kind uses. A
+new CLI surface, `adhd serve` (`src/serve.ts`, Node's built-in `http`, no new dependency),
+wraps the kernel and the now-`cfg`-aware mission scheduler behind a small HTTP API and serves
+`assets/dump.html`, a self-contained brain-dump capture page. Resolved 2026-09-22.
+
+### Why this is a stage kind, not a third scheduler
+
+`src/os.ts`'s `Kernel` schedules exactly the four-phase run; `src/super/mission.ts`'s own
+module comment says widening that enum "would weaken the invariants that enum encodes."
+`SuperAgent` already exists as the generalisation — a claim/lease/return scheduler over named
+stage kinds, one of which (`diverge`) already hands off to the kernel and adopts the result.
+Segmenting a brain dump into items is a single-subagent, read-text-write-one-artifact task,
+structurally identical to the existing `research` stage kind. So this is one new `StageKind` on
+the scheduler that already exists, and a decision-shaped item still goes into the unmodified
+`Kernel`, by hand, exactly the way a `decide` stage already does.
+
+### What the triage agent is allowed to touch, and why it surprised the plan that proposed it
+
+`adhd-triage` carries `Read, Glob, Grep` — no network, no `Write`. Network was the first guess,
+matching `adhd-branch`/`adhd-critic`/`adhd-deepen`'s "unused launch permit" of `WebSearch,
+WebFetch` — and it is wrong for a mission agent. `test/agents.test.ts`'s "no mission agent can
+reach the network or start a run" test only exempts `adhd-researcher`, for a real reason
+(it searches); granting `adhd-triage` the run-phase permit would have been the D41 exception
+copied into a place D41 never argued for. `Read, Glob, Grep` is the filler `adhd-reviewer` and
+`adhd-governor` already carry for the same reason: a host refuses to launch an agent with zero
+tools, and this agent has no legitimate use for any of the three.
+
+No `Write` follows from the same source `adhd-researcher` and `adhd-reviewer` already establish:
+a stage whose agent has no `Write` does not create its own contract artifact, the host does,
+copying the agent's final message verbatim into the file the contract names. `skills/superagent
+/SKILL.md` gained a short "## The triage stage" paragraph saying so, because it previously said
+nothing about that discipline outside the `diverge` stage, and a plan that assumed the skill
+"needed no changes" would have shipped a stage nobody could actually return.
+
+### The routing classes have to be quoted into the brief, not read
+
+`adhd-triage` has no tools that reach `config/routing.yaml`, so `compileBrief`'s new `triage`
+branch quotes every run-eligible class and its description directly into the brief
+(`runEligibleClasses`, `src/triage.ts`) — the same reason `renderBranchBrief` embeds frame
+stance and probes inline rather than pointing a branch at a file it cannot open.
+
+### `openSuper` gained a `cfg` parameter, matching `openKernel` exactly
+
+`SuperAgent`'s constructor now takes `cfg: Config` as a separate first argument, the same shape
+`Kernel(cfg, opts)` already has — not folded into `SuperOptions`, because `Kernel` was already
+the precedent for keeping the two separate. `openSuper(cfg, root?, opts?)` mirrors
+`openKernel(cfg, root?, opts?)` line for line. The only production call site
+(`src/cli.ts`'s `superFor`) and the twelve direct `new SuperAgent(...)` call sites in
+`test/super.test.ts` were the whole blast radius.
+
+### `claim` learned to scan every mission, because one worker loop has to be enough
+
+Nothing in this repository calls a model, so a Claude Code session running a worker skill must
+be polling claim/return for anything to happen — asking a person capturing a brain dump to also
+hand-copy a mission id into a terminal is the opposite of low friction. `claim(id: string |
+null, worker)` now scans every running mission, oldest submitted first, when `id` is `null`,
+the same shape `Kernel.claim`'s optional `runId` already has. This is additive rather than a
+breaking rename: every existing call passes a real id and is unaffected, including the
+`superCmd.command("claim <mission_id>")` CLI call sites and all thirteen pre-existing
+`sa.claim("m", "w")` calls in the test suite. The CLI's own `claim [mission_id]` (now optional)
+exposes the scan for `/superagent` to use.
+
+One thing this does not do: `SuperAgent` has no mutex the way the kernel's `withLock` does.
+Scanning across missions does not add a race beyond the one already there for a single mission
+— the read-then-write inside a single `claim` call was never atomic here — but real concurrent
+workers safely sharing one root remains a kernel-only guarantee. Recorded rather than implied,
+since claiming otherwise would be false.
+
+### D5 is collapsed to one click for `triage`, and nowhere else
+
+`SuperAgent.submit` always lands at `awaiting_confirm`. `adhd serve`'s `POST /api/dump` calls
+`confirm` immediately afterward, server-side, for the `triage` mission class only — one
+subagent, budget-capped at 20,000 tokens by `CLASS_POLICY.triage`, triggered by the user's own
+"sort this out" click. D5's resolution text is about a system that "spawns seven subagents and
+gives the user no way out"; this spawns one, under a ceiling the class policy enforces
+regardless of what the agent claims it needs. The expensive path — a confirmed multi-frame
+decision run, submitted through the unmodified kernel exactly as a `decide` stage already is —
+keeps its own full, separate, explicit confirm click in the UI, both in `/api/decide`'s
+unconfirmed `submit` and in `test/serve.test.ts`'s load-bearing assertion that nothing is
+claimable from the kernel until `/api/decide/:id/confirm` is called. Collapsing that path too
+would be the exact violation fixture 001 exists to catch.
+
+This was confirmed with the user before any code was written, not assumed: the auto-confirm was
+presented as the one open design call in the plan, with the alternative (an explicit confirm
+step for triage as well) named beside it, and the auto-confirm was the one chosen.
+
+### What this does not do
+
+Triage does not rank or prioritise items. `TriageResultSchema` (`src/triage.ts`) is `.strict()`
+with no field for a priority, an order, or an opinion — the same mechanical trick
+`decisionSchema` uses to keep an orchestrator from having anywhere to put a candidate answer,
+now covering a second artifact shape. A "prioritised daily plan" in the product sense is out of
+scope for what one ungated classification pass is allowed to produce; grouping by kind and
+capture order is what ships instead. Only a genuinely decision-shaped item, run through the real
+frame library with its own explicit confirm, produces anything resembling a recommendation, and
+only for that one item.
+
+`adhd serve` also does not ship a product a person can use without a computer already running
+Claude Code. A worker — a Claude Code session running `/superagent`, and a second running
+`/adhd-worker` once a decision run is confirmed — has to be pointed at the same
+`--os-root`/`--super-root` or every mission and run sits at `pending` indefinitely. This is not
+a gap to close later; it is what "no inference client, ever" costs, stated rather than
+discovered by a confused user watching a spinner. `GET /api/waiting/:id` and the page's own
+banner exist because that discovery should happen in the product, not in an issue report.

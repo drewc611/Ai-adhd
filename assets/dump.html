@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADHD brain dump</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #FBFBFC; --panel: #FFFFFF; --line: #E3E6EB; --ink: #14171D; --dim: #616B7D;
+    --amber: #B07D12; --teal: #0E8577; --coral: #C4453A; --slate: #6C7789;
+    --pruned-bg: #FDF3F2; --live-bg: #F1FAF8; --sel: #EEF1F6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0C0E13; --panel: #141821; --line: #252C3A; --ink: #E9EFF6; --dim: #8A94A6;
+      --amber: #F0C24B; --teal: #45D0C0; --coral: #F97B6B; --slate: #6C7789;
+      --pruned-bg: #1E1518; --live-bg: #10201E; --sel: #1D2431;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C0E13; --panel: #141821; --line: #252C3A; --ink: #E9EFF6; --dim: #8A94A6;
+    --amber: #F0C24B; --teal: #45D0C0; --coral: #F97B6B; --slate: #6C7789;
+    --pruned-bg: #1E1518; --live-bg: #10201E; --sel: #1D2431;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); }
+  h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+
+  header { display: flex; gap: 14px; align-items: center; padding: 14px 20px;
+           border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  .mark { width: 30px; height: 30px; flex: none; }
+  .title { font-weight: 700; letter-spacing: 0.02em; }
+  .spacer { flex: 1 1 auto; }
+  button.ghost { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+  button.ghost:hover { border-color: var(--dim); }
+
+  main { max-width: 760px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  .capture textarea { width: 100%; min-height: 140px; font: 17px/1.5 var(--sans); color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+    resize: vertical; }
+  .capture textarea:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .capture-row { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
+  button.primary { font: 650 16px var(--sans); color: white; background: var(--teal); border: none;
+    border-radius: 12px; padding: 14px 22px; cursor: pointer; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.primary:disabled { opacity: 0.5; cursor: default; }
+  .hint { color: var(--dim); font-size: 13px; }
+
+  .banner { display: none; margin: 18px 0; padding: 14px 16px; border-radius: 12px; font-size: 14px;
+    border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); background: color-mix(in srgb, var(--amber) 12%, var(--panel)); }
+  .banner.show { display: block; }
+
+  .items { margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
+  .item { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--panel); }
+  .chip { flex: none; font: 700 11px var(--mono); letter-spacing: 0.04em; text-transform: uppercase;
+    border-radius: 999px; padding: 3px 9px; margin-top: 2px; }
+  .chip.quick_task { color: var(--teal); background: var(--live-bg); border: 1px solid color-mix(in srgb, var(--teal) 40%, transparent); }
+  .chip.note { color: var(--dim); background: var(--sel); border: 1px solid var(--line); }
+  .chip.decision { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); }
+  .item-text { flex: 1 1 auto; font-size: 16px; }
+  .item-actions { flex: none; }
+
+  .decide-box { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--sel); font-size: 13px; }
+  .decide-box .preview { font-family: var(--mono); white-space: pre-wrap; font-size: 12px; color: var(--dim); margin: 8px 0; }
+  .decide-box button.primary { padding: 9px 16px; font-size: 14px; }
+  .decide-box .synthesis { white-space: pre-wrap; font-size: 14px; line-height: 1.6; margin-top: 10px; }
+
+  .empty { color: var(--dim); font-style: italic; padding: 20px 0; }
+  .group-label { font: 600 12px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); margin: 20px 0 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="mark" viewBox="0 0 256 256" aria-hidden="true">
+    <rect width="256" height="256" rx="56" fill="#141821"/>
+    <g fill="none" stroke="#3C4453" stroke-width="13" stroke-linecap="round">
+      <path d="M82.8 107.1 L166.3 41.8"/><path d="M88.5 137.9 L189.9 168.9"/>
+    </g>
+    <g fill="none" stroke="#7E8899" stroke-width="10" stroke-linecap="round">
+      <path d="M158.3 31.6 L174.3 52.1"/><path d="M193.7 156.5 L186.1 181.4"/>
+    </g>
+    <g fill="none" stroke-width="13" stroke-linecap="round">
+      <path d="M88.1 116.9 L188.4 82.4" stroke="#F0C24B"/>
+      <path d="M90.0 126.8 L195.9 123.1" stroke="#45D0C0"/>
+      <path d="M83.2 148.5 L167.8 212.3" stroke="#F97B6B"/>
+    </g>
+    <circle cx="188.4" cy="82.4" r="13" fill="#F0C24B"/><circle cx="195.9" cy="123.1" r="13" fill="#45D0C0"/>
+    <circle cx="167.8" cy="212.3" r="13" fill="#F97B6B"/><circle cx="56" cy="128" r="16" fill="#E9EFF6"/>
+  </svg>
+  <div class="title">brain dump</div>
+  <div class="spacer"></div>
+  <button class="ghost" id="theme" title="Light, dark, or follow the system">◑</button>
+</header>
+
+<main>
+  <div class="capture">
+    <textarea id="dump" placeholder="Everything on your mind, one line or one comma at a time. Don't organize it — that's the next step." autofocus></textarea>
+    <div class="capture-row">
+      <button class="primary" id="submit">Sort this out</button>
+      <span class="hint" id="capture-hint"></span>
+    </div>
+  </div>
+
+  <div class="banner" id="waiting-banner">
+    Waiting for a worker — is a Claude Code session running <code>/superagent</code> pointed at
+    this server's <code>--super-root</code>? Nothing here calls a model on its own.
+  </div>
+
+  <div id="items"></div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const KIND_LABEL = { quick_task: "quick task", note: "note", decision: "decision" };
+
+const theme = $("theme");
+theme.onclick = () => {
+  const now = document.documentElement.getAttribute("data-theme");
+  const next = now === "dark" ? "light" : now === "light" ? null : "dark";
+  if (next) document.documentElement.setAttribute("data-theme", next); else document.documentElement.removeAttribute("data-theme");
+};
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+  return res.json();
+}
+
+let currentMission = null;
+let pollTimer = null;
+let waitTimer = null;
+
+$("submit").onclick = async () => {
+  const text = $("dump").value.trim();
+  if (!text) return;
+  $("submit").disabled = true;
+  $("capture-hint").textContent = "sorting…";
+  try {
+    const { mission_id } = await api("/api/dump", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
+    currentMission = mission_id;
+    $("dump").value = "";
+    $("items").innerHTML = "";
+    startPolling(mission_id);
+    startWaitCheck(mission_id);
+  } catch (e) {
+    $("capture-hint").textContent = "error: " + e.message;
+  } finally {
+    $("submit").disabled = false;
+  }
+};
+
+function startWaitCheck(id) {
+  clearTimeout(waitTimer);
+  $("waiting-banner").classList.remove("show");
+  const check = async () => {
+    if (currentMission !== id) return;
+    try {
+      const { ever_claimed } = await api(`/api/waiting/${id}`);
+      $("waiting-banner").classList.toggle("show", !ever_claimed);
+    } catch {}
+    waitTimer = setTimeout(check, 4000);
+  };
+  waitTimer = setTimeout(check, 6000);
+}
+
+function startPolling(id) {
+  clearTimeout(pollTimer);
+  const tick = async () => {
+    if (currentMission !== id) return;
+    try {
+      const s = await api(`/api/dump/${id}`);
+      $("capture-hint").textContent = s.items ? "" : `sorting… (${s.stage})`;
+      if (s.items) {
+        $("waiting-banner").classList.remove("show");
+        clearTimeout(waitTimer);
+        renderItems(s.items);
+        return;
+      }
+    } catch (e) {
+      $("capture-hint").textContent = "error: " + e.message;
+    }
+    pollTimer = setTimeout(tick, 2000);
+  };
+  pollTimer = setTimeout(tick, 1500);
+}
+
+function renderItems(items) {
+  const box = $("items");
+  box.innerHTML = "";
+  if (!items.length) { box.append(el("div", "empty", "Nothing came back.")); return; }
+
+  for (const kind of ["decision", "quick_task", "note"]) {
+    const group = items.filter((i) => i.kind === kind);
+    if (!group.length) continue;
+    box.append(el("div", "group-label", KIND_LABEL[kind] + (group.length > 1 ? "s" : "")));
+    for (const item of group) box.append(renderItem(item));
+  }
+}
+
+function renderItem(item) {
+  const row = el("div", "item");
+  row.append(el("span", "chip " + item.kind, KIND_LABEL[item.kind]));
+  const body = el("div", "item-text");
+  body.append(el("div", null, item.text));
+  if (item.kind === "decision") body.append(renderDecide(item));
+  row.append(body);
+  return row;
+}
+
+function renderDecide(item) {
+  const wrap = el("div", "decide-box");
+  const btn = el("button", "primary", "Run ADHD reasoning on this");
+  wrap.append(btn);
+  const out = el("div");
+  wrap.append(out);
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    out.innerHTML = "";
+    try {
+      const r = await api("/api/decide", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ problem: item.draft_problem, problem_class: item.suggested_class }),
+      });
+      if (r.declined) { out.append(el("div", "preview", "declined: " + r.reason)); return; }
+      out.append(el("div", "preview", r.preview));
+      const confirmBtn = el("button", "primary", `Yes, spend ~${r.estimate_tokens} tokens`);
+      out.append(confirmBtn);
+      confirmBtn.onclick = async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "running…";
+        await api(`/api/decide/${r.run_id}/confirm`, { method: "POST" });
+        pollDecision(r.run_id, out);
+      };
+    } catch (e) {
+      out.append(el("div", "preview", "error: " + e.message));
+    } finally {
+      btn.remove();
+    }
+  };
+  return wrap;
+}
+
+function pollDecision(runId, out) {
+  const tick = async () => {
+    const s = await api(`/api/decide/${runId}`);
+    if (s.synthesis) {
+      out.innerHTML = "";
+      out.append(el("div", "synthesis", s.synthesis));
+      return;
+    }
+    setTimeout(tick, 3000);
+  };
+  setTimeout(tick, 2000);
+}
+</script>
+</body>
+</html>

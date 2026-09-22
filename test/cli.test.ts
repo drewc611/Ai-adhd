@@ -173,14 +173,15 @@ test("a run abort exits 3, distinct from a config error and a contract failure",
 /**
  * Backlog 43. Every command that can produce structured output now does, because the alternative
  * for a driver is regexing a path out of a sentence. `wizard` is interactive and is excluded on
- * purpose rather than by oversight.
+ * purpose rather than by oversight; `serve` starts a long-running server and logs status lines
+ * rather than producing a single result a driver would parse, the same shape of exclusion.
  */
 test("every non-interactive command offers --json", () => {
   const cli = readFileSync(join(cfg.root, "src", "cli.ts"), "utf8");
   const lacking: string[] = [];
   for (const part of cli.split(/\n(?=program\n {2}\.command\()/).slice(1)) {
     const name = part.match(/\.command\("([\w-]+)/)?.[1];
-    if (!name || name === "wizard") continue;
+    if (!name || name === "wizard" || name === "serve") continue;
     const end = part.indexOf("\n});");
     if (!part.slice(0, end === -1 ? part.length : end).includes("--json")) lacking.push(name);
   }

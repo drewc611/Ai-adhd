@@ -37,7 +37,7 @@ are same-fixture, same-seed, same-brief reruns of `001-seed3`: the deliberate re
 the noise floor, and the E12 pair that put the critic's own instructions genuinely in force for the
 first time. Two are fixture 014 at seven branches, the widest path the router can produce.
 The mechanics — verbatim passthrough, `problem_hash`, blind pass A, the pruned block — are enforced
-by 510 tests rather than by inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
+by 533 tests rather than by inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
 before the commit that runs it.
 
 ## What holds
