@@ -2516,6 +2516,26 @@ is what every measurement in this repository actually invokes, so that is where 
 One case needed a real error rather than a silent empty read: a manifest whose every source is mutable now
 exits saying there is nothing repeatable to train on and naming the opt-in, instead of training on nothing.
 
+### A fourth site, found the same way `train_lstm.py` was
+
+`evaluate.py`'s `main()` — the multi-order comparison CLI, not one of the three single-model trainers —
+built its library with a bare `Library.load(args.manifest)` and offered no `--include-mutable-sources`
+flag at all. It went unpatched by the original change and uncovered by `test_the_selection_is_defined_once`,
+because it is not a `train_*` module and `TRAINER_CLIS` never named it.
+
+Found while backlog 74 tried to get a comparable order-4-vs-5 table: `python -m adhd_analysis.text.evaluate`
+run directly trained on `repo-docs`, `repo-prompts` and `repo-readme` alongside the real corpus, silently.
+`selection.py`'s mutable-source filter is now split into `stable_library()`, used by both `training_library()`
+(the single-model trainers, which also apply a held-out split) and `evaluate.py`'s CLI directly (which
+applies its own `--every` split across both sides afterward and has no use for `--held-out-file`). Fixed
+in the same commit that resolves backlog 74, with the same test shape `test_corpus_fingerprint.py` already
+used for the other three sites.
+
+No published table in this repository was produced by invoking `evaluate.py`'s CLI directly after D26 —
+D13 and D15 both predate D26 and are already marked pre-D26 measurements; E8's and backlog-82's tables came
+from scripts that built a `.stable()` library and called `compare_orders()` as a function, not through this
+CLI path. This closes the gap before a table was ever produced through it, rather than after.
+
 ### A floating-point trap, caught by an existing test
 
 Setting the threshold floor to E4's gap exactly refused E4. `0.0085 - 0.0063` is `0.0022000000000000006`
@@ -3582,3 +3602,268 @@ opened on this repository launch a server at startup, and on a fresh clone with 
 `node_modules` the launcher exits with its diagnostic every time. Noisy startup on every clone
 against an unreachable deliverable is a trade with two defensible sides, which by the rule at the top
 of `CLAUDE.md` makes it the owner's call and not a commit. Backlog item 104.
+
+## D45. Order 5 for the weekly background model, because the runner grew and D13's ceiling did not
+
+**Decision:** `Budget.weekly()`'s `max_rss_mb` is now 9216, up from 5120, and `train.yml`'s
+`workflow_dispatch` `order` input defaults to `"5"`, up from `"4"`. Resolved 2026-09-21.
+
+Backlog item 74 asked for this if the corpus shrank or the runner grew, and named D13's table to
+re-decide from. The corpus has not shrunk — it is 68M tokens per D15, well past the 22.9M D13
+measured. The runner grew instead: GitHub's `ubuntu-latest` moved from 2-core/7GB to 4-core/16GB in
+December 2023, and D13's 5120MB ceiling — chosen to fit the old 7GB spec with margin — was never
+revisited against the new one.
+
+### What actually binds, re-measured on the real corpus with mutable sources excluded
+
+D13's table was 22.9M training tokens. That is no longer what a weekly run trains on: `Budget.
+weekly()`'s `max_tokens` (40,000,000) binds first, at the corpus size already cached in this
+repository's CI, and it binds regardless of order. Both orders below trained to that same 40M-token
+ceiling, scored on the same held-out set (`SplitLibrary`, every 20th document, `.stable()` applied
+before the split):
+
+| order | n-grams | held-out perplexity | peak RSS | training seconds |
+|---|---|---|---|---|
+| 4 | 12.4M | 46.4 | 4,123MB | 283 |
+| 5 | 24.8M | **41.0** | 7,258MB | 448 |
+
+Order 5 is not just cheaper relative to the new ceiling than D13 found it relative to the old one —
+it is the better model outright at this corpus size: 11.7% lower held-out perplexity than order 4,
+for 2.0x the n-gram table and 1.76x the peak RSS. Neither run's scoring pass was truncated; the OOV
+rate is identical between the two rows, which is only possible if both were scored on the same text.
+
+The held-out-perplexity step `train.yml` runs as a separate process after training, with a fresh
+`Budget.weekly()` and no extended wall-clock allowance, was checked separately: scoring the order-5
+model above against the same held-out split took 43 seconds against the governor's 1500-second
+ceiling, not truncated. The margin `compare_orders()` gives scoring internally (4x the training
+wall-clock, because a higher order is deeper per token) turned out not to be load-bearing at this
+corpus size; it is there for a corpus or order this repository has not measured yet.
+
+### Getting a comparable table required fixing a bug first
+
+The straightforward way to reproduce this — `python -m adhd_analysis.text.evaluate --orders 4,5` —
+does not give a comparable table, because `evaluate.py`'s CLI never applied D26's mutable-source
+exclusion. See the fourth-site addendum under D26 for the fix and the reasoning; this decision's
+numbers were measured after that fix, calling `compare_orders()` directly with a `.stable()` library
+before the CLI fix landed, then reproduced through the fixed CLI to confirm the two agree.
+
+### What was not changed
+
+`max_tokens` stays at 40,000,000. Backlog 74 named two different, separable changes — raising the
+memory ceiling so order 5 completes at the corpus size where training already truncates, and
+separately raising the token ceiling so training reads more of the now much larger corpus before
+truncating at all. Only the first is this decision. The second trades a real increase in CI wall
+clock and would need its own measurement of where perplexity actually plateaus; it is not resolved
+here and is not implied by this change.
+
+`max_seconds` (1500) and `max_ngrams` (12,000,000) are both unchanged and did not bind on either
+order in the measurement above.
+
+## D46. Brain-dump triage rides the mission scheduler, and one UI click auto-confirms it
+
+**Decision:** A new stage kind, `triage`, is added to `src/super/mission.ts`'s `StageKind`
+enum and a matching `triage` mission class to `MissionClass`, dispatching a new agent
+`agents/adhd-triage.md`. Its artifact (`items.yaml`) is validated against a `zod` schema
+(`src/triage.ts`) instead of the markdown `requires` headings every other stage kind uses. A
+new CLI surface, `adhd serve` (`src/serve.ts`, Node's built-in `http`, no new dependency),
+wraps the kernel and the now-`cfg`-aware mission scheduler behind a small HTTP API and serves
+`assets/dump.html`, a self-contained brain-dump capture page. Resolved 2026-09-22.
+
+### Why this is a stage kind, not a third scheduler
+
+`src/os.ts`'s `Kernel` schedules exactly the four-phase run; `src/super/mission.ts`'s own
+module comment says widening that enum "would weaken the invariants that enum encodes."
+`SuperAgent` already exists as the generalisation — a claim/lease/return scheduler over named
+stage kinds, one of which (`diverge`) already hands off to the kernel and adopts the result.
+Segmenting a brain dump into items is a single-subagent, read-text-write-one-artifact task,
+structurally identical to the existing `research` stage kind. So this is one new `StageKind` on
+the scheduler that already exists, and a decision-shaped item still goes into the unmodified
+`Kernel`, by hand, exactly the way a `decide` stage already does.
+
+### What the triage agent is allowed to touch, and why it surprised the plan that proposed it
+
+`adhd-triage` carries `Read, Glob, Grep` — no network, no `Write`. Network was the first guess,
+matching `adhd-branch`/`adhd-critic`/`adhd-deepen`'s "unused launch permit" of `WebSearch,
+WebFetch` — and it is wrong for a mission agent. `test/agents.test.ts`'s "no mission agent can
+reach the network or start a run" test only exempts `adhd-researcher`, for a real reason
+(it searches); granting `adhd-triage` the run-phase permit would have been the D41 exception
+copied into a place D41 never argued for. `Read, Glob, Grep` is the filler `adhd-reviewer` and
+`adhd-governor` already carry for the same reason: a host refuses to launch an agent with zero
+tools, and this agent has no legitimate use for any of the three.
+
+No `Write` follows from the same source `adhd-researcher` and `adhd-reviewer` already establish:
+a stage whose agent has no `Write` does not create its own contract artifact, the host does,
+copying the agent's final message verbatim into the file the contract names. `skills/superagent
+/SKILL.md` gained a short "## The triage stage" paragraph saying so, because it previously said
+nothing about that discipline outside the `diverge` stage, and a plan that assumed the skill
+"needed no changes" would have shipped a stage nobody could actually return.
+
+### The routing classes have to be quoted into the brief, not read
+
+`adhd-triage` has no tools that reach `config/routing.yaml`, so `compileBrief`'s new `triage`
+branch quotes every run-eligible class and its description directly into the brief
+(`runEligibleClasses`, `src/triage.ts`) — the same reason `renderBranchBrief` embeds frame
+stance and probes inline rather than pointing a branch at a file it cannot open.
+
+### `openSuper` gained a `cfg` parameter, matching `openKernel` exactly
+
+`SuperAgent`'s constructor now takes `cfg: Config` as a separate first argument, the same shape
+`Kernel(cfg, opts)` already has — not folded into `SuperOptions`, because `Kernel` was already
+the precedent for keeping the two separate. `openSuper(cfg, root?, opts?)` mirrors
+`openKernel(cfg, root?, opts?)` line for line. The only production call site
+(`src/cli.ts`'s `superFor`) and the twelve direct `new SuperAgent(...)` call sites in
+`test/super.test.ts` were the whole blast radius.
+
+### `claim` learned to scan every mission, because one worker loop has to be enough
+
+Nothing in this repository calls a model, so a Claude Code session running a worker skill must
+be polling claim/return for anything to happen — asking a person capturing a brain dump to also
+hand-copy a mission id into a terminal is the opposite of low friction. `claim(id: string |
+null, worker)` now scans every running mission, oldest submitted first, when `id` is `null`,
+the same shape `Kernel.claim`'s optional `runId` already has. This is additive rather than a
+breaking rename: every existing call passes a real id and is unaffected, including the
+`superCmd.command("claim <mission_id>")` CLI call sites and all thirteen pre-existing
+`sa.claim("m", "w")` calls in the test suite. The CLI's own `claim [mission_id]` (now optional)
+exposes the scan for `/superagent` to use.
+
+One thing this does not do: `SuperAgent` has no mutex the way the kernel's `withLock` does.
+Scanning across missions does not add a race beyond the one already there for a single mission
+— the read-then-write inside a single `claim` call was never atomic here — but real concurrent
+workers safely sharing one root remains a kernel-only guarantee. Recorded rather than implied,
+since claiming otherwise would be false.
+
+### D5 is collapsed to one click for `triage`, and nowhere else
+
+`SuperAgent.submit` always lands at `awaiting_confirm`. `adhd serve`'s `POST /api/dump` calls
+`confirm` immediately afterward, server-side, for the `triage` mission class only — one
+subagent, budget-capped at 20,000 tokens by `CLASS_POLICY.triage`, triggered by the user's own
+"sort this out" click. D5's resolution text is about a system that "spawns seven subagents and
+gives the user no way out"; this spawns one, under a ceiling the class policy enforces
+regardless of what the agent claims it needs. The expensive path — a confirmed multi-frame
+decision run, submitted through the unmodified kernel exactly as a `decide` stage already is —
+keeps its own full, separate, explicit confirm click in the UI, both in `/api/decide`'s
+unconfirmed `submit` and in `test/serve.test.ts`'s load-bearing assertion that nothing is
+claimable from the kernel until `/api/decide/:id/confirm` is called. Collapsing that path too
+would be the exact violation fixture 001 exists to catch.
+
+This was confirmed with the user before any code was written, not assumed: the auto-confirm was
+presented as the one open design call in the plan, with the alternative (an explicit confirm
+step for triage as well) named beside it, and the auto-confirm was the one chosen.
+
+### What this does not do
+
+Triage does not rank or prioritise items. `TriageResultSchema` (`src/triage.ts`) is `.strict()`
+with no field for a priority, an order, or an opinion — the same mechanical trick
+`decisionSchema` uses to keep an orchestrator from having anywhere to put a candidate answer,
+now covering a second artifact shape. A "prioritised daily plan" in the product sense is out of
+scope for what one ungated classification pass is allowed to produce; grouping by kind and
+capture order is what ships instead. Only a genuinely decision-shaped item, run through the real
+frame library with its own explicit confirm, produces anything resembling a recommendation, and
+only for that one item.
+
+`adhd serve` also does not ship a product a person can use without a computer already running
+Claude Code. A worker — a Claude Code session running `/superagent`, and a second running
+`/adhd-worker` once a decision run is confirmed — has to be pointed at the same
+`--os-root`/`--super-root` or every mission and run sits at `pending` indefinitely. This is not
+a gap to close later; it is what "no inference client, ever" costs, stated rather than
+discovered by a confused user watching a spinner. `GET /api/waiting/:id` and the page's own
+banner exist because that discovery should happen in the product, not in an issue report.
+
+---
+
+## D47. Backlog 17: a FRAME_BREAKER probe for `false_means`, tried and not (yet) sufficient
+
+**Decision:** FRAME_BREAKER's `probes` list in `config/frames.yaml` gains a second question —
+"If the answer requires naming, labelling, or flagging something, what does that choice assert
+about the state it does not name — and would anyone actually read it there?" — placed second,
+right after the existing load-bearing-assumption question. `evals/frame-drift-baseline.json` is
+new, mirroring `evals/replay-baseline.json`'s mechanism exactly, because editing a shipped
+frame's content changes `frame_hash` for every recorded run that dispatched it. A fresh
+dispatch of fixture 004, `evals/recorded/004-frame-breaker-probe`, tests whether the probe
+closes the gap. It does not, cleanly. Resolved 2026-09-23.
+
+### Why a probe, and why FRAME_BREAKER
+
+`docs/AUTHORING-FRAMES.md` already named this the likely fix, under "A place to put a probe":
+backlog 17 is its own worked example, because what the `false_means` gap wants is one more
+question asked inside an existing stance, not a fourteenth frame on a shared axis. `false_means`
+(T2) is a frame-trap assertion, and T2 is the trap FRAME_BREAKER exists to attack: its whole job
+is naming and testing the load-bearing assumption a question makes. The assumption `false_means`
+watches for — that a single label carries meaning for the case it doesn't name — is a specific,
+recurring instance of exactly that job, so it belongs on FRAME_BREAKER rather than on a frame
+whose axis has nothing to do with assumption-hunting. No D6 orthogonality check applies: nothing
+was added, and `AUTHORING-FRAMES.md`'s checklist is for a new frame on a candidate axis, not an
+edit to an existing one's probes.
+
+The probe is written generically, not about naming or flags specifically, because FRAME_BREAKER
+runs across every problem class D6 lets it dispatch to, not just `naming`. A probe that only
+made sense for flag names would be a topic wearing a probe's clothes — exactly what
+`AUTHORING-FRAMES.md`'s "what a frame is not" section rules out, applied one level down to a
+single question rather than a whole stance.
+
+### The drift the edit causes, and the mechanism built to say so honestly
+
+`frame_hash` (`src/hash.ts`) covers `probes`, by design (D33: whole-definition comparison is
+what makes "is this the same definition" answerable at all). Editing FRAME_BREAKER's probes
+therefore changes its hash, and `frames --drift` — a **gate**, not a report, in
+`.github/workflows/library.yml` — fails non-zero on any recorded run whose dispatched frame no
+longer matches the library. FRAME_BREAKER was dispatched in twelve recorded runs before this
+change; five of them (`001-seed3`, `001-seed3-repeat`, `001-seed3-e12-1`, `001-seed3-e12-2`,
+`014-seed14`) carry a `frame_hash` stamp (D6) and would have flipped the gate red on this PR.
+The other seven predate the stamp entirely and read `unknown`, not `changed` — they were never
+going to fail this gate regardless of the edit, and get no baseline entry for the same reason a
+`null` doesn't belong in a file that explains genuine differences.
+
+Re-running all twelve just to re-stamp a hash would have spent real subagent budget on runs
+whose only purpose would be provenance housekeeping — none of the eleven runs besides
+`004-kernel-naming` has anything to do with the `false_means` gap. So `frames --drift` gained
+the same escape hatch `adhd replay` already has for synthesis rendering: `evals/frame-drift-
+baseline.json`, `{why, drifted: {"<run>/<frame>": "<reason>"}}`, loaded by
+`loadFrameDriftBaseline` in `src/frames.ts`. `frameDrift`'s `DriftReport` now separates three
+things that were previously one list: `changed` (real drift with no baseline entry — still
+fails the gate), `expected` (real drift the baseline explains — reported, not failing), and
+`stale_baseline` (a listed pair that stopped differing — fails, on the same argument
+`replay.ts`'s stale-baseline check makes: a baseline that forgives drift no longer happening is
+how the next real redefinition gets waved through unnoticed). `test/frames.test.ts` gained two
+tests mirroring `test/replay.test.ts`'s equivalent pair: the baseline explains exactly the runs
+that are actually drifting and nothing else, and a stale entry fails as loudly as unexplained
+drift does.
+
+The five recorded runs stay exactly as they are — rewriting them to match the new probe would
+make the corpus claim a run displayed reasoning FRAME_BREAKER never actually produced under
+this definition, the same argument `former_ids` already makes for a rename.
+
+### What the test run found
+
+`004-frame-breaker-probe` re-dispatches fixture 004's problem under the same seed, so it draws
+the same five frames `004-kernel-naming` drew (SUCCESSOR, MINIMALIST, PARTICULARIST, SUPPLICANT,
+FRAME_BREAKER — D6's renames of HORIZON and END_USER). `adhd eval` still fails
+`004/false_means` on it.
+
+The near miss is worth recording precisely, because it is not simply "the probe did nothing."
+FRAME_BREAKER's reasoning directly engages the new question: it says a name like
+`new_checkout_enabled` "asserts an implicit 'old checkout' fallback state" that "the name
+carries none of that as fact, it just gestures at it" — substantively the `false_means`
+question, closer than anything in the original run. Two independent things stopped it from
+counting. First, the phrasing doesn't match the fixture's detector regex (`when (it|the flag)
+is (false|off|disabled)`, `(false|off) means`, and so on) — the idea arrived, the specific
+words the fixture watches for did not. Second, and separately, this FRAME_BREAKER branch was
+pruned by the critic for T1 (its "naming is not the decision, governance is" argument is
+generic enough to survive deleting every checkout-specific detail from the problem) and T7
+(never weighs the cost of skipping governance against the cost of the lifecycle record it
+proposes) — so even matching language would not have reached the final recommendation this run
+shipped, which came from PARTICULARIST's cluster instead.
+
+**One run at one seed is evidence, not a verdict.** It says a single probe on one frame did not
+close this gap on this draw; it says nothing about whether a different seed, a sharper
+wording, or a genuinely different mechanism (a probe on another frame, or the new-frame path
+`AUTHORING-FRAMES.md` treats as the fallback) would. Backlog 17 stays open. The probe stays in
+the library regardless of this one outcome: it is a generically defensible assumption-hunting
+question for FRAME_BREAKER's stance whether or not it happens to trip `false_means`'s regex on
+any given draw, and reverting it would throw away the one branch in the corpus that has come
+closest to asking the question this backlog item wants asked.
+
+`evals/assertion-baseline.json` was updated with `--update` to record the six assertions this
+new recording holds that `004-kernel-naming` also holds (`convention_list`, `deletion`,
+`never_names_it`, `no_verdict`, `not_the_name`, `who_reads`, `trap_named`) — gains, not
+regressions, per `adhd eval --gate`'s own distinction. `004/false_means` stays an empty list.

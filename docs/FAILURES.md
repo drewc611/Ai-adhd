@@ -51,8 +51,14 @@ That has not happened.
 ## The one that fails and is neither
 
 `004-kernel-naming` misses `false_means` (T2): the answer never says what the flag name asserts when
-the flag is off. Backlog 17 is the item — no frame asks what a name asserts in its negative case — and
-it is open. The run is recorded as observed.
+the flag is off. Backlog 17 is the item — no frame asks what a name asserts in its negative case.
+
+D47 tried the fix `docs/AUTHORING-FRAMES.md` suggested — a probe on FRAME_BREAKER rather than a new
+frame — and re-dispatched the fixture as `004-frame-breaker-probe`. It still misses: FRAME_BREAKER's
+reasoning gets close (it names the implicit "old checkout" fallback state the flag's name does not
+carry as fact), but the phrasing doesn't match the detector, and the branch was independently pruned
+for T1 and T7 before it could reach the recommendation anyway. Both runs are recorded as observed.
+Backlog 17 stays open.
 
 ## What has never failed
 

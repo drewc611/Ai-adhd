@@ -189,6 +189,15 @@ yet enough to know whether they work.
 17. **Close the `false_means` gap** found by run 004: no frame asks what a name asserts in its
     negative case. Either a probe on an existing frame or a new frame with the orthogonality
     check run first.
+
+    **Still open. D47 tried the probe.** `docs/AUTHORING-FRAMES.md` already named this as the likely
+    fix, so FRAME_BREAKER gained a probe asking what a label asserts about the state it does not
+    name. A fresh dispatch of fixture 004 (`004-frame-breaker-probe`) still misses `false_means`:
+    FRAME_BREAKER's reasoning gets close — it names the implicit "old checkout" fallback state a
+    name like `new_checkout_enabled` does not actually carry as fact — but the phrasing does not
+    match the detector, and the branch was independently pruned for T1 and T7 before it could reach
+    the recommendation. One run at one seed is not enough to conclude the probe doesn't help; it is
+    enough to say it hasn't yet. Full accounting in D47 and `evals/recorded/004-frame-breaker-probe`.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**
@@ -778,17 +787,34 @@ the end is a record section they have been mis-filed — which is the whole of w
     `NPM_TOKEN` repository secret, which only the owner can add.** Until it is there, a tag fails
     at the npm step with that sentence. See `docs/DISTRIBUTION.md`.
 
-73. **A mission that runs the whole loop end to end** (evidence). Every part of the SuperAgent is
+73. ~~**A mission that runs the whole loop end to end** (evidence). Every part of the SuperAgent is
     tested and `adhd super` drives a real mission through plan, confirm, claim, a contract
     rejection, a retry and done. Nothing has yet run a `deep` mission with live subagents, so the
     stage graph's central claim — that a second research pass after the divergence catches the
     direction chosen too early — is a design argument and not a finding. It needs one real
-    mission, which costs real tokens, and is the owner's call for the same reason D5 exists.
+    mission, which costs real tokens, and is the owner's call for the same reason D5 exists.~~
+    **Run, with the owner's confirmation at plan time per D5: `backlog-105-fix`, a `deep` mission
+    against item 105, all seven stages with live subagents (research, decide, research_2, build,
+    verify, create, review), merged in PR #33.** The stage graph's central claim was not confirmed
+    in the form it was asked, and that is the finding rather than a gap in the run: `decide`'s own
+    five-branch ADHD pass committed to no direction at all (every frame pruned by the trap sweep,
+    a legitimate outcome the design anticipates), so there was no early wrong commitment for
+    `research_2` to catch. `research_2` still visibly mattered — its findings against the live
+    codebase, not just the branches' own reasoning, are what `build`'s choice between two competing
+    fixes actually rested on — but the corpus now has one mission and zero cases of the pass
+    catching a premature commitment. One real mission is one data point. See the README's Status
+    section and `missions/missions/backlog-105-fix/` (gitignored, mission-local) for the full
+    account.
 
-74. **Order 5, if the corpus ever shrinks or the runner grows** (owner's call). Held-out
+74. ~~**Order 5, if the corpus ever shrinks or the runner grows** (owner's call). Held-out
     perplexity is best at order 5 (36.0 against 38.6) and it costs 9.2GB, past `Budget.weekly()`'s
     5120MB. At this corpus size order 4 is the only one that fits a hosted runner. A smaller corpus
-    or a larger runner changes the answer, and D13 has the measured table to re-decide from.
+    or a larger runner changes the answer, and D13 has the measured table to re-decide from.~~
+    **The runner grew: `ubuntu-latest` moved to 4-core/16GB in December 2023, and D13's 5120MB
+    ceiling never moved with it. Re-measured at the corpus size the token ceiling already binds at
+    (40M tokens, mutable sources excluded): order 5 peaks at 7,258MB against order 4's 4,123MB, and
+    scores 41.0 held-out perplexity against 46.4. `Budget.weekly()`'s `max_rss_mb` is now 9216 and
+    `train.yml`'s default order is 5. See D45.**
 
 75. **Rust RFCs and Kubernetes KEPs, if the network boundary may widen** (owner's call). Both
     licences are read and correct — MIT OR Apache-2.0 and Apache-2.0, better provenance than the

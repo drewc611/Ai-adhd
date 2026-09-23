@@ -1,0 +1,37 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: SUPPLICANT
+position: >-
+  Do not spend this decision on an internal name; instead make whatever the flag controls show up as a visible, reportable checkout-version marker on the error screen or receipt the user actually sees.
+reasoning: |
+  1. The user was trying to finish a purchase: fill in payment, hit confirm, get a receipt. That is
+  the whole of their goal. They never asked for a "new checkout" and do not know one exists as a
+  concept, only as whatever screen loads when they click "pay."
+  2. At the moment it matters, they can see only the rendered page: the fields, the buttons, an error
+  message if one appears, maybe a spinner that never resolves. They cannot see a flag name, a
+  percentage rollout, or an engineering ticket. They can press submit again, go back, refresh, close
+  the tab, or reach for support chat. That is the entire action surface.
+  3. They give up the moment checkout feels untrustworthy: an error with no explanation, a field that
+  behaves differently than last time, a charge that may or may not have gone through. When they give
+  up, the system loses the sale and, worse, loses the diagnostic signal, because if they do file a
+  support ticket, neither they nor the agent can say "this happened on the new one" or "the old one."
+  The bug becomes unreproducible from the report alone, and the next user hits it again.
+  4. If they knew it was possible, they would ask for a way to say, after something goes wrong, "here
+  is exactly which checkout I was in" without having to know engineering internals, so their report is
+  actually actionable. They do not care what the flag is called internally. They care that the version
+  they experienced is identifiable from their side when they need to describe it.
+forecloses:
+  - >-
+    Picking the flag's name purely on engineering convention (e.g. checkout_redesign_2026) with no
+    plan to surface that state anywhere the user or support can see it.
+  - >-
+    Treating this as a closed naming decision that ships without touching the error page, receipt, or
+    support-ticket intake, since none of those would let the user report which version they hit.
+falsifier: >-
+  Pull the last ten checkout-related support tickets or chat transcripts; if none of them needed to
+  know which checkout variant the user was on to get resolved, the user-facing need this position rests
+  on does not exist and the position is wrong.
+missing_actor: >-
+  The support agent who receives the abandoned-checkout complaint; they can look up a user's session
+  against the flag-assignment log to diagnose the report, but only if that lookup path is built, and
+  the problem statement never names them or their need.
+confidence: medium

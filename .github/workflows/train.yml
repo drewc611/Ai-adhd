@@ -15,14 +15,17 @@ on:
     inputs:
       order:
         description: n-gram order
-        default: "4"
+        # 5, not 4: D45 measured order 5 at 7,258MB peak RSS against the governor's 9216MB, with
+        # order 4 at 4,123MB. Order 5 also has the better held-out perplexity (41.0 against 46.4)
+        # at the same 40M-token ceiling, so there is no longer a reason to default to the worse one.
+        default: "5"
       max_seconds:
         description: wall-clock ceiling, seconds (the governor's limit is 1800)
         default: "1500"
       corpus_size:
         description: how many RFCs to hold, spread across the published range
         # 1500 rather than the whole archive: at order 4 the table costs about 250MB per million
-        # tokens and 1500 RFCs is roughly 17M tokens, which lands under the governor's 5120MB with
+        # tokens and 1500 RFCs is roughly 17M tokens, which lands under the governor's 9216MB with
         # margin. Above that the resident-set ceiling binds and the model describes a prefix.
         default: "1500"
 

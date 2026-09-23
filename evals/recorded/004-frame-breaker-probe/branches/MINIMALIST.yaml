@@ -1,0 +1,49 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: MINIMALIST
+position: >-
+  Name it literally what it does, right now, with no scheme: something like
+  checkout_new, and stop there.
+reasoning: |
+  1. The pain is not actually about naming theory. Someone is mid-task, about
+  to write a flag check into code, and is stuck because "what should we call
+  it" feels like it needs a decision bigger than it is. The question is being
+  asked as if it opens a design problem (taxonomy, prefixes, ownership
+  convention) when what's actually blocking them is just needing one string
+  they can commit to and move on.
+
+  2. The smallest intervention is to pick a plain, literal, descriptive name
+  for this one flag and use it. It should say what changes when it's on
+  (new checkout) and nothing more. No prefix scheme, no team/owner encoding,
+  no expiry-date convention, no registry entry. One name, one flag, done.
+
+  3. This deliberately leaves unfixed: how the next flag will be named, how
+  anyone will know this flag is temporary and should be deleted, whether it
+  collides with an existing naming pattern elsewhere in the codebase, and who
+  owns cleanup after rollout. None of that is required to unblock the person
+  who asked the question today, and inventing it now is solving problems that
+  don't exist yet for flags that don't exist yet.
+
+  4. The larger fix -- an actual naming convention or flag lifecycle policy --
+  becomes necessary when a second or third flag shows up and someone can't
+  tell from the names alone what they gate, whether they're safe to remove,
+  or who to ask. You'd know because someone would have to go read the flag's
+  implementation just to find out what it does, or two flags would end up
+  with names that collide or contradict each other.
+forecloses:
+  - >-
+    Designing a feature-flag naming convention or taxonomy (prefixes for
+    team, rollout stage, or expiry date) as part of answering this question.
+  - >-
+    Setting up a flag registry, lifecycle policy, or ownership/removal
+    process before there is more than one flag to coordinate.
+falsifier: >-
+  Grep the codebase for existing feature flags: if there is already an
+  established naming pattern in use (e.g. everything prefixed ff_ or
+  namespaced by team), this ad hoc name is wrong and should match the
+  existing pattern instead of inventing a fresh one.
+missing_actor: >-
+  Whoever is responsible for deleting the flag once the new checkout is
+  fully rolled out -- they aren't named in the question, but the name
+  chosen now should make it obvious later that this flag is temporary and
+  safe to remove.
+confidence: medium

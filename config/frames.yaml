@@ -58,6 +58,8 @@ frames:
       must be concrete enough to act on tomorrow.
     probes:
       - What is the load bearing assumption in how the question is phrased?
+      - If the answer requires naming, labelling, or flagging something, what does that choice
+        assert about the state it does not name — and would anyone actually read it there?
       - Who benefits from that assumption being unexamined?
       - If it is false, what is the question actually about?
       - What is the first concrete action under the corrected frame?

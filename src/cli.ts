@@ -19,6 +19,7 @@ import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
 import { wizard } from "./tui.js";
 import { kernelStats, openKernel, recordRun } from "./os.js";
+import { createDumpServer } from "./serve.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort, UsageError } from "./errors.js";
 import { join } from "node:path";
@@ -174,8 +175,8 @@ program
       }
       if (o.drift) {
         const r = frameDrift(cfg, o.recorded);
-        console.log(o.json ? JSON.stringify({ rows: r.rows, changed: r.changed, unknown: r.unknown.length }, null, 2) : r.text);
-        process.exit(r.changed.length ? 1 : 0);
+        console.log(o.json ? JSON.stringify({ rows: r.rows, changed: r.changed, expected: r.expected, stale_baseline: r.stale_baseline, unknown: r.unknown.length }, null, 2) : r.text);
+        process.exit(r.changed.length || r.stale_baseline.length ? 1 : 0);
       }
       if (o.forbidden) {
         const r = forbiddenAudit(cfg, o.recorded);
@@ -318,6 +319,32 @@ program
         `wrote ${r.path} (${(r.bytes / 1024).toFixed(0)} KB): ${r.runs} run(s), ${r.frames} frame(s).`,
         "\nSelf-contained. Open it from disk; there is nothing to serve and nothing to fetch.",
       );
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command("serve")
+  .description(
+    "start a local UI over the kernel and mission scheduler: a brain dump goes in, quick tasks/notes/decisions come out, " +
+      "and a decision item can be run through the real frame library. Nothing here calls a model — run /superagent " +
+      "(for triage) and /adhd-worker (for a confirmed decision run) in a Claude Code session pointed at the same " +
+      "--os-root/--super-root, or nothing here will ever move off pending.",
+  )
+  .option("--port <n>", "", (v) => Number.parseInt(v, 10), 4174)
+  .option("--os-root <dir>", "kernel runs directory (default $ADHD_OS_ROOT or ./runs)")
+  .option("--super-root <dir>", "mission root (default $ADHD_SUPER_ROOT or ./missions)")
+  .action((o: { port: number; osRoot?: string; superRoot?: string }) => {
+    try {
+      const cfg = loadConfig(program.opts().root, program.opts().overlay);
+      const osRoot = o.osRoot ?? process.env["ADHD_OS_ROOT"] ?? "runs";
+      const superRoot = o.superRoot ?? process.env["ADHD_SUPER_ROOT"] ?? "missions";
+      const server = createDumpServer(cfg, { osRoot, superRoot });
+      server.listen(o.port, () => {
+        console.log(`adhd serve on http://localhost:${o.port}  (os-root ${osRoot}, super-root ${superRoot})`);
+        console.log("Nothing here calls a model. Run /superagent and /adhd-worker in a Claude Code session pointed at the same roots, or this sits at pending.");
+      });
     } catch (e) {
       fail(e);
     }
@@ -642,7 +669,7 @@ program
 const superCmd = program
   .command("super")
   .description("the SuperAgent: missions that take minutes to hours, with sandboxes, memory, a message gateway and stages. Never calls a model.");
-const superFor = (o: { superRoot?: string }) => openSuper(o.superRoot ?? process.env["ADHD_SUPER_ROOT"] ?? "./missions");
+const superFor = (o: { superRoot?: string }) => openSuper(loadConfig(program.opts().root, program.opts().overlay), o.superRoot ?? process.env["ADHD_SUPER_ROOT"] ?? "./missions");
 
 superCmd
   .command("plan")
@@ -678,14 +705,14 @@ superCmd
 superCmd.command("confirm <mission_id>").option("--super-root <dir>").action((id, o) => { try { out(superFor(o).confirm(id)); } catch (e) { fail(e); } });
 
 superCmd
-  .command("claim <mission_id>")
-  .description("lease the next unblocked stage and print its brief")
+  .command("claim [mission_id]")
+  .description("lease the next unblocked stage and print its brief. Omit mission_id to scan every running mission, oldest first")
   .requiredOption("--worker <id>")
   .option("--super-root <dir>")
   .option("--brief-only", "print the brief and nothing else")
   .action((id, o) => {
     try {
-      const c = superFor(o).claim(id, o.worker);
+      const c = superFor(o).claim(id ?? null, o.worker);
       if (!c) { out({ claimed: null }); return; }
       if (o.briefOnly) { console.log(c.brief); return; }
       out({ stage: c.id, kind: c.kind, agent: c.agent, tools: c.tools, sandbox: c.sandbox, lease_until: c.lease_until, goal_hash: c.goal_hash });

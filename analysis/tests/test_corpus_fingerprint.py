@@ -260,6 +260,35 @@ def test_every_trainer_cli_excludes_mutable_sources_unless_asked(module, extra, 
     assert {s["name"] for s in json.loads(rec2.read_text())["sources"]} == {"repo-docs", "corpus"}
 
 
+def test_evaluate_cli_excludes_mutable_sources_unless_asked(tmp_path, capsys):
+    """The fourth site D26's own text names as a hazard and never patched.
+
+    `evaluate.py`'s `main()` is the multi-order comparison CLI, not one of the three single-model
+    trainers `TRAINER_CLIS` covers, and it built its library with a bare `Library.load(args.manifest)`
+    with no `--include-mutable-sources` opt-in at all — found while backlog 74 tried to get a comparable
+    order-4-vs-5 table and got one that had trained on `repo-docs` instead. Same guard, same layer,
+    different shape of CLI: no `--record`, and `--every` is its own held-out split rather than
+    `training_library`'s, so this reuses `stable_library` rather than `training_library`.
+    """
+    import importlib
+    import json as jsonlib
+
+    main = importlib.import_module("adhd_analysis.text.evaluate").main
+    manifest = two_source_manifest(tmp_path, stable_docs=6)
+    base = ["--manifest", str(manifest), "--orders", "2", "--every", "2", "--min-count", "1",
+            "--max-seconds", "300", "--json"]
+
+    assert main(base + ["--out", str(tmp_path / "orders")]) == 0
+    out = capsys.readouterr().out
+    names = {s["name"] for s in jsonlib.loads(out)[0]["sources"]}
+    assert names == {"corpus"}, f"evaluate.py read text a commit can rewrite: {sorted(names)}"
+
+    assert main(base + ["--out", str(tmp_path / "orders2"), "--include-mutable-sources"]) == 0
+    out2 = capsys.readouterr().out
+    names2 = {s["name"] for s in jsonlib.loads(out2)[0]["sources"]}
+    assert names2 == {"repo-docs", "corpus"}
+
+
 def test_the_selection_is_defined_once():
     """The duplication that caused this. Three `main()`s each loading the library themselves is three
     places for one rule, and D26 reached two of them."""
@@ -273,6 +302,12 @@ def test_the_selection_is_defined_once():
         assert "Library.load(args.manifest)" not in src, (
             f"{mod.__name__} loads the library itself again, which is how train_lstm.py was missed"
         )
+
+    from adhd_analysis.text import evaluate
+
+    assert "stable_library(args)" in inspect.getsource(evaluate), (
+        "evaluate.py does not use the shared selection"
+    )
 
 
 def test_a_clean_checkout_is_told_why_rather_than_told_its_paths_are_wrong(tmp_path):

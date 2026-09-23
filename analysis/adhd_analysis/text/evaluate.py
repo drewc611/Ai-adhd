@@ -34,6 +34,7 @@ from typing import Iterator
 from .budget import Budget
 from .corpora import Library
 from .ngram import KneserNey
+from .selection import add_manifest_arguments, stable_library
 from .tokenize import EOS, sentences, tokens
 from .train import TrainingRecord, train
 
@@ -655,7 +656,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="adhd_analysis.text.evaluate",
         description="Train several orders on the same split and score them on held-out documents. Never calls a model.",
     )
-    ap.add_argument("--manifest", default="corpora.yaml")
+    add_manifest_arguments(ap)
     ap.add_argument("--orders", default="3,4,5")
     ap.add_argument("--out", default="models/orders")
     ap.add_argument("--every", type=int, default=20, help="hold out every Nth document")
@@ -672,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
         b.max_rss_mb = args.max_rss_mb
 
     results = compare_orders(
-        Library.load(args.manifest),
+        stable_library(args),
         [int(x) for x in args.orders.split(",")],
         args.out,
         every=args.every,

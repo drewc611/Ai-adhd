@@ -1,11 +1,11 @@
-# What seventeen runs show
+# What eighteen runs show
 
 A short account of what this repository has actually established, written so the negative results
 are as easy to find as the rest. Every number below comes from a command in this checkout and is
 pinned by a test; the commands are named so you can rerun them.
 
-Backlog item 49 asked for this at five runs. There are seventeen now, thirteen with a `score.json`,
-and the extra twelve did not change the shape of the answer — with five exceptions, all named where
+Backlog item 49 asked for this at five runs. There are eighteen now, fourteen with a `score.json`,
+and the extra thirteen did not change the shape of the answer — with five exceptions, all named where
 they belong. Two are from `001-seed3`: the first contested decision the rubric actually separates, and
 the first run to come in under the token estimate it was quoted. The third is its replicate at the
 same seed with byte-identical briefs, and it is the most uncomfortable number here: the critic pruned
@@ -31,13 +31,13 @@ in-context divergence technique is built on exactly that (D2).
 
 ## Method
 
-Seventeen recorded runs over five fixtures, each fixture carrying `must_surface` assertions written
-before the run and, on four of the five, a linear chain-of-thought control. Three of the seventeen
+Eighteen recorded runs over five fixtures, each fixture carrying `must_surface` assertions written
+before the run and, on four of the five, a linear chain-of-thought control. Three of the eighteen
 are same-fixture, same-seed, same-brief reruns of `001-seed3`: the deliberate replicate that measured
 the noise floor, and the E12 pair that put the critic's own instructions genuinely in force for the
 first time. Two are fixture 014 at seven branches, the widest path the router can produce.
 The mechanics — verbatim passthrough, `problem_hash`, blind pass A, the pruned block — are enforced
-by 510 tests rather than by inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
+by 535 tests rather than by inspection. `docs/EXPERIMENTS.md` registers each experiment, with its readings fixed in advance,
 before the commit that runs it.
 
 ## What holds
