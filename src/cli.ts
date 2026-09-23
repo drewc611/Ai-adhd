@@ -175,8 +175,8 @@ program
       }
       if (o.drift) {
         const r = frameDrift(cfg, o.recorded);
-        console.log(o.json ? JSON.stringify({ rows: r.rows, changed: r.changed, unknown: r.unknown.length }, null, 2) : r.text);
-        process.exit(r.changed.length ? 1 : 0);
+        console.log(o.json ? JSON.stringify({ rows: r.rows, changed: r.changed, expected: r.expected, stale_baseline: r.stale_baseline, unknown: r.unknown.length }, null, 2) : r.text);
+        process.exit(r.changed.length || r.stale_baseline.length ? 1 : 0);
       }
       if (o.forbidden) {
         const r = forbiddenAudit(cfg, o.recorded);

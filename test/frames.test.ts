@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cfg, tmp } from "./helpers.js";
-import { PASS_A_NOISE_FLOOR, RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, orthogonality, recordedDraws, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
+import { PASS_A_NOISE_FLOOR, RETIREMENT_FLOOR, axisCoverage, diffRuns, frameDrift, frameHealth, frameReach, frameStats, labelCollisions, loadFrameDriftBaseline, orthogonality, recordedDraws, forbiddenAudit, forbiddenProbes } from "../src/frames.js";
 import { interRater } from "../src/learn.js";
 import { frameHash } from "../src/hash.js";
 import { compile, selectFrames } from "../src/compile.js";
@@ -453,18 +453,23 @@ test("a frame hash covers what a branch is asked to do, and not what the frame i
   assert.notEqual(frameHash({ ...f, tools: ["WebSearch"] } as typeof f), base);
 });
 
-test("a run recorded before the stamp is unknown, which is not unchanged, and a stamped one is neither", () => {
+test("a run recorded before the stamp is unknown, which is not unchanged, and a stamped one may be either", () => {
   // Assuming the corpus matches would invent the fact the report exists to establish. Every run
   // recorded before `frame_hash` was stamped reads `null`, and until `001-seed3` that was all of
-  // them — this test asserted it of every row. That run is the first carrying the stamp, so it
-  // reads `false`, unchanged, on evidence rather than by assumption. Nothing reads `true`.
+  // them. D47 then edited FRAME_BREAKER's probes, so the five stamped runs that dispatched it now
+  // read `true` — real drift, not assumed sameness — and every one is listed in
+  // evals/frame-drift-baseline.json, which is why the report-level `changed` (unexplained drift,
+  // the thing a reader should actually worry about) stays empty.
   const d = frameDrift(cfg);
   assert.deepEqual(d.changed, []);
   assert.ok(d.unknown.length >= 35, `only ${d.unknown.length} branches read as unknown`);
 
   const stamped = d.rows.filter((r) => r.changed !== null);
   assert.ok(stamped.length > 0, "no recorded run carries a frame_hash, so the stamp is not being written");
-  for (const r of stamped) assert.equal(r.changed, false, `${r.run}/${r.frame} reads as changed`);
+  const reallyChanged = stamped.filter((r) => r.changed === true);
+  assert.ok(reallyChanged.length > 0, "D47 edited FRAME_BREAKER's probes; no stamped run reads as changed");
+  for (const r of reallyChanged) assert.ok(r.expected_drift, `${r.run}/${r.frame} reads as changed and is not in evals/frame-drift-baseline.json`);
+  for (const r of stamped.filter((r) => r.changed === false)) assert.equal(r.expected_drift, null, `${r.run}/${r.frame} is unchanged but the baseline still lists it — stale entry`);
   for (const r of d.rows.filter((r) => !stamped.includes(r))) assert.equal(r.changed, null);
   assert.match(d.text, /unknown is not unchanged/);
 });
@@ -505,6 +510,47 @@ test("drift forwards a renamed frame rather than reporting it as gone", () => {
   assert.equal(d.rows.length, 1);
   assert.equal(d.rows[0]!.frame, "SUPPLICANT");
   assert.equal(d.rows[0]!.changed, false, "a rename read as a redefinition");
+});
+
+const CORPUS = join(cfg.root, "evals", "recorded");
+
+/** A scratch copy of the recorded corpus, so a test that writes cannot touch the evidence. */
+function corpusCopy(): string {
+  const dir = join(tmp(), "recorded");
+  cpSync(CORPUS, dir, { recursive: true });
+  return dir;
+}
+
+test("the frame-drift baseline says why for every run/frame it excuses, and excuses nothing that is not drifting", () => {
+  // Same argument as the equivalent replay-baseline.json test: a baseline that excuses a pair
+  // which is not actually drifting is dead weight at best and a way to hide a real regression at
+  // worst, and one that is missing a genuinely drifting pair leaves `frames --drift` failing the
+  // gate for no actionable reason.
+  const baseline = loadFrameDriftBaseline(cfg);
+  const d = frameDrift(cfg);
+  const actuallyChanged = d.rows.filter((r) => r.changed === true).map((r) => `${r.run}/${r.frame}`).sort();
+  assert.deepEqual(Object.keys(baseline.drifted).sort(), actuallyChanged, "evals/frame-drift-baseline.json and the corpus disagree about which run/frame pairs drift");
+  for (const [key, why] of Object.entries(baseline.drifted)) {
+    assert.ok(why.length > 20, `${key}'s baseline entry is too short to be a reason`);
+    assert.match(why, /D\d+/, `${key}'s entry does not name the decision that changed the frame`);
+  }
+  assert.match(baseline.why, /recorded artifact is evidence of what that frame produced/);
+});
+
+test("a stale frame-drift baseline entry fails as loudly as unexplained drift does", () => {
+  // A baseline that forgives drift no longer happening is how the next real redefinition is
+  // waved through unnoticed, so it is an error rather than a note. Simulate 001-seed3's
+  // FRAME_BREAKER branch being re-stamped under the current library (as a re-run would do):
+  // its evals/frame-drift-baseline.json entry, still claiming it differs, is now stale.
+  const dir = corpusCopy();
+  const planPath = join(dir, "001-seed3", "plan.json");
+  const plan = JSON.parse(readFileSync(planPath, "utf8")) as { branches: { frame: string; frame_hash?: string }[] };
+  const current = frameHash(cfg.frames.frames.find((f) => f.id === "FRAME_BREAKER")!);
+  for (const b of plan.branches) if (b.frame === "FRAME_BREAKER") b.frame_hash = current;
+  writeFileSync(planPath, JSON.stringify(plan));
+  const d = frameDrift(cfg, dir);
+  assert.deepEqual(d.stale_baseline, ["001-seed3/FRAME_BREAKER"]);
+  assert.match(d.text, /baseline entry\(ies\) are stale/);
 });
 
 test("a new compile stamps every branch, so the corpus stops being unknown from here", () => {
