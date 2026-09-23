@@ -189,6 +189,15 @@ yet enough to know whether they work.
 17. **Close the `false_means` gap** found by run 004: no frame asks what a name asserts in its
     negative case. Either a probe on an existing frame or a new frame with the orthogonality
     check run first.
+
+    **Still open. D47 tried the probe.** `docs/AUTHORING-FRAMES.md` already named this as the likely
+    fix, so FRAME_BREAKER gained a probe asking what a label asserts about the state it does not
+    name. A fresh dispatch of fixture 004 (`004-frame-breaker-probe`) still misses `false_means`:
+    FRAME_BREAKER's reasoning gets close — it names the implicit "old checkout" fallback state a
+    name like `new_checkout_enabled` does not actually carry as fact — but the phrasing does not
+    match the detector, and the branch was independently pruned for T1 and T7 before it could reach
+    the recommendation. One run at one seed is not enough to conclude the probe doesn't help; it is
+    enough to say it hasn't yet. Full accounting in D47 and `evals/recorded/004-frame-breaker-probe`.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**

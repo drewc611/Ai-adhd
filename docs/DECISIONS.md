@@ -3768,3 +3768,102 @@ Claude Code. A worker — a Claude Code session running `/superagent`, and a sec
 a gap to close later; it is what "no inference client, ever" costs, stated rather than
 discovered by a confused user watching a spinner. `GET /api/waiting/:id` and the page's own
 banner exist because that discovery should happen in the product, not in an issue report.
+
+---
+
+## D47. Backlog 17: a FRAME_BREAKER probe for `false_means`, tried and not (yet) sufficient
+
+**Decision:** FRAME_BREAKER's `probes` list in `config/frames.yaml` gains a second question —
+"If the answer requires naming, labelling, or flagging something, what does that choice assert
+about the state it does not name — and would anyone actually read it there?" — placed second,
+right after the existing load-bearing-assumption question. `evals/frame-drift-baseline.json` is
+new, mirroring `evals/replay-baseline.json`'s mechanism exactly, because editing a shipped
+frame's content changes `frame_hash` for every recorded run that dispatched it. A fresh
+dispatch of fixture 004, `evals/recorded/004-frame-breaker-probe`, tests whether the probe
+closes the gap. It does not, cleanly. Resolved 2026-09-23.
+
+### Why a probe, and why FRAME_BREAKER
+
+`docs/AUTHORING-FRAMES.md` already named this the likely fix, under "A place to put a probe":
+backlog 17 is its own worked example, because what the `false_means` gap wants is one more
+question asked inside an existing stance, not a fourteenth frame on a shared axis. `false_means`
+(T2) is a frame-trap assertion, and T2 is the trap FRAME_BREAKER exists to attack: its whole job
+is naming and testing the load-bearing assumption a question makes. The assumption `false_means`
+watches for — that a single label carries meaning for the case it doesn't name — is a specific,
+recurring instance of exactly that job, so it belongs on FRAME_BREAKER rather than on a frame
+whose axis has nothing to do with assumption-hunting. No D6 orthogonality check applies: nothing
+was added, and `AUTHORING-FRAMES.md`'s checklist is for a new frame on a candidate axis, not an
+edit to an existing one's probes.
+
+The probe is written generically, not about naming or flags specifically, because FRAME_BREAKER
+runs across every problem class D6 lets it dispatch to, not just `naming`. A probe that only
+made sense for flag names would be a topic wearing a probe's clothes — exactly what
+`AUTHORING-FRAMES.md`'s "what a frame is not" section rules out, applied one level down to a
+single question rather than a whole stance.
+
+### The drift the edit causes, and the mechanism built to say so honestly
+
+`frame_hash` (`src/hash.ts`) covers `probes`, by design (D33: whole-definition comparison is
+what makes "is this the same definition" answerable at all). Editing FRAME_BREAKER's probes
+therefore changes its hash, and `frames --drift` — a **gate**, not a report, in
+`.github/workflows/library.yml` — fails non-zero on any recorded run whose dispatched frame no
+longer matches the library. FRAME_BREAKER was dispatched in twelve recorded runs before this
+change; five of them (`001-seed3`, `001-seed3-repeat`, `001-seed3-e12-1`, `001-seed3-e12-2`,
+`014-seed14`) carry a `frame_hash` stamp (D6) and would have flipped the gate red on this PR.
+The other seven predate the stamp entirely and read `unknown`, not `changed` — they were never
+going to fail this gate regardless of the edit, and get no baseline entry for the same reason a
+`null` doesn't belong in a file that explains genuine differences.
+
+Re-running all twelve just to re-stamp a hash would have spent real subagent budget on runs
+whose only purpose would be provenance housekeeping — none of the eleven runs besides
+`004-kernel-naming` has anything to do with the `false_means` gap. So `frames --drift` gained
+the same escape hatch `adhd replay` already has for synthesis rendering: `evals/frame-drift-
+baseline.json`, `{why, drifted: {"<run>/<frame>": "<reason>"}}`, loaded by
+`loadFrameDriftBaseline` in `src/frames.ts`. `frameDrift`'s `DriftReport` now separates three
+things that were previously one list: `changed` (real drift with no baseline entry — still
+fails the gate), `expected` (real drift the baseline explains — reported, not failing), and
+`stale_baseline` (a listed pair that stopped differing — fails, on the same argument
+`replay.ts`'s stale-baseline check makes: a baseline that forgives drift no longer happening is
+how the next real redefinition gets waved through unnoticed). `test/frames.test.ts` gained two
+tests mirroring `test/replay.test.ts`'s equivalent pair: the baseline explains exactly the runs
+that are actually drifting and nothing else, and a stale entry fails as loudly as unexplained
+drift does.
+
+The five recorded runs stay exactly as they are — rewriting them to match the new probe would
+make the corpus claim a run displayed reasoning FRAME_BREAKER never actually produced under
+this definition, the same argument `former_ids` already makes for a rename.
+
+### What the test run found
+
+`004-frame-breaker-probe` re-dispatches fixture 004's problem under the same seed, so it draws
+the same five frames `004-kernel-naming` drew (SUCCESSOR, MINIMALIST, PARTICULARIST, SUPPLICANT,
+FRAME_BREAKER — D6's renames of HORIZON and END_USER). `adhd eval` still fails
+`004/false_means` on it.
+
+The near miss is worth recording precisely, because it is not simply "the probe did nothing."
+FRAME_BREAKER's reasoning directly engages the new question: it says a name like
+`new_checkout_enabled` "asserts an implicit 'old checkout' fallback state" that "the name
+carries none of that as fact, it just gestures at it" — substantively the `false_means`
+question, closer than anything in the original run. Two independent things stopped it from
+counting. First, the phrasing doesn't match the fixture's detector regex (`when (it|the flag)
+is (false|off|disabled)`, `(false|off) means`, and so on) — the idea arrived, the specific
+words the fixture watches for did not. Second, and separately, this FRAME_BREAKER branch was
+pruned by the critic for T1 (its "naming is not the decision, governance is" argument is
+generic enough to survive deleting every checkout-specific detail from the problem) and T7
+(never weighs the cost of skipping governance against the cost of the lifecycle record it
+proposes) — so even matching language would not have reached the final recommendation this run
+shipped, which came from PARTICULARIST's cluster instead.
+
+**One run at one seed is evidence, not a verdict.** It says a single probe on one frame did not
+close this gap on this draw; it says nothing about whether a different seed, a sharper
+wording, or a genuinely different mechanism (a probe on another frame, or the new-frame path
+`AUTHORING-FRAMES.md` treats as the fallback) would. Backlog 17 stays open. The probe stays in
+the library regardless of this one outcome: it is a generically defensible assumption-hunting
+question for FRAME_BREAKER's stance whether or not it happens to trip `false_means`'s regex on
+any given draw, and reverting it would throw away the one branch in the corpus that has come
+closest to asking the question this backlog item wants asked.
+
+`evals/assertion-baseline.json` was updated with `--update` to record the six assertions this
+new recording holds that `004-kernel-naming` also holds (`convention_list`, `deletion`,
+`never_names_it`, `no_verdict`, `not_the_name`, `who_reads`, `trap_named`) — gains, not
+regressions, per `adhd eval --gate`'s own distinction. `004/false_means` stays an empty list.

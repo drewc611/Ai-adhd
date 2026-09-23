@@ -99,25 +99,32 @@
       "003-kernel-strategy"
     ],
     "004/convention_list": [
+      "004-frame-breaker-probe",
       "004-kernel-naming"
     ],
     "004/deletion": [
+      "004-frame-breaker-probe",
       "004-kernel-naming"
     ],
     "004/false_means": [],
     "004/never_names_it": [
+      "004-frame-breaker-probe",
       "004-kernel-naming"
     ],
     "004/no_verdict": [
+      "004-frame-breaker-probe",
       "004-kernel-naming"
     ],
     "004/not_the_name": [
+      "004-frame-breaker-probe",
       "004-kernel-naming"
     ],
     "004/trap_named": [
+      "004-frame-breaker-probe",
       "004-kernel-naming"
     ],
     "004/who_reads": [
+      "004-frame-breaker-probe",
       "004-kernel-naming"
     ],
     "011/call_site_reader": [],

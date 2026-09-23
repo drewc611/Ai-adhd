@@ -1,0 +1,61 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: FRAME_BREAKER
+position: >-
+  Before anyone names the flag, write and attach a one-page lifecycle record to
+  it — owner, rollout stages, rollback trigger metric, and a hard removal date
+  — because naming is not the decision that matters here.
+reasoning: |
+  1. The question assumes the work in front of the team is a labeling
+  exercise: that a feature flag is the right mechanism, that it already
+  exists or will exist as a binary gate, and that the only open decision is
+  the string to type into the config. It treats naming as the task.
+
+  2. A name like "new_checkout_enabled" asserts an implicit "old checkout"
+  fallback state and implies the flag is temporary — but the name carries
+  none of that as fact, it just gestures at it. What actually determines
+  whether the flag stays temporary is a lifecycle plan: who owns it, what
+  rollback metric kills it, what date it gets deleted. That plan is the
+  thing nobody reads, because in most orgs it is never written down —
+  people read the name in a PR diff or a dashboard, decide it's
+  self-explanatory, and move on. The name becomes a stand-in for governance
+  that was never actually done.
+
+  3. Whoever wants to ship without committing to a rollback threshold or an
+  expiry date benefits from the assumption going unexamined. A naming
+  bikeshed is easy, fast, and feels like progress in a meeting; writing down
+  an owner, a kill metric, and a deletion date is a real commitment that
+  someone has to be held to later. Defaulting to "what should we call it"
+  lets the team close the loop on the easy part and skip the part with
+  teeth.
+
+  4. If the assumption is false, the question isn't about vocabulary at all.
+  It's about flag governance: does this flag have an owner, a rollout plan,
+  a defined failure condition, and a scheduled removal — the name is a
+  trivial downstream artifact of that policy, not the decision itself.
+
+  5. The first concrete action: today, before the flag is created or named,
+  file a ticket (or metadata block in the flag config) specifying owner,
+  rollout percentage stages, the metric and threshold that triggers
+  rollback, and a calendar date — say 60 days out — by which the flag is
+  either fully rolled out and deleted or explicitly renewed. Only after that
+  exists does a name get chosen, and it should encode the lifecycle (e.g. a
+  standard prefix plus the linked ticket ID) rather than be debated as a
+  standalone creative choice.
+forecloses:
+  - >-
+    A meeting or thread spent comparing candidate flag names or naming
+    conventions in isolation from any lifecycle commitment.
+  - >-
+    Treating the flag as permanent infrastructure with no scheduled removal
+    or rollback trigger once it ships.
+falsifier: >-
+  Pull the flag-management dashboard or config repo and check flags older
+  than 90 days: if every one has a linked owner and expiry ticket already,
+  governance is already handled here and the naming question really was the
+  only open one — that would prove this position wrong.
+missing_actor: >-
+  The platform/on-call engineer who administers the feature-flag service —
+  they can require an owner field and an expiry date before any new flag is
+  allowed to be created, which makes the naming debate moot without needing
+  anyone else's buy-in.
+confidence: medium
