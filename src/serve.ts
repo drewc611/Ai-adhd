@@ -107,11 +107,17 @@ export function createDumpServer(cfg: Config, opts: ServeOptions) {
       const id = m[1]!;
       const s = superAgent.status(id);
       const stage = s.mission.stages[0]!;
-      if (stage.status !== "done") return void json(res, 200, { state: s.mission.state, stage: stage.status, items: null });
+      // "dead" means a worker tried, `adhd super return` rejected the artifact against
+      // checkTriageArtifact's schema, and that happened CLASS_POLICY.triage.maxAttempts times.
+      // Polling forever on a stage that can never finish is the exact silent-spinner failure
+      // the waiting-banner exists to avoid on the "no worker yet" side; this is its counterpart
+      // on the "a worker tried and the contract kept rejecting it" side.
+      if (stage.status === "dead") return void json(res, 200, { state: s.mission.state, stage: stage.status, items: null, failed: true, reason: stage.note ?? "the worker's submission kept failing its contract" });
+      if (stage.status !== "done") return void json(res, 200, { state: s.mission.state, stage: stage.status, items: null, failed: false, reason: stage.status === "pending" ? stage.note : null });
       const artifactPath = join(opts.superRoot, "missions", id, stage.contract.artifact);
       const text = existsSync(artifactPath) ? readFileSync(artifactPath, "utf8") : "";
       const { result } = checkTriageArtifact(cfg, text);
-      return void json(res, 200, { state: s.mission.state, stage: stage.status, items: result?.items ?? null });
+      return void json(res, 200, { state: s.mission.state, stage: stage.status, items: result?.items ?? null, failed: false, reason: null });
     }
 
     if (method === "POST" && path === "/api/decide") {

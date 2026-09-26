@@ -73,6 +73,10 @@
   .decide-box .synthesis { white-space: pre-wrap; font-size: 14px; line-height: 1.6; margin-top: 10px; }
 
   .empty { color: var(--dim); font-style: italic; padding: 20px 0; }
+  .failure { margin-top: 26px; padding: 16px 18px; border-radius: 12px; font-size: 15px;
+    border: 1px solid color-mix(in srgb, var(--coral) 45%, transparent);
+    background: color-mix(in srgb, var(--coral) 10%, var(--panel)); }
+  .failure-reason { color: var(--dim); font-size: 13px; font-family: var(--mono); margin: 8px 0 12px; }
   .group-label { font: 600 12px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); margin: 20px 0 4px; }
 </style>
 </head>
@@ -179,7 +183,19 @@ function startPolling(id) {
     if (currentMission !== id) return;
     try {
       const s = await api(`/api/dump/${id}`);
-      $("capture-hint").textContent = s.items ? "" : `sorting… (${s.stage})`;
+      if (s.failed) {
+        // The stage hit its attempt limit and will never finish on its own. Say so plainly
+        // instead of leaving "sorting…" spinning forever — the same honesty the waiting
+        // banner already applies to "no worker yet", applied here to "a worker tried and
+        // the contract kept rejecting it".
+        $("waiting-banner").classList.remove("show");
+        clearTimeout(waitTimer);
+        $("capture-hint").textContent = "";
+        $("items").innerHTML = "";
+        $("items").append(renderFailure(s.reason));
+        return;
+      }
+      $("capture-hint").textContent = s.items ? "" : s.reason ? `sorting… (${s.stage}: last attempt didn't parse, retrying — ${s.reason})` : `sorting… (${s.stage})`;
       if (s.items) {
         $("waiting-banner").classList.remove("show");
         clearTimeout(waitTimer);
@@ -192,6 +208,16 @@ function startPolling(id) {
     pollTimer = setTimeout(tick, 2000);
   };
   pollTimer = setTimeout(tick, 1500);
+}
+
+function renderFailure(reason) {
+  const box = el("div", "failure");
+  box.append(el("div", null, "This one didn't come back clean."));
+  box.append(el("div", "failure-reason", reason || "the worker's submission kept failing its contract."));
+  const retry = el("button", "ghost", "Try again");
+  retry.onclick = () => { $("items").innerHTML = ""; $("dump").focus(); };
+  box.append(retry);
+  return box;
 }
 
 function renderItems(items) {

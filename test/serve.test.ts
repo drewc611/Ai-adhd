@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { cfg, tmp } from "./helpers.js";
 import { createDumpServer } from "../src/serve.js";
@@ -109,6 +110,31 @@ test("GET /api/waiting/:id reports false until a worker claims the stage, then t
     openSuper(cfg, superRoot).claim(mission_id, "w");
     const after = await (await fetch(base + `/api/waiting/${mission_id}`)).json();
     assert.equal((after as { ever_claimed: boolean }).ever_claimed, true);
+  });
+});
+
+test("GET /api/dump/:id reports a dead triage stage as a clear failure, not an endless spinner", async () => {
+  // A stage that has hit CLASS_POLICY.triage.maxAttempts will never become `done` on its own,
+  // so a client that only checks `items` would poll forever. This is the same silent-spinner
+  // failure the waiting banner exists to avoid on the "no worker yet" side, checked here on the
+  // "a worker tried and the contract kept rejecting it" side.
+  await withServer(async (base, _osRoot, superRoot) => {
+    const res = await fetch(base + "/api/dump", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "call mom" }) });
+    const { mission_id } = (await res.json()) as { mission_id: string };
+
+    const sa = openSuper(cfg, superRoot);
+    const itemsPath = join(superRoot, "missions", mission_id, "items.yaml");
+    for (let i = 0; i < 2; i++) {
+      const claimed = sa.claim(mission_id, "w")!;
+      assert.ok(claimed, `attempt ${i + 1} was not claimable`);
+      writeFileSync(itemsPath, "```yaml\nitems: []\n```");
+      sa.return_(mission_id, "triage", { worker: "w", goal_hash: claimed.goal_hash });
+    }
+
+    const body = (await (await fetch(base + `/api/dump/${mission_id}`)).json()) as { failed: boolean; items: unknown; reason: string };
+    assert.equal(body.failed, true, "a dead stage was not reported as failed");
+    assert.equal(body.items, null);
+    assert.match(body.reason, /items/i, "the rejection reason from checkTriageArtifact was not surfaced");
   });
 });
 
