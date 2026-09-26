@@ -59,6 +59,9 @@
   .items { margin-top: 26px; display: flex; flex-direction: column; gap: 10px; }
   .item { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px;
     border: 1px solid var(--line); background: var(--panel); }
+  .item.done { opacity: 0.55; }
+  .item.done .item-text { text-decoration: line-through; text-decoration-color: var(--dim); }
+  .item .check { flex: none; width: 19px; height: 19px; margin-top: 2px; accent-color: var(--teal); cursor: pointer; }
   .chip { flex: none; font: 700 11px var(--mono); letter-spacing: 0.04em; text-transform: uppercase;
     border-radius: 999px; padding: 3px 9px; margin-top: 2px; }
   .chip.quick_task { color: var(--teal); background: var(--live-bg); border: 1px solid color-mix(in srgb, var(--teal) 40%, transparent); }
@@ -73,6 +76,13 @@
   .decide-box .synthesis { white-space: pre-wrap; font-size: 14px; line-height: 1.6; margin-top: 10px; }
 
   .empty { color: var(--dim); font-style: italic; padding: 20px 0; }
+  .done-section { margin-top: 20px; }
+  .done-section summary { cursor: pointer; color: var(--dim); font-size: 13px; font-weight: 600;
+    letter-spacing: 0.02em; padding: 6px 2px; list-style: none; }
+  .done-section summary::-webkit-details-marker { display: none; }
+  .done-section summary::before { content: "▸ "; }
+  .done-section[open] summary::before { content: "▾ "; }
+  .done-section .item { margin-top: 8px; }
   .failure { margin-top: 26px; padding: 16px 18px; border-radius: 12px; font-size: 15px;
     border: 1px solid color-mix(in srgb, var(--coral) 45%, transparent);
     background: color-mix(in srgb, var(--coral) 10%, var(--panel)); }
@@ -220,25 +230,62 @@ function renderFailure(reason) {
   return box;
 }
 
+// Done items are never deleted, only set aside — the same choice the reasoning engine itself
+// makes about pruned positions: nothing a person acted on should vanish without a trace.
+function doneKey(missionId) { return `adhd-dump:${missionId}:done`; }
+function getDone(missionId) {
+  try { return new Set(JSON.parse(localStorage.getItem(doneKey(missionId)) || "[]")); } catch { return new Set(); }
+}
+function setDone(missionId, ids) {
+  try { localStorage.setItem(doneKey(missionId), JSON.stringify([...ids])); } catch {}
+}
+
 function renderItems(items) {
   const box = $("items");
   box.innerHTML = "";
   if (!items.length) { box.append(el("div", "empty", "Nothing came back.")); return; }
 
+  const missionId = currentMission;
+  const done = getDone(missionId);
+  const toggle = (id) => {
+    done.has(id) ? done.delete(id) : done.add(id);
+    setDone(missionId, done);
+    renderItems(items);
+  };
+
+  const live = items.filter((i) => !done.has(i.id));
+  const settled = items.filter((i) => done.has(i.id));
+
+  if (!live.length) box.append(el("div", "empty", "Everything here is marked done."));
   for (const kind of ["decision", "quick_task", "note"]) {
-    const group = items.filter((i) => i.kind === kind);
+    const group = live.filter((i) => i.kind === kind);
     if (!group.length) continue;
     box.append(el("div", "group-label", KIND_LABEL[kind] + (group.length > 1 ? "s" : "")));
-    for (const item of group) box.append(renderItem(item));
+    for (const item of group) box.append(renderItem(item, false, toggle));
+  }
+
+  if (settled.length) {
+    const details = el("details", "done-section");
+    const summary = el("summary", null, `${settled.length} done`);
+    details.append(summary);
+    for (const item of settled) details.append(renderItem(item, true, toggle));
+    box.append(details);
   }
 }
 
-function renderItem(item) {
-  const row = el("div", "item");
+function renderItem(item, done, toggle) {
+  const row = el("div", "item" + (done ? " done" : ""));
+  const check = el("input");
+  check.type = "checkbox";
+  check.className = "check";
+  check.checked = done;
+  check.title = done ? "Bring this back" : "Mark done";
+  check.onchange = () => toggle(item.id);
+  row.append(check);
   row.append(el("span", "chip " + item.kind, KIND_LABEL[item.kind]));
   const body = el("div", "item-text");
   body.append(el("div", null, item.text));
-  if (item.kind === "decision") body.append(renderDecide(item));
+  if (item.kind === "decision" && !done) body.append(renderDecide(item));
   row.append(body);
   return row;
 }
