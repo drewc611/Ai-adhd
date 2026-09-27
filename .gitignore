@@ -19,3 +19,23 @@ analysis/models/*
 # models stay build artifacts. See analysis/README.md for the size/quality trade.
 !analysis/models/background.tf.gz
 analysis/corpora/
+
+# --- secrets (added by the 2026-09 security audit) ---
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+secrets.json
+credentials.json
+service-account*.json
