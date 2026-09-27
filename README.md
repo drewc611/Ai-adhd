@@ -8,6 +8,7 @@
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/codeql.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/maintenance.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/maintenance.yml/badge.svg?branch=main" alt="maintenance"></a>
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml/badge.svg?branch=main" alt="train"></a>
+  <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/secret-scan.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/secret-scan.yml/badge.svg?branch=main" alt="secret scan"></a>
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-536-2ea44f" alt="536 TypeScript tests"></a>
