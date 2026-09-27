@@ -125,7 +125,7 @@ jobs:
       - name: train
         working-directory: analysis
         env:
-          ORDER: ${{ github.event.inputs.order || 4 }}
+          ORDER: ${{ github.event.inputs.order || 5 }}
           MAX_SECONDS: ${{ github.event.inputs.max_seconds || 1500 }}
         run: |
           python -m adhd_analysis.text.train \
