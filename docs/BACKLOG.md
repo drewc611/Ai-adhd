@@ -1427,7 +1427,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     no-op, because the failure mode of a typo here is the report going back to counting the run
     twice and reading exactly as it did before the field existed.
 
-100. **Two frame labels are ordinary English nouns, and E10 showed what that costs.** `adhd frames
+100. ~~**Two frame labels are ordinary English nouns, and E10 showed what that costs.** `adhd frames
     --collisions` reports `LEDGER` and `SUCCESSOR` appearing in artifacts their frames did not write:
     `014-seed1`'s SABOTEUR wrote "logs that were not written to be a ledger" and `014-seed14`'s
     PARTICULARIST wrote "successor". The redactor removes the phrase, so the critic read "written to
@@ -1442,7 +1442,13 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     attacks, tools, stance, probes and forbidden list, and a rename changes the id every recorded run
     refers to. Fifteen runs are downstream. Either the rename carries an alias so old recordings stay
     readable, or the corpus is re-keyed, and which of those is right is a D6 call.
-    `frames --collisions` counts the problem and stops, and so does this.
+    `frames --collisions` counts the problem and stops, and so does this.~~
+    **Resolved as D48, on item 61's exact method.** `LEDGER` → `LEVY`, `SUCCESSOR` → `CARETAKER`
+    (its second rename, after `HORIZON`), each verified against every recorded artifact, synthesis
+    file and fixture before being picked. `former_ids` carries both chains so no recorded run needed
+    rewriting, and `frame_hash` covers neither `id` nor `name`, so `adhd frames --drift` reports zero
+    unexplained drift across all fourteen recorded runs. `docs/RETIREMENT.md`'s standing section,
+    which discusses both frames by name, is updated to match what `adhd frames --health` now reports.
 
 101. **A checked-in file has read short twice on CI and the cause is not established.** Both
     failures are inside `adhd viewer`, on files `git` checked out and nothing in this repository

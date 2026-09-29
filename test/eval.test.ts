@@ -369,7 +369,7 @@ test("a decline fixture fails when routing stops declining its class", () => {
     action: "run",
     description: "no longer declined",
     signals: [],
-    frames: ["LEDGER", "MECHANIC", "SABOTEUR"],
+    frames: ["LEVY", "MECHANIC", "SABOTEUR"],
     n: 3,
     alternates: [],
   };

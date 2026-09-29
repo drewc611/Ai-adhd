@@ -54,19 +54,19 @@ function recordRun(
 test("frame stats count prunes, folds and recommendations across runs, and name the frames never dispatched", () => {
   const root = join(tmp(), "recorded");
   mkdirSync(root, { recursive: true });
-  // LEDGER pruned in both runs; DOOR_KEEPER never pruned and holds the recommendation once,
+  // LEVY pruned in both runs; DOOR_KEEPER never pruned and holds the recommendation once,
   // then folds the second time so it must not be counted as holding it twice.
   recordRun(
     root,
     "001-a",
     [
       { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9, verdict: "defend" },
-      { frame: "SUCCESSOR", status: "survivor", pass_a: 0.7 },
-      { frame: "LEDGER", status: "pruned", pass_a: 0.5, fired: ["T1"] },
+      { frame: "CARETAKER", status: "survivor", pass_a: 0.7 },
+      { frame: "LEVY", status: "pruned", pass_a: 0.5, fired: ["T1"] },
     ],
     [
-      { id: "big", members: ["DOOR_KEEPER", "SUCCESSOR"], survivors: ["DOOR_KEEPER", "SUCCESSOR"], representative: "DOOR_KEEPER" },
-      { id: "gone", members: ["LEDGER"], survivors: [], representative: null },
+      { id: "big", members: ["DOOR_KEEPER", "CARETAKER"], survivors: ["DOOR_KEEPER", "CARETAKER"], representative: "DOOR_KEEPER" },
+      { id: "gone", members: ["LEVY"], survivors: [], representative: null },
     ],
   );
   recordRun(
@@ -74,13 +74,13 @@ test("frame stats count prunes, folds and recommendations across runs, and name 
     "001-b",
     [
       { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.8, verdict: "fold" },
-      { frame: "SUCCESSOR", status: "survivor", pass_a: 0.6, verdict: "defend" },
-      { frame: "LEDGER", status: "pruned", pass_a: 0.4, fired: ["T1", "T7"] },
+      { frame: "CARETAKER", status: "survivor", pass_a: 0.6, verdict: "defend" },
+      { frame: "LEVY", status: "pruned", pass_a: 0.4, fired: ["T1", "T7"] },
     ],
     [
       { id: "one", members: ["DOOR_KEEPER"], survivors: ["DOOR_KEEPER"], representative: "DOOR_KEEPER" },
-      { id: "two", members: ["SUCCESSOR"], survivors: ["SUCCESSOR"], representative: "SUCCESSOR" },
-      { id: "gone", members: ["LEDGER"], survivors: [], representative: null },
+      { id: "two", members: ["CARETAKER"], survivors: ["CARETAKER"], representative: "CARETAKER" },
+      { id: "gone", members: ["LEVY"], survivors: [], representative: null },
     ],
   );
 
@@ -89,14 +89,14 @@ test("frame stats count prunes, folds and recommendations across runs, and name 
   const dk = r.frames.find((f) => f.frame === "DOOR_KEEPER")!;
   assert.deepEqual([dk.runs, dk.pruned, dk.folded, dk.defended], [2, 0, 1, 1]);
   assert.equal(dk.recommended, 1, "a folded representative does not hold the recommendation");
-  const hz = r.frames.find((f) => f.frame === "SUCCESSOR")!;
+  const hz = r.frames.find((f) => f.frame === "CARETAKER")!;
   assert.equal(hz.recommended, 1, "the next live cluster holds it when the first folded");
-  const ld = r.frames.find((f) => f.frame === "LEDGER")!;
+  const ld = r.frames.find((f) => f.frame === "LEVY")!;
   assert.deepEqual([ld.runs, ld.pruned, ld.traps.T1, ld.traps.T7], [2, 2, 2, 1]);
   assert.equal(ld.mean_pass_a?.toFixed(2), "0.45");
-  assert.equal(r.traps.find((t) => t.trap === "T1")!.fired, 2, "T1 fired once per run on LEDGER");
+  assert.equal(r.traps.find((t) => t.trap === "T1")!.fired, 2, "T1 fired once per run on LEVY");
   assert.equal(r.traps.find((t) => t.trap === "T5")!.fired, 0);
-  assert.match(r.text, /pruned in every appearance[^\n]*LEDGER 2\/2/);
+  assert.match(r.text, /pruned in every appearance[^\n]*LEVY 2\/2/);
   assert.match(r.text, /never pruned[^\n]*DOOR_KEEPER 0\/2/);
   assert.match(r.text, /never dispatched in a recorded run:[^\n]*SABOTEUR/);
   assert.match(r.text, /detectors that have never fired:[^\n]*T5/);
@@ -110,9 +110,9 @@ test("a run that failed at run level attributes the recommendation to nobody", (
     "900-mono",
     [
       { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9, verdict: "defend" },
-      { frame: "SUCCESSOR", status: "survivor", pass_a: 0.8, verdict: "defend" },
+      { frame: "CARETAKER", status: "survivor", pass_a: 0.8, verdict: "defend" },
     ],
-    [{ id: "one", members: ["DOOR_KEEPER", "SUCCESSOR"], survivors: ["DOOR_KEEPER", "SUCCESSOR"], representative: "DOOR_KEEPER" }],
+    [{ id: "one", members: ["DOOR_KEEPER", "CARETAKER"], survivors: ["DOOR_KEEPER", "CARETAKER"], representative: "DOOR_KEEPER" }],
     { monoculture: true },
   );
   const r = frameStats(cfg, root);
@@ -157,21 +157,21 @@ test("diff refuses to blame the seed when the frame sets also differ", () => {
 
   // Same frames, different seed: the change is attributable.
   const clean = [
-    mk("900-a", 1, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "SUCCESSOR", status: "pruned", pass_a: 0.5 }], "Do X."),
-    mk("900-b", 2, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "SUCCESSOR", status: "survivor", pass_a: 0.7 }], "Do Y."),
+    mk("900-a", 1, [{ frame: "LEVY", status: "survivor", pass_a: 0.8 }, { frame: "CARETAKER", status: "pruned", pass_a: 0.5 }], "Do X."),
+    mk("900-b", 2, [{ frame: "LEVY", status: "survivor", pass_a: 0.8 }, { frame: "CARETAKER", status: "survivor", pass_a: 0.7 }], "Do Y."),
   ] as const;
   const ok = diffRuns(cfg, clean[0], clean[1]);
   assert.equal(ok.same_problem, true);
-  assert.deepEqual(ok.status_changed, [{ frame: "SUCCESSOR", a: "pruned", b: "survivor" }]);
+  assert.deepEqual(ok.status_changed, [{ frame: "CARETAKER", a: "pruned", b: "survivor" }]);
   assert.match(ok.text, /this change is the seed's doing/);
   assert.match(ok.text, /That is a seed effect/);
   assert.ok(!/CONFOUNDED/.test(ok.text));
-  assert.equal(ok.pass_a_moved.find((m) => m.frame === "SUCCESSOR")?.delta.toFixed(2), "0.20");
+  assert.equal(ok.pass_a_moved.find((m) => m.frame === "CARETAKER")?.delta.toFixed(2), "0.20");
 
   // Different frames as well as a different seed: it is not.
-  const c = mk("901-c", 3, [{ frame: "LEDGER", status: "survivor", pass_a: 0.8 }, { frame: "MECHANIC", status: "survivor", pass_a: 0.7 }], "Do Z.");
+  const c = mk("901-c", 3, [{ frame: "LEVY", status: "survivor", pass_a: 0.8 }, { frame: "MECHANIC", status: "survivor", pass_a: 0.7 }], "Do Z.");
   const confounded = diffRuns(cfg, clean[0], c);
-  assert.deepEqual(confounded.only_a, ["SUCCESSOR"]);
+  assert.deepEqual(confounded.only_a, ["CARETAKER"]);
   assert.deepEqual(confounded.only_b, ["MECHANIC"]);
   assert.match(confounded.text, /CONFOUNDED/);
   assert.match(confounded.text, /cannot say which caused it/);
@@ -203,7 +203,7 @@ function recordBranches(root: string, id: string, artifacts: Record<string, stri
 test("a label used only by its own frame is discriminating and not reported", () => {
   const root = tmp();
   recordBranches(root, "001", {
-    LEDGER: 'reasoning: "The ledger says someone pays for the retry."',
+    LEVY: 'reasoning: "The ledger says someone pays for the retry."',
     MECHANIC: 'reasoning: "Look at what the machine actually does."',
   });
   const r = labelCollisions(cfg, root);
@@ -239,7 +239,7 @@ test("a label used by a frame that does not own it is reported with the text tha
 /** Counting it would put every label at own >= 1 and hide the real signal. */
 test("the mandatory frame field is not counted as a use", () => {
   const root = tmp();
-  recordBranches(root, "001", { LEDGER: 'position: "Do the thing."' });
+  recordBranches(root, "001", { LEVY: 'position: "Do the thing."' });
   const r = labelCollisions(cfg, root);
   assert.deepEqual(r.collisions, []);
   assert.equal(r.artifacts, 1);
@@ -248,7 +248,7 @@ test("the mandatory frame field is not counted as a use", () => {
 test("separator spellings count as the same label", () => {
   const root = tmp();
   recordBranches(root, "001", {
-    LEDGER: 'reasoning: "The door-keeper pattern and the doorkeeper idea are the same."',
+    LEVY: 'reasoning: "The door-keeper pattern and the doorkeeper idea are the same."',
     DOOR_KEEPER: 'position: "Gate it."',
   });
   const c = labelCollisions(cfg, root).collisions.find((x) => x.frame === "DOOR_KEEPER" && x.label === "Door keeper")!;
@@ -262,17 +262,18 @@ test("separator spellings count as the same label", () => {
  * were chosen over the alternatives. A new frame whose name is ordinary prose fails here.
  */
 /*
- * This asserted zero collisions and held for 39 artifacts. E10 broke it at 63, and the tool was
- * right: `ledger` and `successor` are ordinary English nouns, and two artifacts in the wide-path
- * runs used them as nouns. The damage is visible in that run's own pass A brief, where SABOTEUR's
- * "logs that were not written to be a ledger" reached the critic as "written to be a [frame]".
+ * This asserted zero collisions and held for 39 artifacts. E10 broke it at 63: `ledger` and
+ * `successor` are ordinary English nouns, and two artifacts in the wide-path runs used them as
+ * nouns. The damage was visible in that run's own pass A brief, where SABOTEUR's "logs that were
+ * not written to be a ledger" reached the critic as "written to be a [frame]".
  *
- * The fix is a rename, the rename changes `frame_hash`, and that is a D6 decision with the whole
- * recorded corpus downstream of it. `frames --collisions` says so itself and stops. So does this:
- * the known pair is pinned with its evidence, and a *new* collision still fails, which is the
- * property worth keeping. Backlog 100.
+ * Fixed as D48 (backlog 100): `LEDGER` renamed to `LEVY`, `SUCCESSOR` to `CARETAKER`, on the same
+ * verified-against-the-corpus method as `END_USER`/`HORIZON` above. Zero collisions again, and
+ * this asserts it the same way that comment does — a new collision on the current library still
+ * fails, which is the property worth keeping regardless of which two names it was pinned against
+ * last.
  */
-const KNOWN_LABEL_COLLISIONS = ["LEDGER", "SUCCESSOR"];
+const KNOWN_LABEL_COLLISIONS: string[] = [];
 
 test("no frame label collides with the recorded corpus beyond the two already recorded", () => {
   const r = labelCollisions(cfg);
@@ -283,9 +284,6 @@ test("no frame label collides with the recorded corpus beyond the two already re
     KNOWN_LABEL_COLLISIONS,
     "a label found in an artifact its frame did not write identifies nothing and is redacted anyway; a new one is a new problem",
   );
-  // And the two that do collide are ordinary nouns rather than a near-miss on a frame id, which is
-  // what makes them a naming problem and not a redactor bug.
-  for (const c of r.collisions.filter((x) => x.foreign > 0)) assert.match(c.label, /^(LEDGER|Ledger|SUCCESSOR|Successor)$/);
 });
 
 test("no recorded artifacts reports nothing rather than claiming every label is clean", () => {
@@ -481,20 +479,20 @@ test("a stamped run whose frame has since been edited reports CHANGED", () => {
   const dir = join(tmp(), "recorded");
   const run = join(dir, "999-stamped");
   mkdirSync(run, { recursive: true });
-  const edited = cfg.frames.frames.find((f) => f.id === "LEDGER")!;
+  const edited = cfg.frames.frames.find((f) => f.id === "LEVY")!;
   writeFileSync(
     join(run, "plan.json"),
     JSON.stringify({
       branches: [
-        { frame: "LEDGER", frame_hash: frameHash({ ...edited, stance: "a different instruction entirely" }) },
+        { frame: "LEVY", frame_hash: frameHash({ ...edited, stance: "a different instruction entirely" }) },
         { frame: "PARTICULARIST", frame_hash: frameHash(cfg.frames.frames.find((f) => f.id === "PARTICULARIST")!) },
       ],
     }),
   );
   const d = frameDrift(cfg, dir);
-  assert.deepEqual(d.changed.map((r) => r.frame), ["LEDGER"]);
+  assert.deepEqual(d.changed.map((r) => r.frame), ["LEVY"]);
   assert.equal(d.rows.find((r) => r.frame === "PARTICULARIST")!.changed, false);
-  assert.match(d.text, /^CHANGED\s+999-stamped\/LEDGER/m);
+  assert.match(d.text, /^CHANGED\s+999-stamped\/LEVY/m);
   assert.match(d.text, /not evidence about the frame that carries the id today/);
 });
 
@@ -810,7 +808,7 @@ test("the same-seed pair still shows a stable pass A and an unstable trap sweep"
 /*
  * Backlog 99. `001-seed3-repeat` is fixture 001 at seed 3 with briefs byte-identical to
  * `001-seed3`'s, recorded to measure the noise floor, and every rate in `frames --health` counted
- * it as a second appearance. `LEDGER` met a retirement criterion on a denominator two of whose
+ * it as a second appearance. `LEVY` met a retirement criterion on a denominator two of whose
  * five entries were the same problem declining to pick it twice, and crossed the five-appearance
  * floor on the same duplicate.
  */
@@ -822,15 +820,15 @@ test("a declared replicate is one draw for a rate and still its own run for a co
       root,
       id,
       [
-        { frame: "LEDGER", status: "pruned", pass_a: 0.7 },
+        { frame: "LEVY", status: "pruned", pass_a: 0.7 },
         { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9, verdict: "defend" },
       ],
-      [{ id: "c1", members: ["LEDGER", "DOOR_KEEPER"], survivors: ["DOOR_KEEPER"], representative: "DOOR_KEEPER" }],
+      [{ id: "c1", members: ["LEVY", "DOOR_KEEPER"], survivors: ["DOOR_KEEPER"], representative: "DOOR_KEEPER" }],
       replicate_of === undefined ? {} : { replicate_of },
     );
 
   const s = frameStats(cfg, root);
-  const ledger = s.frames.find((f) => f.frame === "LEDGER")!;
+  const ledger = s.frames.find((f) => f.frame === "LEVY")!;
   assert.equal(s.runs, 3);
   assert.equal(ledger.runs, 3, "three artifacts were produced and all three are real");
   assert.equal(ledger.draws, 2, "two of those runs are the same draw");
@@ -851,20 +849,20 @@ test("a replicate that disagrees with its original is reported as a split, not a
     recordRun(
       root,
       id,
-      [{ frame: "LEDGER", status, pass_a: 0.7 }, { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9 }],
-      [{ id: "c1", members: ["LEDGER", "DOOR_KEEPER"], survivors: status === "pruned" ? ["DOOR_KEEPER"] : ["LEDGER", "DOOR_KEEPER"], representative: "DOOR_KEEPER" }],
+      [{ frame: "LEVY", status, pass_a: 0.7 }, { frame: "DOOR_KEEPER", status: "survivor", pass_a: 0.9 }],
+      [{ id: "c1", members: ["LEVY", "DOOR_KEEPER"], survivors: status === "pruned" ? ["DOOR_KEEPER"] : ["LEVY", "DOOR_KEEPER"], representative: "DOOR_KEEPER" }],
       replicate_of === undefined ? {} : { replicate_of },
     );
   run("001-a", "pruned");
   run("001-a-repeat", "survivor", "001-a");
 
   const s = frameStats(cfg, root);
-  const ledger = s.frames.find((f) => f.frame === "LEDGER")!;
+  const ledger = s.frames.find((f) => f.frame === "LEVY")!;
   assert.equal(ledger.draws, 1);
   assert.equal(ledger.draws_pruned, 0, "the draw is not unanimous, so it is not a pruned draw");
   assert.deepEqual(ledger.split_draws, ["001-a"]);
   assert.match(s.text, /draws whose members disagreed, on identical input:/);
-  assert.match(s.text, /LEDGER\s+001-a/);
+  assert.match(s.text, /LEVY\s+001-a/);
 });
 
 test("the retirement floor counts draws, so a replicate cannot carry a frame over it", () => {
@@ -893,7 +891,7 @@ test("the retirement floor counts draws, so a replicate cannot carry a frame ove
 test("a replicate_of naming a run that is not on disk is an error rather than a silent no-op", () => {
   const root = join(tmp(), "recorded");
   mkdirSync(root, { recursive: true });
-  recordRun(root, "001-a", [{ frame: "LEDGER", status: "pruned" }], [], { replicate_of: "001-that-never-existed" });
+  recordRun(root, "001-a", [{ frame: "LEVY", status: "pruned" }], [], { replicate_of: "001-that-never-existed" });
   const draws = recordedDraws(root);
   assert.equal(draws.get("001-a"), "001-a", "a dangling reference leaves the run as its own draw");
 });
@@ -901,8 +899,8 @@ test("a replicate_of naming a run that is not on disk is an error rather than a 
 test("a circular replicate_of resolves rather than hanging", () => {
   const root = join(tmp(), "recorded");
   mkdirSync(root, { recursive: true });
-  recordRun(root, "001-a", [{ frame: "LEDGER", status: "pruned" }], [], { replicate_of: "001-b" });
-  recordRun(root, "001-b", [{ frame: "LEDGER", status: "pruned" }], [], { replicate_of: "001-a" });
+  recordRun(root, "001-a", [{ frame: "LEVY", status: "pruned" }], [], { replicate_of: "001-b" });
+  recordRun(root, "001-b", [{ frame: "LEVY", status: "pruned" }], [], { replicate_of: "001-a" });
   const draws = recordedDraws(root);
   assert.equal(draws.size, 2);
   for (const id of ["001-a", "001-b"]) assert.ok(draws.get(id), `${id} resolved to some draw`);

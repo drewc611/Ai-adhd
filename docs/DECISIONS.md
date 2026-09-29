@@ -3867,3 +3867,57 @@ closest to asking the question this backlog item wants asked.
 new recording holds that `004-kernel-naming` also holds (`convention_list`, `deletion`,
 `never_names_it`, `no_verdict`, `not_the_name`, `who_reads`, `trap_named`) — gains, not
 regressions, per `adhd eval --gate`'s own distinction. `004/false_means` stays an empty list.
+
+## D48. Backlog 100: rename `LEDGER` to `LEVY` and `SUCCESSOR` to `CARETAKER`, again
+
+**Decision:** Rename `LEDGER` to `LEVY` and `SUCCESSOR` to `CARETAKER`, closing backlog 100.
+Resolved 2026-09-29.
+
+`adhd frames --collisions` found both labels are ordinary English nouns that other frames had
+independently written into their own artifacts: `014-seed1`'s SABOTEUR wrote "logs that were
+not written to be a ledger", and its PARTICULARIST wrote "successor" — neither frame holding
+either id — so the redactor removed a phrase each frame legitimately wrote of its own, and the
+critic scoring `specificity` and `substance` read "written to be a [frame]" in its place. This
+is exactly the failure item 61 fixed once already: `SUCCESSOR` is itself the surviving half of
+that earlier rename, from `HORIZON`, on 2026-09-07. A frame's own vocabulary colliding with
+ordinary prose is not a one-time accident this library gets to fix and forget; it is a property
+some names have and others do not, and the fix is the same mechanical check every time.
+
+The method is item 61's, unchanged: every candidate checked against all recorded artifacts,
+every synthesis file and every fixture, and only a name appearing nowhere in the corpus was
+eligible. `LEVY` and `CARETAKER` both cleared it. `former_ids` on both frames carries the full
+chain — `[LEDGER]` and `[HORIZON, SUCCESSOR]` — so a recorded run naming the old id still
+resolves, and the recorded runs themselves are not rewritten: they are the record of what
+actually ran, under the id current when it ran.
+
+**`frame_hash` is unaffected, by construction.** It covers `axis`, `attacks`, `tools`, `stance`,
+`probes` and `forbidden`; `id`, `name` and `former_ids` are deliberately excluded so a rename
+never reads as a redefinition (D6, `src/hash.ts`). `adhd frames --drift` confirms it: zero
+unexplained drift across all fourteen recorded runs after the rename, and the five entries in
+`evals/frame-drift-baseline.json` are untouched — they were never about these two frames.
+
+**The cost was real and mechanical, not conceptual.** `config/routing.yaml` names frames
+directly in each class's `frames`/`alternates` list and is cross-checked against the *live* id
+set at load time — an overlay applies before that check, per item 71, and a plain rename is no
+different — so both occurrences of each old id there were updated to the new one; a `former_id`
+forwards a recorded run's reference, not a routing class's. Past that, twenty-seven tests broke,
+and every one of them was the same shape: a test either read the real `config/frames.yaml`
+through `cfg` (`cfg.frameById.get("LEDGER")`, a brief's rendered text, an MCP tool's listing, a
+diagram in `README.md`) and needed the new id, or it hardcoded `"LEDGER"` as an arbitrary sample
+frame in a synthetic corpus built by the test itself and needed nothing, because nothing there
+depends on the real library. Sorting one from the other, file by file, is the entire diff.
+`docs/RETIREMENT.md`'s standing section is the one genuine content change: it discusses both
+frames' historical statistics by name across several paragraphs, and `test/frames.test.ts`
+already fails the build if that document's figures drift from what `adhd frames --health`
+reports — which now reports `LEVY` and `CARETAKER`, so the prose does too. Its own paragraph
+about the naming collision is rewritten in the past tense, on the same argument the `SUPPLICANT`
+paragraph above it already models: state the current name in the analysis, note the former one
+once, and let `former_ids` carry the rest.
+
+One test needed an actual fix rather than a renamed literal: `test/overlay.test.ts`'s "an
+overlay frame with a new id is added after the base ones" cloned `LEVY` (`{ ...base, id:
+"HOUSE_STYLE", ... }`) to build a synthetic new frame, and the spread carried `LEVY`'s own
+`former_ids: [LEDGER]` onto `HOUSE_STYLE` unedited — a collision the test had never been able to
+produce before, because the frame it used to clone (`LEDGER`) had never itself been renamed.
+The fix is `former_ids: []` on the synthetic clone: a frame invented for a test should not
+inherit the rename history of whatever real frame it happened to copy.

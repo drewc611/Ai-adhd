@@ -12,7 +12,7 @@
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-536-2ea44f" alt="536 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-247-2ea44f" alt="247 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D47%20resolved-0969da" alt="D1 through D47 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D48%20resolved-0969da" alt="D1 through D48 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -44,7 +44,7 @@ flowchart LR
   end
   subgraph adhd["ADHD: N context windows, no channel between them"]
     direction LR
-    P2(["prompt"]) -.->|"brief, one way"| C1["LEDGER<br/><i>who pays</i>"] --> O1["position"]
+    P2(["prompt"]) -.->|"brief, one way"| C1["LEVY<br/><i>who pays</i>"] --> O1["position"]
     P2 -.->|"brief, one way"| C2["SABOTEUR<br/><i>how it breaks</i>"] --> O2["position"]
     P2 -.->|"brief, one way"| C3["SUPPLICANT<br/><i>who is hurt</i>"] --> O3["position"]
   end
@@ -85,7 +85,7 @@ cannot ask the same question twice under two names.
 |---|---|---|
 | particulars | `PARTICULARIST` | T1 |
 | frame_validity | `FRAME_BREAKER` | T2 |
-| cost | `LEDGER` | T1, T6 |
+| cost | `LEVY` | T1, T6 |
 | reversibility | `DOOR_KEEPER` | T7 |
 | adversary | `SABOTEUR` | T6, T7 |
 | scope | `MINIMALIST` | T1, T4, T5 |
@@ -93,7 +93,7 @@ cannot ask the same question twice under two names.
 | actors | `ACTOR_CENSUS` · `SUPPLICANT` | T6 / T1, T6 |
 | mechanism | `MECHANIC` | T3 |
 | derivation | `FIRST_PRINCIPLES` | T1, T3 |
-| operation | `NIGHT_OPERATOR` · `SUCCESSOR` | T6, T4 / T7, T4 |
+| operation | `NIGHT_OPERATOR` · `CARETAKER` | T6, T4 / T7, T4 |
 
 Each frame exists to defeat a named trap in [`docs/TRAPS.md`](docs/TRAPS.md): T1 consensus,
 T2 frame accepted, T3 borrowed authority, T4 option list, T5 no verdict, T6 missing actor,
@@ -188,7 +188,7 @@ Nothing under `src/` calls a model. Nothing under `analysis/` does either, and n
 ## Status
 
 Library, CLI, MCP server and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D47 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+`CLAUDE.md`. D1 through D48 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 Seventeen runs are recorded over five fixtures, with a linear chain-of-thought negative control
 per fixture that must fail, and three decline fixtures asserting that routing refuses a class

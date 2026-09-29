@@ -90,8 +90,14 @@ frames:
       - Answering before the census is complete.
       - Naming an actor without naming the concrete action they can take.
 
-  - id: LEDGER
-    name: Ledger
+  - id: LEVY
+    name: Levy
+    # Renamed from LEDGER, 2026-09-29 (D48). `adhd frames --collisions` found "ledger" written by
+    # SABOTEUR in `014-seed1` ("logs that were not written to be a ledger"), a frame that does not
+    # hold this id, so the redactor removed a phrase this frame never wrote. Verified against all
+    # recorded artifacts, synthesis files and fixtures: "levy" appears nowhere in the corpus.
+    # Recorded runs keep the id they ran under; former_ids forwards them.
+    former_ids: [LEDGER]
     axis: cost
     attacks: [T6, T1]
     tools: []
@@ -289,13 +295,14 @@ frames:
       - Assuming the user waits. Users leave.
       - Recommending anything the user cannot observe the effect of.
 
-  - id: SUCCESSOR
-    name: Successor
-    # Renamed from HORIZON, same reason and same date. "Horizon" is what any branch calls a
-    # time frame, and FRAME_BREAKER wrote "a one year horizon" in a run this frame was not in.
-    # The new name states the stance directly: the person who inherits the decision, not the
-    # timescale they inherit it over.
-    former_ids: [HORIZON]
+  - id: CARETAKER
+    name: Caretaker
+    # Renamed from SUCCESSOR, 2026-09-29 (D48), which was itself renamed from HORIZON on
+    # 2026-09-07 for the same reason. "Successor" collided a second time: `014-seed1`'s
+    # PARTICULARIST wrote "successor" in a run this frame was not in. Verified against all
+    # recorded artifacts, synthesis files and fixtures: "caretaker" appears nowhere in the
+    # corpus. Recorded runs keep the id they ran under; former_ids forwards them.
+    former_ids: [HORIZON, SUCCESSOR]
     axis: operation
     attacks: [T7, T4]
     tools: []

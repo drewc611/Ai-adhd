@@ -57,8 +57,8 @@ function recordRun(
 
 test("sensitivity reports nothing when no cluster ever had a choice to make", () => {
   const root = tmp();
-  recordRun(root, "001", { A: { frame: "LEDGER" }, B: { frame: "MECHANIC" } }, [
-    { id: "c1", members: ["LEDGER"], survivors: ["LEDGER"] },
+  recordRun(root, "001", { A: { frame: "LEVY" }, B: { frame: "MECHANIC" } }, [
+    { id: "c1", members: ["LEVY"], survivors: ["LEVY"] },
     { id: "c2", members: ["MECHANIC"], survivors: ["MECHANIC"] },
   ]);
   const r = weightSensitivity(cfg, root);
@@ -70,23 +70,23 @@ test("sensitivity reports nothing when no cluster ever had a choice to make", ()
 
 test("a representative that a one-point weight move changes is reported as a flip", () => {
   const root = tmp();
-  // Weighted totals under shipped weights (reasoning_carries 1, substance 2): LEDGER 3, MECHANIC 4.
-  // Move reasoning_carries to 2 and LEDGER takes it at 6. The rubric did not choose; the weight did.
+  // Weighted totals under shipped weights (reasoning_carries 1, substance 2): LEVY 3, MECHANIC 4.
+  // Move reasoning_carries to 2 and LEVY takes it at 6. The rubric did not choose; the weight did.
   recordRun(
     root,
     "001",
     {
-      A: { frame: "LEDGER", base: 0, scores: { reasoning_carries: 3 } },
+      A: { frame: "LEVY", base: 0, scores: { reasoning_carries: 3 } },
       B: { frame: "MECHANIC", base: 0, scores: { substance: 2 } },
     },
-    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+    [{ id: "c1", members: ["LEVY", "MECHANIC"], survivors: ["LEVY", "MECHANIC"] }],
   );
   const r = weightSensitivity(cfg, root);
   assert.equal(r.cluster_decisions, 1);
   assert.ok(r.flips.length > 0, "expected at least one flip");
   assert.ok(
-    r.flips.some((f) => f.under_shipped === "MECHANIC" && f.under_perturbed === "LEDGER"),
-    "shipped weights pick MECHANIC; a perturbation should hand it to LEDGER",
+    r.flips.some((f) => f.under_shipped === "MECHANIC" && f.under_perturbed === "LEVY"),
+    "shipped weights pick MECHANIC; a perturbation should hand it to LEVY",
   );
   assert.ok(r.by_dimension.some((d) => d.dimension === "reasoning_carries" && d.flips > 0));
   assert.match(r.text, /chosen by the weights/);
@@ -97,8 +97,8 @@ test("a survivor that dominates on every dimension never flips", () => {
   recordRun(
     root,
     "001",
-    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
-    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+    { A: { frame: "LEVY", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEVY", "MECHANIC"], survivors: ["LEVY", "MECHANIC"] }],
   );
   const r = weightSensitivity(cfg, root);
   assert.equal(r.cluster_decisions, 1);
@@ -108,7 +108,7 @@ test("a survivor that dominates on every dimension never flips", () => {
 
 test("negative controls are excluded from both reports", () => {
   const root = tmp();
-  recordRun(root, "001", { A: { frame: "LEDGER" } }, [{ id: "c1", members: ["LEDGER"], survivors: ["LEDGER"] }]);
+  recordRun(root, "001", { A: { frame: "LEVY" } }, [{ id: "c1", members: ["LEVY"], survivors: ["LEVY"] }]);
   recordRun(root, "002-control", { A: { frame: "MECHANIC" } }, [], { control: true });
   assert.equal(weightSensitivity(cfg, root).runs, 1);
   assert.equal(dimensionCorrelation(cfg, root).n, 1, "one artifact, from the real run only");
@@ -116,7 +116,7 @@ test("negative controls are excluded from both reports", () => {
 
 test("pass A wrapped in a code fence still loads", () => {
   const root = tmp();
-  recordRun(root, "001", { A: { frame: "LEDGER" }, B: { frame: "MECHANIC" } }, [], { fence: true });
+  recordRun(root, "001", { A: { frame: "LEVY" }, B: { frame: "MECHANIC" } }, [], { fence: true });
   assert.equal(dimensionCorrelation(cfg, root).n, 2);
 });
 
@@ -125,7 +125,7 @@ test("two dimensions that move together are flagged as one dimension charging tw
   // committal and substance track each other exactly across six artifacts; nothing else varies.
   const rows = [0, 1, 2, 3, 2, 1];
   const artifacts: Record<string, { frame: string; base: number; scores: Record<string, number> }> = {};
-  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "SUCCESSOR", "SUPPLICANT"];
+  const frames = ["LEVY", "MECHANIC", "SABOTEUR", "MINIMALIST", "CARETAKER", "SUPPLICANT"];
   rows.forEach((v, i) => {
     artifacts[String.fromCharCode(65 + i)] = { frame: frames[i]!, base: 1, scores: { committal: v, substance: v } };
   });
@@ -142,7 +142,7 @@ test("two dimensions that move together are flagged as one dimension charging tw
 test("a dimension that never varies is reported as deciding nothing", () => {
   const root = tmp();
   recordRun(root, "001", {
-    A: { frame: "LEDGER", base: 0, scores: { committal: 1 } },
+    A: { frame: "LEVY", base: 0, scores: { committal: 1 } },
     B: { frame: "MECHANIC", base: 0, scores: { committal: 2 } },
     C: { frame: "SABOTEUR", base: 0, scores: { committal: 3 } },
   });
@@ -162,7 +162,7 @@ test("a dimension that never varies is reported as deciding nothing", () => {
 test("a dimension pinned at the ceiling is flagged even though it varies", () => {
   const root = tmp();
   const artifacts: Record<string, { frame: string; base: number; scores: Record<string, number> }> = {};
-  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "SUCCESSOR", "SUPPLICANT", "SUCCESSOR", "PRIOR_ART", "DOOR_KEEPER", "MINIMALIST"];
+  const frames = ["LEVY", "MECHANIC", "SABOTEUR", "MINIMALIST", "CARETAKER", "SUPPLICANT", "CARETAKER", "PRIOR_ART", "DOOR_KEEPER", "MINIMALIST"];
   frames.forEach((f, i) => {
     artifacts[String.fromCharCode(65 + i)] = { frame: f, base: i % 4, scores: { foreclosure: i === 0 ? 2 : 3 } };
   });
@@ -194,7 +194,7 @@ test("a clean rubric reports no finding rather than inventing one", () => {
   ];
   assert.equal(columns.length, DIMS.length, "one column per rubric dimension");
   const artifacts: Record<string, { frame: string; scores: Record<string, number> }> = {};
-  const frames = ["LEDGER", "MECHANIC", "SABOTEUR", "MINIMALIST", "SUCCESSOR", "SUPPLICANT", "PRIOR_ART", "DOOR_KEEPER"];
+  const frames = ["LEVY", "MECHANIC", "SABOTEUR", "MINIMALIST", "CARETAKER", "SUPPLICANT", "PRIOR_ART", "DOOR_KEEPER"];
   frames.forEach((f, i) => {
     const scores: Record<string, number> = {};
     DIMS.forEach((d, j) => (scores[d] = columns[j]![i]!));
@@ -235,8 +235,8 @@ test("two identical scorings agree on every cell and change nothing", () => {
   const dir = recordRun(
     root,
     "001",
-    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
-    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+    { A: { frame: "LEVY", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEVY", "MECHANIC"], survivors: ["LEVY", "MECHANIC"] }],
   );
   const r = interRater(cfg, dir, writeSecond(root, { A: Object.fromEntries(DIMS.map((d) => [d, 3])), B: Object.fromEntries(DIMS.map((d) => [d, 1])) }));
   assert.equal(r.artifacts, 2);
@@ -252,14 +252,14 @@ test("a disagreement that reverses a contested cluster is reported as a changed 
   const dir = recordRun(
     root,
     "001",
-    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
-    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+    { A: { frame: "LEVY", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEVY", "MECHANIC"], survivors: ["LEVY", "MECHANIC"] }],
   );
   // The second critic reads the pack the other way round.
   const r = interRater(cfg, dir, writeSecond(root, { A: Object.fromEntries(DIMS.map((d) => [d, 1])), B: Object.fromEntries(DIMS.map((d) => [d, 3])) }));
   assert.equal(r.exact, 0);
   assert.equal(r.ranking_changed, true);
-  assert.deepEqual(r.representative_changes, [{ cluster: "c1", a: "LEDGER", b: "MECHANIC" }]);
+  assert.deepEqual(r.representative_changes, [{ cluster: "c1", a: "LEVY", b: "MECHANIC" }]);
   assert.match(r.text, /depends on which critic read it/);
 });
 
@@ -272,13 +272,13 @@ test("a ranking change across clusters leaves every representative standing", ()
   const dir = recordRun(
     root,
     "001",
-    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 2 }, C: { frame: "SUCCESSOR", base: 1 } },
+    { A: { frame: "LEVY", base: 3 }, B: { frame: "MECHANIC", base: 2 }, C: { frame: "CARETAKER", base: 1 } },
     [
-      { id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] },
-      { id: "c2", members: ["SUCCESSOR"], survivors: ["SUCCESSOR"] },
+      { id: "c1", members: ["LEVY", "MECHANIC"], survivors: ["LEVY", "MECHANIC"] },
+      { id: "c2", members: ["CARETAKER"], survivors: ["CARETAKER"] },
     ],
   );
-  // SUCCESSOR climbs past both, but it is a singleton: it goes to deepen either way.
+  // CARETAKER climbs past both, but it is a singleton: it goes to deepen either way.
   const r = interRater(
     cfg,
     dir,
@@ -295,13 +295,13 @@ test("a ranking change across clusters leaves every representative standing", ()
 
 test("scoring a different problem is refused rather than compared", () => {
   const root = tmp();
-  const dir = recordRun(root, "001", { A: { frame: "LEDGER" } });
+  const dir = recordRun(root, "001", { A: { frame: "LEVY" } });
   assert.throws(() => interRater(cfg, dir, writeSecond(root, { A: undefined, B: {} }, "hash-other")), /problem_hash mismatch/);
 });
 
 test("an incomplete second pack is refused rather than compared on what is there", () => {
   const root = tmp();
-  const dir = recordRun(root, "001", { A: { frame: "LEDGER" }, B: { frame: "MECHANIC" } });
+  const dir = recordRun(root, "001", { A: { frame: "LEVY" }, B: { frame: "MECHANIC" } });
   assert.throws(() => interRater(cfg, dir, writeSecond(root, { A: {} })), /missing artifact\(s\) B/);
 });
 
@@ -318,7 +318,7 @@ test("the recorded second scoring of 003 is readable and still says what D8 reco
 
 test("a corpus with no second scoring says how to make one instead of printing zeroes", () => {
   const root = tmp();
-  recordRun(root, "001", { A: { frame: "LEDGER" } });
+  recordRun(root, "001", { A: { frame: "LEVY" } });
   const r = interRaterCorpus(cfg, root);
   assert.equal(r.runs.length, 0);
   assert.equal(r.cells, 0);
@@ -333,12 +333,12 @@ test("a corpus with no second scoring says how to make one instead of printing z
 test("corpus agreement pools by cell rather than averaging run percentages", () => {
   const root = tmp();
   const big = recordRun(root, "001", {
-    A: { frame: "LEDGER", base: 2 },
+    A: { frame: "LEVY", base: 2 },
     B: { frame: "MECHANIC", base: 2 },
-    C: { frame: "SUCCESSOR", base: 2 },
+    C: { frame: "CARETAKER", base: 2 },
     D: { frame: "SABOTEUR", base: 2 },
   });
-  const small = recordRun(root, "002", { A: { frame: "LEDGER", base: 2 } }, [], {});
+  const small = recordRun(root, "002", { A: { frame: "LEVY", base: 2 } }, [], {});
   // Four artifacts scored identically, one artifact disagreeing on every dimension.
   const same = Object.fromEntries(DIMS.map((d) => [d, 2]));
   writeFileSync(
@@ -362,8 +362,8 @@ test("the corpus rollup names the runs whose representative would have changed",
   const dir = recordRun(
     root,
     "001",
-    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
-    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+    { A: { frame: "LEVY", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEVY", "MECHANIC"], survivors: ["LEVY", "MECHANIC"] }],
   );
   writeFileSync(
     join(dir, "critic", "pass-a.rater2.yaml"),
@@ -379,7 +379,7 @@ test("the corpus rollup names the runs whose representative would have changed",
   const r = interRaterCorpus(cfg, root);
   assert.deepEqual(r.runs_with_changed_representative, ["001"]);
   assert.match(r.text, /would have sent a different position to deepen/);
-  assert.match(r.text, /LEDGER->MECHANIC/);
+  assert.match(r.text, /LEVY->MECHANIC/);
 });
 
 /**
@@ -443,8 +443,8 @@ function contestedRun(root: string, id = "001") {
   return recordRun(
     root,
     id,
-    { A: { frame: "LEDGER", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
-    [{ id: "c1", members: ["LEDGER", "MECHANIC"], survivors: ["LEDGER", "MECHANIC"] }],
+    { A: { frame: "LEVY", base: 3 }, B: { frame: "MECHANIC", base: 1 } },
+    [{ id: "c1", members: ["LEVY", "MECHANIC"], survivors: ["LEVY", "MECHANIC"] }],
   );
 }
 
@@ -457,7 +457,7 @@ test("a panel where every critic agrees says the rubric determines the cluster",
   assert.deepEqual(r.raters, ["shipped", "rater2", "rater3"]);
   assert.equal(r.clusters.length, 1);
   assert.equal(r.clusters[0]!.unanimous, true);
-  assert.deepEqual(r.clusters[0]!.picks, { shipped: "LEDGER", rater2: "LEDGER", rater3: "LEDGER" });
+  assert.deepEqual(r.clusters[0]!.picks, { shipped: "LEVY", rater2: "LEVY", rater3: "LEVY" });
   assert.match(r.text, /unanimous: the rubric determines this one/);
 });
 
@@ -473,7 +473,7 @@ test("a 2-1 majority names the critic that read it differently", () => {
   const r = raterPanel(cfg, dir);
   assert.equal(r.clusters[0]!.unanimous, false);
   assert.deepEqual(r.clusters[0]!.split, [
-    { frame: "LEDGER", raters: ["shipped", "rater2"] },
+    { frame: "LEVY", raters: ["shipped", "rater2"] },
     { frame: "MECHANIC", raters: ["rater3"] },
   ]);
   assert.match(r.text, /2-1: a majority, and rater3 read it differently/);
@@ -535,7 +535,7 @@ test("an exact tie is reported as no decision, not a close one", () => {
   const c = r.clusters[0]!;
   assert.deepEqual(c.ties, ["rater2"]);
   assert.equal(c.margins.rater2, 0);
-  assert.equal(c.picks.rater2, "LEDGER", "LEDGER sorts before MECHANIC");
+  assert.equal(c.picks.rater2, "LEVY", "LEVY sorts before MECHANIC");
   assert.match(r.text, /EXACT TIE for rater2/);
   assert.match(r.text, /sorts first alphabetically. That is not a decision/);
 });

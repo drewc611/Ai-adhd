@@ -122,7 +122,7 @@ test("why refuses an unknown frame with the library listed", () => {
   const r = run(["why", join(cfg.root, "evals", "recorded", "001-first-run"), "NOT_A_FRAME"]);
   assert.equal(r.code, 5);
   assert.match(r.err, /usage: unknown frame/);
-  assert.match(r.err, /LEDGER/);
+  assert.match(r.err, /LEVY/);
 });
 
 /** A driver script branches on these, so each has to mean one thing. */
