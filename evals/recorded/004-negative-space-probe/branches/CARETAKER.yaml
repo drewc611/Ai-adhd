@@ -1,0 +1,66 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: CARETAKER
+position: >-
+  Name the flag for the specific capability it gates, using a permanent
+  domain-prefixed identifier (e.g. checkout.single_page_flow), and never use
+  relative language like "new" or "v2" that only makes sense compared to a
+  baseline that will not exist in two years.
+reasoning: |
+  1. What changed that the original decision didn't anticipate: the "new
+  checkout" stopped being new. It became the only checkout, or spawned a
+  third variant while the flag was mid-rollout, or got reused as a kill
+  switch during an incident long after the A/B test ended. The binary
+  "old vs new" framing the name encoded broke the moment reality stopped
+  being binary. Nobody planned for that because at launch there really
+  were only two states.
+
+  2. What is load bearing now: the string "new_checkout" (or whatever
+  relative name was picked) is baked into analytics event names, dashboard
+  filters, incident runbooks, support macros, and as a prerequisite
+  condition inside two or three other flags that gate on "if new checkout
+  is on, also enable X." None of those consumers care what the flag
+  *means* anymore, only that the string is stable. The temporal name,
+  which was supposed to be disposable, is now the immovable part, and the
+  actual checkout behavior underneath it has quietly become permanent.
+
+  3. What the maintainer would pay today to undo it: a rename is not a
+  one-line change, it's a migration. It means aliasing the old flag name
+  to keep historical analytics queries valid, re-pointing every dashboard
+  and runbook reference, updating the dependent flags without flipping
+  anyone's rollout state mid-flight, and eating a week of "why did the
+  flag name change" questions from on-call engineers who trusted the old
+  name as ground truth. That cost is real and it is paid specifically
+  because the original name described a relationship ("new" relative to
+  "old") instead of a thing. A capability-based name would not need this
+  migration because it never stops being true.
+
+  4. What to decide now vs. leave open: decide the naming convention
+  itself (capability + owning-domain prefix, no relative/temporal words)
+  and decide it applies to this flag today, even though it means renaming
+  work now instead of later when there will be more dependents. Leave
+  undecided: what future checkout variants will exist, who will own the
+  checkout domain after the next reorg, and when this specific flag gets
+  deleted. Those are genuinely unknowable and trying to pre-name for them
+  is just guessing at a future shape, which is not the fix.
+forecloses:
+  - >-
+    Naming the flag "new_checkout" or "checkout_v2", which reads clearly at
+    launch but becomes meaningless or actively misleading once the "new"
+    version is the only version.
+  - >-
+    Naming the flag after the rollout mechanism itself (e.g.
+    "checkout_experiment_1"), which loses all meaning to anyone who wasn't
+    around for the experiment once it ends.
+falsifier: >-
+  Two years from now, grep the codebase, dashboards, and runbooks for the
+  flag name: if the temporally-named flag was fully deleted within weeks
+  of 100% rollout with zero lingering references anywhere, then the
+  staleness problem never materialized and the rename cost this position
+  demands was unnecessary.
+missing_actor: >-
+  The analytics/data team that consumes the flag name as a permanent event
+  dimension; they were never consulted on naming stability and are the
+  ones who can require a stable identifier contract independent of the
+  flag's own lifecycle, which is exactly what prevents the rename-cost
+  problem described above.
+confidence: medium

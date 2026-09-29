@@ -5,7 +5,7 @@ import { crossCheck, currentFrameId, frameIdHistory, knownFrameIds } from "../sr
 import { TRAP_IDS } from "../src/schema.js";
 
 test("the shipped config loads and passes the D6 static check", () => {
-  assert.equal(cfg.frames.frames.length, 13);
+  assert.equal(cfg.frames.frames.length, 14);
   assert.equal(crossCheck(cfg.frames, cfg.routing, cfg.rubric).length, 0);
 });
 

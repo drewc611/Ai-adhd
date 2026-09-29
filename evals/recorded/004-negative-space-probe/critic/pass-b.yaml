@@ -1,0 +1,92 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+pass: B
+clusters:
+  - id: version_variant_naming
+    action: "Rename the flag using a version or variant tag such as checkout_v2, or a multivariate legacy|v2 state, instead of any name built on the word new."
+    members: [NEGATIVE_SPACE]
+    singleton: true
+    strongest_objection: null
+  - id: literal_adhoc_naming
+    action: "Pick one specific, literal name for this flag right now without pausing to design or adopt any broader naming convention."
+    members: [MINIMALIST]
+    singleton: true
+    strongest_objection: null
+  - id: session_sticky_flag
+    action: "Make the flag's evaluation sticky for the whole duration of a shopper's checkout session, leaving the actual name of the flag unresolved."
+    members: [SUPPLICANT]
+    singleton: true
+    strongest_objection: null
+  - id: convention_matched_naming
+    action: "Copy the casing and namespace pattern the team's existing flags already use, keeping the word new as part of the literal string."
+    members: [PARTICULARIST]
+    singleton: true
+    strongest_objection: null
+  - id: capability_based_naming
+    action: "Name the flag after the permanent capability it gates, with a domain prefix, and never after its relative recency."
+    members: [CARETAKER]
+    singleton: true
+    strongest_objection: "This position requires knowing, at flag-creation time, the precise and durable shape of the capability the redesign will end up being -- but checkout redesigns routinely change scope between when the flag is created and when the feature actually stabilizes, so a name like a single-page-flow identifier can just as easily become inaccurate as a temporal one would, only for a different reason (the implementation changed) rather than the reason this position defends against (time passed). Locking in a specific mechanism name early is itself a bet that the mechanism won't change, and if it does, the same downstream migration cost this position is trying to avoid gets paid anyway, just earlier and under a different justification."
+  - id: registry_governance_gate
+    action: "Require the flag to be registered with an owner and a hard expiry date before the PR introducing it can merge, treating the literal name as secondary."
+    members: [FRAME_BREAKER]
+    singleton: true
+    strongest_objection: null
+traps:
+  NEGATIVE_SPACE:
+    T1: { fired: false, evidence: "Removing 'feature flag' erases the entire premise of boolean-versus-multivariate evaluation states the whole argument is built on, so the position would not survive intact." }
+    T2: { fired: false, evidence: "It directly tests the assumption that a plain boolean flag is sufficient by tracing a concrete analytics collapse scenario, and the multivariate/versioned recommendation follows from that test." }
+    T3: { fired: false, evidence: "The argument about who reads flag state and what changes for them cites no outside authority anywhere, so removing citations removes nothing." }
+    T4: { fired: true, evidence: "The position offers two live mechanisms (a versioned boolean like checkout_v2 or a full multivariate legacy|v2 flag) without settling which to build, leaving that decision to the reader." }
+    T5: { fired: false, evidence: "The position opens with an imperative, 'Name the flag by version or variant... use something like checkout_v2', which is an actionable do-X sentence." }
+    T6: { fired: false, evidence: "missing_actor names the experimentation/data-science owner with a concrete action (decide boolean vs multivariate), and the reasoning also discusses on-call engineers and analytics pipelines as affected readers." }
+    T7: { fired: true, evidence: "The position never weighs what it costs to pick the wrong flag shape against how long that mistake would take to surface, e.g. whether upgrading boolean to multivariate later is cheap or a painful migration." }
+    T8: { fired: false, evidence: "Stripped of framing, 'use a versioned or multivariate name instead of a relative boolean so exposure and control-group data stay distinguishable' is a real, checkable analytics-engineering claim." }
+  MINIMALIST:
+    T1: { fired: true, evidence: "The core claim -- pick one specific literal name now rather than building a convention for a single instance -- reads identically if 'feature flag', 'new checkout', and 'controls whether users see' were swapped for any other one-off named artifact." }
+    T2: { fired: false, evidence: "It tests the assumption that a naming convention/policy is needed at this moment, and the recommendation to defer standardization follows directly from that test." }
+    T3: { fired: false, evidence: "The cost-benefit argument against premature taxonomies cites no outside authority, so nothing collapses if citations are stripped." }
+    T4: { fired: true, evidence: "The position deliberately declines to decide a naming convention, a deletion policy, and future-flag consistency, explicitly listing all three as left open." }
+    T5: { fired: false, evidence: "The position states plainly, 'Pick one literal, specific name right now... and move on', an actionable do-X sentence." }
+    T6: { fired: false, evidence: "missing_actor names whoever owns post-rollout cleanup with an action (be assigned before shipping), so the field is populated and actionable rather than left null." }
+    T7: { fired: false, evidence: "The position explicitly sequences on cost: pick the cheap, reversible name now, and defer the harder-to-reverse decision (a team-wide convention) until a second or third flag proves it necessary." }
+    T8: { fired: false, evidence: "Stripped of framing, 'just pick a specific name now rather than inventing a convention for one flag' is an ordinary, sensible scoping claim that stands on its own." }
+  SUPPLICANT:
+    T1: { fired: true, evidence: "The session-stickiness argument only needs some toggle that can change a user's experience mid-transaction; it would read the same for any transactional flow gated by any switch, not specifically a 'feature flag' for a 'new checkout'." }
+    T2: { fired: false, evidence: "It tests the assumption that the flag's name is what matters to any real party, and the recommendation (session stickiness over naming) follows directly from that test." }
+    T3: { fired: false, evidence: "The first-person walkthrough cites no external authority at any step, so nothing collapses if citations are removed." }
+    T4: { fired: true, evidence: "The position explicitly declines to answer the literal question asked (what to call the flag) and never specifies the storage or session mechanism that would deliver the stickiness it demands." }
+    T5: { fired: false, evidence: "The position states, 'Guarantee that once a shopper starts checkout, the flag locks them into one version for the whole session', an actionable do-X sentence." }
+    T6: { fired: false, evidence: "missing_actor names the shopper's own view together with a support agent who can file a session-consistency bug, directly naming an actor the bare naming question omits." }
+    T7: { fired: true, evidence: "The position asserts session-locking should be guaranteed but never discusses what it costs to be wrong about that (e.g. an overly rigid lock hiding a needed rollback) versus how quickly such a mistake would surface." }
+    T8: { fired: false, evidence: "Stripped of the first-person shopper narrative, 'keep the flag's assignment stable for the duration of a checkout session' is a standard sticky-bucketing engineering practice that holds without the narration." }
+  PARTICULARIST:
+    T1: { fired: false, evidence: "The reasoning's own first step explicitly derives the position from the phrases 'feature flag', 'new checkout', and 'controls whether users see', so removing them removes the constraints the position depends on." }
+    T2: { fired: false, evidence: "It tests the assumption that a standalone name can be invented independent of the existing flag system, and the recommendation to defer to convention follows from that test." }
+    T3: { fired: false, evidence: "The argument about word decay and existing conventions cites no external authority, so nothing collapses without citations." }
+    T4: { fired: true, evidence: "The position resolves to three different literal strings contingent on an unstated fact (the team's casing convention), so the reader still has to make the final naming call themselves." }
+    T5: { fired: false, evidence: "The position states, 'Match the new flag's name to whatever naming convention the existing feature-flag system already uses', an actionable do-X sentence." }
+    T6: { fired: false, evidence: "missing_actor names the flag-platform administrator with the action of stating the existing convention before a name is chosen." }
+    T7: { fired: true, evidence: "There is no discussion anywhere in the reasoning of what it would cost to have matched the wrong convention, or how quickly such a mistake would surface versus how hard it would be to fix." }
+    T8: { fired: false, evidence: "Stripped of framing, 'follow your team's existing flag naming convention instead of inventing a new pattern' is an ordinary, real piece of advice." }
+  CARETAKER:
+    T1: { fired: false, evidence: "The entire migration-cost argument depends on 'new checkout' being a relative label tied to a soon-obsolete baseline; without that specific detail there is no decaying string to warn against." }
+    T2: { fired: false, evidence: "It tests the assumption that relative/temporal naming is harmless at launch by tracing the migration cost paid later, and the capability-based recommendation follows from that trace." }
+    T3: { fired: false, evidence: "The four-step argument about what's load-bearing and what a rename costs cites no outside authority, so nothing collapses without citations." }
+    T4: { fired: false, evidence: "The position supplies one concrete literal name (checkout.single_page_flow) and one clear rule (no relative language), closing the actual question asked and leaving open only genuinely separate matters like future ownership after a reorg." }
+    T5: { fired: false, evidence: "The position states, 'Name the flag for the specific capability it gates, using a permanent domain-prefixed identifier', an actionable do-X sentence." }
+    T6: { fired: false, evidence: "missing_actor names the analytics/data team with the action of requiring a stable identifier contract, directly tied to the rename-cost argument." }
+    T7: { fired: false, evidence: "The position explicitly compares renaming now, while few things depend on the flag and it is cheap, against renaming later once analytics, dashboards and dependent flags have accumulated and the migration becomes expensive." }
+    T8: { fired: false, evidence: "Stripped of framing, 'name flags for the capability they gate, not their relative recency, because temporal names get baked into everything downstream and become expensive to rename' is a substantive claim that holds without the framing." }
+  FRAME_BREAKER:
+    T1: { fired: true, evidence: "The governance argument (owner, expiry, registry gate before merge) is generic flag-lifecycle advice that would apply unchanged to any feature flag for any feature, not specifically one controlling visibility of a new checkout." }
+    T2: { fired: false, evidence: "It tests the assumption that naming is the live decision by tracing who benefits from skipping governance and who inherits the cost, and the registry recommendation follows from that test." }
+    T3: { fired: false, evidence: "The five-step chain about assumption, cost, and consequence cites no outside authority, so nothing collapses without citations." }
+    T4: { fired: true, evidence: "The position never answers the question actually posed -- what to call the flag -- and also leaves the specific default owner, expiry duration, and registry schema unspecified." }
+    T5: { fired: false, evidence: "The position states, 'Skip the naming debate and instead register the flag with a mandatory owner and a hard expiry/removal date', an actionable do-X sentence." }
+    T6: { fired: false, evidence: "missing_actor names the on-call/platform team with audit authority to force expiry, though the position's core mechanism (a CI-blocking PR gate) does not strictly require that team to act." }
+    T7: { fired: false, evidence: "The position notes that naming is 'a five-minute side effect' compared to the governance decision, gesturing at a cheap-versus-costly distinction without building it into an explicit sequence." }
+    T8: { fired: false, evidence: "Stripped of framing, 'require an owner and an expiry date before a flag can merge' is a concrete, real operational policy claim independent of the naming angle." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "Multiple branches directly attack the question's implicit frame from different angles: one argues naming is not even the live decision, one argues a plain boolean is the wrong mechanism, one argues the flag's name is irrelevant to the party actually affected, and one argues relative naming itself is the flawed premise -- so the load-bearing assumption that this is simply a string-choice problem was tested, not accepted." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every one of the six branches populates missing_actor with a specific party and a concrete action (platform administrator, on-call/platform team, shopper/support agent, analytics/data-science owner, cleanup owner), so none left it null." }
+lint_verdicts: []

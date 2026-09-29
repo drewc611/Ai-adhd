@@ -61,7 +61,7 @@ classes:
       - "trade-off"
     frames: [FRAME_BREAKER, ACTOR_CENSUS, LEVY, DOOR_KEEPER, MINIMALIST]
     alternates: [PARTICULARIST, NIGHT_OPERATOR, SABOTEUR, MECHANIC, PRIOR_ART, CARETAKER,
-                 SUPPLICANT, FIRST_PRINCIPLES]
+                 SUPPLICANT, FIRST_PRINCIPLES, NEGATIVE_SPACE]
 
   fuzzy_debugging:
     action: run
@@ -74,7 +74,7 @@ classes:
       - "no idea why"
     frames: [MECHANIC, PARTICULARIST, SABOTEUR, NIGHT_OPERATOR, FRAME_BREAKER]
     alternates: [ACTOR_CENSUS, DOOR_KEEPER, MINIMALIST, LEVY, SUPPLICANT, PRIOR_ART,
-                 FIRST_PRINCIPLES, CARETAKER]
+                 FIRST_PRINCIPLES, CARETAKER, NEGATIVE_SPACE]
 
   naming:
     action: run
@@ -83,7 +83,12 @@ classes:
       - "what should I call"
       - "name for"
       - "rename"
-    frames: [PARTICULARIST, FRAME_BREAKER, SUPPLICANT, CARETAKER, MINIMALIST]
+    # NEGATIVE_SPACE (backlog 23, D51) is primary here rather than an alternate, on the same
+    # reasoning D35 gave FIRST_PRINCIPLES its slot in strategy: the class most directly tied to the
+    # gap a frame answers is where a shuffle has to be able to draw it. Backlog 17's false_means
+    # gap — no frame asks what a name asserts about the state it doesn't name — is the naming-
+    # specific case NEGATIVE_SPACE generalizes.
+    frames: [PARTICULARIST, FRAME_BREAKER, SUPPLICANT, CARETAKER, MINIMALIST, NEGATIVE_SPACE]
     alternates: [ACTOR_CENSUS, DOOR_KEEPER, NIGHT_OPERATOR, LEVY, PRIOR_ART, SABOTEUR,
                  MECHANIC, FIRST_PRINCIPLES]
 
@@ -98,7 +103,7 @@ classes:
       - "public"
     frames: [SUPPLICANT, DOOR_KEEPER, SABOTEUR, MINIMALIST, FRAME_BREAKER]
     alternates: [ACTOR_CENSUS, PARTICULARIST, NIGHT_OPERATOR, LEVY, MECHANIC, PRIOR_ART,
-                 CARETAKER, FIRST_PRINCIPLES]
+                 CARETAKER, FIRST_PRINCIPLES, NEGATIVE_SPACE]
 
   strategy:
     action: run
@@ -122,7 +127,7 @@ classes:
     n: 6
     frames: [FRAME_BREAKER, LEVY, DOOR_KEEPER, PRIOR_ART, CARETAKER, FIRST_PRINCIPLES]
     alternates: [SABOTEUR, PARTICULARIST, ACTOR_CENSUS, MINIMALIST, NIGHT_OPERATOR,
-                 MECHANIC, SUPPLICANT]
+                 MECHANIC, SUPPLICANT, NEGATIVE_SPACE]
 
   enumerate_options:
     action: run
@@ -136,7 +141,7 @@ classes:
     n: 7                      # wide by default; still below hard_cap. Nine listed, seven
                               # taken in seeded shuffle order; axes stay distinct by
                               # construction here (one frame per axis in this list).
-    alternates: [PRIOR_ART, SUPPLICANT, CARETAKER, FIRST_PRINCIPLES]
+    alternates: [PRIOR_ART, SUPPLICANT, CARETAKER, FIRST_PRINCIPLES, NEGATIVE_SPACE]
 
   factual_lookup:
     action: decline

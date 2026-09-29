@@ -1,0 +1,48 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: FRAME_BREAKER
+position: >-
+  Skip the naming debate and instead register the flag with a mandatory owner
+  and a hard expiry/removal date before the PR that introduces it is allowed to merge.
+reasoning: |
+  1. The question assumes a single boolean flag is the settled mechanism and that
+  naming is the only decision left. It treats "what do we call it" as the live
+  question, which presupposes the flag's scope, ownership, and lifecycle are
+  already resolved when in practice they usually aren't.
+  2. Naming it something like `new_checkout_enabled` asserts a clean binary state
+  space: old checkout or new checkout. What it doesn't name is everything else
+  that actually governs the flag in production — partial rollout percentages,
+  per-segment overrides, kill-switch behavior, and especially the removal date.
+  Nobody reads a retirement plan anywhere, because picking a name feels like
+  progress and substitutes for writing the lifecycle down. The flag keeps the
+  word "new" in its name for years after the checkout stops being new, which is
+  itself evidence the real governance was never recorded.
+  3. Whoever wants to ship today without committing to cleanup benefits from
+  leaving this unexamined — usually the engineer or PM who wants a quick
+  unblock. The cost of an un-owned, un-expired flag lands later, on whoever
+  inherits the tech debt or gets paged when two overlapping flags interact.
+  4. If the naming-is-the-decision assumption is false, the real question is
+  about flag lifecycle and governance: who owns this flag, what are its actual
+  states beyond on/off, when is it deleted, and is a flag even the right
+  primitive versus a staged-rollout config or an experiment key. Naming is a
+  five-minute side effect of answering those questions, not the question itself.
+  5. So the first concrete action tomorrow is not a naming meeting. It's adding
+  an entry to (or creating) a feature-flag registry with required fields —
+  owner, creation date, rollout stages, and a hard expiry/removal date — as a
+  blocking part of the same PR that introduces the flag, with a stale-flag
+  check that fails CI or pages the owner once the expiry passes.
+forecloses:
+  - >-
+    Spending review time on picking a descriptive, permanent-sounding flag
+    name as the main deliverable of this decision.
+  - >-
+    Letting the flag exist indefinitely as unowned infrastructure with no
+    scheduled removal or audit.
+falsifier: >-
+  If the team already has a flag registry that enforces owner and expiry
+  fields via CI before merge, then this position adds nothing and the naming
+  question really was the only open item.
+missing_actor: >-
+  The on-call or platform team that inherits stale, unowned flags later —
+  give them audit authority to force expiry or removal of any flag past its
+  registered date, independent of the feature team that created it.
+confidence: medium

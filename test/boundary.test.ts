@@ -247,6 +247,33 @@ test("exactly one file in analysis/ reaches the network, and it is not in the pa
   // wrote down is the licensing equivalent of an unbudgeted download.
   assert.match(body, /licence_url/, "a source records no licence url");
 
+  // D50: the one narrow widening of the text/plain rule, for `rust-rfcs` and `k8s-keps`. `get()`
+  // itself is unchanged (checked above); the JSON carve-out lives in a second, separate function so
+  // accepting JSON is not something every source gained by accident.
+  assert.match(body, /def get_json\(/, "the tree-listing fetch is not a separate function from get()");
+  assert.match(body, /ctype != "application\/json"/, "get_json does not require application/json");
+  const getBody = body.slice(body.indexOf("\ndef get("), body.indexOf("\ndef get_json("));
+  assert.ok(!/application\/json/.test(getBody), "get() itself now accepts JSON, not just get_json()");
+
+  // api.github.com is scoped to two repositories' tree endpoints, never the bare host — the same
+  // prefix-not-host shape as every raw.githubusercontent.com prefix already in the file.
+  assert.match(
+    body,
+    /"https:\/\/api\.github\.com\/repos\/rust-lang\/rfcs\/git\/trees\/"/,
+    "no scoped api.github.com prefix for rust-lang/rfcs",
+  );
+  assert.match(
+    body,
+    /"https:\/\/api\.github\.com\/repos\/kubernetes\/enhancements\/git\/trees\/"/,
+    "no scoped api.github.com prefix for kubernetes/enhancements",
+  );
+  assert.ok(!/"https:\/\/api\.github\.com\/"/.test(body), "api.github.com is allowlisted bare, not scoped");
+
+  // A truncated tree listing is a partial corpus wearing the name of a complete one, and this
+  // fetcher's whole design is to fail loudly on a corpus problem rather than train on the remainder.
+  assert.match(body, /class TreeTruncated/, "a truncated tree listing is not refused");
+  assert.match(body, /tree\.get\("truncated"\)/, "truncation is never checked on the tree response");
+
   // Importable from the package would make the exception meaningless: the package's own ban is
   // enforced by import, so a re-export would carry the network straight back in.
   const pkg = walk(join(ANALYSIS, "adhd_analysis"), [".py"]).map((f) => readFileSync(f, "utf8")).join("\n");
@@ -314,7 +341,7 @@ test("the weekly job writes the corpus where corpora.yaml reads it", () => {
   assert.equal(out![1], "corpora", "--out must be the parent directory, not one source's directory");
 
   const manifest = readFileSync(join(ANALYSIS, "corpora.yaml"), "utf8");
-  for (const name of ["rfc", "pep", "eip", "erc"]) {
+  for (const name of ["rfc", "pep", "eip", "erc", "rust-rfcs", "k8s-keps"]) {
     assert.match(manifest, new RegExp(`path: corpora/${name}\\b`), `the manifest does not read corpora/${name}`);
   }
   assert.match(wf, /the fetched corpus reaches the trainer/, "nothing fails the job when the fetch lands nowhere");

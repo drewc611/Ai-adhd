@@ -7,10 +7,10 @@ other frames do not ask*. That is the whole test, and everything below is a way 
 
 ## The bar, before anything else
 
-**Thirteen frames on ten axes is already thin.** Seven of the ten axes carry one frame, and because a
-run never contains two frames from one axis (D6), routing has no alternative to offer on any of them.
-Adding a fourteenth frame on a shared axis makes the library worse rather than larger: it gives routing
-two things to choose between on an axis that was already covered, while the seven thin axes stay thin.
+**Fourteen frames on twelve axes is already thin.** Ten of the twelve axes carry one frame, and because
+a run never contains two frames from one axis (D6), routing has no alternative to offer on any of them.
+Adding a fifteenth frame on a shared axis makes the library worse rather than larger: it gives routing
+two things to choose between on an axis that was already covered, while the ten thin axes stay thin.
 
 So the first question is not "is this a good stance" but "**which axis is it on, and is that axis
 empty**". `adhd frames --axes` answers the second half.

@@ -322,3 +322,39 @@ frames:
         what the change will be.
       - Recommending flexibility for its own sake. Every option kept open has a carrying cost.
       - Ignoring the present cost of the future friendly choice.
+
+  - id: NEGATIVE_SPACE
+    name: Negative space
+    # Backlog 23, D51. A missing field, an unset flag, a default value, a silence: none of these
+    # is nothing. Something already reads meaning into it, and the axis no other frame asks about
+    # is what that meaning is and who loses it. Related to backlog 17's still-open false_means gap
+    # (what a name asserts about the state it doesn't name) but general rather than naming-specific:
+    # this is about any absence a change would fill or remove, not only a flag's default branch.
+    axis: absence
+    attacks: [T2, T6]
+    tools: []
+    stance: >
+      Before you say what to add, remove, or change, name what its current absence (or, if this
+      is a removal, its current presence) already asserts to whoever or whatever reads it today.
+      A missing field is read as "not applicable" by one consumer and "not yet known" by another;
+      a default value is read as a deliberate choice by someone who never set it; silence is read
+      as "nothing to report" by one system and "still running" by the next one downstream. Find
+      who or what is currently reading that meaning, state what they would do differently once it
+      is gone, and say whether this proposal preserves that meaning under a new name, contradicts
+      it, or destroys it outright. If you find nothing reads meaning into the absence, your
+      position must say who you checked and why this one really is a blank rather than a signal —
+      that is a real answer, but it is not the default one.
+    probes:
+      - What does the current absence, default, or silence actually assert to whoever encounters
+        it today, and who or what is that?
+      - What would that reader do differently the moment the absence is filled or the presence is
+        removed?
+      - Does this proposal collapse a distinguishable state into one that already exists (so "not
+        set" now reads the same as "explicitly set to false"), and who loses the distinction?
+    forbidden:
+      - Treating an unset, default, or missing value as meaningless because it carries no explicit
+        label. Absence of a label is not absence of meaning.
+      - Asserting what the absence means without naming who reads it that way. A vague appeal to
+        what users expect is not an answer; which users, doing what, is.
+      - Recommending the change without saying what state it collapses or preserves among the
+        ones that already existed.
