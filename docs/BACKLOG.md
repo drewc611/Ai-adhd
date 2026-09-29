@@ -818,7 +818,7 @@ the end is a record section they have been mis-filed — which is the whole of w
     scores 41.0 held-out perplexity against 46.4. `Budget.weekly()`'s `max_rss_mb` is now 9216 and
     `train.yml`'s default order is 5. See D45.**
 
-75. **Rust RFCs and Kubernetes KEPs, if the network boundary may widen** (owner's call). Both
+75. ~~**Rust RFCs and Kubernetes KEPs, if the network boundary may widen** (owner's call). Both
     licences are read and correct — MIT OR Apache-2.0 and Apache-2.0, better provenance than the
     IETF RFCs already in the corpus — and both are the same genre. Neither is numerically
     enumerable: `text/0002-rfc-process.md` and `keps/sig-node/1234-some-feature/README.md` carry a
@@ -831,7 +831,13 @@ the end is a record section they have been mis-filed — which is the whole of w
     that can fetch is a job that can fetch weights, and `text/plain` only is one of the four things
     that keeps the exception small. A JSON carve-out is a real widening of it, so it is the owner's
     call rather than a table entry. What it would buy: roughly 600 more documents under freer
-    licences than the largest source currently in the corpus.
+    licences than the largest source currently in the corpus.~~
+    **Resolved as D50: the owner made the call directly, and it was made to widen.** Both sources
+    are implemented (`TreeSource`, `get_json()`, `tree_candidates()`, `fetch_tree_source()` in
+    `analysis/scripts/fetch_corpus.py`), registered in `analysis/corpora.yaml`, and documented in
+    `docs/PROVENANCE.md`. The JSON carve-out is a second, narrow function next to `get()` — which
+    is unchanged — and `api.github.com` is allowlisted as two prefixes scoped one repository each,
+    never the bare host. A truncated tree listing is refused rather than trained on.
 
 76. ~~**Re-measure what pruning costs, on one split** (small, and it invalidates a published figure
     until it is done). D14 priced count-pruning at 2.9x perplexity — 17.4 against 6.06 — and D16

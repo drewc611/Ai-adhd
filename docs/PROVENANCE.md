@@ -30,6 +30,8 @@ source, under the source's own terms, with the source's own attribution intact.
 | `erc` — Ethereum ERCs | **CC0-1.0** | public domain dedication | [`ethereum/ERCs/LICENSE.md`](https://github.com/ethereum/ERCs/blob/master/LICENSE.md) |
 | `pep` — Python PEPs | **public domain and CC0-1.0** | dual, mandatory for every PEP | [PEP 1 §15](https://peps.python.org/pep-0001/#pep-header-preamble) |
 | `rfc` — IETF RFCs | IETF Trust copyright, BCP 78 | freely readable and redistributable in full; **derivatives restricted** | [RFC 5378](https://www.rfc-editor.org/rfc/rfc5378.txt), [TLP](https://trustee.ietf.org/documents/trust-legal-provisions/) |
+| `rust-rfcs` — Rust RFCs | **MIT OR Apache-2.0** | dual, permissive | [`rust-lang/rfcs/LICENSE-MIT`](https://github.com/rust-lang/rfcs/blob/master/LICENSE-MIT) |
+| `k8s-keps` — Kubernetes KEPs | **Apache-2.0** | permissive | [`kubernetes/enhancements/LICENSE`](https://github.com/kubernetes/enhancements/blob/master/LICENSE) |
 
 ```
 cd analysis && python scripts/fetch_corpus.py --licences
@@ -37,6 +39,16 @@ cd analysis && python scripts/fetch_corpus.py --licences
 
 That prints the same table from the code, so the code and this document cannot drift apart without
 one of them being obviously wrong.
+
+### Why `rust-rfcs` and `k8s-keps` fetch differently (D50)
+
+Both licences were read and correct from the start (backlog item 75), but neither series is
+numerically enumerable the way an RFC or a PEP is: `text/0002-rfc-process.md` and
+`keps/sig-node/1234-some-feature/README.md` carry a slug the number does not determine, and
+neither repository ships an index file. The only listing mechanism is GitHub's tree API, which
+answers JSON where every other source here answers `text/plain` — a real widening of the fetcher's
+allowlist, made explicit and recorded rather than folded in quietly. `analysis/scripts/fetch_corpus.py`'s
+module docstring and `get_json()` have the mechanism; `docs/DECISIONS.md` D50 has the reasoning.
 
 ### 43% of the EIP corpus was a forwarding stub
 

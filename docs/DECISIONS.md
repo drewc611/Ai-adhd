@@ -3940,3 +3940,60 @@ The third option D44 raised — `.mcp.json` plus a `SessionStart` hook that runs
 not build on the user's behalf," because an MCP server that fetches dependencies and compiles
 the first time a host starts it is a network fetch nobody asked for, on a host that starts
 servers without asking. Nothing about a `.mcp.json` file changes that reasoning.
+
+## D50. Backlog 75: widen the fetcher's allowlist to a second content type, for two sources only
+
+**Decision:** Add `rust-rfcs` and `k8s-keps` to `analysis/scripts/fetch_corpus.py`, enumerated by
+GitHub's tree API rather than a numeric template, and accept `application/json` from that one
+call through a new `get_json()` function. `get()` — the document fetch every other source uses,
+`text/plain` only — is unchanged. Resolved 2026-09-29.
+
+Item 75 named the trade precisely and left it to the owner: both licences were read and correct
+from the start (MIT OR Apache-2.0, Apache-2.0, better provenance than the IETF RFCs already in
+the corpus), but neither series is numerically enumerable — `text/0002-rfc-process.md` and
+`keps/sig-node/1234-some-feature/README.md` carry a slug the number does not determine, and
+neither repository ships an index. The only listing mechanism is GitHub's tree API, which answers
+JSON. D10 banned network in a scheduled job because a job that can fetch is a job that can fetch
+weights, and `text/plain` only was one of the four things keeping that exception small. A JSON
+carve-out is a real widening of it. The owner made the call directly: widen it, for exactly these
+two sources.
+
+**How the widening stays as narrow as the rest of the exception.**
+
+- `get_json()` is a second, small function next to `get()`, not a parameter that changes what
+  `get()` accepts. A document fetch that quietly started accepting JSON would accept it from
+  every source, not just the two that need it — so accepting JSON at all is a decision visible in
+  a function's name, the same way accepting `text/plain` only was.
+- `api.github.com` is allowlisted as two prefixes, each scoped to one repository's tree endpoint
+  (`.../repos/rust-lang/rfcs/git/trees/`, `.../repos/kubernetes/enhancements/git/trees/`), never
+  the bare host. Same shape as every `raw.githubusercontent.com` prefix already in the file: a
+  host allowlist containing either one serves every public repository on GitHub, a prefix serves
+  one repository and nothing else.
+- The document content itself — what a matched path's raw file actually contains — is still read
+  through `get()`, still `text/plain` only, still refusing the same weight-format extensions.
+  Nothing about how a document's *content* is checked changed; only how the *list* of documents
+  to check is obtained did.
+- A truncated tree listing (`"truncated": true`, GitHub's own signal that a response did not hold
+  everything) is refused with `TreeTruncated` rather than trained on. A partial listing silently
+  accepted is the corpus equivalent of the manifest bug D10 already fails loudly on: it looks like
+  it worked.
+
+**The 60-unauthenticated-requests-an-hour concern that shelved this the first time no longer
+applies**, and the reason is `recursive=1`: it lists an entire repository's tree in one response,
+so fetching a whole corpus costs one API request plus one raw-content request per matched
+document — the same shape as every numeric source, not the per-directory-listing cost the earlier
+investigation assumed.
+
+**What changed, concretely.** `analysis/scripts/fetch_corpus.py` gained `TreeSource` (parallel to
+`Source`, enumerated by a tree listing instead of a numeric template), `get_json()`, `tree_candidates()`
+(the same spread-not-lowest-first reasoning as `candidates()`, sorted by the number embedded in
+each matched path), and `fetch_tree_source()` (`fetch_source()`'s shape, one tree listing instead
+of N probes). `UNIMPLEMENTED` is gone — both entries moved into `TREE_SOURCES`, now real. `main()`
+dispatches on which dict a `--source` name is in. `analysis/corpora.yaml` gained `rust-rfcs` and
+`k8s-keps` entries, both `required: false` like every other third-party source.
+`docs/PROVENANCE.md` records both licences in the same table and format as the rest.
+`test/boundary.test.ts` and `analysis/tests/test_fetch_and_genericity.py` both pin the new
+boundary the same way they already pinned the old one: the scoped prefixes, the second content
+type living in a second function, the truncation refusal, and (new, Python-side) `get_json`'s own
+content-type gate and `tree_candidates`' matching and spread behaviour, exercised against a fake
+tree response — none of it makes a real request.

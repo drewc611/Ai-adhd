@@ -10,6 +10,13 @@ that can fetch weights. So the ban moved rather than lifted, and the capability 
 check: https only, an allowlist of **URL prefixes** rather than hosts, `text/plain` only, and a
 refusal list of the extensions weights arrive in. `test/boundary.test.ts` pins all of it.
 
+Two sources, `rust-rfcs` and `k8s-keps`, are a second, narrower exception to the `text/plain` rule
+(D50): their filenames carry a slug no numeric template determines, so the only way to enumerate
+them is GitHub's tree API, which answers JSON. `get_json()` is the only function that accepts it,
+it is checked against the same URL allowlist as everything else, and the two tree endpoints are
+scoped to one repository each — the same prefix-not-host boundary as every raw-content source
+below. The document content itself is still fetched through `get()`, still `text/plain` only.
+
 Prefixes rather than hosts because `raw.githubusercontent.com` serves every public repository on
 GitHub. Allowing the host would allow all of them; allowing
 `https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/` allows the EIPs and nothing else.
@@ -30,7 +37,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import posixpath
+import re
 import sys
 import time
 import urllib.error
@@ -57,14 +66,23 @@ class FetchRefused(RuntimeError):
     """Raised for anything the prefix allowlist, the content type or the extension rules reject."""
 
 
+class TreeTruncated(RuntimeError):
+    """Raised when GitHub's tree API reports `truncated: true` on a listing this fetcher read.
+
+    A truncated listing is a partial corpus wearing the name of a complete one. D10's manifest
+    fails loudly on a missing path rather than training on the remainder; a truncated tree gets
+    the same treatment rather than silently enumerating whatever fit in one response.
+    """
+
+
 @dataclass(frozen=True)
 class Source:
     """One corpus: where it lives, what it is licensed under, and how to enumerate it.
 
-    `numbers` sources are enumerated by probing a numeric template and accepting the 404s. That is
-    how the RFC fetcher already worked and it needs no directory listing, no API token and no rate
-    limit budget — which matters, because the alternative is GitHub's tree API at 60 unauthenticated
-    requests an hour and a response this repository cannot verify from every environment.
+    Enumerated by probing a numeric template and accepting the 404s. That is how the RFC fetcher
+    already worked and it needs no directory listing, no API token and no request budget beyond
+    the probes themselves. `TreeSource` below is the other shape, for a filename a number alone
+    does not determine.
     """
 
     name: str
@@ -157,18 +175,82 @@ SOURCES: dict[str, Source] = {
     ),
 }
 
-#: Corpora whose licences were verified and whose enumeration this script does not implement.
+@dataclass(frozen=True)
+class TreeSource:
+    """A corpus enumerated by GitHub's tree API rather than a numeric template.
+
+    `rust-rfcs` and `k8s-keps` carry a slug the number does not determine
+    (`text/0002-rfc-process.md`, `keps/sig-node/1234-some-feature/README.md`), so there is no
+    template to probe. `recursive=1` lists the whole repository in one request, which is why the
+    60-unauthenticated-requests-an-hour ceiling that rules out per-directory listing is not a
+    constraint here: one API request plus one raw-content request per matched document, the same
+    shape as every numeric source above it. D50 is the decision to widen the fetcher this far.
+    """
+
+    name: str
+    licence: str
+    licence_url: str
+    #: The tree listing endpoint, `?recursive=1` and all. Fetched once per run, via `get_json()`.
+    tree_url: str
+    #: Every URL this source may fetch starts with one of these: the tree endpoint's own directory
+    #: and the raw-content directory the matched paths are read from. Same prefix-not-host shape
+    #: as `Source.prefixes` — one repository each, not `api.github.com` or
+    #: `raw.githubusercontent.com` bare.
+    prefixes: tuple[str, ...]
+    #: Where a matched path's content is actually read from. Always one of `prefixes`.
+    raw_prefix: str
+    #: Matches a document path in the tree listing. Named group `n` is the number tree_candidates
+    #: sorts and spreads by; anything not matching this is not a document this source wants.
+    path_pattern: re.Pattern[str]
+    notes: str = ""
+
+    def filename(self, path: str) -> str:
+        """A path has slashes; a corpus directory should not have subdirectories."""
+        return path.replace("/", "__")
+
+
+#: Corpora enumerated by GitHub's tree API rather than a numeric template, because their filenames
+#: carry a slug the number does not determine: `text/0002-rfc-process.md`,
+#: `keps/sig-node/1234-some-feature/README.md`. `recursive=1` lists the whole repository in one
+#: request, so the 60-unauthenticated-requests-an-hour ceiling that rules out per-directory
+#: listing is not a constraint here: fetching an entire corpus costs one API request plus one raw
+#: request per document, the same shape as every numeric source above.
 #:
-#: Both need a directory listing, because their filenames carry a slug that cannot be derived from
-#: the number: `text/0002-rfc-process.md`, `keps/sig-node/1234-some-feature/README.md`. Listing
-#: means GitHub's tree API, which is 60 unauthenticated requests an hour and which this repository
-#: could not verify from the environment the rest of this file was tested in. Shipping an
-#: enumeration path nobody has run is how a fetcher fails on someone else's machine, so these are
-#: recorded rather than guessed at. The licences are read from the projects' own files and are
-#: correct; only the plumbing is missing.
-UNIMPLEMENTED = {
-    "rust-rfcs": ("MIT OR Apache-2.0", "https://github.com/rust-lang/rfcs/blob/master/LICENSE-MIT"),
-    "k8s-keps": ("Apache-2.0", "https://github.com/kubernetes/enhancements/blob/master/LICENSE"),
+#: Verified 2026-09-29 by reading each project's own licence file, not from memory.
+TREE_SOURCES: dict[str, TreeSource] = {
+    "rust-rfcs": TreeSource(
+        name="rust-rfcs",
+        licence="MIT OR Apache-2.0",
+        licence_url="https://github.com/rust-lang/rfcs/blob/master/LICENSE-MIT",
+        tree_url="https://api.github.com/repos/rust-lang/rfcs/git/trees/master?recursive=1",
+        prefixes=(
+            "https://api.github.com/repos/rust-lang/rfcs/git/trees/",
+            "https://raw.githubusercontent.com/rust-lang/rfcs/master/",
+        ),
+        raw_prefix="https://raw.githubusercontent.com/rust-lang/rfcs/master/",
+        path_pattern=re.compile(r"^text/(?P<n>\d{4})-[^/]+\.md$"),
+        notes=(
+            "Dual-licensed MIT OR Apache-2.0, read from the repository's own LICENSE-MIT. Better "
+            "provenance than the IETF RFCs already in the corpus, and the same genre: a numbered "
+            "design proposal with a rationale section, written to be argued with."
+        ),
+    ),
+    "k8s-keps": TreeSource(
+        name="k8s-keps",
+        licence="Apache-2.0",
+        licence_url="https://github.com/kubernetes/enhancements/blob/master/LICENSE",
+        tree_url="https://api.github.com/repos/kubernetes/enhancements/git/trees/master?recursive=1",
+        prefixes=(
+            "https://api.github.com/repos/kubernetes/enhancements/git/trees/",
+            "https://raw.githubusercontent.com/kubernetes/enhancements/master/",
+        ),
+        raw_prefix="https://raw.githubusercontent.com/kubernetes/enhancements/master/",
+        path_pattern=re.compile(r"^keps/sig-[a-z0-9-]+/(?P<n>\d+)-[^/]+/README\.md$"),
+        notes=(
+            "Apache-2.0, read from the repository's own LICENSE. Same enumeration shape as "
+            "rust-rfcs: one tree listing, then one raw fetch per matched KEP's README."
+        ),
+    ),
 }
 
 #: Bitcoin BIPs are numerically enumerable and reachable, so the plumbing above would work. They are
@@ -184,7 +266,9 @@ UNLICENSED_AT_SOURCE = {
 
 
 def allowed_prefixes() -> tuple[str, ...]:
-    return tuple(p for s in SOURCES.values() for p in s.prefixes)
+    return tuple(p for s in SOURCES.values() for p in s.prefixes) + tuple(
+        p for s in TREE_SOURCES.values() for p in s.prefixes
+    )
 
 
 def _check_url(url: str) -> None:
@@ -249,6 +333,27 @@ def get(url: str, timeout: float = 60.0) -> bytes:
         return body
 
 
+def get_json(url: str, timeout: float = 60.0) -> dict:
+    """The one place this fetcher accepts anything but `text/plain`, and it accepts exactly one thing.
+
+    Same allowlist, same redirect re-check, same size ceiling as `get()` — only the expected
+    content type differs, which is why this is a second small function next to `get()` rather than
+    a parameter that changes what `get()` accepts. A document fetch that quietly started accepting
+    JSON would accept it from every source, not just the two that need it.
+    """
+    _check_url(url)
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
+    with _OPENER.open(req, timeout=timeout) as r:  # noqa: S310 - scheme and prefix checked on every hop
+        _check_url(r.url)
+        ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip()
+        if ctype != "application/json":
+            raise FetchRefused(f"{url}: content type {ctype!r}, expected application/json")
+        body = r.read(MAX_DOCUMENT_BYTES + 1)
+        if len(body) > MAX_DOCUMENT_BYTES:
+            raise FetchRefused(f"{url}: over {MAX_DOCUMENT_BYTES:,} bytes; this fetches a listing, not an archive")
+        return json.loads(body)
+
+
 @dataclass
 class Fetched:
     source: str
@@ -271,6 +376,30 @@ def candidates(source: Source, limit: int, spread: bool) -> list[int]:
         return list(range(1, min(limit, source.highest) + 1))
     step = source.highest / limit
     return sorted({max(1, int(i * step)) for i in range(1, limit + 1)})
+
+
+def tree_candidates(source: TreeSource, tree: dict, limit: int, spread: bool) -> list[str]:
+    """Which matched paths to fetch, sorted by the number embedded in each one.
+
+    Same spread-across-the-range reasoning as `candidates()`: the earliest numbers in either
+    series are short procedural documents, so limiting a large listing to the first N would train
+    on nothing but those. Unmatched tree entries (directories, and every file that is not a
+    document this source wants) are dropped before the spread runs, not after.
+    """
+    matched: list[tuple[int, str]] = []
+    for entry in tree.get("tree", []):
+        if entry.get("type") != "blob":
+            continue
+        m = source.path_pattern.match(entry.get("path", ""))
+        if m:
+            matched.append((int(m.group("n")), entry["path"]))
+    matched.sort()
+
+    if limit >= len(matched) or not spread:
+        return [path for _, path in matched[:limit]]
+    step = len(matched) / limit
+    picked = sorted({min(len(matched) - 1, int(i * step)) for i in range(1, limit + 1)})
+    return [matched[i][1] for i in picked]
 
 
 def sweep_stubs(source: Source, out: Path) -> int:
@@ -343,14 +472,71 @@ def fetch_source(source: Source, out: Path, limit: int, delay: float, max_bytes:
     return result
 
 
+def fetch_tree_source(source: TreeSource, out: Path, limit: int, delay: float, max_bytes: int, spread: bool = True) -> Fetched:
+    """`fetch_source`'s shape, for a source enumerated by one tree listing instead of N probes.
+
+    One `get_json()` call, then `get()` per matched document — the document fetch is the same
+    `text/plain`-only function every numeric source uses, so nothing about how a document's
+    content is checked changes for these two sources. Only how the list of documents is obtained
+    does.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    result = Fetched(source=source.name)
+    total = sum(p.stat().st_size for p in out.glob("*") if p.is_file() and p.name != "MANIFEST.sha256")
+
+    tree = get_json(source.tree_url)
+    if tree.get("truncated"):
+        raise TreeTruncated(
+            f"{source.name}: GitHub's tree listing was truncated; a partial listing is not a corpus "
+            "this fetcher will train on silently"
+        )
+
+    for path in tree_candidates(source, tree, limit, spread):
+        if total >= max_bytes:
+            print(f"{source.name}: byte ceiling reached at {total:,}", file=sys.stderr)
+            break
+        dest = out / source.filename(path)
+        if dest.exists() and dest.stat().st_size > 0:
+            result.skipped += 1
+            continue
+        try:
+            body = get(source.raw_prefix + path)
+        except FetchRefused as e:
+            result.refused.append(str(e))
+            raise
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            # A path the tree listing just named should exist; this is the network being the
+            # network, not an expected gap the way a probed number's 404 is.
+            result.missing += 1
+            print(f"{source.name} {path}: {e}", file=sys.stderr)
+            time.sleep(delay)
+            continue
+        dest.write_bytes(body)
+        total += len(body)
+        result.files += 1
+        result.bytes = total
+        time.sleep(delay)
+
+    digest = hashlib.sha256()
+    files = sorted(p for p in out.glob("*") if p.is_file() and p.name != "MANIFEST.sha256")
+    for p in files:
+        digest.update(p.name.encode())
+        digest.update(hashlib.sha256(p.read_bytes()).digest())
+    (out / "MANIFEST.sha256").write_text(
+        f"{digest.hexdigest()}  {len(files)} files  {source.name}  {source.licence}\n"
+    )
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="fetch_corpus",
         description="Download openly licensed design-proposal text into local corpus directories. "
         "Text only, allowlisted URL prefixes only, nothing redistributed by this repository.",
-        epilog="licences: " + "; ".join(f"{s.name}={s.licence}" for s in SOURCES.values()),
+        epilog="licences: " + "; ".join(f"{s.name}={s.licence}" for s in list(SOURCES.values()) + list(TREE_SOURCES.values())),
     )
-    ap.add_argument("--source", action="append", choices=sorted(SOURCES), help="repeatable; default is all")
+    all_names = sorted(set(SOURCES) | set(TREE_SOURCES))
+    ap.add_argument("--source", action="append", choices=all_names, help="repeatable; default is all")
     ap.add_argument("--out", default="corpora", help="parent directory; each source gets a subdirectory")
     ap.add_argument("--limit", type=int, default=600, help="documents per source, spread across its range")
     ap.add_argument("--delay", type=float, default=0.25, help="seconds between requests; do not lower it")
@@ -360,23 +546,26 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     if args.licences:
-        for s in SOURCES.values():
+        for s in list(SOURCES.values()) + list(TREE_SOURCES.values()):
             print(f"{s.name:12} {s.licence:52} {s.licence_url}")
             if s.notes:
                 print(f"{'':12} {s.notes}")
-        for name, (lic, url) in sorted(UNIMPLEMENTED.items()):
-            print(f"{name:12} {lic:52} {url}  (licence verified, enumeration not implemented)")
         for name, (why, url) in sorted(UNLICENSED_AT_SOURCE.items()):
             print(f"{name:12} {why:52} {url}  (refused: licence not verifiable per repository)")
         return 0
 
-    chosen = [SOURCES[n] for n in (args.source or sorted(SOURCES))]
-    for s in chosen:
-        r = fetch_source(s, Path(args.out) / s.name, args.limit, args.delay, args.max_bytes, spread=not args.no_spread)
+    chosen = args.source or all_names
+    for name in chosen:
+        out = Path(args.out) / name
+        if name in SOURCES:
+            r = fetch_source(SOURCES[name], out, args.limit, args.delay, args.max_bytes, spread=not args.no_spread)
+        else:
+            r = fetch_tree_source(TREE_SOURCES[name], out, args.limit, args.delay, args.max_bytes, spread=not args.no_spread)
         stubs = f", stubs {r.stubs}" if r.stubs else ""
+        licence = SOURCES.get(name, TREE_SOURCES.get(name)).licence  # type: ignore[union-attr]
         print(
             f"{r.source}: fetched {r.files}, cached {r.skipped}, missing {r.missing}{stubs}, "
-            f"{r.bytes:,} bytes  [{s.licence}]"
+            f"{r.bytes:,} bytes  [{licence}]"
         )
     return 0
 
