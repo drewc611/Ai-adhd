@@ -3997,3 +3997,71 @@ boundary the same way they already pinned the old one: the scoped prefixes, the 
 type living in a second function, the truncation refusal, and (new, Python-side) `get_json`'s own
 content-type gate and `tree_candidates`' matching and spread behaviour, exercised against a fake
 tree response — none of it makes a real request.
+
+## D51. Backlog 23: add `NEGATIVE_SPACE` on a new axis, `absence`
+
+**Decision:** Add a fourteenth frame, `NEGATIVE_SPACE`, axis `absence`, attacking T2 and T6.
+Primary in the `naming` routing class, alternate everywhere else. Resolved 2026-09-29.
+
+Item 23 proposed "a frame that reasons about the negative case generally (what the absence of the
+thing asserts)" under exactly this candidate name, subject to D6's orthogonality check. The bar in
+`docs/AUTHORING-FRAMES.md` is which axis a frame is on before whether it is a good stance, and
+`absence` was empty: no existing frame asks what a missing field, an unset flag, a default value,
+or a silence already communicates to whoever reads it, and whether a proposed change preserves,
+contradicts, or destroys that communication.
+
+**Where it came from.** Backlog 17's still-open gap — no frame asks what a name asserts about the
+state it doesn't name — is the naming-specific instance of this question. D47 tried a probe on
+FRAME_BREAKER for exactly that gap and recorded, honestly, that it engaged the question but the
+phrasing didn't match the fixture's detector and the branch was pruned on unrelated grounds. Item
+23 generalizes past naming: a missing field, a default value, and a silence all carry the same
+shape of problem, and `NEGATIVE_SPACE`'s stance is written at that generality rather than re-
+scoped to names. Backlog 17 stays open on its own terms — this frame does not close it, and isn't
+claimed to.
+
+**Name checked against the whole corpus**, item 61's method: `NEGATIVE_SPACE` and "Negative space"
+appear nowhere in `evals/`, `docs/`, `config/`, `prompts/`, `agents/`, `skills/`, `README.md` or
+`CLAUDE.md` except the backlog item that proposed it. `adhd frames --collisions` confirms no label
+appears in an artifact other than its own frame's, across all 78 recorded artifacts.
+
+**Attacks T2 and T6, not a new trap.** The frame's own probes ask who currently reads the absence's
+meaning — an actor no other frame modelled, which is T6's shape exactly — and whether the change
+quietly redefines what the problem's framing already assumed the absence meant, which is T2's. No
+new trap was written; the schema's `attacks` field requires existing trap ids and both fit without
+stretching.
+
+**Routing.** `naming` carries it primary rather than alternate, on the same reasoning D35 gave
+`FIRST_PRINCIPLES` its slot in `strategy`: the class most directly tied to the gap a frame answers
+is where a shuffle has to be able to draw it, and `naming` is where backlog 17's instance of this
+question lives. It is an alternate in the other five run classes (`design_decision`,
+`fuzzy_debugging`, `api_surface`, `strategy`, `enumerate_options`), the same rollout shape
+`FIRST_PRINCIPLES` had before D35. `naming`'s primary list grows from five entries to six with no
+change to its `n` (`Math.min(max_branches, primary.length)` stays 5), so it is reached by the
+shuffle in most runs rather than every one, at no change to the D5 token estimate.
+
+**The orthogonality check has nothing to say about it yet, and says so honestly.** `adhd frames
+--orthogonality` reports co-clustering only over runs that dispatched a pair; `NEGATIVE_SPACE` has
+zero recorded runs, so it does not appear in the report at all rather than appearing at a
+misleadingly clean 0%. The same is already true of `FIRST_PRINCIPLES` before its first dispatch.
+
+**What this decision does not do.** `docs/AUTHORING-FRAMES.md`'s checklist also asks for a fixture
+the frame should obviously win, written and run, before calling a new frame proven rather than
+merely plausible. Writing that fixture is mechanical and free; running it against real subagents to
+find out whether the frame actually wins is backlog 19's job and real spend under D5, not folded
+into this decision. `NEGATIVE_SPACE` ships here as a library addition that passes every static
+check this repository can run without spending anything: schema, collisions, and orthogonality
+against the runs that exist. Whether it is a good frame, in the sense backlog 19 would measure, is
+still an open question.
+
+**What changed, concretely.** `config/frames.yaml` gained the frame. `config/routing.yaml` added it
+to `naming`'s primary list and to the other five run classes' alternates.
+`test/cli.test.ts`, `test/config.test.ts` and `test/frames.test.ts` had their literal frame and
+forbidden-entry counts moved from 13/39 to 14/42, the same class of fallout D48's rename produced
+and fixed the same way: each hardcoded number checked against what actually changed rather than
+bulk-replaced. `README.md`'s frame table and axis count, and `docs/AUTHORING-FRAMES.md`'s own
+stated axis-thinness numbers (independently found stale by one axis before this change — corrected
+to the true current count rather than left compounding), were both updated; `docs/DECISIONS.md`,
+`docs/BACKLOG.md` and `docs/FEATURES.md`'s historical frame-count mentions were left as written,
+on the same principle D48 already established: a document narrating what the library looked like
+at a specific past moment keeps that count, and only a forward-looking claim about the library's
+current shape gets corrected.

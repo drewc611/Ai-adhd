@@ -305,8 +305,12 @@ yet enough to know whether they work.
     **Built as `adhd frames --axes`. Seven of the ten axes carry one frame, and because a run never
     contains two frames from one axis (D6), routing has no alternative to offer on any of them.
     `mechanism` is the only axis with a member no run has ever dispatched.**
-23. **A frame that reasons about the negative case generally** (what the absence of the thing
-    asserts), candidate name NEGATIVE_SPACE, subject to the orthogonality check.
+23. ~~**A frame that reasons about the negative case generally** (what the absence of the thing
+    asserts), candidate name NEGATIVE_SPACE, subject to the orthogonality check.~~
+    **Resolved as D51.** Added on a new axis, `absence`, attacking T2 and T6. Passes the
+    orthogonality check (zero recorded runs, so nothing to flag), the collisions check (name
+    appears nowhere in the corpus), and validation. Primary in `naming`, alternate elsewhere.
+    Not yet proven by a fixture it should win — that is backlog 19's job, real spend under D5.
 
 ## 4. Critic and scoring
 
