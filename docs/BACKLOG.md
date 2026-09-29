@@ -1522,7 +1522,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Cheap to describe, not cheap to build: it needs a live host, which is the same thing that made
     D36 through D41 untestable from inside a session.
 
-104. **The MCP server is the one plugin-only surface still unreachable from a clone** (decision,
+104. ~~**The MCP server is the one plugin-only surface still unreachable from a clone** (decision,
     owner's call — D44 declined to make it). `plugin.json` declares `adhd` as an MCP server pointing
     at `${CLAUDE_PLUGIN_ROOT}/bin/adhd-mcp.mjs`. There is no `.mcp.json`, so a session opened on this
     repository has none of the four MCP tools, and `skills/adhd-worker/SKILL.md` names them as one of
@@ -1538,7 +1538,11 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     The two sides: an unreachable v0 deliverable, against a startup failure that greets every new
     reader of the repository. A third option is a `.mcp.json` plus a SessionStart hook that builds
     if `dist/` is absent, which trades the noise for a network fetch nobody asked for and is the
-    thing `bin/adhd-mcp.mjs` says in its own comments it refuses to do.
+    thing `bin/adhd-mcp.mjs` says in its own comments it refuses to do.~~
+    **Resolved as D49: shipped `.mcp.json`, took the noisy-clone side of the trade.** The owner
+    made the call directly. A repo-root `.mcp.json` now declares the `adhd` MCP server with the
+    same command and args as `plugin.json`'s `mcpServers` entry; the third option (a SessionStart
+    hook that builds on demand) was not taken, for the reason already given above.
 
 105. ~~**Fixture 001's `must_not` checks assume a recommendation exists.** Found running E12
     (item 102): both cells pruned every branch, which is a legitimate run outcome — nothing wrong

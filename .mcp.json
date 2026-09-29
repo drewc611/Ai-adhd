@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "adhd": {
+      "command": "node",
+      "args": [
+        "bin/adhd-mcp.mjs"
+      ]
+    }
+  }
+}

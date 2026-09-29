@@ -3921,3 +3921,22 @@ overlay frame with a new id is added after the base ones" cloned `LEVY` (`{ ...b
 produce before, because the frame it used to clone (`LEDGER`) had never itself been renamed.
 The fix is `former_ids: []` on the synthetic clone: a frame invented for a test should not
 inherit the rename history of whatever real frame it happened to copy.
+
+## D49. Backlog 104: ship `.mcp.json`, and take the noisy-clone side of the trade
+
+**Decision:** Add a repo-root `.mcp.json` declaring the `adhd` MCP server, same command and args
+as `plugin.json`'s `mcpServers` entry. Resolved 2026-09-29.
+
+D44 named the trade and declined to make it: a `.mcp.json` reaches the one plugin-only surface
+`agents/` and `skills/` already had fixed (D42, D44) for every session opened directly on a
+clone, at the cost of `bin/adhd-mcp.mjs` printing its build diagnostic and exiting 1 on every
+fresh clone with no `dist/`. The owner's call, made directly: ship it. The unreachable-server
+side is a silent gap with no error and no path forward for a session that needs the four MCP
+tools; the noisy-clone side is a diagnostic that names the exact command to fix it and exits
+without doing anything by itself. A clear failure that tells you what to run beats a silent one.
+
+The third option D44 raised — `.mcp.json` plus a `SessionStart` hook that runs the build when
+`dist/` is missing — is not this decision. `bin/adhd-mcp.mjs`'s own comment says why: it "does
+not build on the user's behalf," because an MCP server that fetches dependencies and compiles
+the first time a host starts it is a network fetch nobody asked for, on a host that starts
+servers without asking. Nothing about a `.mcp.json` file changes that reasoning.
