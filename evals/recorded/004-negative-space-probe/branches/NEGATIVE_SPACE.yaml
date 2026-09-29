@@ -1,0 +1,68 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: NEGATIVE_SPACE
+position: >-
+  Name the flag by version or variant, not by relative recency — use something
+  like `checkout_v2` or a multivariate `checkout_experience: legacy|v2`, and
+  never a name built on the word "new" such as `new_checkout` or
+  `enable_new_checkout`.
+reasoning: |
+  1. Who reads the current absence, and what does it assert: Today there is no
+  checkout flag at all, so the absence is read by two distinct parties. First,
+  engineers, deploy tooling, and any service that calls checkout currently
+  read "no flag defined here" as "checkout is one undifferentiated code path;
+  there is nothing to branch on." Second, once any flag-evaluation SDK
+  (LaunchDarkly-style or homegrown) is introduced, a user who has not yet been
+  bucketed produces a "key not found / not evaluated" state, and the
+  experimentation/analytics pipeline currently reads that specific absence as
+  "not yet part of the rollout" — a state distinct from an explicit false
+  assignment.
+
+  2. What that reader does differently once the state changes: Once the flag
+  exists, on-call engineers and deploy tooling stop treating checkout as one
+  path — they start segmenting incidents, rollout percentage, and rollback
+  decisions by flag value, and every downstream team (support scripts, QA,
+  other services) has to start asking "which variant" instead of assuming a
+  single behavior. Analytics stops treating conversion as a single number and
+  starts attributing it to a flag value — but only if unbucketed users are
+  kept distinguishable from users explicitly held back as a control group. If
+  they are not kept distinguishable, analytics silently reports "not yet
+  exposed" users as "control," inflating or deflating the measured control
+  group and biasing the rollout decision.
+
+  3. Does the proposal collapse a distinguishable state: Yes, on two axes, if
+  the obvious naive name and type are used. First, a plain boolean named
+  `new_checkout` collapses "user never evaluated" and "user deliberately kept
+  on legacy as an A/B control" into the same `false` — the experimentation
+  team loses the ability to compute true exposure rate versus true
+  control-group size, a distinction they currently have implicitly (no flag
+  exists yet, so no one has been silently defaulted to anything). Second, the
+  word "new" itself is a name that decays: "new_checkout=true" only means
+  something relative to today. When a third checkout revision ships, anyone
+  auditing flags later (on-call reading a dashboard, an engineer doing flag
+  cleanup) will read `new_checkout=false` as "the original checkout" when it
+  may in fact mean "the second of three checkouts" — the name erases which
+  specific version it ever pointed to. A version-pinned name (`checkout_v2`)
+  or a multivariate flag with an explicit unset/legacy/v2 state preserves both
+  distinctions instead of quietly destroying them.
+forecloses:
+  - >-
+    Naming the flag `new_checkout`, `enable_new_checkout`, or any name that
+    uses "new"/"legacy" as the permanent identifier rather than a version tag.
+  - >-
+    Shipping a plain boolean flag when the org's experimentation team needs to
+    distinguish "not yet bucketed" from "explicitly assigned to control" —
+    that requires a three-state or multivariate flag, not a boolean.
+falsifier: >-
+  Check the actual flag platform in use: if it already logs "not evaluated"
+  as a state distinct from "evaluated false" in its analytics regardless of
+  the flag's own type (so the control-vs-unbucketed collapse in probe 3 does
+  not actually happen on this platform), then the multivariate requirement is
+  unnecessary and the position should shrink to just the naming-decay
+  argument against "new_checkout."
+missing_actor: >-
+  The experimentation or data-science owner who consumes the flag's exposure
+  and assignment data for conversion analysis — the brief names only "users"
+  and implicitly engineers, but this person is the one actually harmed by a
+  boolean's state collapse and should be the one deciding whether the flag is
+  boolean or multivariate.
+confidence: medium

@@ -1,0 +1,56 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: PARTICULARIST
+position: >-
+  Match the new flag's name to whatever naming convention the existing feature-flag
+  system already uses — new_checkout_enabled if flags there are snake_case,
+  new-checkout if kebab-case, checkout.new_flow if dot-namespaced — instead of
+  inventing a standalone string.
+reasoning: |
+  1. The three most specific details in the problem statement are: "feature flag"
+  (which implies there is already a flag system with its own naming shape, even
+  though the problem shows none of it), "new checkout" (a label defined only in
+  relation to an old checkout, not a self-standing name), and "controls whether
+  users see" (this is a plain boolean visibility gate, not a percentage rollout or
+  multivariate flag, which rules out names implying gradual rollout like
+  checkout_rollout_pct).
+
+  2. None of these three details actually fixes a string. They only constrain the
+  semantics: it must read as a checkout-related boolean, and it is relative to an
+  existing "old" checkout. The detail that is missing and that flips the literal
+  answer is the naming convention already in use in this team's flag system. If
+  that convention is snake_case, the answer is new_checkout_enabled. If it is
+  kebab-case, the answer is new-checkout. If it is dot-namespaced, the answer is
+  checkout.new_flow. If the redesign already has an internal project codename
+  (a detail this problem withholds), the answer replaces "new" with that codename,
+  because "new" is not a name the team chose, it is a description of recency that
+  will stop being true.
+
+  3. The answer a competent practitioner gives in thirty seconds is new-checkout or
+  new_checkout. The detail in this exact problem that makes that answer wrong is
+  the word "new" in "new checkout" itself: it is a relative label, meaningful only
+  as long as an old checkout still exists to contrast with. Once the new checkout
+  ships and becomes the only checkout, the flag named new_checkout is describing
+  nothing distinguishing, and the string is now inaccurate in exactly the
+  situation the problem describes (a flag "controls whether users see" it, meaning
+  it is meant to be flipped and eventually retired). The thirty-second answer bakes
+  in a word whose truth value the problem statement's own framing guarantees will
+  expire.
+forecloses:
+  - >-
+    picking a name independent of the flag platform's existing casing/namespace
+    convention
+  - >-
+    treating "new" as a permanent identifier with no plan for what the flag or its
+    references get renamed to once the new checkout is no longer new
+falsifier: >-
+  Look at the current list of flags in the system this flag will live in; if an
+  entry already exists for the old checkout (e.g. legacy_checkout or
+  checkout_v1_enabled) or for this specific redesign under a project codename,
+  the flag must follow that existing pattern rather than the invented
+  new-checkout/new_checkout default, which falsifies this position if kept as
+  the literal name.
+missing_actor: >-
+  Whoever administers the feature-flag platform and can see the current flag list
+  and naming convention; their action is to state that convention (and any
+  existing old-checkout flag name or project codename) before a name is chosen.
+confidence: medium

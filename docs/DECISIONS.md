@@ -4065,3 +4065,58 @@ to the true current count rather than left compounding), were both updated; `doc
 on the same principle D48 already established: a document narrating what the library looked like
 at a specific past moment keeps that count, and only a forward-looking claim about the library's
 current shape gets corrected.
+
+## D52. `004-negative-space-probe`: NEGATIVE_SPACE's first run, and another false_means attempt
+
+**Decision:** Dispatch fixture 004 (same problem, class, seed as `004-kernel-naming` and
+`004-frame-breaker-probe`) with NEGATIVE_SPACE added as a sixth frame, and record the result
+regardless of outcome. Resolved 2026-09-29.
+
+Two open items converge on the same run. D51 shipped NEGATIVE_SPACE with no real evidence behind
+it — `docs/AUTHORING-FRAMES.md`'s checklist wants a fixture the frame should obviously win, run,
+before a frame counts as more than plausible. And backlog 17's `false_means` gap — no frame asks
+what a name asserts about the state it doesn't name — is exactly the general question
+NEGATIVE_SPACE's stance is built around, one level more abstract than the naming-specific case
+D47's FRAME_BREAKER probe already tried and did not close. One run tests both, honestly, rather
+than two runs each answering half the question.
+
+**The result on false_means: closer, still a miss, same shape as D47's.** NEGATIVE_SPACE's
+reasoning traces the question about as directly as anything in the corpus has — a plain boolean
+collapses "never evaluated" and "deliberately held back as a control" into the same `false` — but
+the phrasing does not match the detector's regex, checked directly against all six artifacts.
+Backlog 17 stays open. `docs/EXPERIMENTS.md` was not the right place for this — it belongs beside
+D47 as the same attempt at a wider level, and lives in `evals/recorded/004-negative-space-probe/README.md`
+instead, matching where D47's own write-up lives.
+
+**The larger, unplanned result: total scatter.** Six branches, zero shared actions — not even the
+PARTICULARIST+FRAME_BREAKER pairing that clustered in both prior runs of this fixture.
+`adhd run --phase deepen` refused (`SCATTER: 6 branches and no two share a position`), so
+`synthesis.md` renders no recommendation at all, with the pruned block and CARETAKER's sole,
+unverified survivor. Recorded as observed, exactly as `expect.scatter: false` says it should be:
+this is fixture 004's assertion working, not failing, on an input the fixture never claimed to
+survive with a sixth frame in the mix. Whether NEGATIVE_SPACE's presence caused the scatter, or a
+five-frame rerun today would scatter too for reasons that have nothing to do with a sixth frame,
+is not established by one run and is not claimed here — `docs/RETIREMENT.md`'s single-sample
+discipline applies to this finding the same as any other.
+
+**NEGATIVE_SPACE's own first scorecard.** Pass A 0.88 (second of six). Pruned on T4 (names two
+live mechanisms, a versioned boolean or a multivariate flag, without settling which) and T7
+(never weighs the cost of guessing the wrong flag shape against the cost of widening one later).
+Real, specific findings about one artifact — not a verdict on the frame, the same standing every
+frame's first appearance carries. `adhd frames --health` now reports it at two criteria (2 and 3),
+correctly flagged as "under the 5-run floor" — one run is not five, and `docs/RETIREMENT.md`'s
+standing section names it for exactly that reason: so the tooling and the document agree, which is
+what that section is for.
+
+**What changed, concretely.** `evals/recorded/004-negative-space-probe/` (branches, critic passes,
+cost.json, README.md, expected.json — outcome `fail`, four failing items: `false_means`,
+`not_the_name`, `never_names_it`, `expect scatter false`). `evals/assertion-baseline.json` updated
+with `--update` for five gained assertions this run holds. `docs/RETIREMENT.md`'s standing section
+bumped to fifteen runs and gained the NEGATIVE_SPACE paragraph above. `docs/WRITEUP.md`'s run
+counts moved from eighteen/fourteen to nineteen/fifteen, with no other number in it moving — the
+inter-rater and weight-sensitivity corpora this run did not touch stayed exactly as measured.
+`analysis/README.md`'s reliability table's ceiling-rate column moved on six of nine dimensions
+(one new scored artifact shifts a corpus-wide rate by a point or few); alpha, percent-exact and
+distinct-value counts were unaffected. `test/contract-prose.test.ts`'s folded/plain/quoted counts
+moved from 78/106/11/117 files/plain/quoted/folded to 84/106/11/135, all six new branch artifacts
+folded, none plain — the D37 contract held.

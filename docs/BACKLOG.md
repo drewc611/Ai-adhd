@@ -190,14 +190,21 @@ yet enough to know whether they work.
     negative case. Either a probe on an existing frame or a new frame with the orthogonality
     check run first.
 
-    **Still open. D47 tried the probe.** `docs/AUTHORING-FRAMES.md` already named this as the likely
-    fix, so FRAME_BREAKER gained a probe asking what a label asserts about the state it does not
-    name. A fresh dispatch of fixture 004 (`004-frame-breaker-probe`) still misses `false_means`:
-    FRAME_BREAKER's reasoning gets close — it names the implicit "old checkout" fallback state a
-    name like `new_checkout_enabled` does not actually carry as fact — but the phrasing does not
-    match the detector, and the branch was independently pruned for T1 and T7 before it could reach
-    the recommendation. One run at one seed is not enough to conclude the probe doesn't help; it is
-    enough to say it hasn't yet. Full accounting in D47 and `evals/recorded/004-frame-breaker-probe`.
+    **Still open. D47 tried the probe; D52 tried the general case.** `docs/AUTHORING-FRAMES.md`
+    already named the probe as the likely fix, so FRAME_BREAKER gained one asking what a label
+    asserts about the state it does not name. A fresh dispatch of fixture 004
+    (`004-frame-breaker-probe`) still misses `false_means`: FRAME_BREAKER's reasoning gets close —
+    it names the implicit "old checkout" fallback state a name like `new_checkout_enabled` does not
+    actually carry as fact — but the phrasing does not match the detector, and the branch was
+    independently pruned for T1 and T7 before it could reach the recommendation.
+
+    D51's `NEGATIVE_SPACE` (backlog 23) asks a more general version of the same question, so D52
+    re-ran fixture 004 a third time with it added as a sixth frame. Same shape, same result:
+    NEGATIVE_SPACE's reasoning traces what a plain boolean collapses ("never evaluated" and
+    "deliberately held back as a control" into the same `false`) about as directly as anything in
+    the corpus, and still does not match the detector's regex. Two runs, two frames, the same
+    near-miss. Full accounting in D47, D52, and `evals/recorded/004-frame-breaker-probe` and
+    `004-negative-space-probe`.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**
@@ -207,8 +214,15 @@ yet enough to know whether they work.
     appeared to name no actor.~~
    **Done. `SUPPLICANT` and `SUCCESSOR`, picked mechanically: every candidate was matched against all 39 recorded artifacts, all synthesis files and all fixtures, and only names appearing nowhere in the corpus were eligible. `config/frames.yaml` carries `former_ids` so the five runs that wrote the old ids still resolve; the runs themselves are not rewritten. D6 has the reasoning.**
 19. **Per-frame fixtures.** One fixture per frame that the frame should obviously win, as a
-    unit test for the frame's own stance. **Still open, and the scope is now known: twelve
-    fixtures, and one frame that cannot have one.**
+    unit test for the frame's own stance. **Still open. Scope moved from twelve to thirteen
+    fixtures when D51 added `NEGATIVE_SPACE`; one frame still cannot have one.**
+
+    **D52 is not this item, and is not claimed as it.** `004-negative-space-probe` gave
+    `NEGATIVE_SPACE` its first real dispatch, but through fixture 004 — a naming fixture built for
+    a different question, run to test backlog 17, not a fixture NEGATIVE_SPACE should obviously
+    win. It didn't win anything there: pruned on T4 and T7, in a run that scattered entirely. This
+    item still wants a fixture built around a problem where the absence of something is
+    load-bearing, run, and won.
 
     **Built first, because it had to be: `adhd frames --reach`.** `--stats` and `--axes` count what
     recorded runs did, and a frame missing from both is either unlucky or unreachable. They cannot

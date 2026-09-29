@@ -1,0 +1,57 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: SUPPLICANT
+position: >-
+  Guarantee that once a shopper starts checkout, the flag locks them into one
+  version for the whole session instead of spending effort on what the flag is called.
+reasoning: |
+  1. I was trying to buy something. I opened my cart, clicked checkout, and started
+  filling in payment and shipping details. That's the whole of what I wanted: get
+  through checkout and get my order confirmed. I never asked to be part of an
+  experiment and I have no idea a "flag" exists.
+
+  2. At the moment it matters, all I can see is the checkout page in front of me:
+  what fields are on it, what the total says, whether the button works. I cannot see
+  a flag name, a percentage rollout, or which "arm" I'm in. All I can do is fill in
+  fields, click buttons, refresh the page, go back, or leave. If the page looks
+  different than it did a minute ago, or my cart total shifts, or a button I clicked
+  before is now missing, I have no way to tell whether that's a bug or "the new
+  experience" — I just see something broken.
+
+  3. I give up the moment the page stops making sense to me: if the checkout flow
+  changes shape mid-session, if my entered information disappears, if the total
+  changes without me changing anything, or if I hit an error with no explanation. I
+  won't file a bug report or ask why — I'll close the tab. When that happens, the
+  system doesn't lose a "test participant," it loses a completed order, and whoever
+  is watching the numbers for this flag will see it as a drop in conversion with no
+  attached reason, because I never told anyone.
+
+  4. If I knew it was possible, I would ask for one thing: that whatever version of
+  checkout I land on stays exactly that version, consistently, for as long as I am
+  in the middle of buying something. I don't care what it's named. I care that the
+  ground doesn't move under me while I'm standing on it.
+
+  So the naming question, from where I sit, is a distraction from the only thing
+  that actually reaches me: whether the flag's behavior is stable within a single
+  session. A well-named flag that still re-evaluates per page load will still lose
+  my order. A badly-named flag that pins me to one experience for the whole
+  checkout will never cost me anything.
+forecloses:
+  - >-
+    Treating a clever or descriptive flag name as if it were the fix, and moving on
+    without checking whether the flag can flip mid-session.
+  - >-
+    Re-evaluating the flag on every page load or request within a single checkout,
+    which is what would let the experience change under a shopper mid-purchase.
+  - >-
+    Surfacing the flag's name or state anywhere the shopper could see it, such as
+    in URLs, error messages, or support scripts.
+falsifier: >-
+  A support ticket or session replay showing one shopper whose checkout page
+  layout, form fields, or cart total changed while they were still filling it out,
+  with no action taken by the shopper themselves.
+missing_actor: >-
+  The shopper's own view of the situation is not represented in "what should we
+  call the flag" at all; a support agent fielding complaints about a checkout that
+  "looked different halfway through" can act on this system by filing that as a
+  session-consistency bug against the flag, independent of its eventual name.
+confidence: medium

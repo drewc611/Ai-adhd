@@ -78,7 +78,7 @@ A retired frame is not dispatched and does not count towards `n`. `adhd frames` 
 separate heading. Its recorded runs stay exactly as they are: they are the evidence for the
 retirement, and rewriting them would destroy the argument.
 
-## Current standing, as of 14 runs
+## Current standing, as of 15 runs
 
 `adhd frames --health` counts every criterion below over the recorded corpus. Read it before
 this section rather than after: the table is a snapshot and the command is the current state.
@@ -144,6 +144,14 @@ The counts are draws, with runs beside them where the two differ. Ten draws over
 | `FIRST_PRINCIPLES` | 0 | never dispatched across ten draws; criterion 5's count has not started. Reachable since D35 as a `strategy` primary at n=6, and it is an `enumerate_options` **alternate**, so the two wide-path runs did not reach it either. |
 
 Seven frames now sit at or past the five-run floor. None meets two criteria.
+
+**`NEGATIVE_SPACE` (D51, backlog 23) is at two criteria after its first dispatch, and one run is
+not evidence.** `004-negative-space-probe` pruned it (T4, T7) and it did not hold the recommendation
+— criteria 2 and 3, both met, both on a sample of one. `adhd frames --health` reports it correctly:
+"2 met, under the 5-run floor." Named here so the tooling and this document agree, exactly the
+drift this section exists to catch, not because there is anything to watch yet. `MECHANIC` and
+`NIGHT_OPERATOR`'s row above is the reminder of how fast a single additional run can move this:
+`NIGHT_OPERATOR` was at two criteria at nine runs and one more dispatch dropped it to one.
 
 **A separate naming problem, found by the same runs, and now fixed.** `adhd frames --collisions`
 found that `LEDGER` and `SUCCESSOR` were ordinary English nouns and both appeared as nouns in

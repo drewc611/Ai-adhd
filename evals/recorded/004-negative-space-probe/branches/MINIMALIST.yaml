@@ -1,0 +1,40 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: MINIMALIST
+position: >-
+  Pick one literal, specific name right now (e.g. checkout_redesign_2026) and move on, rather
+  than pausing to design a naming convention.
+reasoning: |
+  1. The pain is a moment of friction before writing code: someone needs a string to put in a
+  config file and doesn't want to guess wrong or have it questioned later. That's a small,
+  one-time decision being treated as if it needs a policy.
+  2. The smallest intervention is to name this one flag as plainly and specifically as possible
+  - describe what it gates (checkout) and what distinguishes it (the new version, ideally tied
+  to something stable like a date, ticket, or version number rather than "new," which ages
+  badly) - and stop there. No taxonomy, no prefix scheme, no team-wide standard invented to
+  answer a question about one flag.
+  3. This deliberately leaves unfixed: there is no naming convention for flags in general, no
+  rule for how future flags will be named consistently, and no stated policy for when this flag
+  gets deleted after the rollout finishes. That's acceptable now because a convention designed
+  around a single instance is a guess dressed as a standard - it's cheaper to let the second and
+  third flag reveal what actually needs standardizing.
+  4. The larger fix - an actual documented naming convention - becomes necessary when there are
+  enough flags that people can no longer tell what a flag does from its name, or when two flags
+  collide or overlap in meaning. You'd know this was happening the moment someone has to ask
+  "wait, how do we name flags?" instead of "what do we call this one," or when a flag from six
+  months ago outlives its own descriptive name (e.g., "new_checkout" is no longer new).
+forecloses:
+  - >-
+    Writing or adopting a formal feature-flag naming taxonomy or style guide as part of
+    answering this.
+  - >-
+    Running a naming discussion, poll, or bikeshed among multiple candidate names before
+    shipping the flag.
+falsifier: >-
+  If within the next couple of weeks a second, unrelated feature flag gets created and someone
+  has to stop and ask "how do we name flags" because the first ad hoc name already caused
+  confusion or a near-collision, that shows a convention was needed now, not later.
+missing_actor: >-
+  Whoever owns cleanup after the rollout finishes - the question only asks how to name the
+  flag, not who deletes it and the branching code once the new checkout is fully live; that
+  person should be assigned before the flag ships, not after it's forgotten.
+confidence: medium

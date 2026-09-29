@@ -1,0 +1,245 @@
+{
+  "n": 6,
+  "frames": [
+    {
+      "frame": "NEGATIVE_SPACE",
+      "status": "pruned",
+      "cluster": "version_variant_naming",
+      "pass_a": 0.8809523809523809,
+      "fired": [
+        {
+          "trap": "T4",
+          "evidence": "The position offers two live mechanisms (a versioned boolean like checkout_v2 or a full multivariate legacy|v2 flag) without settling which to build, leaving that decision to the reader."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The position never weighs what it costs to pick the wrong flag shape against how long that mistake would take to surface, e.g. whether upgrading boolean to multivariate later is cheap or a painful migration."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name the flag by version or variant, not by relative recency — use something like `checkout_v2` or a multivariate `checkout_experience: legacy|v2`, and never a name built on the word \"new\" such as `new_checkout` or `enable_new_checkout`.",
+      "forecloses": [
+        "Naming the flag `new_checkout`, `enable_new_checkout`, or any name that uses \"new\"/\"legacy\" as the permanent identifier rather than a version tag.",
+        "Shipping a plain boolean flag when the org's experimentation team needs to distinguish \"not yet bucketed\" from \"explicitly assigned to control\" — that requires a three-state or multivariate flag, not a boolean."
+      ],
+      "falsifier": "Check the actual flag platform in use: if it already logs \"not evaluated\" as a state distinct from \"evaluated false\" in its analytics regardless of the flag's own type (so the control-vs-unbucketed collapse in probe 3 does not actually happen on this platform), then the multivariate requirement is unnecessary and the position should shrink to just the naming-decay argument against \"new_checkout.\"",
+      "missing_actor": "The experimentation or data-science owner who consumes the flag's exposure and assignment data for conversion analysis — the brief names only \"users\" and implicitly engineers, but this person is the one actually harmed by a boolean's state collapse and should be the one deciding whether the flag is boolean or multivariate."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "pruned",
+      "cluster": "literal_adhoc_naming",
+      "pass_a": 0.7380952380952381,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The core claim -- pick one specific literal name now rather than building a convention for a single instance -- reads identically if 'feature flag', 'new checkout', and 'controls whether users see' were swapped for any other one-off named artifact."
+        },
+        {
+          "trap": "T4",
+          "evidence": "The position deliberately declines to decide a naming convention, a deletion policy, and future-flag consistency, explicitly listing all three as left open."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Pick one literal, specific name right now (e.g. checkout_redesign_2026) and move on, rather than pausing to design a naming convention.",
+      "forecloses": [
+        "Writing or adopting a formal feature-flag naming taxonomy or style guide as part of answering this.",
+        "Running a naming discussion, poll, or bikeshed among multiple candidate names before shipping the flag."
+      ],
+      "falsifier": "If within the next couple of weeks a second, unrelated feature flag gets created and someone has to stop and ask \"how do we name flags\" because the first ad hoc name already caused confusion or a near-collision, that shows a convention was needed now, not later.",
+      "missing_actor": "Whoever owns cleanup after the rollout finishes - the question only asks how to name the flag, not who deletes it and the branching code once the new checkout is fully live; that person should be assigned before the flag ships, not after it's forgotten."
+    },
+    {
+      "frame": "SUPPLICANT",
+      "status": "pruned",
+      "cluster": "session_sticky_flag",
+      "pass_a": 0.7142857142857143,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The session-stickiness argument only needs some toggle that can change a user's experience mid-transaction; it would read the same for any transactional flow gated by any switch, not specifically a 'feature flag' for a 'new checkout'."
+        },
+        {
+          "trap": "T4",
+          "evidence": "The position explicitly declines to answer the literal question asked (what to call the flag) and never specifies the storage or session mechanism that would deliver the stickiness it demands."
+        },
+        {
+          "trap": "T7",
+          "evidence": "The position asserts session-locking should be guaranteed but never discusses what it costs to be wrong about that (e.g. an overly rigid lock hiding a needed rollback) versus how quickly such a mistake would surface."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Guarantee that once a shopper starts checkout, the flag locks them into one version for the whole session instead of spending effort on what the flag is called.",
+      "forecloses": [
+        "Treating a clever or descriptive flag name as if it were the fix, and moving on without checking whether the flag can flip mid-session.",
+        "Re-evaluating the flag on every page load or request within a single checkout, which is what would let the experience change under a shopper mid-purchase.",
+        "Surfacing the flag's name or state anywhere the shopper could see it, such as in URLs, error messages, or support scripts."
+      ],
+      "falsifier": "A support ticket or session replay showing one shopper whose checkout page layout, form fields, or cart total changed while they were still filling it out, with no action taken by the shopper themselves.",
+      "missing_actor": "The shopper's own view of the situation is not represented in \"what should we call the flag\" at all; a support agent fielding complaints about a checkout that \"looked different halfway through\" can act on this system by filing that as a session-consistency bug against the flag, independent of its eventual name."
+    },
+    {
+      "frame": "PARTICULARIST",
+      "status": "pruned",
+      "cluster": "convention_matched_naming",
+      "pass_a": 0.6904761904761905,
+      "fired": [
+        {
+          "trap": "T4",
+          "evidence": "The position resolves to three different literal strings contingent on an unstated fact (the team's casing convention), so the reader still has to make the final naming call themselves."
+        },
+        {
+          "trap": "T7",
+          "evidence": "There is no discussion anywhere in the reasoning of what it would cost to have matched the wrong convention, or how quickly such a mistake would surface versus how hard it would be to fix."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Match the new flag's name to whatever naming convention the existing feature-flag system already uses — new_checkout_enabled if flags there are snake_case, new-checkout if kebab-case, checkout.new_flow if dot-namespaced — instead of inventing a standalone string.",
+      "forecloses": [
+        "picking a name independent of the flag platform's existing casing/namespace convention",
+        "treating \"new\" as a permanent identifier with no plan for what the flag or its references get renamed to once the new checkout is no longer new"
+      ],
+      "falsifier": "Look at the current list of flags in the system this flag will live in; if an entry already exists for the old checkout (e.g. legacy_checkout or checkout_v1_enabled) or for this specific redesign under a project codename, the flag must follow that existing pattern rather than the invented new-checkout/new_checkout default, which falsifies this position if kept as the literal name.",
+      "missing_actor": "Whoever administers the feature-flag platform and can see the current flag list and naming convention; their action is to state that convention (and any existing old-checkout flag name or project codename) before a name is chosen."
+    },
+    {
+      "frame": "CARETAKER",
+      "status": "survivor",
+      "cluster": "capability_based_naming",
+      "pass_a": 0.9523809523809523,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name the flag for the specific capability it gates, using a permanent domain-prefixed identifier (e.g. checkout.single_page_flow), and never use relative language like \"new\" or \"v2\" that only makes sense compared to a baseline that will not exist in two years.",
+      "forecloses": [
+        "Naming the flag \"new_checkout\" or \"checkout_v2\", which reads clearly at launch but becomes meaningless or actively misleading once the \"new\" version is the only version.",
+        "Naming the flag after the rollout mechanism itself (e.g. \"checkout_experiment_1\"), which loses all meaning to anyone who wasn't around for the experiment once it ends."
+      ],
+      "falsifier": "Two years from now, grep the codebase, dashboards, and runbooks for the flag name: if the temporally-named flag was fully deleted within weeks of 100% rollout with zero lingering references anywhere, then the staleness problem never materialized and the rename cost this position demands was unnecessary.",
+      "missing_actor": "The analytics/data team that consumes the flag name as a permanent event dimension; they were never consulted on naming stability and are the ones who can require a stable identifier contract independent of the flag's own lifecycle, which is exactly what prevents the rename-cost problem described above."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "registry_governance_gate",
+      "pass_a": 0.7857142857142857,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The governance argument (owner, expiry, registry gate before merge) is generic flag-lifecycle advice that would apply unchanged to any feature flag for any feature, not specifically one controlling visibility of a new checkout."
+        },
+        {
+          "trap": "T4",
+          "evidence": "The position never answers the question actually posed -- what to call the flag -- and also leaves the specific default owner, expiry duration, and registry schema unspecified."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Skip the naming debate and instead register the flag with a mandatory owner and a hard expiry/removal date before the PR that introduces it is allowed to merge.",
+      "forecloses": [
+        "Spending review time on picking a descriptive, permanent-sounding flag name as the main deliverable of this decision.",
+        "Letting the flag exist indefinitely as unowned infrastructure with no scheduled removal or audit."
+      ],
+      "falsifier": "If the team already has a flag registry that enforces owner and expiry fields via CI before merge, then this position adds nothing and the naming question really was the only open item.",
+      "missing_actor": "The on-call or platform team that inherits stale, unowned flags later — give them audit authority to force expiry or removal of any flag past its registered date, independent of the feature team that created it."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "version_variant_naming",
+      "action": "Rename the flag using a version or variant tag such as checkout_v2, or a multivariate legacy|v2 state, instead of any name built on the word new.",
+      "members": [
+        "NEGATIVE_SPACE"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "literal_adhoc_naming",
+      "action": "Pick one specific, literal name for this flag right now without pausing to design or adopt any broader naming convention.",
+      "members": [
+        "MINIMALIST"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "session_sticky_flag",
+      "action": "Make the flag's evaluation sticky for the whole duration of a shopper's checkout session, leaving the actual name of the flag unresolved.",
+      "members": [
+        "SUPPLICANT"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "convention_matched_naming",
+      "action": "Copy the casing and namespace pattern the team's existing flags already use, keeping the word new as part of the literal string.",
+      "members": [
+        "PARTICULARIST"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "capability_based_naming",
+      "action": "Name the flag after the permanent capability it gates, with a domain prefix, and never after its relative recency.",
+      "members": [
+        "CARETAKER"
+      ],
+      "survivors": [
+        "CARETAKER"
+      ],
+      "singleton": true,
+      "strongest_objection": "This position requires knowing, at flag-creation time, the precise and durable shape of the capability the redesign will end up being -- but checkout redesigns routinely change scope between when the flag is created and when the feature actually stabilizes, so a name like a single-page-flow identifier can just as easily become inaccurate as a temporal one would, only for a different reason (the implementation changed) rather than the reason this position defends against (time passed). Locking in a specific mechanism name early is itself a bet that the mechanism won't change, and if it does, the same downstream migration cost this position is trying to avoid gets paid anyway, just earlier and under a different justification.",
+      "representative": "CARETAKER",
+      "mean_pass_a": 0.9523809523809523
+    },
+    {
+      "id": "registry_governance_gate",
+      "action": "Require the flag to be registered with an owner and a hard expiry date before the PR introducing it can merge, treating the literal name as secondary.",
+      "members": [
+        "FRAME_BREAKER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": true,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "Multiple branches directly attack the question's implicit frame from different angles: one argues naming is not even the live decision, one argues a plain boolean is the wrong mechanism, one argues the flag's name is irrelevant to the party actually affected, and one argues relative naming itself is the flawed premise -- so the load-bearing assumption that this is simply a string-choice problem was tested, not accepted."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every one of the six branches populates missing_actor with a specific party and a concrete action (platform administrator, on-call/platform team, shopper/support agent, analytics/data-science owner, cleanup owner), so none left it null."
+    },
+    "notes": [
+      "SCATTER: 6 branches and no two share a position. The problem statement is probably underspecified. Return the ambiguity to the asker.",
+      "singleton CARETAKER escalated to deepen, flagged unverified"
+    ]
+  },
+  "proceed": false,
+  "rubric_version": 1
+}

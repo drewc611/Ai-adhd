@@ -1,11 +1,11 @@
-# What eighteen runs show
+# What nineteen runs show
 
 A short account of what this repository has actually established, written so the negative results
 are as easy to find as the rest. Every number below comes from a command in this checkout and is
 pinned by a test; the commands are named so you can rerun them.
 
-Backlog item 49 asked for this at five runs. There are eighteen now, fourteen with a `score.json`,
-and the extra thirteen did not change the shape of the answer — with five exceptions, all named where
+Backlog item 49 asked for this at five runs. There are nineteen now, fifteen with a `score.json`,
+and the extra fourteen did not change the shape of the answer — with five exceptions, all named where
 they belong. Two are from `001-seed3`: the first contested decision the rubric actually separates, and
 the first run to come in under the token estimate it was quoted. The third is its replicate at the
 same seed with byte-identical briefs, and it is the most uncomfortable number here: the critic pruned

@@ -1,0 +1,57 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+pass: A
+scores:
+  A:
+    committal: { score: 1, evidence: "The single sentence gives three different literal names contingent on an unstated convention (snake_case/kebab-case/dot-namespaced), so the reader still has to go find which applies before acting." }
+    falsifiability: { score: 1, evidence: "The falsifier just asks the reader to look up the existing flag list, but since the position already says \"match whatever convention exists,\" finding that convention fulfills rather than kills the position." }
+    specificity: { score: 3, evidence: "The reasoning is built explicitly on the three phrases \"feature flag,\" \"new checkout,\" and \"controls whether users see,\" and would not assemble the same way without them." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that a standalone name can be invented independent of the existing flag system, and the recommendation to defer to convention follows directly from that test." }
+    reasoning_carries: { score: 3, evidence: "No external authority or citation appears anywhere; the argument is self-contained inference about naming conventions and word decay." }
+    actor_coverage: { score: 3, evidence: "The flag-platform administrator is named with a concrete action (state the convention), and the position cannot be executed without that actor's input." }
+    reversibility: { score: 0, evidence: "Nothing in the reasoning distinguishes a cheap/reversible naming step from an expensive/committed one." }
+    substance: { score: 2, evidence: "Flattened, the claim (\"name flags per your team's existing convention rather than inventing one\") is a real but fairly ordinary piece of advice." }
+  B:
+    committal: { score: 3, evidence: "One sentence directs a concrete, mergeable action — require owner and hard expiry before the PR merges — with no hedge." }
+    falsifiability: { score: 3, evidence: "The falsifier (check whether the team's registry already enforces owner/expiry via CI) is cheap to check and, if true, the artifact itself says the position \"adds nothing.\"" }
+    specificity: { score: 1, evidence: "The governance argument (owner, expiry, registry gate) is generic flag-lifecycle advice that would read the same for almost any feature flag, checkout-specific wording aside." }
+    assumption_attack: { score: 3, evidence: "It directly attacks the premise that naming is the live decision and replaces it with a governance decision, and the recommended action follows from that reframing." }
+    reasoning_carries: { score: 3, evidence: "The five-step chain about who benefits from skipping governance and who inherits the cost uses no outside authority." }
+    actor_coverage: { score: 2, evidence: "The on-call/platform team is named with an audit action, but the core recommendation (gate the PR) doesn't actually hinge on that team exercising it." }
+    reversibility: { score: 1, evidence: "It notes naming is \"a five-minute side effect\" compared to the governance decision but never builds an explicit cheap-vs-expensive sequence from it." }
+    substance: { score: 3, evidence: "Flattened, \"require an owner and expiry date before a flag can merge\" is a standalone, real operational claim independent of the naming framing." }
+  C:
+    committal: { score: 3, evidence: "The position is one sentence with a clear verb — guarantee session-long stickiness — and no escape hatch." }
+    falsifiability: { score: 1, evidence: "The proposed falsifier (a support ticket showing mid-session layout change) would confirm rather than overturn the position, since finding it validates the very risk the position addresses." }
+    specificity: { score: 2, evidence: "The reasoning leans on checkout-specific mechanics (cart total, payment fields, session) even though it explicitly discards the naming detail, so it partly bends around this problem." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that the flag's name is what matters to any real party, and the recommendation (session stickiness over naming) follows from that test." }
+    reasoning_carries: { score: 3, evidence: "The argument is a first-person walkthrough with no cited authority at any step." }
+    actor_coverage: { score: 3, evidence: "The shopper/support-agent perspective is named with a concrete action (file a session-consistency bug), and it is the entire basis the position is built from." }
+    reversibility: { score: 0, evidence: "There is no cheap-vs-expensive or reversible-vs-committed distinction anywhere in the reasoning." }
+    substance: { score: 2, evidence: "Flattened to \"don't let the flag's evaluation change within a shopper's checkout session,\" it is a real practice, though the vivid first-person framing does real persuasive work beyond that plain claim." }
+  D:
+    committal: { score: 3, evidence: "One sentence commits to a specific naming pattern (domain-prefixed capability name) and explicitly bans the alternative, with no hedge." }
+    falsifiability: { score: 2, evidence: "The falsifier (grep for lingering references two years from now) is observable and relevant to the claim but requires waiting years to check, making it expensive rather than cheap." }
+    specificity: { score: 3, evidence: "The argument depends on this exact flag's downstream consumers — analytics events, dashboards, runbooks, dependent flags — and would not transfer unchanged to a generic naming question." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that a relative/temporal name is harmless at launch, and the capability-based recommendation follows directly from tracing that assumption's failure mode." }
+    reasoning_carries: { score: 3, evidence: "The four-step chain about migration cost stands entirely on its own reasoning with no cited source." }
+    actor_coverage: { score: 3, evidence: "The analytics/data team is named with a concrete action (require a stable identifier contract), and the whole rename-cost argument depends on that team's consumption of the string." }
+    reversibility: { score: 3, evidence: "The position is explicitly sequenced on cost-over-time: rename now while cheap (few dependents) versus rename later when it becomes an expensive migration." }
+    substance: { score: 3, evidence: "Flattened, \"name flags for the capability, not relative recency, because temporal names create costly later migrations\" is the same real claim without the framing." }
+  E:
+    committal: { score: 2, evidence: "The one-sentence position still offers two alternative instruments (versioned boolean or multivariate flag), which is a soft escape hatch on the exact mechanism to use." }
+    falsifiability: { score: 3, evidence: "The falsifier (check whether the platform already distinguishes \"not evaluated\" from \"false\") is cheap and, per the artifact itself, would shrink the position to just the naming-decay argument if true." }
+    specificity: { score: 3, evidence: "The reasoning is built around this flag's specific bucketing/control-group collapse scenario and would not survive removal of those details unchanged." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that a plain boolean flag is sufficient, and the multivariate/versioned recommendation follows from showing that assumption collapses a real distinction." }
+    reasoning_carries: { score: 3, evidence: "The argument about who reads flag state and what changes for them uses no external authority." }
+    actor_coverage: { score: 3, evidence: "The experimentation/data-science owner is named with a concrete decision-making action, and the case for multivariate naming depends on that actor's needs." }
+    reversibility: { score: 0, evidence: "No cheap-versus-expensive or reversible-versus-committed distinction appears anywhere in the reasoning." }
+    substance: { score: 3, evidence: "Flattened, \"use a versioned or multivariate flag instead of a relative boolean so analytics can distinguish unbucketed from control\" is the same substantive claim without the framing." }
+  F:
+    committal: { score: 3, evidence: "One sentence commits to picking a specific literal name now and explicitly rejects pausing for a convention, with no hedge." }
+    falsifiability: { score: 2, evidence: "The falsifier (a second flag causing a near-collision within weeks) is observable and relevant but requires waiting on an uncertain future event rather than a cheap immediate check." }
+    specificity: { score: 1, evidence: "The core argument — don't build a policy around a single instance — is generic advice about premature standardization that would read the same for almost any first-of-its-kind naming decision." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that a naming convention is needed now, and the recommendation to defer standardization follows directly from that test." }
+    reasoning_carries: { score: 3, evidence: "The cost-benefit argument about premature taxonomies cites no outside authority." }
+    actor_coverage: { score: 2, evidence: "The post-rollout cleanup owner is named with an action (assign before shipping), but the core naming recommendation doesn't actually depend on that actor." }
+    reversibility: { score: 3, evidence: "The position is explicitly sequenced: do the cheap, reversible thing (pick one name) now, and defer the more committed decision (a naming convention) until a second or third flag proves it's needed." }
+    substance: { score: 2, evidence: "Flattened, \"just pick a specific name now instead of designing a taxonomy\" is a real but fairly ordinary practical claim." }
