@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
+import { request } from "node:http";
+import { spawnSync } from "node:child_process";
 import { cfg, tmp } from "./helpers.js";
-import { createDumpServer } from "../src/serve.js";
+import { createDumpServer, isLoopbackHost, MAX_BODY_BYTES } from "../src/serve.js";
 import { openKernel } from "../src/os.js";
 import { openSuper } from "../src/super/index.js";
 
@@ -144,4 +146,101 @@ test("an unknown route returns 404 as JSON", async () => {
     assert.equal(res.status, 404);
     assert.match((await res.json() as { error: string }).error, /not found/);
   });
+});
+
+/**
+ * fetch() will not let a script set Host or Origin, and those two headers are exactly what these
+ * tests are about, so they go through node:http, which sends what it is given.
+ */
+function raw(base: string, method: string, path: string, headers: Record<string, string> = {}, body?: string): Promise<{ status: number; body: string }> {
+  const u = new URL(base);
+  return new Promise((resolve, reject) => {
+    const req = request({ host: u.hostname, port: u.port, method, path, headers }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8") }));
+    });
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+const JSON_HEADERS = { "content-type": "application/json" };
+
+test("a request whose Host is not loopback is refused before any route runs (DNS rebinding)", async () => {
+  await withServer(async (base) => {
+    const port = new URL(base).port;
+    const r = await raw(base, "GET", "/", { host: `rebind.example:${port}` });
+    assert.equal(r.status, 403);
+    const wrongPort = await raw(base, "GET", "/", { host: "localhost:1" });
+    assert.equal(wrongPort.status, 403);
+    for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]) {
+      assert.equal((await raw(base, "GET", "/", { host })).status, 200, host);
+    }
+  });
+});
+
+test("a cross-origin POST is refused and submits no mission", async () => {
+  await withServer(async (base, _osRoot, superRoot) => {
+    const port = new URL(base).port;
+    const body = JSON.stringify({ text: "enqueue me" });
+    for (const origin of ["http://evil.example", "null", `http://127.0.0.1:${Number(port) + 1}`, `https://127.0.0.1:${port}`]) {
+      const r = await raw(base, "POST", "/api/dump", { ...JSON_HEADERS, origin, host: `127.0.0.1:${port}` }, body);
+      assert.equal(r.status, 403, `origin ${origin} was accepted`);
+    }
+    const site = await raw(base, "POST", "/api/dump", { ...JSON_HEADERS, "sec-fetch-site": "cross-site", host: `127.0.0.1:${port}` }, body);
+    assert.equal(site.status, 403);
+    const sameSite = await raw(base, "POST", "/api/dump", { ...JSON_HEADERS, "sec-fetch-site": "same-site", host: `127.0.0.1:${port}` }, body);
+    assert.equal(sameSite.status, 403);
+    assert.equal(openSuper(cfg, superRoot).list().length, 0, "a refused request still created a mission");
+  });
+});
+
+test("a same-origin POST, with or without Origin, still works", async () => {
+  await withServer(async (base) => {
+    const port = new URL(base).port;
+    const body = JSON.stringify({ text: "buy milk" });
+    const withOrigin = await raw(base, "POST", "/api/dump", { ...JSON_HEADERS, origin: `http://127.0.0.1:${port}`, "sec-fetch-site": "same-origin" }, body);
+    assert.equal(withOrigin.status, 200);
+    const noOrigin = await raw(base, "POST", "/api/dump", JSON_HEADERS, body);
+    assert.equal(noOrigin.status, 200);
+  });
+});
+
+test("a request body over the cap is refused with 413 and submits no mission", async () => {
+  await withServer(async (base, _osRoot, superRoot) => {
+    const big = JSON.stringify({ text: "x".repeat(MAX_BODY_BYTES + 1) });
+    const r = await raw(base, "POST", "/api/dump", JSON_HEADERS, big);
+    assert.equal(r.status, 413);
+    assert.equal(openSuper(cfg, superRoot).list().length, 0);
+  });
+});
+
+test("allowedHosts admits a named host and nothing else", async () => {
+  const osRoot = tmp("adhd-serve-os-");
+  const superRoot = tmp("adhd-serve-super-");
+  const server = createDumpServer(cfg, { osRoot, superRoot, allowedHosts: ["dump.internal"] });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const port = new URL(base).port;
+    assert.equal((await raw(base, "GET", "/", { host: `dump.internal:${port}` })).status, 200);
+    assert.equal((await raw(base, "GET", "/", { host: `other.internal:${port}` })).status, 403);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(osRoot, { recursive: true, force: true });
+    rmSync(superRoot, { recursive: true, force: true });
+  }
+});
+
+test("isLoopbackHost accepts only loopback addresses", () => {
+  for (const h of ["localhost", "127.0.0.1", "::1"]) assert.equal(isLoopbackHost(h), true, h);
+  for (const h of ["0.0.0.0", "::", "192.168.1.5", "example.com", ""]) assert.equal(isLoopbackHost(h), false, h);
+});
+
+test("adhd serve refuses a non-loopback --host without --allow-non-loopback", () => {
+  const cli = join(cfg.root, "dist", "src", "cli.js");
+  const r = spawnSync(process.execPath, [cli, "serve", "--host", "0.0.0.0", "--port", "0", "--os-root", tmp("adhd-serve-os-"), "--super-root", tmp("adhd-serve-super-")], { encoding: "utf8", cwd: cfg.root, timeout: 20000 });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr + r.stdout, /allow-non-loopback/);
 });

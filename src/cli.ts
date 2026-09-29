@@ -19,7 +19,7 @@ import { explainFrame } from "./why.js";
 import { writeViewer } from "./viewer.js";
 import { wizard } from "./tui.js";
 import { kernelStats, openKernel, recordRun } from "./os.js";
-import { createDumpServer } from "./serve.js";
+import { createDumpServer, isLoopbackHost } from "./serve.js";
 import { readFileSync } from "node:fs";
 import { ConfigError, ContractError, RunAbort, UsageError } from "./errors.js";
 import { join } from "node:path";
@@ -333,16 +333,26 @@ program
       "--os-root/--super-root, or nothing here will ever move off pending.",
   )
   .option("--port <n>", "", (v) => Number.parseInt(v, 10), 4174)
+  .option("--host <addr>", "address to bind; anything but localhost, 127.0.0.1 or ::1 also needs --allow-non-loopback", "127.0.0.1")
+  .option("--allow-non-loopback", "let --host bind an address other machines can reach; this server has no login, so anyone who can reach it can enqueue work for your workers")
+  .option("--allowed-host <name...>", "extra Host header names to accept, needed when --allow-non-loopback is reached by a name other than localhost")
   .option("--os-root <dir>", "kernel runs directory (default $ADHD_OS_ROOT or ./runs)")
   .option("--super-root <dir>", "mission root (default $ADHD_SUPER_ROOT or ./missions)")
-  .action((o: { port: number; osRoot?: string; superRoot?: string }) => {
+  .action((o: { port: number; host: string; allowNonLoopback?: boolean; allowedHost?: string[]; osRoot?: string; superRoot?: string }) => {
     try {
+      if (!isLoopbackHost(o.host) && !o.allowNonLoopback) {
+        throw new Error(`refusing to bind ${o.host}: it is not a loopback address. adhd serve has no login. Pass --allow-non-loopback to bind it anyway.`);
+      }
       const cfg = loadConfig(program.opts().root, program.opts().overlay);
       const osRoot = o.osRoot ?? process.env["ADHD_OS_ROOT"] ?? "runs";
       const superRoot = o.superRoot ?? process.env["ADHD_SUPER_ROOT"] ?? "missions";
-      const server = createDumpServer(cfg, { osRoot, superRoot });
-      server.listen(o.port, () => {
-        console.log(`adhd serve on http://localhost:${o.port}  (os-root ${osRoot}, super-root ${superRoot})`);
+      const wildcard = o.host === "0.0.0.0" || o.host === "::";
+      const allowedHosts = [...(o.allowedHost ?? []), ...(isLoopbackHost(o.host) || wildcard ? [] : [o.host])];
+      const server = createDumpServer(cfg, { osRoot, superRoot, allowedHosts });
+      server.listen(o.port, o.host, () => {
+        const shown = o.host.includes(":") ? `[${o.host}]` : o.host;
+        console.log(`adhd serve on http://${shown}:${o.port}  (os-root ${osRoot}, super-root ${superRoot})`);
+        if (!isLoopbackHost(o.host)) console.log(`WARNING: bound to ${o.host}. There is no login: anyone who can reach this port can enqueue work for your workers.`);
         console.log("Nothing here calls a model. Run /superagent and /adhd-worker in a Claude Code session pointed at the same roots, or this sits at pending.");
       });
     } catch (e) {

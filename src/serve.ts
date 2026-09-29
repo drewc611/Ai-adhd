@@ -23,11 +23,41 @@ function json(res: ServerResponse, code: number, body: unknown): void {
   res.end(text);
 }
 
+/** A request the server refuses on purpose; carries the status the client should see. */
+class HttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
+/** A brain dump is prose. Nothing this UI accepts needs more than this, and an uncapped body is a memory sink. */
+export const MAX_BODY_BYTES = 1024 * 1024;
+
+const LOOPBACK_NAMES = ["localhost", "127.0.0.1", "[::1]"];
+
+/** True for the addresses `adhd serve` may bind without an explicit opt-in. */
+export function isLoopbackHost(host: string): boolean {
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    const declared = Number(req.headers["content-length"]);
+    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return void reject(new HttpError(413, "request body too large"));
     const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
+    let size = 0;
+    let tooLarge = false;
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_BODY_BYTES) {
+        tooLarge = true;
+        chunks.length = 0;
+        return;
+      }
+      if (!tooLarge) chunks.push(c);
+    });
     req.on("end", () => {
+      if (tooLarge) return void reject(new HttpError(413, "request body too large"));
       const text = Buffer.concat(chunks).toString("utf8");
       if (!text.trim()) return void resolve({});
       try {
@@ -65,6 +95,11 @@ function newMissionId(): string {
 export interface ServeOptions {
   osRoot: string;
   superRoot: string;
+  /**
+   * Host names, beyond the loopback ones, that a request may address. Empty by default. Only
+   * `adhd serve --allow-non-loopback` fills it, and every entry is a name the operator typed.
+   */
+  allowedHosts?: string[];
 }
 
 export function createDumpServer(cfg: Config, opts: ServeOptions) {
@@ -72,9 +107,49 @@ export function createDumpServer(cfg: Config, opts: ServeOptions) {
   const superAgent = openSuper(cfg, opts.superRoot);
   const pageHtml = readFileSync(join(cfg.root, "assets", "dump.html"), "utf8");
 
+  const extraHosts = (opts.allowedHosts ?? []).map((h) => h.toLowerCase());
+
+  /**
+   * Host and Origin gate. A page on any other site can reach a loopback server two ways: a
+   * cross-site request from the browser, and DNS rebinding, where its own hostname is re-pointed
+   * at 127.0.0.1. The Host header exposes the second (the browser still sends the attacker's
+   * name), and Origin plus Sec-Fetch-Site expose the first. There is no token here, so this is
+   * the whole defence: a request that fails it is refused before any route runs.
+   */
+  function checkOrigin(req: IncomingMessage): HttpError | null {
+    const port = req.socket.localPort;
+    const allowed = new Set<string>();
+    for (const name of [...LOOPBACK_NAMES, ...extraHosts]) allowed.add(`${name}:${port}`);
+    const host = (req.headers.host ?? "").toLowerCase();
+    if (!allowed.has(host)) return new HttpError(403, "host not allowed");
+    const method = req.method ?? "GET";
+    if (method === "GET" || method === "HEAD") return null;
+    const site = req.headers["sec-fetch-site"];
+    if (site !== undefined && site !== "same-origin" && site !== "none") return new HttpError(403, "cross-site request refused");
+    const origin = req.headers.origin;
+    if (origin !== undefined) {
+      let ok = false;
+      try {
+        const u = new URL(origin);
+        ok = u.protocol === "http:" && allowed.has(u.host.toLowerCase());
+      } catch {
+        ok = false;
+      }
+      if (!ok) return new HttpError(403, "cross-origin request refused");
+    }
+    return null;
+  }
+
   return createServer((req, res) => {
+    const refused = checkOrigin(req);
+    if (refused) return void json(res, refused.status, { error: refused.message });
     void handle(req, res).catch((e: unknown) => {
-      if (!res.headersSent) json(res, 500, { error: (e as Error).message });
+      if (res.headersSent) return;
+      if (e instanceof HttpError) {
+        res.setHeader("connection", "close");
+        return void json(res, e.status, { error: e.message });
+      }
+      json(res, 500, { error: (e as Error).message });
     });
   });
 

@@ -8,9 +8,10 @@
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/codeql.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/maintenance.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/maintenance.yml/badge.svg?branch=main" alt="maintenance"></a>
   <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/train.yml/badge.svg?branch=main" alt="train"></a>
+  <a href="https://github.com/drewc611/Ai-adhd/actions/workflows/secret-scan.yml"><img src="https://github.com/drewc611/Ai-adhd/actions/workflows/secret-scan.yml/badge.svg?branch=main" alt="secret scan"></a>
   <a href="#install"><img src="https://img.shields.io/badge/Claude%20Code-plugin-d97757" alt="Claude Code plugin"></a>
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
-  <a href="test/"><img src="https://img.shields.io/badge/tests-536-2ea44f" alt="536 TypeScript tests"></a>
+  <a href="test/"><img src="https://img.shields.io/badge/tests-543-2ea44f" alt="543 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-247-2ea44f" alt="247 Python tests"></a>
   <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D47%20resolved-0969da" alt="D1 through D47 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
@@ -155,6 +156,10 @@ page. It is not a sixth way to call a model — it still calls none. Nothing mov
 without a Claude Code session running `/superagent` and `/adhd-worker` pointed at the same
 `--os-root`/`--super-root`. See [D46](docs/DECISIONS.md).
 
+The server binds 127.0.0.1, refuses a `Host` header that is not loopback, and refuses a cross-origin
+`POST`, because it has no login. Binding any other address takes `--host <addr> --allow-non-loopback`,
+and a name other than the address itself takes `--allowed-host <name>`.
+
 ## Reach for it when
 
 A design decision has more than one defensible answer. A bug is fuzzy and the first theory
@@ -172,7 +177,7 @@ prompts/    orchestrator, branch, critic, deepen, synthesis
 agents/     four run subagents, five mission subagents, the trainer and its governor
 skills/     adhd (drives a run), adhd-worker (executes one), superagent (drives a mission)
 src/        compiler, validator, scorer, harness, kernel, CLI, MCP server
-test/       536 tests over all of it
+test/       543 tests over all of it
 bin/        adhd-mcp.mjs: the plugin's MCP entry point, and what it says when unbuilt
 assets/     the mark, the banner, the run explorer shell
 scripts/    demo.sh: what a clean checkout can show without a model
