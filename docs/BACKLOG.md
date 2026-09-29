@@ -624,7 +624,9 @@ yet enough to know whether they work.
 
 ## 8. Distribution
 
-51. **Publish to npm** under a scoped name.
+51. ~~**Publish to npm** under a scoped name.~~ **Duplicate of item 72, resolved there:** the
+    scoped name (`ai-adhd`) and the publish pipeline (`.github/workflows/release.yml`) both
+    exist; the only remaining step is the owner adding the `NPM_TOKEN` repository secret.
 52. ~~**A GitHub Action** that runs `adhd eval` on every PR touching `config/` or `prompts/`.~~
     **Already built and found open by the audit in item 83. `.github/workflows/library.yml` is
     path-filtered on `config/**`, `prompts/**`, `evals/fixtures/**` and `agents/**`, and it is separate
