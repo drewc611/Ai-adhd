@@ -52,8 +52,8 @@ test("an overlay frame reusing an id replaces the base frame whole", () => {
 });
 
 test("an overlay frame with a new id is added after the base ones", () => {
-  const base = cfg.frameById.get("LEDGER")!;
-  const novel = { ...base, id: "HOUSE_STYLE", name: "House style", axis: "house", stance: "Answer the way this team answers, in the house idiom, with the house caveats attached." };
+  const base = cfg.frameById.get("LEVY")!;
+  const novel = { ...base, id: "HOUSE_STYLE", name: "House style", axis: "house", stance: "Answer the way this team answers, in the house idiom, with the house caveats attached.", former_ids: [] };
   const c = loadConfig(root({ frames: [novel] }));
   assert.deepEqual(c.overlay!.added_frames, ["HOUSE_STYLE"]);
   assert.deepEqual(c.overlay!.replaced_frames, []);
@@ -63,13 +63,13 @@ test("an overlay frame with a new id is added after the base ones", () => {
 
 test("a routing class is replaced whole, and a run under the overlay dispatches its frames", () => {
   const c = loadConfig(root({
-    routing: { classes: { design_decision: { action: "run", description: "overlaid", signals: ["x"], frames: ["LEDGER", "SABOTEUR", "MECHANIC"], alternates: [], n: 3 } } },
+    routing: { classes: { design_decision: { action: "run", description: "overlaid", signals: ["x"], frames: ["LEVY", "SABOTEUR", "MECHANIC"], alternates: [], n: 3 } } },
   }));
   assert.deepEqual(c.overlay!.replaced_classes, ["design_decision"]);
   const r = compile(c, "What timeouts should I set on this HTTP client?", { problem_class: "design_decision" }, { seed: 1 });
   if (r.kind !== "plan") throw new Error("expected a plan");
   assert.equal(r.plan.n, 3);
-  assert.deepEqual(r.plan.branches.map((b) => b.frame).sort(), ["LEDGER", "MECHANIC", "SABOTEUR"]);
+  assert.deepEqual(r.plan.branches.map((b) => b.frame).sort(), ["LEVY", "MECHANIC", "SABOTEUR"]);
   // Other classes are untouched: replacement is per id, not per file.
   assert.ok(c.routing.classes["fuzzy_debugging"], "replacing one class dropped the others");
 });
@@ -118,8 +118,8 @@ test("an overlay that changes nothing is refused rather than silently ignored", 
 });
 
 test("the overlay hash is over its bytes, so two different overlays never collide", () => {
-  const a = stringify({ frames: [{ ...cfg.frameById.get("LEDGER")!, stance: "One currency only, and name the payer before naming the option." }] });
-  const b = stringify({ frames: [{ ...cfg.frameById.get("LEDGER")!, stance: "Two currencies at most, and name the payer before the option." }] });
+  const a = stringify({ frames: [{ ...cfg.frameById.get("LEVY")!, stance: "One currency only, and name the payer before naming the option." }] });
+  const b = stringify({ frames: [{ ...cfg.frameById.get("LEVY")!, stance: "Two currencies at most, and name the payer before the option." }] });
   assert.notEqual(overlayHash(a), overlayHash(b));
   assert.equal(overlayHash(a), overlayHash(a));
 });
@@ -127,11 +127,11 @@ test("the overlay hash is over its bytes, so two different overlays never collid
 test("applyOverlay reports what it did, because a merge nobody can see is the failure mode", () => {
   const { applied } = applyOverlay(
     { frames: cfg.frames, routing: cfg.routing, rubric: cfg.rubric },
-    { frames: [{ ...cfg.frameById.get("LEDGER")!, stance: "Price it in sleep, and name who loses the sleep first." }, { ...cfg.frameById.get("LEDGER")!, id: "NEW_ONE", axis: "novel" }] },
+    { frames: [{ ...cfg.frameById.get("LEVY")!, stance: "Price it in sleep, and name who loses the sleep first." }, { ...cfg.frameById.get("LEVY")!, id: "NEW_ONE", axis: "novel" }] },
     "/tmp/o.yaml",
     "sha256:abc",
   );
-  assert.deepEqual(applied.replaced_frames, ["LEDGER"]);
+  assert.deepEqual(applied.replaced_frames, ["LEVY"]);
   assert.deepEqual(applied.added_frames, ["NEW_ONE"]);
   assert.equal(applied.path, "/tmp/o.yaml");
 });

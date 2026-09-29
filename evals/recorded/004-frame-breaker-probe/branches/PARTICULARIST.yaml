@@ -1,0 +1,52 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: PARTICULARIST
+position: >-
+  Before naming it, find out whether this flag is a temporary rollout switch
+  or a permanent toggle: if temporary, name it for deletion (tie it to the
+  rollout ticket, never the word "new"); if permanent, name it after the
+  actual checkout capability being shipped, never using "new" at all.
+reasoning: |
+  1. The three most specific details in the problem: it is a "feature flag"
+  (implying an existing flagging system with its own conventions this
+  question doesn't disclose), it gates "the new checkout" (implying an old
+  checkout still exists, so this is a replacement, not a net-new feature),
+  and it "controls whether users see" it (a visibility/rollout gate, not
+  necessarily a permanent config toggle).
+  2. The detail that flips the answer is the one the problem omits:
+  temporary vs. permanent. "New" is a relative, time-decaying label. If the
+  flag is meant to be deleted once rollout hits 100%, its name can safely
+  reference "new" because it will be gone before "new" stops being true. If
+  the flag is meant to persist (e.g., as a long-lived kill switch or
+  segment-based toggle), "new_checkout" will still be sitting in the
+  codebase after the new checkout is the only checkout, and the name will
+  actively mislead anyone reading it later. Since the problem gives no
+  lifecycle information, no single name survives both cases.
+  3. The thirty-second answer any competent practitioner gives is
+  "new_checkout" or "checkout_redesign_enabled." That answer is wrong
+  exactly when the flag outlives its rollout, which the problem does not
+  rule out — "controls whether users see" the new checkout says nothing
+  about the flag being removed after full rollout, so the reflexive answer
+  is only safe in the unstated temporary case.
+forecloses:
+  - >-
+    Naming the flag "new_checkout" (or any variant using "new") as its
+    permanent, lasting name without first confirming it will be deleted on
+    a known schedule.
+  - >-
+    Picking a name before checking whether this flag is meant to be
+    short-lived or long-lived.
+  - >-
+    Answering with a generic team-wide naming convention without checking
+    what naming scheme this codebase's flag system already enforces.
+falsifier: >-
+  Search this codebase's flag store for other flags named with relative
+  terms like "new_" or "_v2" that finished their rollout more than a year
+  ago — if all of them were renamed or deleted on schedule, the risk this
+  position warns about never materializes here, and the temporary-name
+  branch alone would have sufficed regardless of lifecycle.
+missing_actor: >-
+  The team that owns the feature-flag platform and its existing naming
+  taxonomy (e.g., required prefixes, ownership tags, or expiry metadata),
+  who can specify the exact scheme this flag's name must conform to before
+  anyone picks "new_checkout" or anything else.
+confidence: medium

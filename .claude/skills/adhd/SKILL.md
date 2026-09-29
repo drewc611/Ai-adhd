@@ -59,7 +59,7 @@ As you spawn, append an entry to `runs/<run_id>/dispatch.json`:
 
 ```json
 { "entries": [
-  { "task": "branch:LEDGER", "planned": "adhd-branch", "actual": "adhd-branch" },
+  { "task": "branch:LEVY", "planned": "adhd-branch", "actual": "adhd-branch" },
   { "task": "critique:pass-a", "planned": "adhd-critic", "actual": "adhd-branch-search",
     "compare": "note is required whenever actual differs from planned",
     "note": "adhd-critic refused: unrecognized [TodoWrite]" }

@@ -30,8 +30,8 @@ many of those matches chance explains. Krippendorff's alpha does. Over the same 
 |---|---|---|---|---|---|
 | `reversibility` | **+0.875** | [+0.78, +0.95] | 80% | 18% | 4 |
 | `specificity` | +0.732 | [+0.48, +0.95] | 85% | 15% | 4 |
-| `assumption_attack` | +0.709 | [+0.48, +0.87] | 70% | 50% | 4 |
-| `reasoning_carries` | +0.675 | [+0.68, +0.68] | 98% | 96% | 3 |
+| `assumption_attack` | +0.709 | [+0.48, +0.87] | 70% | 51% | 4 |
+| `reasoning_carries` | +0.675 | [+0.68, +0.69] | 98% | 97% | 3 |
 | `actor_coverage` | +0.649 | [+0.50, +0.76] | 85% | 45% | 3 |
 | `committal` | +0.562 | [+0.26, +0.85] | 87% | 80% | 3 |
 | `substance` | +0.469 | [+0.22, +0.65] | 77% | 76% | 3 |

@@ -1,0 +1,60 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: SUCCESSOR
+position: >-
+  Rename the flag now from a temporal label like `new_checkout` to a
+  versioned, capability-based key such as `checkout_flow_v2`, and pay the
+  migration cost across every downstream consumer today rather than later.
+reasoning: |
+  1. What changed that the original decision didn't anticipate: the flag
+  outlived the rollout it was built for. It stopped being a temporary toggle
+  and became a permanent branch point — used for a v3 experiment, kept alive
+  for one merchant segment that never migrated, referenced as a dependency by
+  three other flags, and wired into an emergency kill switch. "New" stopped
+  meaning new. Nobody planned for the flag to still exist in two years, so
+  nobody planned for what its name would mean once it wasn't new anymore.
+
+  2. What's load-bearing now: the literal string `new_checkout` is not just a
+  boolean in one service. It's an analytics event property with two years of
+  historical data keyed on it, a config key in the experiment platform,
+  hardcoded in mobile app builds that ship on a six-week cadence, referenced
+  in support scripts, and possibly named in a merchant contract as "the new
+  checkout experience." None of those systems can be repointed by editing one
+  file. The name became infrastructure the moment a second system started
+  reading it, and that happened before anyone decided it should be permanent.
+
+  3. What the maintainer would pay for a different choice: they would pay a
+  one-time migration now — introduce the versioned key, dual-write flag state
+  under both names for a deprecation window, update every consumer (client
+  configs, analytics schema, support tooling), and retire the old key on a
+  fixed date. That's real sprint time, not a policy change. The payoff is
+  that the next redesign doesn't require inventing `new_new_checkout` or
+  overloading `new_checkout` with a third meaning, and the flag's name stops
+  silently lying about its age.
+
+  4. What to decide now vs. leave open: decide the naming convention
+  (capability + explicit version, not relative time) and decide who owns the
+  flag's retirement date — that's cheap to fix now and expensive to fix
+  later because it compounds with every new consumer. Leave undecided what
+  the eventual default checkout will be called once v2 ships to 100%, and
+  don't pre-name v3 or v4 — inventing future version slots now is flexibility
+  with no present payoff, since nobody yet knows what will actually change
+  next.
+forecloses:
+  - >-
+    Leaving the flag as `new_checkout` indefinitely to avoid the migration
+    cost, letting the name drift further from what it actually gates.
+  - >-
+    Naming the next redesign's flag `new_new_checkout` or `checkout_2025`,
+    continuing the temporal pattern instead of breaking it.
+falsifier: >-
+  Grep the codebase, analytics schema, and mobile client configs for
+  `new_checkout`. If the flag is already scheduled for full removal this
+  quarter and no system outside the checkout service references it by name,
+  the migration is wasted work and the old name should just be deleted, not
+  renamed.
+missing_actor: >-
+  The analytics/data team, who owns the event schema keyed on the flag name
+  and can decouple two years of historical reporting from the flag's literal
+  string by adding a stable semantic dimension now, so the rename doesn't
+  force reprocessing or breaking existing dashboards.
+confidence: medium

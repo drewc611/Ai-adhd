@@ -20,6 +20,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rea
 import { join } from "node:path";
 import { ContractError, RunAbort } from "../errors.js";
 import { problemHash } from "../hash.js";
+import type { Config } from "../config.js";
+import { checkTriageArtifact, runEligibleClasses } from "../triage.js";
 import { Gateway, ORCHESTRATOR, orchestrator, type Participant } from "./gateway.js";
 import { Memory } from "./memory.js";
 import { Sandbox } from "./sandbox.js";
@@ -87,6 +89,17 @@ export function template(cls: MissionClass): StageTemplate[] {
     contract: { artifact: `${id}.md`, requires: ["## Findings", "## Sources", "## What is still unknown"], command: null, min_words: 120 },
   });
 
+  if (cls === "triage")
+    return [
+      {
+        id: "triage",
+        kind: "triage",
+        label: "segment the brain dump into items",
+        after: [],
+        contract: { artifact: "items.yaml", requires: [], command: null, min_words: 0 },
+      },
+    ];
+
   if (cls === "quick")
     return [
       research("research", "gather what is already known", []),
@@ -153,7 +166,7 @@ export class SuperAgent {
   readonly gateway: Gateway;
   private readonly now: () => Date;
 
-  constructor(opts: SuperOptions) {
+  constructor(private readonly cfg: Config, opts: SuperOptions) {
     this.root = opts.root;
     this.now = opts.now ?? (() => new Date());
     mkdirSync(this.root, { recursive: true });
@@ -295,6 +308,18 @@ export class SuperAgent {
         "Reason from the goal and from what you are given.",
         "",
       );
+    } else if (s.kind === "triage") {
+      // The triage agent carries no tools (STAGE_TOOLS.triage), so it cannot read
+      // config/routing.yaml itself. This is the same reason renderBranchBrief embeds frame
+      // stance and probes inline rather than pointing a branch at a file.
+      lines.push(
+        "## Routing classes you may suggest",
+        "",
+        "Every class a `decision` item's suggested_class may name, and nothing else is valid:",
+        "",
+        ...runEligibleClasses(this.cfg).map((c) => `- \`${c.name}\`: ${c.description}`),
+        "",
+      );
     } else if (recall.entries.length) {
       lines.push("## What earlier stages recorded", "");
       for (const e of recall.entries) lines.push(`- [${e.kind}] ${e.text}  (${e.provenance.stage_id})`);
@@ -313,12 +338,34 @@ export class SuperAgent {
     return text;
   }
 
-  /** Hand out one stage under a lease, oldest unblocked first. */
-  claim(id: string, worker: string): ClaimedStage | null {
-    let m = this.read(id);
+  /**
+   * Hand out one stage under a lease, oldest unblocked first. `id: null` scans every running
+   * mission, oldest submitted first, and claims the first claimable stage it finds — the same
+   * shape `Kernel.claim`'s optional `runId` already has, added so one worker loop can service
+   * every pending `triage` mission without being told mission ids out of band (D46).
+   *
+   * Not locked the way the kernel's `claim`/`return` are: `SuperAgent` has no mutex, scanning
+   * across missions does not add a race beyond the one already there for a single mission (the
+   * read-then-write between `claim` calls was never atomic here). Real concurrent workers on one
+   * root remain a kernel-only guarantee.
+   */
+  claim(id: string | null, worker: string): ClaimedStage | null {
+    if (id !== null) return this.tryClaim(this.read(id), worker);
+    const running = this.list()
+      .filter((m) => m.state === "running")
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const m of running) {
+      const claimed = this.tryClaim(m, worker);
+      if (claimed) return claimed;
+    }
+    return null;
+  }
+
+  private tryClaim(mission: Mission, worker: string): ClaimedStage | null {
+    let m = mission;
     if (m.state !== "running") return null;
     if (m.spent_tokens >= m.budget_tokens) {
-      this.journal(id, { event: "budget_exhausted", spent: m.spent_tokens, budget: m.budget_tokens });
+      this.journal(m.mission_id, { event: "budget_exhausted", spent: m.spent_tokens, budget: m.budget_tokens });
       this.write({ ...m, state: "blocked", reason: `budget exhausted: ${m.spent_tokens} >= ${m.budget_tokens}` });
       return null;
     }
@@ -340,7 +387,7 @@ export class SuperAgent {
     next.started_at = next.started_at ?? at.toISOString();
     next.lease_until = new Date(at.getTime() + policy.leaseSeconds * 1000).toISOString();
     const saved = this.write(m);
-    this.journal(id, { event: "claimed", stage: next.id, worker, attempt: next.attempts });
+    this.journal(saved.mission_id, { event: "claimed", stage: next.id, worker, attempt: next.attempts });
 
     return {
       ...next,
@@ -349,7 +396,7 @@ export class SuperAgent {
       brief: this.compileBrief(saved, next),
       agent: STAGE_AGENT[next.kind],
       tools: STAGE_TOOLS[next.kind],
-      sandbox: ["build", "verify"].includes(next.kind) ? join(this.dir(id), "sandbox") : null,
+      sandbox: ["build", "verify"].includes(next.kind) ? join(this.dir(saved.mission_id), "sandbox") : null,
     };
   }
 
@@ -409,6 +456,10 @@ export class SuperAgent {
     const p = join(this.dir(m.mission_id), s.contract.artifact);
     if (!existsSync(p)) return [`${s.contract.artifact} was not written`];
     const body = readFileSync(p, "utf8");
+    // items.yaml is a schema, not markdown headings — the contract's `requires`/`min_words` are
+    // both empty for a triage stage (see `template`), so this branch replaces the checks below
+    // rather than adding to them.
+    if (s.kind === "triage") return checkTriageArtifact(this.cfg, body).problems;
     const out: string[] = [];
     for (const r of s.contract.requires) if (!body.includes(r)) out.push(`${s.contract.artifact} is missing ${JSON.stringify(r)}`);
     const words = body.split(/\s+/).filter(Boolean).length;
@@ -522,6 +573,6 @@ export function missionPreview(m: Mission): string {
   return lines.join("\n");
 }
 
-export function openSuper(root: string, opts: Omit<SuperOptions, "root"> = {}): SuperAgent {
-  return new SuperAgent({ root, ...opts });
+export function openSuper(cfg: Config, root?: string, opts: Omit<SuperOptions, "root"> = {}): SuperAgent {
+  return new SuperAgent(cfg, { root: root ?? process.env["ADHD_SUPER_ROOT"] ?? "missions", ...opts });
 }

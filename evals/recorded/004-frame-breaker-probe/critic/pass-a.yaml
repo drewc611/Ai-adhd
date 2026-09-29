@@ -1,0 +1,48 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+pass: A
+scores:
+  A:
+    committal: { score: 1, evidence: "The position is a two-branch conditional (temporary vs permanent) that defers the actual name choice to a future determination rather than committing to one name now." }
+    falsifiability: { score: 2, evidence: "The falsifier requires searching the flag store's multi-year history, which is observable and relevant but not cheap to check immediately." }
+    specificity: { score: 2, evidence: "The reasoning leans on the three specific problem details (flag, new checkout, visibility gate) though the temporary/permanent distinction it turns on is a generalizable naming issue." }
+    assumption_attack: { score: 3, evidence: "It names and calls for testing the temporary-vs-permanent assumption, and the naming answer follows directly from that result." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities are used; the lifecycle argument is entirely self-contained." }
+    actor_coverage: { score: 2, evidence: "The missing actor (flag-platform team) is named with a concrete action (specify the naming scheme) though the position doesn't strictly hinge on them acting first." }
+    reversibility: { score: 1, evidence: "Reversibility is only implicit in the temporary/permanent split and is never named as a cost dimension." }
+    substance: { score: 3, evidence: "Flat restated, it is still a real claim: determine the flag's lifecycle before choosing how to name it." }
+  B:
+    committal: { score: 3, evidence: "One imperative sentence -- write and attach a lifecycle record before naming -- with no hedge returning the choice to the reader." }
+    falsifiability: { score: 3, evidence: "Checking the flag dashboard for existing owner/expiry metadata is cheap and would directly refute the claim that governance is missing here." }
+    specificity: { score: 1, evidence: "The governance-over-naming argument is generic enough to apply to nearly any flag-naming question and is barely anchored to checkout specifics." }
+    assumption_attack: { score: 3, evidence: "It explicitly names the assumption that naming is the task, rejects it, and the recommended action changes entirely as a result." }
+    reasoning_carries: { score: 3, evidence: "The governance-vs-naming argument stands entirely on its own without any cited authority." }
+    actor_coverage: { score: 3, evidence: "The on-call/platform engineer is named with a concrete gatekeeping action, and the position's success depends on that actor enforcing it." }
+    reversibility: { score: 0, evidence: "No distinction is drawn anywhere between cheap reversible moves and expensive committed ones." }
+    substance: { score: 3, evidence: "Flat restated -- document owner, rollout stage, and removal date before naming -- it remains a substantive, actionable claim." }
+  C:
+    committal: { score: 3, evidence: "One directive sentence -- stop optimizing the internal name, make the version visible to users/support -- with no hedge." }
+    falsifiability: { score: 3, evidence: "Pulling the last ten support tickets is cheap and would directly kill the claim if none needed variant identification." }
+    specificity: { score: 2, evidence: "The reasoning stays anchored in checkout-specific user actions (payment, receipt, error) though the underlying UX argument could transfer to other flagged features." }
+    assumption_attack: { score: 3, evidence: "It rejects the frame that naming is the relevant decision at all and redirects to a different actionable target, changing the answer entirely." }
+    reasoning_carries: { score: 3, evidence: "The user-journey argument is self-contained with no authority invoked." }
+    actor_coverage: { score: 3, evidence: "The support agent is named with a specific lookup action, and the position's payoff depends on that actor having the tool built." }
+    reversibility: { score: 0, evidence: "No cheap-vs-expensive distinction is made anywhere in the reasoning." }
+    substance: { score: 2, evidence: "Flat restated, the claim -- expose the checkout version to users/support -- is worth saying but sidesteps the literal naming question, so some of its force is the reframe itself." }
+  D:
+    committal: { score: 3, evidence: "One sentence -- rename now to a versioned key and pay the migration cost today -- with no escape hatch." }
+    falsifiability: { score: 3, evidence: "Grepping the codebase/analytics/mobile configs is cheap and would directly flip the recommendation to deletion instead of rename." }
+    specificity: { score: 3, evidence: "The reasoning invents and depends on a specific downstream history (years of analytics data, mobile builds, merchant contracts) that makes it unusable for a differently-situated instance of this problem." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that the flag is still temporary by tracing what actually happened to it, and the rename recommendation follows directly from that finding." }
+    reasoning_carries: { score: 3, evidence: "The migration-cost argument is fully self-contained with no cited authority." }
+    actor_coverage: { score: 3, evidence: "The analytics/data team is named with a specific decoupling action that the rename's safety explicitly depends on." }
+    reversibility: { score: 3, evidence: "The position is explicitly sequenced around what's cheap to decide now versus expensive to fix later, deliberately leaving future version names open." }
+    substance: { score: 3, evidence: "Flat restated, it's still a real engineering claim: migrate off the temporal flag name now while the cost is lower." }
+  E:
+    committal: { score: 3, evidence: "One sentence -- pick a literal descriptive name and stop -- with no hedge or conditional." }
+    falsifiability: { score: 3, evidence: "Grepping for an existing naming pattern is cheap and would directly overturn the ad hoc recommendation." }
+    specificity: { score: 0, evidence: "The YAGNI-style argument against over-designing a naming scheme is generic and would survive deletion of every checkout-specific detail in the problem." }
+    assumption_attack: { score: 1, evidence: "It names the assumption that a bigger design decision is needed but only asserts it's overthinking rather than actually testing it." }
+    reasoning_carries: { score: 3, evidence: "The minimal-intervention argument is self-contained with no authority cited." }
+    actor_coverage: { score: 1, evidence: "The eventual flag-deleter is named but given no concrete action beyond a vague hope that the name will 'make it obvious' later." }
+    reversibility: { score: 0, evidence: "No explicit cheap-vs-expensive distinction is drawn, only implied by the low-commitment nature of the pick." }
+    substance: { score: 3, evidence: "Flat restated, it's still a real claim: choose a plain descriptive name now rather than designing a taxonomy." }

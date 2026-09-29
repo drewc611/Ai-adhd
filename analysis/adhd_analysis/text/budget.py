@@ -147,8 +147,16 @@ class Budget:
 
     @classmethod
     def weekly(cls) -> Budget:
-        """What a scheduled run gets: under a GitHub runner's 7GB and well under its 6h limit."""
-        return cls(max_tokens=40_000_000, max_seconds=1500.0, max_ngrams=12_000_000, max_rss_mb=5120)
+        """What a scheduled run gets: under a GitHub runner's 16GB and well under its 6h limit.
+
+        `max_rss_mb` was 5120 against the runner's old 7GB spec. `ubuntu-latest` moved to 4-core/16GB
+        in December 2023 and the ceiling had not moved with it, so order 5 refused itself on memory
+        it had room for: at the corpus size the token ceiling already binds at (40M tokens), order 5
+        peaks at 7,258MB and order 4 at 4,123MB, both measured on the real corpus with mutable sources
+        excluded. 9216 leaves order 5 about 2GB of margin under the new 16GB and stays well clear of
+        order 4. See D45.
+        """
+        return cls(max_tokens=40_000_000, max_seconds=1500.0, max_ngrams=12_000_000, max_rss_mb=9216)
 
     @classmethod
     def smoke(cls) -> Budget:

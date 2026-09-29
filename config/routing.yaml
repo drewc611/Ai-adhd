@@ -59,8 +59,8 @@ classes:
       - "how should we"
       - "what should I set"
       - "trade-off"
-    frames: [FRAME_BREAKER, ACTOR_CENSUS, LEDGER, DOOR_KEEPER, MINIMALIST]
-    alternates: [PARTICULARIST, NIGHT_OPERATOR, SABOTEUR, MECHANIC, PRIOR_ART, SUCCESSOR,
+    frames: [FRAME_BREAKER, ACTOR_CENSUS, LEVY, DOOR_KEEPER, MINIMALIST]
+    alternates: [PARTICULARIST, NIGHT_OPERATOR, SABOTEUR, MECHANIC, PRIOR_ART, CARETAKER,
                  SUPPLICANT, FIRST_PRINCIPLES]
 
   fuzzy_debugging:
@@ -73,8 +73,8 @@ classes:
       - "where should I look"
       - "no idea why"
     frames: [MECHANIC, PARTICULARIST, SABOTEUR, NIGHT_OPERATOR, FRAME_BREAKER]
-    alternates: [ACTOR_CENSUS, DOOR_KEEPER, MINIMALIST, LEDGER, SUPPLICANT, PRIOR_ART,
-                 FIRST_PRINCIPLES, SUCCESSOR]
+    alternates: [ACTOR_CENSUS, DOOR_KEEPER, MINIMALIST, LEVY, SUPPLICANT, PRIOR_ART,
+                 FIRST_PRINCIPLES, CARETAKER]
 
   naming:
     action: run
@@ -83,8 +83,8 @@ classes:
       - "what should I call"
       - "name for"
       - "rename"
-    frames: [PARTICULARIST, FRAME_BREAKER, SUPPLICANT, SUCCESSOR, MINIMALIST]
-    alternates: [ACTOR_CENSUS, DOOR_KEEPER, NIGHT_OPERATOR, LEDGER, PRIOR_ART, SABOTEUR,
+    frames: [PARTICULARIST, FRAME_BREAKER, SUPPLICANT, CARETAKER, MINIMALIST]
+    alternates: [ACTOR_CENSUS, DOOR_KEEPER, NIGHT_OPERATOR, LEVY, PRIOR_ART, SABOTEUR,
                  MECHANIC, FIRST_PRINCIPLES]
 
   api_surface:
@@ -97,8 +97,8 @@ classes:
       - "expose"
       - "public"
     frames: [SUPPLICANT, DOOR_KEEPER, SABOTEUR, MINIMALIST, FRAME_BREAKER]
-    alternates: [ACTOR_CENSUS, PARTICULARIST, NIGHT_OPERATOR, LEDGER, MECHANIC, PRIOR_ART,
-                 SUCCESSOR, FIRST_PRINCIPLES]
+    alternates: [ACTOR_CENSUS, PARTICULARIST, NIGHT_OPERATOR, LEVY, MECHANIC, PRIOR_ART,
+                 CARETAKER, FIRST_PRINCIPLES]
 
   strategy:
     action: run
@@ -120,7 +120,7 @@ classes:
     # five-run floor, so demoting it would have destroyed the evidence needed to judge it. The cost
     # is paid in spend instead: a strategy run is six branches, and the D5 preview says so.
     n: 6
-    frames: [FRAME_BREAKER, LEDGER, DOOR_KEEPER, PRIOR_ART, SUCCESSOR, FIRST_PRINCIPLES]
+    frames: [FRAME_BREAKER, LEVY, DOOR_KEEPER, PRIOR_ART, CARETAKER, FIRST_PRINCIPLES]
     alternates: [SABOTEUR, PARTICULARIST, ACTOR_CENSUS, MINIMALIST, NIGHT_OPERATOR,
                  MECHANIC, SUPPLICANT]
 
@@ -131,12 +131,12 @@ classes:
       - "a few ways to"
       - "some options for"
       - "different approaches"
-    frames: [FRAME_BREAKER, ACTOR_CENSUS, LEDGER, DOOR_KEEPER, MINIMALIST, PARTICULARIST,
+    frames: [FRAME_BREAKER, ACTOR_CENSUS, LEVY, DOOR_KEEPER, MINIMALIST, PARTICULARIST,
              SABOTEUR, NIGHT_OPERATOR, MECHANIC]
     n: 7                      # wide by default; still below hard_cap. Nine listed, seven
                               # taken in seeded shuffle order; axes stay distinct by
                               # construction here (one frame per axis in this list).
-    alternates: [PRIOR_ART, SUPPLICANT, SUCCESSOR, FIRST_PRINCIPLES]
+    alternates: [PRIOR_ART, SUPPLICANT, CARETAKER, FIRST_PRINCIPLES]
 
   factual_lookup:
     action: decline

@@ -45,11 +45,11 @@ test("briefs are isolated: no other frame id, no count, no 'so far'", () => {
   const all = cfg.frames.frames;
   for (const b of r.briefs) assert.deepEqual(checkBriefIsolation(b.text, b.frame, all, { problem: "Name this function." }), []);
   // And the checker itself catches the things it claims to.
-  const poisoned = r.briefs[0]!.text + "\nHere is what has been considered so far by the 4 other branches: LEDGER said...";
+  const poisoned = r.briefs[0]!.text + "\nHere is what has been considered so far by the 4 other branches: LEVY said...";
   const problems = checkBriefIsolation(poisoned, r.briefs[0]!.frame, all, { problem: "Name this function." });
   assert.ok(problems.some((p) => /so far/.test(p)));
   assert.ok(problems.some((p) => /branch count/.test(p)));
-  assert.ok(problems.some((p) => /LEDGER/.test(p)) || r.briefs[0]!.frame === "LEDGER");
+  assert.ok(problems.some((p) => /LEVY/.test(p)) || r.briefs[0]!.frame === "LEVY");
 });
 
 test("a brief contains exactly its own frame's stance and no other stance", () => {
@@ -95,12 +95,12 @@ test("decline classes produce no briefs", () => {
 });
 
 test("tool grants land in the brief and pick the agent", () => {
-  const r = compile(cfg, "p", { problem_class: "strategy", frames: ["PRIOR_ART", "LEDGER", "DOOR_KEEPER"] }, { seed: 1 });
+  const r = compile(cfg, "p", { problem_class: "strategy", frames: ["PRIOR_ART", "LEVY", "DOOR_KEEPER"] }, { seed: 1 });
   if (r.kind !== "plan") throw new Error("expected plan");
   const pa = r.plan.branches.find((b) => b.frame === "PRIOR_ART")!;
   assert.equal(pa.agent, "adhd-branch-search");
   assert.match(r.briefs.find((b) => b.frame === "PRIOR_ART")!.text, /WebSearch and WebFetch/);
-  assert.match(r.briefs.find((b) => b.frame === "LEDGER")!.text, /You have no tools/);
-  const brief = renderBranchBrief(cfg, "p", "sha256:x", cfg.frameById.get("LEDGER")!);
+  assert.match(r.briefs.find((b) => b.frame === "LEVY")!.text, /You have no tools/);
+  const brief = renderBranchBrief(cfg, "p", "sha256:x", cfg.frameById.get("LEVY")!);
   assert.doesNotMatch(brief, /Read|Grep|Glob/);
 });

@@ -66,7 +66,7 @@ test("a frame carries every id it has been renamed from, and both directions res
   assert.deepEqual(frameIdHistory(cfg, "END_USER"), ["SUPPLICANT", "END_USER"], "an old note has to still resolve");
   assert.equal(currentFrameId(cfg, "END_USER"), "SUPPLICANT");
   assert.equal(currentFrameId(cfg, "SUPPLICANT"), "SUPPLICANT");
-  assert.equal(currentFrameId(cfg, "LEDGER"), "LEDGER", "a frame that was never renamed is unaffected");
+  assert.equal(currentFrameId(cfg, "MECHANIC"), "MECHANIC", "a frame that was never renamed is unaffected");
 });
 
 /** A run may name a frame retired outright. That is a fact about the run, not an error. */
@@ -90,8 +90,8 @@ test("a former id that is live, or claimed twice, is refused", () => {
   const clone = () => JSON.parse(JSON.stringify(cfg.frames)) as typeof cfg.frames;
 
   const live = clone();
-  live.frames[0]!.former_ids = ["LEDGER"];
-  assert.match(crossCheck(live, cfg.routing, cfg.rubric).join("\n"), /former_id LEDGER is also a live frame id/);
+  live.frames[0]!.former_ids = ["MECHANIC"];
+  assert.match(crossCheck(live, cfg.routing, cfg.rubric).join("\n"), /former_id MECHANIC is also a live frame id/);
 
   const twice = clone();
   twice.frames[0]!.former_ids = ["OLD_NAME"];

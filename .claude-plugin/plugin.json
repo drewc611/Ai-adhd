@@ -29,7 +29,8 @@
     "./agents/adhd-builder.md",
     "./agents/adhd-verifier.md",
     "./agents/adhd-maker.md",
-    "./agents/adhd-reviewer.md"
+    "./agents/adhd-reviewer.md",
+    "./agents/adhd-triage.md"
   ],
   "mcpServers": {
     "adhd": {

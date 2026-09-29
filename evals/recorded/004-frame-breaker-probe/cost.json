@@ -1,0 +1,19 @@
+{
+  "tokens": 133007,
+  "wall": "~266s of reported subagent runtime (sum of phase durations; driven by hand via `adhd run --phase`, so there is no kernel-tracked calendar time)",
+  "reported_tasks": 8,
+  "of_tasks": 8,
+  "by_phase": {
+    "diverge": 56029,
+    "critique_a": 23715,
+    "critique_b": 29997,
+    "deepen": 23266
+  },
+  "by_frame": {
+    "SUCCESSOR": 11768,
+    "MINIMALIST": 10024,
+    "PARTICULARIST": 11845,
+    "SUPPLICANT": 11546,
+    "FRAME_BREAKER": 10846
+  }
+}

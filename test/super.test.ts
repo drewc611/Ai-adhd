@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ContractError, RunAbort } from "../src/errors.js";
+import { cfg } from "./helpers.js";
 import {
   CLASS_POLICY,
   Gateway,
@@ -63,7 +64,7 @@ test("assertNoReasoning catches commitment and ignores subject matter", () => {
 test("a brief carrying a candidate answer is a contract failure, not a warning", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     const m = sa.submit({ mission_id: "m", goal: "Pick a timeout.", mission_class: "quick" });
     sa.confirm("m");
     // The orchestrator's own channel into a brief. If this ever silently succeeded, every stage
@@ -84,7 +85,7 @@ test("a brief carrying a candidate answer is a contract failure, not a warning",
 test("the orchestrator cannot smuggle an answer through the gateway either", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     sa.submit({ mission_id: "m", goal: "Pick a timeout.", mission_class: "quick" });
     sa.confirm("m");
     assert.throws(() => sa.notify("m", "research", "We should use the shorter deadline."), ContractError);
@@ -123,7 +124,7 @@ test("memory withholds every diverge-written entry from a diverge brief, in any 
 test("a diverge brief states how much was withheld and never what it was", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     sa.submit({ mission_id: "m", goal: "Choose a retry policy.", mission_class: "standard" });
     sa.confirm("m");
     const secret = "MINIMALIST said cap retries at zero";
@@ -348,7 +349,7 @@ test("a cycle is reported as the cycle, not as a mission that is merely waiting"
 test("nothing is claimable before confirm, which is D5 one level up", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     const m = sa.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "deep" });
     assert.equal(m.state, "awaiting_confirm");
     assert.equal(sa.claim("m", "w"), null, "a deep mission started spending before anyone said go");
@@ -363,7 +364,7 @@ test("nothing is claimable before confirm, which is D5 one level up", () => {
 test("a stage advances only when its artifact meets a contract written before it ran", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     sa.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "quick" });
     sa.confirm("m");
     const c = sa.claim("m", "w")!;
@@ -388,7 +389,7 @@ test("a stage advances only when its artifact meets a contract written before it
 test("a stage returned against a different goal aborts the mission-level hash check", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     sa.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "quick" });
     sa.confirm("m");
     sa.claim("m", "w");
@@ -405,7 +406,7 @@ test("a stage returned against a different goal aborts the mission-level hash ch
 test("only the worker holding the lease may return the stage", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     sa.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "quick" });
     sa.confirm("m");
     const c = sa.claim("m", "w1")!;
@@ -421,7 +422,7 @@ test("an expired lease returns the stage, and the class's attempt count is the e
   const root = box();
   let clock = Date.parse("2026-01-01T00:00:00Z");
   try {
-    const sa = new SuperAgent({ root, now: () => new Date(clock) });
+    const sa = new SuperAgent(cfg, { root, now: () => new Date(clock) });
     sa.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "quick" });
     sa.confirm("m");
     const attempts = CLASS_POLICY.quick.maxAttempts;
@@ -442,7 +443,7 @@ test("an expired lease returns the stage, and the class's attempt count is the e
 test("an exhausted budget blocks the mission instead of quietly continuing", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     sa.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "quick", budget_tokens: 500 });
     sa.confirm("m");
     finish(sa, "m", "research", "w", researchBody, 900);
@@ -458,13 +459,13 @@ test("an exhausted budget blocks the mission instead of quietly continuing", () 
 test("a mission survives the process that started it", () => {
   const root = box();
   try {
-    const first = new SuperAgent({ root });
+    const first = new SuperAgent(cfg, { root });
     first.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "quick" });
     first.confirm("m");
     finish(first, "m", "research", "w", researchBody, 100);
 
     // A mission that takes an hour will outlive its process, so the record is the truth.
-    const second = new SuperAgent({ root });
+    const second = new SuperAgent(cfg, { root });
     const st = second.status("m");
     assert.deepEqual(st.ready, ["create"]);
     assert.equal(st.mission.stages[0]!.status, "done");
@@ -478,7 +479,7 @@ test("a mission survives the process that started it", () => {
 test("cancel drops outstanding stages rather than leaving them claimable", () => {
   const root = box();
   try {
-    const sa = new SuperAgent({ root });
+    const sa = new SuperAgent(cfg, { root });
     sa.submit({ mission_id: "m", goal: "Do a thing.", mission_class: "standard" });
     sa.confirm("m");
     sa.claim("m", "w");
@@ -487,6 +488,117 @@ test("cancel drops outstanding stages rather than leaving them claimable", () =>
     assert.ok(m.stages.every((s) => s.status === "dropped"));
     assert.equal(sa.claim("m", "w"), null);
     assert.throws(() => sa.cancel("m"), ContractError);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// -------------------------------------------------------------------------------- the triage stage
+
+const triageBody = `\`\`\`yaml
+items:
+  - id: 1
+    kind: quick_task
+    text: call mom
+    draft_problem: null
+    suggested_class: null
+\`\`\`
+`;
+
+test("a triage mission is one stage, dispatches adhd-triage with no network and no write", () => {
+  const root = box();
+  try {
+    const sa = new SuperAgent(cfg, { root });
+    sa.submit({ mission_id: "m", goal: "call mom, worried about rent, should I switch jobs", mission_class: "triage" });
+    sa.confirm("m");
+    const c = sa.claim("m", "w")!;
+    assert.equal(c.id, "triage");
+    assert.equal(c.kind, "triage");
+    assert.equal(c.agent, "adhd-triage");
+    assert.deepEqual([...c.tools].sort(), ["Glob", "Grep", "Read"]);
+    assert.equal(c.sandbox, null);
+    assert.match(c.brief, /## Routing classes you may suggest/);
+    assert.match(c.brief, /design_decision/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a triage return is checked against the schema, not the markdown heading path", () => {
+  const root = box();
+  try {
+    const sa = new SuperAgent(cfg, { root });
+    sa.submit({ mission_id: "m", goal: "call mom", mission_class: "triage" });
+    sa.confirm("m");
+    const c = sa.claim("m", "w")!;
+    writeFileSync(join(root, "missions", "m", "items.yaml"), "```yaml\nitems: []\n```");
+    const rejected = sa.return_("m", "triage", { worker: "w", goal_hash: c.goal_hash });
+    assert.equal(rejected.stages[0]!.status, "pending", "an empty items array should have failed the schema");
+
+    const c2 = sa.claim("m", "w")!;
+    writeFileSync(join(root, "missions", "m", "items.yaml"), triageBody);
+    const done = sa.return_("m", "triage", { worker: "w", goal_hash: c2.goal_hash, tokens: 500 });
+    assert.equal(done.state, "done");
+    assert.equal(done.spent_tokens, 500);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a triage return whose suggested_class is a decline class is rejected the same way a missing heading is", () => {
+  const root = box();
+  try {
+    const sa = new SuperAgent(cfg, { root });
+    sa.submit({ mission_id: "m", goal: "should I switch jobs", mission_class: "triage" });
+    sa.confirm("m");
+    const c = sa.claim("m", "w")!;
+    const bad = `\`\`\`yaml
+items:
+  - id: 1
+    kind: decision
+    text: should I switch jobs
+    draft_problem: "Whether to switch jobs."
+    suggested_class: factual_lookup
+\`\`\`
+`;
+    writeFileSync(join(root, "missions", "m", "items.yaml"), bad);
+    const rejected = sa.return_("m", "triage", { worker: "w", goal_hash: c.goal_hash });
+    assert.equal(rejected.stages[0]!.status, "pending");
+    assert.match(rejected.stages[0]!.note!, /decline class/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("claim with no mission id scans every running mission, oldest first, and skips one with nothing claimable", () => {
+  const root = box();
+  try {
+    const sa = new SuperAgent(cfg, { root });
+    sa.submit({ mission_id: "a", goal: "first dump", mission_class: "triage" });
+    sa.confirm("a");
+    sa.submit({ mission_id: "b", goal: "second dump", mission_class: "triage" });
+    sa.confirm("b");
+
+    const first = sa.claim(null, "w1")!;
+    assert.equal(first.mission_id, "a", "the older mission was not claimed first");
+    writeFileSync(join(root, "missions", "a", "items.yaml"), triageBody);
+    sa.return_("a", "triage", { worker: "w1", goal_hash: first.goal_hash });
+
+    // Mission a is now done and has nothing claimable; the scan must move on to b.
+    const second = sa.claim(null, "w2")!;
+    assert.equal(second.mission_id, "b", "the scan did not skip a mission with nothing left to claim");
+    assert.equal(sa.claim(null, "w3"), null, "nothing should remain claimable across either mission");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("claim(null) does not touch a mission that is not running", () => {
+  const root = box();
+  try {
+    const sa = new SuperAgent(cfg, { root });
+    sa.submit({ mission_id: "unconfirmed", goal: "still waiting", mission_class: "triage" });
+    assert.equal(sa.claim(null, "w"), null, "an unconfirmed mission started spending before anyone said go");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -1,0 +1,79 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+pass: B
+clusters:
+  - id: gate_naming_on_lifecycle
+    action: "Withhold the actual name until the flag's temporary-vs-permanent or owner/rollback/removal status is established, and let that status determine or accompany the name."
+    members: [PARTICULARIST, FRAME_BREAKER]
+    singleton: false
+    strongest_objection: "The temporary-versus-permanent split this rests on assumes those are two clean, discoverable, static states, but flags routinely begin with an intended rollout window and then become permanent through sheer inertia -- nobody files a ticket to declare it permanent, people just stop paying attention to it. The investigation this position calls for can return a confident 'temporary' verdict today that quietly becomes false in six months with no renaming trigger, leaving the codebase with exactly the misleading relative name this position set out to prevent, while having spent effort on a classification step that didn't hold."
+  - id: rename_to_versioned_key_now
+    action: "Immediately rename the flag to a versioned, capability-based key and migrate every downstream consumer today."
+    members: [SUCCESSOR]
+    singleton: true
+    strongest_objection: "This treats the flag as already carrying two years of entangled downstream dependents -- analytics schemas, mobile builds, merchant contracts -- but nothing established that any of that has actually accumulated yet; if the flag is being named at or near creation, the full migration burden is being paid against a hypothetical future rather than anything that exists today, and the cost of over-engineering a versioned key and deprecation window for a flag that never grows those dependents is never weighed against simply renaming later if and when a real second consumer shows up."
+  - id: pick_literal_name_now
+    action: "Assign a plain literal descriptive name to the flag immediately and treat the decision as closed."
+    members: [MINIMALIST]
+    singleton: true
+    strongest_objection: null
+  - id: surface_version_to_users
+    action: "Skip optimizing the internal flag name and instead build a way for the checkout version to be visible to users and support on the error screen or receipt."
+    members: [SUPPLICANT]
+    singleton: true
+    strongest_objection: null
+traps:
+  SUCCESSOR:
+    T1: { fired: false, evidence: "The reasoning is built on invented specifics tied to this exact scenario (two years of analytics history, mobile build cadence, merchant contracts naming 'the new checkout'), so deleting the prompt's three details would strip the justification for immediate migration." }
+    T2: { fired: false, evidence: "It attacks the assumption that a relative label like 'new' stays safe indefinitely, arguing the flag already outlived the rollout that justified that label." }
+    T3: { fired: false, evidence: "No citation or authority is invoked anywhere; the migration-cost argument is traced entirely from stated premises to conclusion." }
+    T4: { fired: false, evidence: "It forecloses at least two live options (leaving the name as-is, and repeating the temporal pattern on the next redesign) and forces a convention plus an ownership decision now." }
+    T5: { fired: false, evidence: "The position opens with the imperative 'Rename the flag now ... and pay the migration cost ... today', an explicit do-X sentence." }
+    T6: { fired: false, evidence: "The missing_actor (the analytics/data team) is named with a concrete decoupling action that the rename's safety depends on." }
+    T7: { fired: false, evidence: "It explicitly separates what's cheap to decide now (naming convention, retirement owner) from what's expensive to leave open (letting the string become infrastructure) and refuses to pre-commit to future version names." }
+    T8: { fired: false, evidence: "Restated flatly -- migrate off the temporal flag name now while the cost is still low -- it remains a real, arguable engineering claim, not a claim that depended on its framing." }
+  MINIMALIST:
+    T1: { fired: true, evidence: "The 'don't over-design, just pick a plain string' argument is a generic YAGNI point that would survive deleting 'feature flag', 'new checkout', and 'controls whether users see' entirely unchanged." }
+    T2: { fired: true, evidence: "It never questions whether the flag's name will still mean 'new' after rollout or whether naming is even the right decision; it accepts the question's frame and only minimizes the effort inside it." }
+    T3: { fired: false, evidence: "No authority is cited; the minimal-intervention argument is self-contained from premise to action." }
+    T4: { fired: false, evidence: "It explicitly forecloses designing a naming taxonomy and forecloses setting up a registry or lifecycle policy before there is more than one flag." }
+    T5: { fired: false, evidence: "The position states 'Name it literally what it does, right now, with no scheme ... and stop there,' a direct do-X imperative." }
+    T6: { fired: true, evidence: "The named actor (whoever eventually deletes the flag) is given no concrete action now beyond a hope that the chosen name will 'make it obvious' later, which is not an action they can take." }
+    T7: { fired: true, evidence: "Nothing weighs the cost of a bad literal name against how long it would take to notice, despite the whole argument resting on this being a low-stakes, reversible choice." }
+    T8: { fired: false, evidence: "Restated flatly -- pick a plain descriptive name and don't build a taxonomy yet -- it is still a real, defensible claim about not over-engineering." }
+  PARTICULARIST:
+    T1: { fired: false, evidence: "The advice to avoid 'new' hinges specifically on the word 'new' appearing in the prompt and on the flag being a visibility gate for a replacement checkout, so deleting those details removes the basis for the rule." }
+    T2: { fired: false, evidence: "It directly tests the unstated temporary-vs-permanent assumption and makes the naming rule conditional on the result." }
+    T3: { fired: false, evidence: "No citations appear; the argument runs entirely from the problem's wording to a conditional naming rule." }
+    T4: { fired: false, evidence: "It forecloses three concrete moves: naming 'new_checkout' permanently, naming before checking lifecycle, and using a generic convention without checking the existing flag system." }
+    T5: { fired: false, evidence: "It contains direct imperatives -- 'name it for deletion', 'name it after the actual checkout capability' -- gated by a condition, not absent." }
+    T6: { fired: false, evidence: "The missing_actor (the flag-platform team) is named with a concrete action: specifying the exact naming scheme before any name is chosen." }
+    T7: { fired: false, evidence: "It explicitly reasons that a temporary flag's wrong name costs little because it disappears before misleading anyone, while a permanent flag's wrong name costs a lot because it will 'actively mislead anyone reading it later' -- a cost-and-time argument." }
+    T8: { fired: false, evidence: "Restated flatly -- determine whether the flag is temporary or permanent before naming it -- it remains a substantive, sayable claim independent of its framing." }
+  SUPPLICANT:
+    T1: { fired: false, evidence: "The argument is built entirely on checkout-specific user actions (payment fields, receipts, error screens), so deleting the 'new checkout' detail removes the concrete scenario the reasoning walks through." }
+    T2: { fired: false, evidence: "It attacks the assumption that this is a purely internal naming decision, arguing the real unmet need is user- and support-facing identifiability." }
+    T3: { fired: false, evidence: "No authority is invoked; the user-journey argument is traced step by step from the user's goal to the recommended action." }
+    T4: { fired: false, evidence: "It forecloses naming on pure engineering convention with no surfacing plan, and forecloses treating this as a closed decision that never touches the error page or receipt." }
+    T5: { fired: false, evidence: "The position reads 'instead make whatever the flag controls show up as a visible, reportable checkout-version marker', an explicit do-X instruction." }
+    T6: { fired: false, evidence: "The missing_actor (the support agent) is named with a concrete lookup action, and the position's entire payoff depends on that actor having the tool built." }
+    T7: { fired: true, evidence: "Nothing addresses the cost of building and maintaining a user/support-facing version marker if it turns out unnecessary, nor how long it would take to learn that." }
+    T8: { fired: false, evidence: "Restated flatly -- expose the checkout version to the user and support instead of just naming the flag internally -- it remains a real, actionable claim, not just an appealing angle." }
+  FRAME_BREAKER:
+    T1: { fired: true, evidence: "The 'naming is not the decision, governance is' argument is generic enough to be made about almost any flag-naming question and does not depend on this being checkout or 'new' specifically." }
+    T2: { fired: false, evidence: "It explicitly names and rejects the assumption that naming is the task, redirecting to ownership, rollback metric, and removal date as the real decision." }
+    T3: { fired: false, evidence: "No citations are used; the governance-over-naming argument is fully self-contained." }
+    T4: { fired: false, evidence: "It forecloses spending a meeting comparing candidate names in isolation and forecloses treating the flag as permanent infrastructure with no scheduled removal." }
+    T5: { fired: false, evidence: "The position states 'write and attach a one-page lifecycle record to it', a direct do-X imperative." }
+    T6: { fired: false, evidence: "The missing_actor (the platform/on-call engineer) is named with a concrete gatekeeping action -- requiring an owner and expiry field before flag creation." }
+    T7: { fired: true, evidence: "It never weighs the cost of being wrong about skipping governance against the cost of the real sprint-time commitment it proposes, nor how long either failure would take to surface." }
+    T8: { fired: false, evidence: "Restated flatly -- document owner, rollout stage, rollback trigger, and removal date before naming -- it remains a substantive, worth-saying claim." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "Four of five branches explicitly attacked a load-bearing assumption -- that the flag stays safely temporary, that naming is even the right decision, or that this is a purely internal choice -- so the run-level consensus trap does not apply." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every branch names a non-null missing_actor (analytics team, eventual flag-deleter, flag-platform team, support agent, on-call engineer), so the run-level actor-omission trap does not apply." }
+lint_verdicts:
+  - { frame: MINIMALIST, trap: T1, lint_said: false, critic_says: true, evidence: "The YAGNI argument is fully generic and would survive deleting 'feature flag', 'new checkout', and 'controls whether users see' unchanged, so it should have fired despite the lint's silence." }
+  - { frame: MINIMALIST, trap: T6, lint_said: false, critic_says: true, evidence: "The named actor is given no concrete action beyond hoping the chosen name reads as obviously temporary later, which is decorative rather than an actor who can change the outcome." }
+  - { frame: MINIMALIST, trap: T7, lint_said: false, critic_says: true, evidence: "Nothing weighs the cost of a bad literal name against how long it would take to notice, despite resting on this being a low-stakes choice." }
+  - { frame: FRAME_BREAKER, trap: T1, lint_said: false, critic_says: true, evidence: "The naming-is-not-the-decision argument is a generic governance point that would survive deletion of every checkout-specific detail in the prompt." }
+  - { frame: FRAME_BREAKER, trap: T7, lint_said: false, critic_says: true, evidence: "The lifecycle-record recommendation never distinguishes the cost of skipping governance now from the real sprint-level commitment it proposes, nor the time to discover either failure." }
+  - { frame: SUPPLICANT, trap: T7, lint_said: false, critic_says: true, evidence: "Redirecting the decision to a user-facing marker is treated as costless to build, with no discussion of the cost of being wrong or how long it would take to find out." }

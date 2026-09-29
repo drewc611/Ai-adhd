@@ -1,6 +1,6 @@
 # The SuperAgent
 
-Work that takes minutes to hours: research it, decide it, build it, check it, write it up. Six
+Work that takes minutes to hours: research it, decide it, build it, check it, write it up. Seven
 stage kinds, a sandbox, memory that survives the mission, and a message gateway.
 
 It never calls a model. The library compiles a brief for each stage and checks what comes back
@@ -21,6 +21,7 @@ Three classes, and the difference is the stage graph rather than a timeout.
 
 | class | stages | lease | budget | what it is for |
 |---|---|---|---|---|
+| `triage` | triage | 5 min | 20k | segmenting a brain dump into quick tasks, notes and decisions |
 | `quick` | research → create | 10 min | 60k | a question somebody already has the answer to |
 | `standard` | research → **decide** → build → verify → create | 30 min | 400k | a change with a decision in front of it |
 | `deep` | research → **decide** → research → build → verify → create → review | 90 min | 2M | a decision whose hard part is only visible after the first attempt at it |
@@ -34,6 +35,15 @@ rather than against each other.
 ordinary run to the kernel — N isolated frames, a blind critic, the eight trap detectors — and
 adopts the synthesis. A mission is worth more than a long prompt precisely because its hard
 decision is made by that machine instead of by one agent being thorough.
+
+**`triage` is not "minutes to hours" shaped, and it does not pretend to be.** One stage, one cheap
+subagent, no sandbox. `adhd-triage` reads a free-form dump and writes `items.yaml`: which parts are
+quick tasks, which are just notes, and which are genuine decisions — each with a drafted problem
+statement and a suggested routing class, never a priority or a recommendation (`src/triage.ts`'s
+schema has no field for either). A decision item goes into the kernel exactly the way `decide`
+already does, by hand, once its own D5 confirm is given; `triage` itself is the one mission class
+`adhd serve` (`docs/DECISIONS.md`, D46) auto-confirms, because it is one capped-budget subagent
+triggered by the user's own submit click, not a mission that could spend without them noticing.
 
 ## Memory, and the rule that shapes it
 

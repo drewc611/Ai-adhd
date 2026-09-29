@@ -99,7 +99,7 @@ test("a failure comes back as an error result, not a thrown transport error", as
   assert.equal(r.isError, true, "a missing file must be reported, not swallowed");
   assert.ok(body(r).length > 0);
   // The server stays usable afterwards.
-  assert.match(body(await call(client, "adhd_frames")), /LEDGER/);
+  assert.match(body(await call(client, "adhd_frames")), /LEVY/);
   await client.close();
 });
 

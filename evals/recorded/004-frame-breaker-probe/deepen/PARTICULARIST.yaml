@@ -1,0 +1,38 @@
+problem_hash: sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102
+frame: PARTICULARIST
+verdict: defend
+response: |
+  The objection is right that a one-time classification is fragile under inertia, but it
+  attacks a version of the position that relies on someone remembering to act -- that was
+  never the load-bearing part. The load-bearing part is what the "temporary" branch
+  produces: a name tied to a rollout ticket, not the word "new." That distinction survives
+  the drift scenario the objection describes, because a ticket ID is a checkable artifact
+  and the word "new" is not. Six months of inertia after tying the name to, say,
+  `checkout_redesign_ROLL-4821` leaves you with a flag whose staleness is mechanically
+  detectable: anyone, or any script, can look up ROLL-4821, see it closed a year ago, and
+  flag the name as overdue for a decision. Six months of inertia after naming it
+  `new_checkout` leaves you with nothing to check against -- "new" doesn't expire, doesn't
+  reference anything external, and gives no future reader or tool a way to notice drift at
+  all. So the objection doesn't show the temporary/permanent split fails; it shows that
+  classifying once and trusting memory to revisit it fails, which is a real gap but a
+  narrower one than "the split doesn't hold." The fix is to make the check external to
+  memory: require the ticket-tied name to carry an expiry signal (e.g., a lint rule or
+  periodic audit that flags any flag name whose referenced ticket has been closed for more
+  than N months) so the "it's still temporary" verdict has to be re-earned rather than
+  assumed. That's a strengthening of the position, not a retreat from it -- the core claim,
+  that "new" is never a safe permanent name and a ticket ID is always more auditable than a
+  relative adjective, is exactly what the drift scenario confirms.
+revised_position: >-
+  Before naming it, find out whether this flag is a temporary rollout switch or a permanent
+  toggle: if temporary, name it for deletion by tying it to the rollout ticket and require an
+  automated or periodic check that flags the name once that ticket has been closed for more
+  than a set period so drift to de facto permanence gets caught rather than assumed away; if
+  permanent, name it after the actual checkout capability being shipped, never using "new" at
+  all.
+revised_falsifier: >-
+  Search this codebase's flag store for flags named after rollout tickets that closed more
+  than a year ago -- if none of them were ever flagged, audited, or renamed despite the
+  ticket being closed and discoverable, the ticket-based name gave no practical advantage
+  over "new_checkout" and the enforcement mechanism this revision adds is the thing actually
+  needed, not the ticket-naming convention itself.
+confidence: medium

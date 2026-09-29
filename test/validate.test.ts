@@ -61,11 +61,11 @@ test("pass B: every (branch, trap) record required; clusters partition the frame
 test("checkBlind catches frame ids, frame display names, and a frame field", () => {
   const frames = cfg.frames.frames;
   assert.deepEqual(checkBlind("### Artifact A\nposition: do x", frames), []);
-  assert.ok(checkBlind("### Artifact A\nframe: LEDGER", frames).length >= 2);
+  assert.ok(checkBlind("### Artifact A\nframe: LEVY", frames).length >= 2);
   // The leak that only checking ids left open: a branch naming its frame the way a brief prints it.
   const byName = checkBlind("### Artifact A\nreasoning: From inside the Door keeper stance, sort the moves.", frames);
   assert.ok(byName.some((p) => /Door keeper/.test(p)), "a display name identifies the frame as surely as its id");
-  assert.ok(checkBlind("### Artifact A\nreasoning: Reading it as the Ledger, someone pays.", frames).some((p) => /Ledger/.test(p)));
+  assert.ok(checkBlind("### Artifact A\nreasoning: Reading it as the Levy, someone pays.", frames).some((p) => /Levy/.test(p)));
 });
 
 test("a label the problem itself uses is not a leak, because every branch may echo the problem", () => {
@@ -81,14 +81,14 @@ test("a label the problem itself uses is not a leak, because every branch may ec
 
 test("redaction strips ids and names, keeps one frame's own label, and leaves problem words alone", () => {
   const frames = cfg.frames.frames;
-  const text = "LEDGER says the Door keeper is wrong, and the Successor view agrees.";
+  const text = "LEVY says the Door keeper is wrong, and the Caretaker view agrees.";
   const all = redactFrameLabels(text, frames);
-  assert.ok(!/LEDGER|Door keeper|Successor/i.test(all), `still leaking: ${all}`);
-  const kept = redactFrameLabels(text, frames, { keep: "SUCCESSOR" });
-  assert.match(kept, /Successor view/, "the survivor keeps its own label");
+  assert.ok(!/LEVY|Door keeper|Caretaker/i.test(all), `still leaking: ${all}`);
+  const kept = redactFrameLabels(text, frames, { keep: "CARETAKER" });
+  assert.match(kept, /Caretaker view/, "the survivor keeps its own label");
   assert.ok(!/Door keeper/i.test(kept), "but not a sibling's");
-  const echoed = redactFrameLabels("The ledger is already reconciled.", frames, { problem: "Is the ledger reconciled?" });
-  assert.match(echoed, /ledger is already reconciled/, "a word the problem uses survives redaction");
+  const echoed = redactFrameLabels("The levy is already reconciled.", frames, { problem: "Is the levy reconciled?" });
+  assert.match(echoed, /levy is already reconciled/, "a word the problem uses survives redaction");
 });
 
 test("a detector that fires on evidence too thin to be an argument rejects the pass", () => {

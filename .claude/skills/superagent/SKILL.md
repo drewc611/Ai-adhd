@@ -53,6 +53,15 @@ The `decide` stage in `standard` and `deep` is not an agent. It submits an ordin
 return the stage. That stage is why a mission is worth more than a long prompt — the hard decision
 gets made by isolated frames and a blind critic instead of by one agent being thorough.
 
+## The triage stage
+
+A `triage` mission is one stage: segment a free-form brain dump into quick tasks, notes and
+decisions. `adhd-triage` carries no `Write`, the same as `adhd-researcher` and `adhd-reviewer` —
+its brief is complete by construction and it has no legitimate use for the filesystem. So it does
+not write `items.yaml` itself. When it returns, write its final message — the fenced YAML block,
+verbatim, nothing added or trimmed — into `items.yaml` in the mission directory yourself, then
+call `adhd super return` as usual. The library checks the schema, not the prose around it.
+
 ## The sandbox
 
 `build` and `verify` stages get one. Create it before the build stage:

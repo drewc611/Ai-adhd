@@ -802,13 +802,42 @@ export interface FrameDrift {
   current_hash: string;
   /** null when the run predates the stamp: unknown is not the same as unchanged. */
   changed: boolean | null;
+  /** The baseline's reason this run/frame pair is expected to differ, if it is listed there. */
+  expected_drift: string | null;
 }
 
 export interface DriftReport {
   rows: FrameDrift[];
+  /** Changed and not in the baseline. These are unexplained: a stance edit nobody accounted for. */
   changed: FrameDrift[];
+  /** Changed exactly as the baseline says they should. */
+  expected: FrameDrift[];
+  /** In the baseline and no longer differing, so the baseline is stale. */
+  stale_baseline: string[];
   unknown: FrameDrift[];
   text: string;
+}
+
+export interface FrameDriftBaseline {
+  why: string;
+  drifted: Record<string, string>;
+}
+
+/**
+ * Runs known to carry a `run/frame` branch whose definition has since changed, with the reason.
+ *
+ * Same argument as `loadBaseline` in `src/replay.ts`, same shape, one file each: a frame's stance
+ * or probes are edited deliberately from time to time (D47 added a FRAME_BREAKER probe), and a
+ * gate that fails forever on runs recorded under the old wording is a gate people learn to
+ * ignore. Recordings are not re-run just to erase the entry — `former_ids` in
+ * `config/frames.yaml` makes the same choice for a rename, and the reasoning is identical: a
+ * recorded artifact is evidence of what that frame produced on the day it ran, not of the
+ * definition the library carries today.
+ */
+export function loadFrameDriftBaseline(cfg: Config): FrameDriftBaseline {
+  const p = join(cfg.root, "evals", "frame-drift-baseline.json");
+  if (!existsSync(p)) return { why: "", drifted: {} };
+  return JSON.parse(readFileSync(p, "utf8")) as FrameDriftBaseline;
 }
 
 /**
@@ -824,6 +853,7 @@ export interface DriftReport {
  * would be inventing the fact this report exists to establish.
  */
 export function frameDrift(cfg: Config, recordedDir = join(cfg.root, "evals", "recorded")): DriftReport {
+  const baseline = loadFrameDriftBaseline(cfg);
   const current = new Map(cfg.frames.frames.map((f) => [f.id, frameHash(f)]));
   const rows: FrameDrift[] = [];
   if (existsSync(recordedDir))
@@ -841,16 +871,22 @@ export function frameDrift(cfg: Config, recordedDir = join(cfg.root, "evals", "r
         const now = current.get(frame);
         if (!now) continue; // a frame that has left the library is a retirement question, not drift
         const recorded = b.frame_hash ?? null;
-        rows.push({ run: d, frame, recorded_hash: recorded, current_hash: now, changed: recorded === null ? null : recorded !== now });
+        const changed = recorded === null ? null : recorded !== now;
+        rows.push({ run: d, frame, recorded_hash: recorded, current_hash: now, changed, expected_drift: baseline.drifted[`${d}/${frame}`] ?? null });
       }
     }
 
-  const changed = rows.filter((r) => r.changed === true);
+  const allChanged = rows.filter((r) => r.changed === true);
   const unknown = rows.filter((r) => r.changed === null);
+  const expected = allChanged.filter((r) => r.expected_drift !== null);
+  const changed = allChanged.filter((r) => r.expected_drift === null);
+  const staleBaseline = rows.filter((r) => r.changed === false && r.expected_drift !== null).map((r) => `${r.run}/${r.frame}`);
+
   const lines = [`frame definition drift over ${new Set(rows.map((r) => r.run)).size} recorded run(s)`];
   lines.push("");
   if (!rows.length) lines.push("no recorded run carries a plan to read.");
   for (const r of changed) lines.push(`CHANGED  ${r.run}/${r.frame}: recorded ${r.recorded_hash}, library now ${r.current_hash}`);
+  for (const r of expected) lines.push(`drifted as expected  ${r.run}/${r.frame}: ${r.expected_drift}`);
   if (unknown.length) {
     const runs = [...new Set(unknown.map((r) => r.run))].sort();
     lines.push(
@@ -858,12 +894,21 @@ export function frameDrift(cfg: Config, recordedDir = join(cfg.root, "evals", "r
     );
   }
   lines.push("");
+  if (allChanged.length)
+    lines.push(
+      `${allChanged.length} branch(es) ran under a definition the library no longer has. Their artifacts are still evidence of what that frame produced; they are not evidence about the frame that carries the id today, and \`frames --stats\` pools them as one.`,
+    );
   if (changed.length)
     lines.push(
-      `${changed.length} branch(es) ran under a definition the library no longer has. Their artifacts are still evidence of what that frame produced; they are not evidence about the frame that carries the id today, and \`frames --stats\` pools them as one.`,
+      `${changed.length} of those are not in evals/frame-drift-baseline.json: ${changed.map((r) => `${r.run}/${r.frame}`).join(", ")}. Either a frame edit was not recorded there, or a recording was edited by hand. Read the diff and decide which before adding a baseline entry; the entry has to say why.`,
     );
-  else if (rows.some((r) => r.changed === false)) lines.push("Every stamped branch ran under the definition the library still carries.");
-  return { rows, changed, unknown, text: lines.join("\n") };
+  if (staleBaseline.length)
+    lines.push(
+      `${staleBaseline.length} baseline entry(ies) are stale: ${staleBaseline.join(", ")} now match the library again. Remove them. A baseline that forgives drift which is no longer happening is how the next real redefinition gets waved through unnoticed.`,
+    );
+  if (!changed.length && !staleBaseline.length && rows.some((r) => r.changed === false || r.expected_drift !== null))
+    lines.push("No unexplained drift.");
+  return { rows, changed, expected, stale_baseline: staleBaseline, unknown, text: lines.join("\n") };
 }
 
 // ---- the forbidden lists, and how much of them anything actually checks -------------------------

@@ -1,0 +1,10 @@
+{
+  "why": "Recorded run/frame branches whose current definition no longer matches the one they ran under. `adhd frames --drift` fails on any drift NOT listed here, and also fails when a listed pair stops drifting, because a stale baseline is how a real redefinition gets waved through unnoticed. Recordings are never re-run to make this file shorter: a recorded artifact is evidence of what that frame produced on the day it ran, not of the definition the library carries today. That is the same argument as former_ids in config/frames.yaml, and the same mechanism as evals/replay-baseline.json for synthesis rendering. Runs recorded before frame_hash was stamped (001-altframes, 001-first-run, 001-seed2, 002-first-run, 002-kernel-enduser, 003-kernel-strategy, 004-kernel-naming) read `unknown`, not `changed`, and carry no entry here for the same reason a null does not belong in this file: there is nothing to forgive on a branch that never asserted a definition to begin with.",
+  "drifted": {
+    "001-seed3/FRAME_BREAKER": "D47 added a FRAME_BREAKER probe closing backlog 17 (the false_means gap). Recorded before the probe existed.",
+    "001-seed3-e12-1/FRAME_BREAKER": "D47, as 001-seed3/FRAME_BREAKER.",
+    "001-seed3-e12-2/FRAME_BREAKER": "D47, as 001-seed3/FRAME_BREAKER.",
+    "001-seed3-repeat/FRAME_BREAKER": "D47, as 001-seed3/FRAME_BREAKER.",
+    "014-seed14/FRAME_BREAKER": "D47, as 001-seed3/FRAME_BREAKER."
+  }
+}

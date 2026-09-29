@@ -28,8 +28,13 @@ import { z } from "zod";
  * `diverge` is the odd one: it does not run a subagent directly, it submits a run to the kernel
  * and adopts the synthesis. That is the point of having it in the list — a mission that needs a
  * hard decision made well uses the thing this repository is, rather than asking one agent nicely.
+ *
+ * `triage` is the other one that is not "minutes to hours" shaped: one subagent, one cheap
+ * classification pass over free text, no filesystem or network access, no sandbox. It exists so a
+ * brain dump can be segmented into items without inventing a third scheduler next to this one and
+ * the kernel — see D46.
  */
-export const STAGE_KINDS = ["research", "diverge", "build", "verify", "create", "review"] as const;
+export const STAGE_KINDS = ["research", "diverge", "build", "verify", "create", "review", "triage"] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
 
 /**
@@ -37,8 +42,12 @@ export type StageKind = (typeof STAGE_KINDS)[number];
  * spend. A `deep` mission with a small budget is a long series of cheap stages; a `quick` one
  * with a large budget is a short expensive one. Conflating them gives you one knob that is
  * wrong for both.
+ *
+ * `triage` is a class of one, sized for exactly one `triage` stage and nothing else — see
+ * `template`. It is not a smaller `quick`: a `quick` mission still runs `adhd-researcher` with
+ * network access; `triage` runs one agent that reads nothing and reaches nothing.
  */
-export const MISSION_CLASSES = ["quick", "standard", "deep"] as const;
+export const MISSION_CLASSES = ["quick", "standard", "deep", "triage"] as const;
 export type MissionClass = (typeof MISSION_CLASSES)[number];
 
 export interface ClassPolicy {
@@ -61,6 +70,11 @@ export const CLASS_POLICY: Record<MissionClass, ClassPolicy> = {
   quick: { leaseSeconds: 600, budgetTokens: 60_000, checkpointEvery: 1, maxAttempts: 2 },
   standard: { leaseSeconds: 1_800, budgetTokens: 400_000, checkpointEvery: 1, maxAttempts: 3 },
   deep: { leaseSeconds: 5_400, budgetTokens: 2_000_000, checkpointEvery: 1, maxAttempts: 3 },
+  // One stage, capped hard: this is the class D46 lets `adhd serve` auto-confirm without a D5
+  // click, so its ceiling is what stands in the gate's place. 300s is generous for one
+  // classification pass; 20,000 tokens is roughly the `quick` research stage's ceiling divided
+  // by three, for a stage that reads no source material and searches nothing.
+  triage: { leaseSeconds: 300, budgetTokens: 20_000, checkpointEvery: 1, maxAttempts: 2 },
 };
 
 /**
@@ -79,6 +93,11 @@ export const STAGE_TOOLS: Record<StageKind, readonly string[]> = {
   verify: ["Read", "Glob", "Grep", "Bash"],
   create: ["Read", "Write", "Glob", "Grep"],
   review: ["Read", "Glob", "Grep"],
+  // No network (only `research` gets that) and no Write: its brief is complete by construction,
+  // so it has no legitimate use for the filesystem either. The grant exists only because a host
+  // refuses to launch an agent with zero tools; `adhd-reviewer` and `adhd-governor` carry the same
+  // filler for the same reason.
+  triage: ["Read", "Glob", "Grep"],
 };
 
 /**
@@ -106,6 +125,7 @@ export const STAGE_AGENT: Record<StageKind, string | null> = {
   verify: "adhd-verifier",
   create: "adhd-maker",
   review: "adhd-reviewer",
+  triage: "adhd-triage",
 };
 
 export const SandboxPolicySchema = z

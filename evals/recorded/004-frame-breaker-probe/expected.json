@@ -1,0 +1,4 @@
+{
+  "outcome": "fail",
+  "note": "Recorded from a fresh dispatch of fixture 004 (same problem text, class, seed 4) after D47 added a probe to FRAME_BREAKER for backlog 17's false_means gap. Driven by hand through `adhd run --phase`, not the kernel, so there is no os.json. Failing item: must_surface false_means (T2). FRAME_BREAKER's reasoning does engage the new probe -- it says a name like \"new_checkout_enabled\" \"asserts an implicit 'old checkout' fallback state\" the name itself does not carry as fact -- but that language does not match the detector's regex, and the branch was independently pruned for T1 (genericity) and T7, so it never reached the final recommendation. Same overall outcome as 004-kernel-naming: recorded as observed, not hidden. Backlog 17 stays open; see D47."
+}
