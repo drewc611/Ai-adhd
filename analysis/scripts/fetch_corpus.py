@@ -221,13 +221,13 @@ TREE_SOURCES: dict[str, TreeSource] = {
     "rust-rfcs": TreeSource(
         name="rust-rfcs",
         licence="MIT OR Apache-2.0",
-        licence_url="https://github.com/rust-lang/rfcs/blob/master/LICENSE-MIT",
-        tree_url="https://api.github.com/repos/rust-lang/rfcs/git/trees/master?recursive=1",
+        licence_url="https://github.com/rust-lang/rfcs/blob/main/LICENSE-MIT",
+        tree_url="https://api.github.com/repos/rust-lang/rfcs/git/trees/main?recursive=1",
         prefixes=(
             "https://api.github.com/repos/rust-lang/rfcs/git/trees/",
-            "https://raw.githubusercontent.com/rust-lang/rfcs/master/",
+            "https://raw.githubusercontent.com/rust-lang/rfcs/main/",
         ),
-        raw_prefix="https://raw.githubusercontent.com/rust-lang/rfcs/master/",
+        raw_prefix="https://raw.githubusercontent.com/rust-lang/rfcs/main/",
         path_pattern=re.compile(r"^text/(?P<n>\d{4})-[^/]+\.md$"),
         notes=(
             "Dual-licensed MIT OR Apache-2.0, read from the repository's own LICENSE-MIT. Better "

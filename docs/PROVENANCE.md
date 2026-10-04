@@ -30,7 +30,7 @@ source, under the source's own terms, with the source's own attribution intact.
 | `erc` — Ethereum ERCs | **CC0-1.0** | public domain dedication | [`ethereum/ERCs/LICENSE.md`](https://github.com/ethereum/ERCs/blob/master/LICENSE.md) |
 | `pep` — Python PEPs | **public domain and CC0-1.0** | dual, mandatory for every PEP | [PEP 1 §15](https://peps.python.org/pep-0001/#pep-header-preamble) |
 | `rfc` — IETF RFCs | IETF Trust copyright, BCP 78 | freely readable and redistributable in full; **derivatives restricted** | [RFC 5378](https://www.rfc-editor.org/rfc/rfc5378.txt), [TLP](https://trustee.ietf.org/documents/trust-legal-provisions/) |
-| `rust-rfcs` — Rust RFCs | **MIT OR Apache-2.0** | dual, permissive | [`rust-lang/rfcs/LICENSE-MIT`](https://github.com/rust-lang/rfcs/blob/master/LICENSE-MIT) |
+| `rust-rfcs` — Rust RFCs | **MIT OR Apache-2.0** | dual, permissive | [`rust-lang/rfcs/LICENSE-MIT`](https://github.com/rust-lang/rfcs/blob/main/LICENSE-MIT) |
 | `k8s-keps` — Kubernetes KEPs | **Apache-2.0** | permissive | [`kubernetes/enhancements/LICENSE`](https://github.com/kubernetes/enhancements/blob/master/LICENSE) |
 
 ```
@@ -113,25 +113,6 @@ genre.
 The RFC corpus stays, because the position above holds for it — nothing is redistributed and nothing
 derived from it is published. If that ever stops being true, the RFCs are the source to drop first,
 and the model can be retrained on the CC0 sources alone with no licensing question at all.
-
-## Verified but not implemented
-
-Two more corpora in the same genre, licences read and correct, enumeration not written:
-
-| source | licence | verified from |
-|---|---|---|
-| Rust RFCs | **MIT OR Apache-2.0** | [`rust-lang/rfcs/LICENSE-MIT`](https://github.com/rust-lang/rfcs/blob/master/LICENSE-MIT) |
-| Kubernetes KEPs | **Apache-2.0** | [`kubernetes/enhancements/LICENSE`](https://github.com/kubernetes/enhancements/blob/master/LICENSE) |
-
-Both need a directory listing, because the filename carries a slug the number does not determine:
-`text/0002-rfc-process.md`, `keps/sig-node/1234-some-feature/README.md`. Listing means GitHub's tree
-API at 60 unauthenticated requests an hour, and that call could not be exercised from the
-environment the rest of the fetcher was tested in. An enumeration path nobody has run is one that
-fails on somebody else's machine, so these are recorded rather than guessed at.
-
-Adding them means allowing `api.github.com` and accepting a JSON response, which is a change to the
-network boundary D10 built rather than another entry in a table. It is the owner's call and it is
-recorded in `docs/BACKLOG.md` rather than taken.
 
 ## Refused for a licensing reason, not a plumbing one
 
