@@ -191,9 +191,18 @@ Nothing under `src/` calls a model. Nothing under `analysis/` does either, and n
 Library, CLI, MCP server and plugin are implemented and tested against the contracts in
 `CLAUDE.md`. D1 through D52 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
-Seventeen runs are recorded over five fixtures, with a linear chain-of-thought negative control
-per fixture that must fail, and three decline fixtures asserting that routing refuses a class
-rather than spending on it.
+Nineteen runs are recorded, fifteen of them real dispatches across five fixtures (001 through
+004, and 014's wide path at n=7); four of those five fixtures also carry a linear chain-of-thought
+negative control that must fail, and three further fixtures decline outright, asserting that
+routing refuses a class rather than spending on it.
+
+**Recently verified, not just built.** D49 through D52 ([`docs/DECISIONS.md`](docs/DECISIONS.md))
+widened the corpus fetcher to two new sources and shipped a fourteenth frame, `NEGATIVE_SPACE`
+([backlog 23](docs/BACKLOG.md)) — and the first live dispatch of the widened fetcher caught a real
+bug a dry read missed: `rust-lang/rfcs`'s default branch is `main`, not the `master` the code
+assumed, found by the actual scheduled workflow 404ing and fixed the same day. `npm audit` reports
+zero vulnerabilities (two moderate transitive findings resolved, [PR #37](https://github.com/drewc611/Ai-adhd/pull/37)),
+and every pinned GitHub Action is off the version CI itself flagged as running a deprecated Node.
 
 The SuperAgent (`adhd super`) ran its first `deep` mission with live subagents in this
 repository's history: all seven stages, research through review, against
