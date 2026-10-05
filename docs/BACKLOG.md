@@ -190,14 +190,21 @@ yet enough to know whether they work.
     negative case. Either a probe on an existing frame or a new frame with the orthogonality
     check run first.
 
-    **Still open. D47 tried the probe.** `docs/AUTHORING-FRAMES.md` already named this as the likely
-    fix, so FRAME_BREAKER gained a probe asking what a label asserts about the state it does not
-    name. A fresh dispatch of fixture 004 (`004-frame-breaker-probe`) still misses `false_means`:
-    FRAME_BREAKER's reasoning gets close — it names the implicit "old checkout" fallback state a
-    name like `new_checkout_enabled` does not actually carry as fact — but the phrasing does not
-    match the detector, and the branch was independently pruned for T1 and T7 before it could reach
-    the recommendation. One run at one seed is not enough to conclude the probe doesn't help; it is
-    enough to say it hasn't yet. Full accounting in D47 and `evals/recorded/004-frame-breaker-probe`.
+    **Still open. D47 tried the probe; D52 tried the general case.** `docs/AUTHORING-FRAMES.md`
+    already named the probe as the likely fix, so FRAME_BREAKER gained one asking what a label
+    asserts about the state it does not name. A fresh dispatch of fixture 004
+    (`004-frame-breaker-probe`) still misses `false_means`: FRAME_BREAKER's reasoning gets close —
+    it names the implicit "old checkout" fallback state a name like `new_checkout_enabled` does not
+    actually carry as fact — but the phrasing does not match the detector, and the branch was
+    independently pruned for T1 and T7 before it could reach the recommendation.
+
+    D51's `NEGATIVE_SPACE` (backlog 23) asks a more general version of the same question, so D52
+    re-ran fixture 004 a third time with it added as a sixth frame. Same shape, same result:
+    NEGATIVE_SPACE's reasoning traces what a plain boolean collapses ("never evaluated" and
+    "deliberately held back as a control" into the same `false`) about as directly as anything in
+    the corpus, and still does not match the detector's regex. Two runs, two frames, the same
+    near-miss. Full accounting in D47, D52, and `evals/recorded/004-frame-breaker-probe` and
+    `004-negative-space-probe`.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**
@@ -207,8 +214,15 @@ yet enough to know whether they work.
     appeared to name no actor.~~
    **Done. `SUPPLICANT` and `SUCCESSOR`, picked mechanically: every candidate was matched against all 39 recorded artifacts, all synthesis files and all fixtures, and only names appearing nowhere in the corpus were eligible. `config/frames.yaml` carries `former_ids` so the five runs that wrote the old ids still resolve; the runs themselves are not rewritten. D6 has the reasoning.**
 19. **Per-frame fixtures.** One fixture per frame that the frame should obviously win, as a
-    unit test for the frame's own stance. **Still open, and the scope is now known: twelve
-    fixtures, and one frame that cannot have one.**
+    unit test for the frame's own stance. **Still open. Scope moved from twelve to thirteen
+    fixtures when D51 added `NEGATIVE_SPACE`; one frame still cannot have one.**
+
+    **D52 is not this item, and is not claimed as it.** `004-negative-space-probe` gave
+    `NEGATIVE_SPACE` its first real dispatch, but through fixture 004 — a naming fixture built for
+    a different question, run to test backlog 17, not a fixture NEGATIVE_SPACE should obviously
+    win. It didn't win anything there: pruned on T4 and T7, in a run that scattered entirely. This
+    item still wants a fixture built around a problem where the absence of something is
+    load-bearing, run, and won.
 
     **Built first, because it had to be: `adhd frames --reach`.** `--stats` and `--axes` count what
     recorded runs did, and a frame missing from both is either unlucky or unreachable. They cannot
@@ -305,8 +319,12 @@ yet enough to know whether they work.
     **Built as `adhd frames --axes`. Seven of the ten axes carry one frame, and because a run never
     contains two frames from one axis (D6), routing has no alternative to offer on any of them.
     `mechanism` is the only axis with a member no run has ever dispatched.**
-23. **A frame that reasons about the negative case generally** (what the absence of the thing
-    asserts), candidate name NEGATIVE_SPACE, subject to the orthogonality check.
+23. ~~**A frame that reasons about the negative case generally** (what the absence of the thing
+    asserts), candidate name NEGATIVE_SPACE, subject to the orthogonality check.~~
+    **Resolved as D51.** Added on a new axis, `absence`, attacking T2 and T6. Passes the
+    orthogonality check (zero recorded runs, so nothing to flag), the collisions check (name
+    appears nowhere in the corpus), and validation. Primary in `naming`, alternate elsewhere.
+    Not yet proven by a fixture it should win — that is backlog 19's job, real spend under D5.
 
 ## 4. Critic and scoring
 
@@ -818,7 +836,7 @@ the end is a record section they have been mis-filed — which is the whole of w
     scores 41.0 held-out perplexity against 46.4. `Budget.weekly()`'s `max_rss_mb` is now 9216 and
     `train.yml`'s default order is 5. See D45.**
 
-75. **Rust RFCs and Kubernetes KEPs, if the network boundary may widen** (owner's call). Both
+75. ~~**Rust RFCs and Kubernetes KEPs, if the network boundary may widen** (owner's call). Both
     licences are read and correct — MIT OR Apache-2.0 and Apache-2.0, better provenance than the
     IETF RFCs already in the corpus — and both are the same genre. Neither is numerically
     enumerable: `text/0002-rfc-process.md` and `keps/sig-node/1234-some-feature/README.md` carry a
@@ -831,7 +849,13 @@ the end is a record section they have been mis-filed — which is the whole of w
     that can fetch is a job that can fetch weights, and `text/plain` only is one of the four things
     that keeps the exception small. A JSON carve-out is a real widening of it, so it is the owner's
     call rather than a table entry. What it would buy: roughly 600 more documents under freer
-    licences than the largest source currently in the corpus.
+    licences than the largest source currently in the corpus.~~
+    **Resolved as D50: the owner made the call directly, and it was made to widen.** Both sources
+    are implemented (`TreeSource`, `get_json()`, `tree_candidates()`, `fetch_tree_source()` in
+    `analysis/scripts/fetch_corpus.py`), registered in `analysis/corpora.yaml`, and documented in
+    `docs/PROVENANCE.md`. The JSON carve-out is a second, narrow function next to `get()` — which
+    is unchanged — and `api.github.com` is allowlisted as two prefixes scoped one repository each,
+    never the bare host. A truncated tree listing is refused rather than trained on.
 
 76. ~~**Re-measure what pruning costs, on one split** (small, and it invalidates a published figure
     until it is done). D14 priced count-pruning at 2.9x perplexity — 17.4 against 6.06 — and D16
@@ -1522,7 +1546,7 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     Cheap to describe, not cheap to build: it needs a live host, which is the same thing that made
     D36 through D41 untestable from inside a session.
 
-104. **The MCP server is the one plugin-only surface still unreachable from a clone** (decision,
+104. ~~**The MCP server is the one plugin-only surface still unreachable from a clone** (decision,
     owner's call — D44 declined to make it). `plugin.json` declares `adhd` as an MCP server pointing
     at `${CLAUDE_PLUGIN_ROOT}/bin/adhd-mcp.mjs`. There is no `.mcp.json`, so a session opened on this
     repository has none of the four MCP tools, and `skills/adhd-worker/SKILL.md` names them as one of
@@ -1538,7 +1562,11 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     The two sides: an unreachable v0 deliverable, against a startup failure that greets every new
     reader of the repository. A third option is a `.mcp.json` plus a SessionStart hook that builds
     if `dist/` is absent, which trades the noise for a network fetch nobody asked for and is the
-    thing `bin/adhd-mcp.mjs` says in its own comments it refuses to do.
+    thing `bin/adhd-mcp.mjs` says in its own comments it refuses to do.~~
+    **Resolved as D49: shipped `.mcp.json`, took the noisy-clone side of the trade.** The owner
+    made the call directly. A repo-root `.mcp.json` now declares the `adhd` MCP server with the
+    same command and args as `plugin.json`'s `mcpServers` entry; the third option (a SessionStart
+    hook that builds on demand) was not taken, for the reason already given above.
 
 105. ~~**Fixture 001's `must_not` checks assume a recommendation exists.** Found running E12
     (item 102): both cells pruned every branch, which is a legitimate run outcome — nothing wrong

@@ -576,11 +576,11 @@ test("the forbidden audit finds the phrases an entry quotes, however long", () =
 
 test("every frame forbids something, and most of what they forbid nothing checks", () => {
   const r = forbiddenAudit(cfg);
-  assert.equal(r.entries.length, 39, "the library's forbidden entries moved; the audit's numbers are stale");
+  assert.equal(r.entries.length, 42, "the library's forbidden entries moved; the audit's numbers are stale");
   for (const f of cfg.frames.frames) {
     assert.ok(r.entries.some((e) => e.frame === f.id), `${f.id} forbids nothing, which config/frames.yaml says is not allowed`);
   }
-  // The finding, asserted so it cannot quietly become false. 35 of 39 entries are instructions to a
+  // The finding, asserted so it cannot quietly become false. 38 of 42 entries are instructions to a
   // model that this repository states and never tests — the shape D13 lost a rule in, and the shape
   // `cut_heldout.py` reached a wrong conclusion in. If this ratio improves, the prose should say so.
   assert.ok(r.checkable <= 6, `${r.checkable} entries are checkable; the report's framing assumes few`);

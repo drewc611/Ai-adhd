@@ -89,6 +89,21 @@ corpora:
     include: ["*.md"]
     licence: "CC0-1.0"
 
+  # Rust RFCs and Kubernetes KEPs (D50, backlog 75). Same genre and better provenance than the IETF
+  # RFCs above; enumerated by GitHub's tree API rather than a numeric template because the filename
+  # carries a slug the number does not determine.
+  - name: rust-rfcs
+    path: corpora/rust-rfcs
+    required: false
+    include: ["*.md"]
+    licence: "MIT OR Apache-2.0"
+
+  - name: k8s-keps
+    path: corpora/k8s-keps
+    required: false
+    include: ["*.md"]
+    licence: "Apache-2.0"
+
   # Anything else on disk. Replace `path` and set `enabled: true`.
   - name: library
     path: /path/to/your/documents

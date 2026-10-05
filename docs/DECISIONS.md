@@ -3921,3 +3921,202 @@ overlay frame with a new id is added after the base ones" cloned `LEVY` (`{ ...b
 produce before, because the frame it used to clone (`LEDGER`) had never itself been renamed.
 The fix is `former_ids: []` on the synthetic clone: a frame invented for a test should not
 inherit the rename history of whatever real frame it happened to copy.
+
+## D49. Backlog 104: ship `.mcp.json`, and take the noisy-clone side of the trade
+
+**Decision:** Add a repo-root `.mcp.json` declaring the `adhd` MCP server, same command and args
+as `plugin.json`'s `mcpServers` entry. Resolved 2026-09-29.
+
+D44 named the trade and declined to make it: a `.mcp.json` reaches the one plugin-only surface
+`agents/` and `skills/` already had fixed (D42, D44) for every session opened directly on a
+clone, at the cost of `bin/adhd-mcp.mjs` printing its build diagnostic and exiting 1 on every
+fresh clone with no `dist/`. The owner's call, made directly: ship it. The unreachable-server
+side is a silent gap with no error and no path forward for a session that needs the four MCP
+tools; the noisy-clone side is a diagnostic that names the exact command to fix it and exits
+without doing anything by itself. A clear failure that tells you what to run beats a silent one.
+
+The third option D44 raised — `.mcp.json` plus a `SessionStart` hook that runs the build when
+`dist/` is missing — is not this decision. `bin/adhd-mcp.mjs`'s own comment says why: it "does
+not build on the user's behalf," because an MCP server that fetches dependencies and compiles
+the first time a host starts it is a network fetch nobody asked for, on a host that starts
+servers without asking. Nothing about a `.mcp.json` file changes that reasoning.
+
+## D50. Backlog 75: widen the fetcher's allowlist to a second content type, for two sources only
+
+**Decision:** Add `rust-rfcs` and `k8s-keps` to `analysis/scripts/fetch_corpus.py`, enumerated by
+GitHub's tree API rather than a numeric template, and accept `application/json` from that one
+call through a new `get_json()` function. `get()` — the document fetch every other source uses,
+`text/plain` only — is unchanged. Resolved 2026-09-29.
+
+Item 75 named the trade precisely and left it to the owner: both licences were read and correct
+from the start (MIT OR Apache-2.0, Apache-2.0, better provenance than the IETF RFCs already in
+the corpus), but neither series is numerically enumerable — `text/0002-rfc-process.md` and
+`keps/sig-node/1234-some-feature/README.md` carry a slug the number does not determine, and
+neither repository ships an index. The only listing mechanism is GitHub's tree API, which answers
+JSON. D10 banned network in a scheduled job because a job that can fetch is a job that can fetch
+weights, and `text/plain` only was one of the four things keeping that exception small. A JSON
+carve-out is a real widening of it. The owner made the call directly: widen it, for exactly these
+two sources.
+
+**How the widening stays as narrow as the rest of the exception.**
+
+- `get_json()` is a second, small function next to `get()`, not a parameter that changes what
+  `get()` accepts. A document fetch that quietly started accepting JSON would accept it from
+  every source, not just the two that need it — so accepting JSON at all is a decision visible in
+  a function's name, the same way accepting `text/plain` only was.
+- `api.github.com` is allowlisted as two prefixes, each scoped to one repository's tree endpoint
+  (`.../repos/rust-lang/rfcs/git/trees/`, `.../repos/kubernetes/enhancements/git/trees/`), never
+  the bare host. Same shape as every `raw.githubusercontent.com` prefix already in the file: a
+  host allowlist containing either one serves every public repository on GitHub, a prefix serves
+  one repository and nothing else.
+- The document content itself — what a matched path's raw file actually contains — is still read
+  through `get()`, still `text/plain` only, still refusing the same weight-format extensions.
+  Nothing about how a document's *content* is checked changed; only how the *list* of documents
+  to check is obtained did.
+- A truncated tree listing (`"truncated": true`, GitHub's own signal that a response did not hold
+  everything) is refused with `TreeTruncated` rather than trained on. A partial listing silently
+  accepted is the corpus equivalent of the manifest bug D10 already fails loudly on: it looks like
+  it worked.
+
+**The 60-unauthenticated-requests-an-hour concern that shelved this the first time no longer
+applies**, and the reason is `recursive=1`: it lists an entire repository's tree in one response,
+so fetching a whole corpus costs one API request plus one raw-content request per matched
+document — the same shape as every numeric source, not the per-directory-listing cost the earlier
+investigation assumed.
+
+**What changed, concretely.** `analysis/scripts/fetch_corpus.py` gained `TreeSource` (parallel to
+`Source`, enumerated by a tree listing instead of a numeric template), `get_json()`, `tree_candidates()`
+(the same spread-not-lowest-first reasoning as `candidates()`, sorted by the number embedded in
+each matched path), and `fetch_tree_source()` (`fetch_source()`'s shape, one tree listing instead
+of N probes). `UNIMPLEMENTED` is gone — both entries moved into `TREE_SOURCES`, now real. `main()`
+dispatches on which dict a `--source` name is in. `analysis/corpora.yaml` gained `rust-rfcs` and
+`k8s-keps` entries, both `required: false` like every other third-party source.
+`docs/PROVENANCE.md` records both licences in the same table and format as the rest.
+`test/boundary.test.ts` and `analysis/tests/test_fetch_and_genericity.py` both pin the new
+boundary the same way they already pinned the old one: the scoped prefixes, the second content
+type living in a second function, the truncation refusal, and (new, Python-side) `get_json`'s own
+content-type gate and `tree_candidates`' matching and spread behaviour, exercised against a fake
+tree response — none of it makes a real request.
+
+## D51. Backlog 23: add `NEGATIVE_SPACE` on a new axis, `absence`
+
+**Decision:** Add a fourteenth frame, `NEGATIVE_SPACE`, axis `absence`, attacking T2 and T6.
+Primary in the `naming` routing class, alternate everywhere else. Resolved 2026-09-29.
+
+Item 23 proposed "a frame that reasons about the negative case generally (what the absence of the
+thing asserts)" under exactly this candidate name, subject to D6's orthogonality check. The bar in
+`docs/AUTHORING-FRAMES.md` is which axis a frame is on before whether it is a good stance, and
+`absence` was empty: no existing frame asks what a missing field, an unset flag, a default value,
+or a silence already communicates to whoever reads it, and whether a proposed change preserves,
+contradicts, or destroys that communication.
+
+**Where it came from.** Backlog 17's still-open gap — no frame asks what a name asserts about the
+state it doesn't name — is the naming-specific instance of this question. D47 tried a probe on
+FRAME_BREAKER for exactly that gap and recorded, honestly, that it engaged the question but the
+phrasing didn't match the fixture's detector and the branch was pruned on unrelated grounds. Item
+23 generalizes past naming: a missing field, a default value, and a silence all carry the same
+shape of problem, and `NEGATIVE_SPACE`'s stance is written at that generality rather than re-
+scoped to names. Backlog 17 stays open on its own terms — this frame does not close it, and isn't
+claimed to.
+
+**Name checked against the whole corpus**, item 61's method: `NEGATIVE_SPACE` and "Negative space"
+appear nowhere in `evals/`, `docs/`, `config/`, `prompts/`, `agents/`, `skills/`, `README.md` or
+`CLAUDE.md` except the backlog item that proposed it. `adhd frames --collisions` confirms no label
+appears in an artifact other than its own frame's, across all 78 recorded artifacts.
+
+**Attacks T2 and T6, not a new trap.** The frame's own probes ask who currently reads the absence's
+meaning — an actor no other frame modelled, which is T6's shape exactly — and whether the change
+quietly redefines what the problem's framing already assumed the absence meant, which is T2's. No
+new trap was written; the schema's `attacks` field requires existing trap ids and both fit without
+stretching.
+
+**Routing.** `naming` carries it primary rather than alternate, on the same reasoning D35 gave
+`FIRST_PRINCIPLES` its slot in `strategy`: the class most directly tied to the gap a frame answers
+is where a shuffle has to be able to draw it, and `naming` is where backlog 17's instance of this
+question lives. It is an alternate in the other five run classes (`design_decision`,
+`fuzzy_debugging`, `api_surface`, `strategy`, `enumerate_options`), the same rollout shape
+`FIRST_PRINCIPLES` had before D35. `naming`'s primary list grows from five entries to six with no
+change to its `n` (`Math.min(max_branches, primary.length)` stays 5), so it is reached by the
+shuffle in most runs rather than every one, at no change to the D5 token estimate.
+
+**The orthogonality check has nothing to say about it yet, and says so honestly.** `adhd frames
+--orthogonality` reports co-clustering only over runs that dispatched a pair; `NEGATIVE_SPACE` has
+zero recorded runs, so it does not appear in the report at all rather than appearing at a
+misleadingly clean 0%. The same is already true of `FIRST_PRINCIPLES` before its first dispatch.
+
+**What this decision does not do.** `docs/AUTHORING-FRAMES.md`'s checklist also asks for a fixture
+the frame should obviously win, written and run, before calling a new frame proven rather than
+merely plausible. Writing that fixture is mechanical and free; running it against real subagents to
+find out whether the frame actually wins is backlog 19's job and real spend under D5, not folded
+into this decision. `NEGATIVE_SPACE` ships here as a library addition that passes every static
+check this repository can run without spending anything: schema, collisions, and orthogonality
+against the runs that exist. Whether it is a good frame, in the sense backlog 19 would measure, is
+still an open question.
+
+**What changed, concretely.** `config/frames.yaml` gained the frame. `config/routing.yaml` added it
+to `naming`'s primary list and to the other five run classes' alternates.
+`test/cli.test.ts`, `test/config.test.ts` and `test/frames.test.ts` had their literal frame and
+forbidden-entry counts moved from 13/39 to 14/42, the same class of fallout D48's rename produced
+and fixed the same way: each hardcoded number checked against what actually changed rather than
+bulk-replaced. `README.md`'s frame table and axis count, and `docs/AUTHORING-FRAMES.md`'s own
+stated axis-thinness numbers (independently found stale by one axis before this change — corrected
+to the true current count rather than left compounding), were both updated; `docs/DECISIONS.md`,
+`docs/BACKLOG.md` and `docs/FEATURES.md`'s historical frame-count mentions were left as written,
+on the same principle D48 already established: a document narrating what the library looked like
+at a specific past moment keeps that count, and only a forward-looking claim about the library's
+current shape gets corrected.
+
+## D52. `004-negative-space-probe`: NEGATIVE_SPACE's first run, and another false_means attempt
+
+**Decision:** Dispatch fixture 004 (same problem, class, seed as `004-kernel-naming` and
+`004-frame-breaker-probe`) with NEGATIVE_SPACE added as a sixth frame, and record the result
+regardless of outcome. Resolved 2026-09-29.
+
+Two open items converge on the same run. D51 shipped NEGATIVE_SPACE with no real evidence behind
+it — `docs/AUTHORING-FRAMES.md`'s checklist wants a fixture the frame should obviously win, run,
+before a frame counts as more than plausible. And backlog 17's `false_means` gap — no frame asks
+what a name asserts about the state it doesn't name — is exactly the general question
+NEGATIVE_SPACE's stance is built around, one level more abstract than the naming-specific case
+D47's FRAME_BREAKER probe already tried and did not close. One run tests both, honestly, rather
+than two runs each answering half the question.
+
+**The result on false_means: closer, still a miss, same shape as D47's.** NEGATIVE_SPACE's
+reasoning traces the question about as directly as anything in the corpus has — a plain boolean
+collapses "never evaluated" and "deliberately held back as a control" into the same `false` — but
+the phrasing does not match the detector's regex, checked directly against all six artifacts.
+Backlog 17 stays open. `docs/EXPERIMENTS.md` was not the right place for this — it belongs beside
+D47 as the same attempt at a wider level, and lives in `evals/recorded/004-negative-space-probe/README.md`
+instead, matching where D47's own write-up lives.
+
+**The larger, unplanned result: total scatter.** Six branches, zero shared actions — not even the
+PARTICULARIST+FRAME_BREAKER pairing that clustered in both prior runs of this fixture.
+`adhd run --phase deepen` refused (`SCATTER: 6 branches and no two share a position`), so
+`synthesis.md` renders no recommendation at all, with the pruned block and CARETAKER's sole,
+unverified survivor. Recorded as observed, exactly as `expect.scatter: false` says it should be:
+this is fixture 004's assertion working, not failing, on an input the fixture never claimed to
+survive with a sixth frame in the mix. Whether NEGATIVE_SPACE's presence caused the scatter, or a
+five-frame rerun today would scatter too for reasons that have nothing to do with a sixth frame,
+is not established by one run and is not claimed here — `docs/RETIREMENT.md`'s single-sample
+discipline applies to this finding the same as any other.
+
+**NEGATIVE_SPACE's own first scorecard.** Pass A 0.88 (second of six). Pruned on T4 (names two
+live mechanisms, a versioned boolean or a multivariate flag, without settling which) and T7
+(never weighs the cost of guessing the wrong flag shape against the cost of widening one later).
+Real, specific findings about one artifact — not a verdict on the frame, the same standing every
+frame's first appearance carries. `adhd frames --health` now reports it at two criteria (2 and 3),
+correctly flagged as "under the 5-run floor" — one run is not five, and `docs/RETIREMENT.md`'s
+standing section names it for exactly that reason: so the tooling and the document agree, which is
+what that section is for.
+
+**What changed, concretely.** `evals/recorded/004-negative-space-probe/` (branches, critic passes,
+cost.json, README.md, expected.json — outcome `fail`, four failing items: `false_means`,
+`not_the_name`, `never_names_it`, `expect scatter false`). `evals/assertion-baseline.json` updated
+with `--update` for five gained assertions this run holds. `docs/RETIREMENT.md`'s standing section
+bumped to fifteen runs and gained the NEGATIVE_SPACE paragraph above. `docs/WRITEUP.md`'s run
+counts moved from eighteen/fourteen to nineteen/fifteen, with no other number in it moving — the
+inter-rater and weight-sensitivity corpora this run did not touch stayed exactly as measured.
+`analysis/README.md`'s reliability table's ceiling-rate column moved on six of nine dimensions
+(one new scored artifact shifts a corpus-wide rate by a point or few); alpha, percent-exact and
+distinct-value counts were unaffected. `test/contract-prose.test.ts`'s folded/plain/quoted counts
+moved from 78/106/11/117 files/plain/quoted/folded to 84/106/11/135, all six new branch artifacts
+folded, none plain — the D37 contract held.

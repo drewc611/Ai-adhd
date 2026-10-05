@@ -34,7 +34,7 @@ test("an unknown command fails rather than doing nothing quietly", () => {
 test("validate exits 0 and names what it loaded", () => {
   const r = run(["validate"]);
   assert.equal(r.code, 0, r.err);
-  assert.match(r.out, /13 frames/);
+  assert.match(r.out, /14 frames/);
   assert.match(r.out, /rubric dimensions/);
 });
 
@@ -48,7 +48,7 @@ test("a bad root is a config error, exit 4, with the reason on stderr", () => {
 test("frames lists the library, and --json emits parseable JSON", () => {
   assert.match(run(["frames"]).out, /PARTICULARIST/);
   const parsed = JSON.parse(run(["frames", "--json"]).out) as { id: string }[];
-  assert.equal(parsed.length, 13);
+  assert.equal(parsed.length, 14);
   assert.ok(parsed.every((f) => typeof f.id === "string"));
 });
 

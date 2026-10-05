@@ -34,6 +34,12 @@ _spec.loader.exec_module(fetch_corpus)  # type: ignore[union-attr]
         ("https://raw.githubusercontent.com/python/peps/main/peps/%2e%2e/%2e%2e/evil/x.md", "encoded traversal"),
         ("https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/weights.safetensors", "refused extension"),
         ("https://www.rfc-editor.org/rfc/corpus.tar", "refused extension"),
+        # D50: api.github.com is allowlisted for two specific repositories' tree endpoints only.
+        ("https://api.github.com/repos/evil/repo/git/trees/master?recursive=1", "another repository on api.github.com"),
+        ("https://api.github.com/user", "bare api.github.com, no repository scope at all"),
+        # Same repo as rust-rfcs, wrong branch of the tree API (a `..` would be the traversal case,
+        # covered above; this is the ordinary out-of-scope-path case for the new host).
+        ("https://api.github.com/repos/rust-lang/rfcs/git/blobs/deadbeef", "tree endpoint only, not blobs"),
     ],
 )
 def test_the_fetcher_refuses_before_it_connects(url, why):
@@ -65,6 +71,17 @@ def test_the_allowlist_is_prefixes_and_covers_every_declared_source():
         fetch_corpus._check_url(source.template.format(n=1))
         assert any(source.template.startswith(p) for p in source.prefixes), source.name
 
+    # D50: a tree source's own tree_url and raw_prefix must satisfy its own prefixes the same way.
+    for source in fetch_corpus.TREE_SOURCES.values():
+        fetch_corpus._check_url(source.tree_url)
+        assert any(source.tree_url.startswith(p) for p in source.prefixes), source.name
+        fetch_corpus._check_url(source.raw_prefix + "x")
+        assert any(source.raw_prefix.startswith(p) for p in source.prefixes), source.name
+        # api.github.com is scoped to one repository's tree endpoint, the same shape as
+        # raw.githubusercontent.com being scoped to one repository's raw-content directory —
+        # never the bare host, which would allow every public repository's tree.
+        assert not any(p == "https://api.github.com/" for p in source.prefixes), source.name
+
 
 def test_every_source_records_a_licence_and_where_it_was_verified():
     """A corpus whose terms nobody wrote down is a corpus nobody checked."""
@@ -76,10 +93,13 @@ def test_every_source_records_a_licence_and_where_it_was_verified():
     for name in ("pep", "eip", "erc"):
         assert "CC0" in fetch_corpus.SOURCES[name].licence
 
-    # Recorded rather than guessed at: licence verified, enumeration not implemented.
-    assert set(fetch_corpus.UNIMPLEMENTED) == {"rust-rfcs", "k8s-keps"}
-    for lic, url in fetch_corpus.UNIMPLEMENTED.values():
-        assert lic and url.startswith("https://")
+    # D50: the tree-enumerated sources, same licence-recording rule as the numeric ones.
+    assert set(fetch_corpus.TREE_SOURCES) == {"rust-rfcs", "k8s-keps"}
+    for source in fetch_corpus.TREE_SOURCES.values():
+        assert source.licence, f"{source.name} has no licence"
+        assert source.licence_url.startswith("https://"), f"{source.name} has no verifiable licence url"
+    assert "MIT" in fetch_corpus.TREE_SOURCES["rust-rfcs"].licence
+    assert "Apache-2.0" in fetch_corpus.TREE_SOURCES["k8s-keps"].licence
 
     # A different refusal with a different reason, and the distinction is the point. These two are
     # reachable and numerically enumerable, so the plumbing is not what stops them: `bitcoin/bips`
@@ -193,6 +213,94 @@ def test_candidates_spread_across_the_range_rather_than_taking_the_lowest():
     assert lowest == list(range(1, 21))
     assert max(spread) > source.highest // 2, "the spread never reaches the modern half of the range"
     assert spread == sorted(spread) and len(set(spread)) == len(spread)
+
+
+def test_get_json_is_the_only_function_that_accepts_anything_but_text_plain(monkeypatch):
+    """D50's whole boundary claim: one function, one content type, checked the same way as `get()`.
+
+    `get()` itself is untouched by this — the assertion belongs to `test_the_fetcher_refuses...`
+    tests above and to `test/boundary.test.ts`'s literal `ctype != "text/plain"` check. This test
+    is only about the new function's own content-type gate.
+    """
+    class FakeResponse:
+        def __init__(self, body: bytes, ctype: str, url: str):
+            self._body = body
+            self.headers = {"Content-Type": ctype}
+            self.url = url
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n):
+            return self._body[:n]
+
+    url = fetch_corpus.TREE_SOURCES["rust-rfcs"].tree_url
+
+    monkeypatch.setattr(fetch_corpus._OPENER, "open", lambda req, timeout=60.0: FakeResponse(b'{"tree": []}', "application/json; charset=utf-8", url))
+    assert fetch_corpus.get_json(url) == {"tree": []}
+
+    monkeypatch.setattr(fetch_corpus._OPENER, "open", lambda req, timeout=60.0: FakeResponse(b"not json", "text/plain", url))
+    with pytest.raises(fetch_corpus.FetchRefused):
+        fetch_corpus.get_json(url)
+
+
+def test_tree_candidates_matches_the_document_shape_and_ignores_everything_else():
+    """Directories, non-matching files and the wrong extension are all in a real tree response."""
+    source = fetch_corpus.TREE_SOURCES["rust-rfcs"]
+    tree = {
+        "tree": [
+            {"path": "text", "type": "tree"},
+            {"path": "text/0001-rfc-process.md", "type": "blob"},
+            {"path": "text/0002-rfc-template.md", "type": "blob"},
+            {"path": "README.md", "type": "blob"},
+            {"path": "text/0001-rfc-process.md.orig", "type": "blob"},
+        ]
+    }
+    matched = fetch_corpus.tree_candidates(source, tree, limit=10, spread=True)
+    assert matched == ["text/0001-rfc-process.md", "text/0002-rfc-template.md"]
+
+
+def test_tree_candidates_spreads_rather_than_taking_the_lowest():
+    source = fetch_corpus.TREE_SOURCES["rust-rfcs"]
+    tree = {"tree": [{"path": f"text/{n:04d}-x.md", "type": "blob"} for n in range(1, 201)]}
+    spread = fetch_corpus.tree_candidates(source, tree, limit=20, spread=True)
+    lowest = fetch_corpus.tree_candidates(source, tree, limit=20, spread=False)
+    assert lowest == [f"text/{n:04d}-x.md" for n in range(1, 21)]
+    assert spread != lowest
+    assert any(int(p.split("/")[1][:4]) > 100 for p in spread), "the spread never reaches the second half"
+    assert spread == sorted(spread) and len(set(spread)) == len(spread)
+
+
+def test_fetch_tree_source_refuses_a_truncated_listing(tmp_path, monkeypatch):
+    """A truncated tree is a partial corpus wearing the name of a complete one. It must not train."""
+    source = fetch_corpus.TREE_SOURCES["k8s-keps"]
+    monkeypatch.setattr(fetch_corpus, "get_json", lambda url, timeout=60.0: {"tree": [], "truncated": True})
+    with pytest.raises(fetch_corpus.TreeTruncated):
+        fetch_corpus.fetch_tree_source(source, tmp_path, limit=10, delay=0.0, max_bytes=10**9)
+
+
+def test_fetch_tree_source_writes_matched_documents_under_a_flattened_filename(tmp_path, monkeypatch):
+    """A path has slashes; a corpus directory should not grow subdirectories from it."""
+    source = fetch_corpus.TREE_SOURCES["k8s-keps"]
+    tree = {
+        "tree": [
+            {"path": "keps/sig-node/1234-some-feature/README.md", "type": "blob"},
+            {"path": "keps/sig-node/1234-some-feature/kep.yaml", "type": "blob"},  # not README, ignored
+        ],
+        "truncated": False,
+    }
+    monkeypatch.setattr(fetch_corpus.time, "sleep", lambda _: None)
+    monkeypatch.setattr(fetch_corpus, "get_json", lambda url, timeout=60.0: tree)
+    monkeypatch.setattr(fetch_corpus, "get", lambda url, timeout=60.0: b"a real KEP\n")
+
+    result = fetch_corpus.fetch_tree_source(source, tmp_path, limit=10, delay=0.0, max_bytes=10**9)
+
+    assert result.files == 1
+    written = sorted(p.name for p in tmp_path.glob("*.md"))
+    assert written == ["keps__sig-node__1234-some-feature__README.md"]
 
 
 def test_the_genericity_report_names_its_corpus_and_counts_its_comparisons():

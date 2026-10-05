@@ -1,0 +1,73 @@
+{
+  "run_id": "004-negative-space-probe",
+  "created_at": "2026-09-29T09:57:55.394Z",
+  "problem_hash": "sha256:3ba15a84863bec4bc8a20ff80de8d21d16c48f123fe67df8451ab32bdcf60102",
+  "problem_class": "naming",
+  "seed": 4,
+  "n": 6,
+  "allow_wide": false,
+  "rubric_version": 1,
+  "overlay": null,
+  "estimate": {
+    "tokens_branches": 306000,
+    "tokens_critic": 186660,
+    "tokens_deepen": 131580,
+    "tokens_total": 624240
+  },
+  "branches": [
+    {
+      "frame": "NEGATIVE_SPACE",
+      "axis": "absence",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:a2f63130ccdaed76",
+      "brief_path": "briefs/NEGATIVE_SPACE.md",
+      "artifact_path": "branches/NEGATIVE_SPACE.yaml"
+    },
+    {
+      "frame": "MINIMALIST",
+      "axis": "scope",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:088dc8a5532c1e88",
+      "brief_path": "briefs/MINIMALIST.md",
+      "artifact_path": "branches/MINIMALIST.yaml"
+    },
+    {
+      "frame": "SUPPLICANT",
+      "axis": "actors",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:5fec40245e0137de",
+      "brief_path": "briefs/SUPPLICANT.md",
+      "artifact_path": "branches/SUPPLICANT.yaml"
+    },
+    {
+      "frame": "PARTICULARIST",
+      "axis": "particulars",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:1bc75aeeae264f16",
+      "brief_path": "briefs/PARTICULARIST.md",
+      "artifact_path": "branches/PARTICULARIST.yaml"
+    },
+    {
+      "frame": "CARETAKER",
+      "axis": "operation",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:8d483803f30154e6",
+      "brief_path": "briefs/CARETAKER.md",
+      "artifact_path": "branches/CARETAKER.yaml"
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "axis": "frame_validity",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:0a3e9c06c72325e6",
+      "brief_path": "briefs/FRAME_BREAKER.md",
+      "artifact_path": "branches/FRAME_BREAKER.yaml"
+    }
+  ]
+}

@@ -61,7 +61,7 @@ test("no corpus and no trained model is committed or published", () => {
 
 test("PROVENANCE names every fetchable source, its licence and where it was verified", () => {
   const fetcher = readFileSync(join(ROOT, "analysis", "scripts", "fetch_corpus.py"), "utf8");
-  const names = [...fetcher.matchAll(/^\s{4}"([a-z-]+)": Source\(/gm)].map((m) => m[1]!);
+  const names = [...fetcher.matchAll(/^\s{4}"([a-z0-9-]+)": (?:Tree)?Source\(/gm)].map((m) => m[1]!);
   assert.ok(names.length >= 3, `expected several sources, found ${names.join(", ")}`);
   for (const n of names) assert.ok(PROVENANCE.includes(`\`${n}\``), `PROVENANCE does not cover the ${n} corpus`);
 
@@ -73,6 +73,9 @@ test("PROVENANCE names every fetchable source, its licence and where it was veri
   // The one source that is not under a free licence has to read differently from the ones that are.
   assert.match(PROVENANCE, /derivatives restricted|derivative works are restricted/i, "PROVENANCE does not flag the restricted source");
 
+  // D50: rust-rfcs and k8s-keps moved from verified-but-unimplemented to real, fetched sources —
+  // named here by their own names list rather than restated, so a rename in the code shows up here.
+  assert.ok(names.includes("rust-rfcs") && names.includes("k8s-keps"), "PROVENANCE test no longer sees the tree-enumerated sources");
   for (const [name, lic] of [["rust", "MIT OR Apache-2.0"], ["Kubernetes", "Apache-2.0"]] as const)
-    assert.ok(new RegExp(name, "i").test(PROVENANCE) && PROVENANCE.includes(lic), `PROVENANCE loses the verified-but-unimplemented ${name} entry`);
+    assert.ok(new RegExp(name, "i").test(PROVENANCE) && PROVENANCE.includes(lic), `PROVENANCE loses the ${name} entry`);
 });
