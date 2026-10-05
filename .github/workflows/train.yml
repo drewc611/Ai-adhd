@@ -43,8 +43,8 @@ jobs:
     # here so a hang in the report step cannot hold a runner for six hours.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - run: pip install -e '.[dev]'
@@ -59,7 +59,7 @@ jobs:
       # The corpus is cached across runs, so the first weekly job pays for the download and the
       # rest top it up. The fetcher skips what is already on disk, which is what makes a partial
       # cache useful rather than a reason to start over.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: analysis/corpora
           # v2: v1 caches hold the old `corpora/rfc/rfc/*.txt` layout, which corpora.yaml does not
@@ -208,7 +208,7 @@ jobs:
                 if hit else "\n> No ceiling bit: the model saw the whole library.")
           PY
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: background-model
           path: |
