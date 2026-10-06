@@ -104,12 +104,27 @@ worth reading beside the run it came from — the same pack scored at a differen
 trap sweep also went from firing twice to firing not at all.
 
 **Two critics scoring the same pack rank it differently every time.** `adhd learn
---agreement-all`, pooled over 7 runs and 305 scored cells: 81% exact agreement, 100% within one
-point, and the ranking changed in all seven. In two of them the shipped representative changed with
+--agreement-all`, pooled over 8 runs and 345 scored cells: 79% exact agreement, 98% within one
+point, and the ranking changed in all eight. In two of them the shipped representative changed with
 it: `002-kernel-enduser` from `FRAME_BREAKER` to `PARTICULARIST`, and `001-seed3-repeat` from
 `ACTOR_CENSUS` to `FRAME_BREAKER` — which is the exact tie above, broken the other way by a critic
-who scored the identical artifacts. A rubric with 81% exact agreement, deciding outcomes separated
+who scored the identical artifacts. A rubric with 79% exact agreement, deciding outcomes separated
 by one anchor point, is not deciding them.
+
+**The eighth run is the one that mattered most, and it did not help.** D41 found that the critic
+agent's own instructions had never actually been in force before E12, and E12's fix made the trap
+sweep reproduce: 39 of 40 (branch, trap) records agreed between two sessions on the same pack. That
+left an open question nobody had tested — whether the same fix would also make the *scoring*
+agree, since a missing instruction was a plausible explanation for both failures at once. It was
+tested by handing `001-seed3-e12-1`'s own pass A brief to a second, properly dispatched critic:
+63% exact agreement on that pack alone, worse than the pre-E12 pooled figure, and the ranking
+inverted (`ACTOR_CENSUS` led the first critic's scoring, `DOOR_KEEPER` led the second's). The trap
+sweep on the same two artifacts agreed on 32 of 40 cells — better than the score agreement, worse
+than E12's own 39 of 40, and concentrated almost entirely on one trap: the first critic fired T1 on
+all five branches, the second fired it on one. Dispatch quality was not the missing variable.
+`evals/recorded/001-seed3-e12-1/critic/pass-a.rater2.yaml` and `pass-b.rater2.yaml` carry the raw
+scoring; this paragraph is the only place the trap-sweep comparison is recorded, since
+`adhd learn` pools pass A agreement only.
 
 **One dimension is near the ceiling and separates almost nothing.** `foreclosure` sits at 2.91 with
 91% of scores at the ceiling and two distinct values ever used, and it is retired (D34). The second
