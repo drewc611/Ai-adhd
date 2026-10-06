@@ -1,0 +1,106 @@
+# A naming fixture built for NEGATIVE_SPACE to obviously win, rather than one it was run against
+# after the fact. Backlog 19. Seed 15 is verified (not assumed) to draw NEGATIVE_SPACE into the
+# naming class's default five-branch selection: `node dist/src/cli.js run --phase compile` on this
+# fixture lists it among the five before any run exists.
+#
+# `004-flag-name.yaml` already exercises naming, and NEGATIVE_SPACE has already run on it twice
+# (D47's FRAME_BREAKER probe, D52's own first dispatch) — both scattered or near-missed. This is a
+# different prompt on purpose: 004 asks what to call a flag that will exist; this asks what to name
+# a field whose current *absence* already has a load-bearing meaning the field itself could
+# destroy. That is NEGATIVE_SPACE's stance stated as a problem rather than as a probe.
+id: "015"
+name: retry-field-default
+problem_class: naming
+seed: 15
+prompt: |
+  We're adding a `max_retries` field to our outbound webhook delivery config. Today there is no
+  such field at all: nothing limits how many times we retry a failing delivery, so we keep retrying
+  with exponential backoff capped at five minutes between attempts, indefinitely. What should we
+  call the new field, and what should it default to?
+
+why: |
+  The linear answer picks a name by convention (`max_retries` reads fine, matches the style guide,
+  is consistent with other `max_*` fields) and a default by instinct (10 is reasonable, nobody
+  retries forever on purpose) and stops there. That answer is available without reading the
+  question: it would be identical for a field that did not have years of load-bearing behavior
+  sitting behind its absence.
+
+  What the question actually turns on is that "no field exists" is not the same thing as "no
+  behavior exists." Every integration that has ever sent a webhook through this system today gets
+  unlimited retries, not because anyone asked for that, but because there was nothing to configure
+  and nothing to configure defaults, structurally, to whatever the code already does in the
+  field's absence — which is retry forever. Adding the field and giving it any finite default
+  changes that behavior for every existing integration silently, with no action from them, the
+  moment the new config ships. A team relying on eventual delivery for a slow downstream consumer
+  — the kind of consumer that comes back after an hour-long outage — loses that guarantee without
+  touching a config file. The field's own name and default have to say whether that is intended.
+
+  None of that is reachable by asking which name is more conventional. The assertions below are
+  what a run must surface to have read the question rather than the genre.
+
+must_surface:
+  - id: absence_today
+    trap: T2
+    description: >
+      The answer states what the field's current absence already means in practice: nothing
+      configures a limit, so the system retries indefinitely today, for everyone, whether or not
+      anyone chose that.
+    any_of:
+      - "no (such )?field (exists|today)"
+      - "nothing (currently|today) (limits|configures|caps)"
+      - "retr(y|ies|ying) (indefinitely|forever|without (a|an)? ?(limit|cap|end))"
+      - "unlimited retr"
+      - "already (means|behaves like|defaults to)"
+      - "today,? (nothing|no ?one|nobody) (has to |needs to )?(set|configure|choose)"
+  - id: who_relies
+    trap: T6
+    description: >
+      Someone or something other than the person naming the field is named as depending on the
+      current unlimited-retry behavior — an existing integration, a downstream consumer, or a
+      guarantee the system currently makes without anyone asking for it.
+    any_of:
+      - "eventual(ly)? deliver"
+      - "at[- ]least[- ]once"
+      - "(existing|current|every) integrat(ion|or)s?"
+      - "(nobody|no ?one|no team) (has|ever) (set|configured|opted|asked)"
+      - "rel(y|ies|ying) on (the )?(unlimited|infinite|indefinite)"
+      - "slow downstream"
+      - "hour[- ]long outage"
+  - id: default_changes_behavior
+    trap: T2
+    description: >
+      The answer says that choosing a finite default silently changes behavior for everyone who
+      never configures the field, rather than treating the default as a free, harmless choice.
+    any_of:
+      - "silently chang(e|es|ed)"
+      - "collapses?"
+      - "default (of|value)? ?.{0,25}(breaks|changes|destroys|loses)"
+      - "preserve[sd]? (the|this|that) (behavior|meaning|semantics|guarantee)"
+      - "(the|a|this) default (must|should|has to) (be|match|preserve)"
+      - "same as (today|current|the existing)"
+      - "without (touching|changing) (a |any )?config"
+  - id: trap_named
+    description: At least one trap id with detector output appears in the pruned block.
+    scope: pruned
+    any_of:
+      - "T[1-8]"
+
+must_not:
+  - id: naming_bikeshed_only
+    trap: T4
+    description: >
+      "max_retries reads fine and matches the style guide" is the linear answer and is true of any
+      field name. Saying it is allowed; saying only it is not, so the recommendation has to carry
+      real words about the default's effect beyond naming-convention language.
+    check: min_words_outside
+    scope: recommendation
+    pattern: "(snake_case|camelCase|consisten(t|cy)|style guide|naming convention|reads (fine|well|clearly))"
+    min_words: 40
+  - id: no_verdict
+    trap: T5
+    description: The recommendation names a field name and a default, or says explicitly why no default is safe.
+    check: must_be_imperative
+    scope: recommendation
+
+expect:
+  pruned_min: 1

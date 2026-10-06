@@ -167,13 +167,13 @@ export function costReport(cfg: Config, recordedDir = join(cfg.root, "evals", "r
     const worst = Math.max(...withEstimate.map((r) => r.tokens));
     const nowFor = (n: number) => {
       const branches = cfg.routing.defaults.tokens_per_branch_estimate * n;
-      return branches + Math.round(branches * 0.61) + Math.round(branches * 0.43);
+      return branches + Math.round(branches * 0.42) + Math.round(branches * 0.40); // D53: 23/55, 22/55
     };
     const ns = [...new Set(withEstimate.map((r) => r.n))].filter((n): n is number => n !== null);
     const nowQuoted = Math.max(...ns.map(nowFor));
     if (nowQuoted >= worst)
       lines.push(
-        `The gate quotes ${num(nowQuoted)} today for the largest of these (n=${ns.reduce((a, b) => (nowFor(b) > nowFor(a) ? b : a))}), against a worst recorded run of ${num(worst)} — so the ratio above is what these runs were quoted, not what a run is quoted now. D32 set the figure from the maximum rather than the mean.`,
+        `The gate quotes ${num(nowQuoted)} today for the largest of these (n=${ns.reduce((a, b) => (nowFor(b) > nowFor(a) ? b : a))}), against a worst recorded run of ${num(worst)} — so the ratio above is what these runs were quoted, not what a run is quoted now. D32 set the figure from the maximum rather than the mean; D53 refit it against the fuller corpus.`,
       );
     else
       lines.push(

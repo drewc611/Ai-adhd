@@ -239,8 +239,11 @@ type Baseline = { why: string; passing: Record<string, string[]> };
  *
  * `--update` rewrites the baseline. A gain is never a failure; it prints and waits to be taken.
  */
-export function regressionGate(cfg: Config, opts: { fixturesDir?: string; recordedDir?: string; update?: boolean } = {}): GateReport {
-  const baselinePath = join(cfg.root, "evals", "assertion-baseline.json");
+export function regressionGate(
+  cfg: Config,
+  opts: { fixturesDir?: string; recordedDir?: string; update?: boolean; baselinePath?: string } = {},
+): GateReport {
+  const baselinePath = opts.baselinePath ?? join(cfg.root, "evals", "assertion-baseline.json");
   const baseline: Baseline = existsSync(baselinePath)
     ? (JSON.parse(readFileSync(baselinePath, "utf8")) as Baseline)
     : { why: "", passing: {} };

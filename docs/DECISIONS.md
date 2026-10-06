@@ -4120,3 +4120,97 @@ inter-rater and weight-sensitivity corpora this run did not touch stayed exactly
 distinct-value counts were unaffected. `test/contract-prose.test.ts`'s folded/plain/quoted counts
 moved from 78/106/11/117 files/plain/quoted/folded to 84/106/11/135, all six new branch artifacts
 folded, none plain — the D37 contract held.
+
+## D53. Refit `tokens_per_branch_estimate` and its phase shape against the fuller corpus
+
+**Decision:** `tokens_per_branch_estimate` moves from **51,000 to 58,000**, and the critique and
+deepen proportions it scales move from **0.61/0.43 to 0.42/0.40**. A five-branch preview now reads
+**527,800** against the worst run on record, **519,482**. Resolved 2026-10-06.
+
+D32 fit both numbers on the five-run corpus available at the time: diverge 49%, critique 30%,
+deepen 21%, and a `tpb` of 51,000 chosen so the total at n=5 just cleared the worst run then
+recorded, 519,482. `adhd cost` now reports a phase split over thirteen runs rather than five —
+diverge 55%, critique 23%, deepen 22% — and the corpus's n=5 maximum has not moved, it is still
+519,482.
+
+**The two numbers had to move together, not separately.** Refitting only the shape (23/55 and
+22/55 in place of 30/49 and 21/49) while leaving `tpb` at 51,000 drops the n=5 total to 463,641 —
+under the worst run on record by more than 10%, which is exactly the failure D32 existed to end,
+reintroduced by updating half of a fitted pair and leaving the other half stale. `tpb` had to be
+re-derived against the same bar D32 used: the smallest round thousand whose total at n=5 still
+clears 519,482 under the new shape. That is 58,000 — 57,000 totals 518,700 and falls 782 tokens
+short; 58,000 totals 527,800, a 1.6% margin over the worst run on record, closer to the kind of
+clearance D32 itself left (520,200 against 519,482 was a 0.14% margin, which is why one more
+run arriving at the old maximum, rather than past it, was already enough to ask whether the figure
+needed revisiting again).
+
+**Why now rather than waiting for a run to breach the quote.** The quote was never actually
+breached — `adhd os` would not have warned on its own. What changed is the corpus `adhd cost`
+fits the shape against: five runs with a phase breakdown became thirteen, and the shape moved
+enough (30/49 to 23/55 is a real shift, not noise inside the five-run sample) that leaving `tpb`
+fixed while the shape underneath it drifted would have let the gate's safety margin erode
+silently, the same way the pre-D32 estimate eroded silently until `adhd cost` was built to show it.
+`adhd cost` and `adhd compile`'s own self-check (the message `the gate quotes N today ... against a
+worst recorded run of M`) both still read as healthy before this change, which is the point: a
+0.14% margin is technically "never exceeded" right up until the run that exceeds it, and nothing
+forced a recheck until this session's work went looking.
+
+**What changed, concretely.** `config/routing.yaml`'s `tokens_per_branch_estimate` and its
+comment; `src/compile.ts`'s two ratio constants and their derivation comment; `src/cost.ts`'s
+duplicate of the same formula, used only for `adhd cost`'s self-check line. `test/cost.test.ts`'s
+phase-share assertions moved from 0.49/0.30/0.21 to 0.55/0.23/0.22, at the same ±0.02 tolerance.
+No recorded run's own `plan.json` or `cost.json` was touched — each still reports the figure it was
+actually quoted, under whichever config was live at the time, which is the property
+`test/cost.test.ts` names directly: "a recorded estimate is what that run was actually quoted and
+never changes." A run recorded under this decision will be the first to read 527,800 or 738,920;
+every run recorded so far still reads 156,000, 520,200, 624,240 or 728,280, exactly as it did
+before.
+
+**Unrelated, found while rebuilding to run `adhd cost`:** `npm ci` surfaced one new critical
+`npm audit` finding, `proxy-addr` (IP spoofing via IPv4-mapped IPv6 trust subnet), disclosed after
+PR #37 closed out the corpus at zero. Same shape as that PR: a transitive dependency of
+`@modelcontextprotocol/sdk`'s own `express` dependency, not a direct dependency, fixed by `npm
+audit fix` within the existing semver range with no change to `package.json`'s declared
+dependency list. Carried in this change rather than filed separately because it was found as a
+side effect of the same `npm ci` this work needed and fixing it cost one command.
+
+## D54. `regressionGate`'s `--update` always wrote the real baseline, sandbox or not
+
+**Decision:** `regressionGate` gains an optional `baselinePath`, defaulting to the same
+`cfg.root`-relative path it always used, so a caller that supplies its own `fixturesDir` and
+`recordedDir` can also supply where `--update` writes. Resolved 2026-10-06.
+
+Found while adding `evals/fixtures/015-retry-field-default.yaml` (backlog 19) and running the
+suite to check it: `evals/assertion-baseline.json`, a file this repository tracks, came back
+modified by `npm test` alone, with no `--gate --update` ever typed. `regressionGate`'s
+`baselinePath` was `join(cfg.root, "evals", "assertion-baseline.json")` unconditionally — the real
+file — even when the function's `fixturesDir`/`recordedDir` pointed at a sandbox. `test/fixtures.test.ts`'s
+`"--update rewrites the baseline and says why the file exists"` calls `regressionGate(cfg, {
+fixturesDir: s.fixtures, recordedDir: s.recorded, update: true })` against a sandbox and then
+asserts the real file is byte-identical before and after, commented "the sandbox is unmodified, so
+the rewrite is a no-op on content." That comment was never actually true in general — it held only
+because the real baseline happened to already match what the real fixtures and recorded
+directories would produce whenever the test ran. Adding a fixture with no recorded run changes
+that: `sandbox()` copies the live `evals/fixtures` directory, so the new fixture's assertion keys
+appeared in the sandbox's computed state, the write still landed on the real path, and the real
+file picked up six new empty-array entries nobody asked it to.
+
+**What makes this worth a decision rather than a one-line fix.** The property under test —
+`--update` changes only the file it is told to change — was never actually checked; the test
+checked a coincidence and called it a guarantee. That is exactly the failure mode `docs/WRITEUP.md`
+exists to catch when it is a frame's claim, and it is no less real when it is a test's. A test
+suite that can silently rewrite a repository's own tracked evidence file, contingent on what the
+fixture directory happens to contain at the moment it runs, is the kind of thing this repository's
+own `adhd eval --gate` was built to make impossible for the corpus it watches — it had simply never
+watched itself.
+
+**What changed.** `src/fixtures.ts`'s `regressionGate` takes `opts.baselinePath` and uses it in
+place of the hardcoded path when given. The CLI (`adhd eval --gate --update`) and the MCP tool
+pass no such option, so their behavior is unchanged. `test/fixtures.test.ts`'s `sandbox()` now
+returns a `baseline` path inside its own temp directory alongside `fixtures` and `recorded`, and
+the update test passes it explicitly, asserts `g.baselinePath` is that sandbox path, and checks the
+real tracked file against a snapshot taken before the call rather than asserting a coincidence.
+`evals/assertion-baseline.json`'s own six new entries for fixture 015 (all empty arrays, since it
+has no recorded run) are kept — `011`, the other fixture with no recorded run, already carries the
+same shape, so this is the existing convention rather than new state, and reverting it would only
+mean the next real update rewrites it right back.

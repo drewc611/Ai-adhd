@@ -10,11 +10,11 @@ const FIXTURES = join(cfg.root, "evals", "fixtures");
 const RECORDED = join(cfg.root, "evals", "recorded");
 
 /** A scratch copy of the fixtures and the corpus, so a test can break one and see the effect. */
-function sandbox(): { fixtures: string; recorded: string } {
+function sandbox(): { fixtures: string; recorded: string; baseline: string } {
   const root = tmp();
   cpSync(FIXTURES, join(root, "fixtures"), { recursive: true });
   cpSync(RECORDED, join(root, "recorded"), { recursive: true });
-  return { fixtures: join(root, "fixtures"), recorded: join(root, "recorded") };
+  return { fixtures: join(root, "fixtures"), recorded: join(root, "recorded"), baseline: join(root, "assertion-baseline.json") };
 }
 
 const fx = (id: string) => loadFixtures(FIXTURES).find((f) => f.id === id)!;
@@ -227,13 +227,23 @@ test("a gain is reported and never fails, so adopting an improvement is a delibe
 });
 
 test("--update rewrites the baseline and says why the file exists", () => {
+  // `regressionGate` used to hardcode `cfg.root`'s own evals/assertion-baseline.json with no way
+  // to redirect it, so this test's `update: true` call was writing the real tracked file as a
+  // side effect — "the sandbox is unmodified, so the rewrite is a no-op on content" was only true
+  // because the real file already agreed with the real fixtures and recorded corpus at the time
+  // the test happened to run. Adding a fixture with no recorded run (any of 011, 014, or a new
+  // one) changes what "now" computes without changing the real baseline on disk, which would
+  // have made this call rewrite the tracked file for real. `baselinePath` makes the destination
+  // explicit, so this test proves the rewrite without ever touching a file this repo tracks.
   const s = sandbox();
-  const before = readFileSync(join(cfg.root, "evals", "assertion-baseline.json"), "utf8");
-  const g = regressionGate(cfg, { fixturesDir: s.fixtures, recordedDir: s.recorded, update: true });
+  const realBaseline = join(cfg.root, "evals", "assertion-baseline.json");
+  const before = readFileSync(realBaseline, "utf8");
+  const g = regressionGate(cfg, { fixturesDir: s.fixtures, recordedDir: s.recorded, baselinePath: s.baseline, update: true });
   assert.equal(g.updated, true);
+  assert.equal(g.baselinePath, s.baseline);
   const after = JSON.parse(readFileSync(g.baselinePath, "utf8")) as { why: string; passing: Record<string, string[]> };
   assert.match(after.why, /stays green however much worse it gets/);
   assert.ok(Object.keys(after.passing).length > 20);
-  // The sandbox is unmodified, so the rewrite is a no-op on content.
-  assert.equal(readFileSync(join(cfg.root, "evals", "assertion-baseline.json"), "utf8"), before);
+  // The real tracked file is never the destination, whatever the sandbox contains.
+  assert.equal(readFileSync(realBaseline, "utf8"), before);
 });

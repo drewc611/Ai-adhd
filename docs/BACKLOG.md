@@ -205,6 +205,28 @@ yet enough to know whether they work.
     the corpus, and still does not match the detector's regex. Two runs, two frames, the same
     near-miss. Full accounting in D47, D52, and `evals/recorded/004-frame-breaker-probe` and
     `004-negative-space-probe`.
+
+    **Checked again, 2026-10-06: the regex is demonstrably too narrow, and it is not getting fixed
+    here anyway.** `004-negative-space-probe`'s own artifact text — "a plain boolean named
+    `new_checkout` collapses 'user never evaluated' and 'user deliberately kept on legacy as an
+    A/B control' into the same `false`" — does what `false_means`'s description asks for and
+    matches none of the detector's seven patterns (`when (it|the flag) is (false|off|disabled)`,
+    `(false|off) means`, `ambiguous`, `(what|which) state`, `names? the state`, `both
+    (states|directions)`, `reading it backwards`). That is a real finding about the detector, not
+    a reason to widen it: the fixture file's own comment invokes E3's rule directly — "a pattern is
+    not widened after seeing which run failed" — and widening these seven patterns now, having just
+    read the one run that near-missed, is exactly that move. A loosened detector that happens to
+    catch this run's specific wording would not generalise; it would be fitted to an answer already
+    known, which is the thing a mechanical detector exists to not do.
+
+    So this stays open, and the honest state of it is worse than "needs a third run": two
+    independent frames, on two separate real dispatches, have now produced reasoning that a human
+    reader would call a clear pass on the underlying question and a detector built from how the
+    question was expected to be answered still misses both. `adhd doctor`'s own warning on this
+    item — "a stretch goal and an unreachable pattern look identical" — is no longer a
+    possibility being flagged, it is what the evidence shows. A third real dispatch under the
+    current detector would very likely fail the same way for the same reason, which is worth
+    saying before anyone spends on it again.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**
@@ -223,6 +245,17 @@ yet enough to know whether they work.
     win. It didn't win anything there: pruned on T4 and T7, in a run that scattered entirely. This
     item still wants a fixture built around a problem where the absence of something is
     load-bearing, run, and won.
+
+    **The fixture half is built, 2026-10-06, not this item's other half.** `evals/fixtures/015-retry-field-default.yaml`:
+    a webhook config field (`max_retries`) that does not exist yet, where the system already
+    retries indefinitely in its absence and a finite default would silently change that for every
+    existing integration. Seed 15 is verified against the real compiler, not assumed, to draw
+    `NEGATIVE_SPACE` into the naming class's five-branch default. `adhd lint` is clean — the first
+    draft matched its own prompt on `nothing (limits|configures|caps)` and was tightened to
+    `nothing (currently|today) (limits|configures|caps)`, the same quoting hazard items 012 and 013
+    hit. `adhd eval` reports it as awaiting a run, same as fixtures 011 and 014's own precedent. The
+    run itself — the half that would actually show whether NEGATIVE_SPACE wins it — is real spend
+    and needs its own D5 confirmation; not run as part of writing the fixture.
 
     **Built first, because it had to be: `adhd frames --reach`.** `--stats` and `--axes` count what
     recorded runs did, and a frame missing from both is either unlucky or unreachable. They cannot
@@ -532,6 +565,16 @@ yet enough to know whether they work.
     it was over-weighted by a third while diverge was under-weighted. Components are proportions of the
     measured split now. `adhd cost` prices the current config beside the historical ratio, because the
     recorded estimate is what each run was quoted and that number never changes.
+
+    **Refit as D53, 2026-10-06.** D32's shape was measured on five runs with a phase breakdown;
+    `adhd cost` now has thirteen, and the split moved from 30/49 and 21/49 to 23/55 and 22/55 —
+    enough to matter, not noise inside the smaller sample. Plugging the new split into the old
+    51,000 would have dropped the n=5 quote to 463,641, under the worst run on record by more than
+    10%: the exact failure this item was opened to end, reintroduced by updating the shape without
+    re-deriving the figure it scales. `tokens_per_branch_estimate` moves again, 51,000 -> **58,000**,
+    the smallest round thousand whose total at n=5 (527,800) still clears 519,482 under the new
+    shape. D32's own margin had been 0.14%; this closes with 1.6%, closer to what "never exceeded"
+    should mean rather than "not yet exceeded."
 
 42. ~~**TTY colour and progress** for `adhd os` while a run advances.~~
     **Already built and found open by the audit below. `src/tty.ts` carries the colour table, a
