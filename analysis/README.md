@@ -10,12 +10,12 @@ cd analysis
 pip install -e '.[dev]'
 python -m adhd_analysis --root ..              # the report
 python -m adhd_analysis --root .. --json       # the same numbers, machine readable
-pytest                                         # 246 tests, the whole suite
+pytest                                         # 255 tests, the whole suite
 ```
 
 ## Why this exists
 
-Every headline figure in the repository is a point estimate over seven double-scored packs. 81%
+Every headline figure in the repository is a point estimate over eight double-scored packs. 79%
 critic agreement. A 3.0x cost ratio. Per-frame prune rates out of two or three appearances. An
 orthogonality rate of 2 in 3. `docs/EXPERIMENTS.md` says those are single-sample noise and
 `docs/RETIREMENT.md` refuses to act on one of them for that reason, but neither says *how*
@@ -23,20 +23,20 @@ uncertain, because nothing had computed it.
 
 Two things follow from computing it.
 
-**81% agreement is not 81% reliability.** Percent agreement counts matches and never asks how
-many of those matches chance explains. Krippendorff's alpha does. Over the same 305 marks:
+**79% agreement is not 79% reliability.** Percent agreement counts matches and never asks how
+many of those matches chance explains. Krippendorff's alpha does. Over the same 345 marks:
 
 | dimension | alpha | 95% interval | % exact | ceiling | distinct values |
 |---|---|---|---|---|---|
-| `reversibility` | **+0.875** | [+0.78, +0.95] | 80% | 19% | 4 |
-| `specificity` | +0.732 | [+0.48, +0.95] | 85% | 17% | 4 |
-| `assumption_attack` | +0.709 | [+0.48, +0.87] | 70% | 54% | 4 |
-| `reasoning_carries` | +0.675 | [+0.68, +0.69] | 98% | 97% | 3 |
-| `actor_coverage` | +0.649 | [+0.50, +0.76] | 85% | 46% | 3 |
-| `committal` | +0.562 | [+0.26, +0.85] | 87% | 79% | 3 |
-| `substance` | +0.469 | [+0.22, +0.65] | 77% | 75% | 3 |
-| `falsifiability` | +0.383 | [+0.06, +0.63] | 80% | 76% | 3 |
-| `foreclosure` | **-0.017** | [-0.04, +0.00] | 96% | 94% | 2 |
+| `reversibility` | **+0.876** | [+0.81, +0.95] | 78% | 19% | 4 |
+| `actor_coverage` | +0.679 | [+0.53, +0.80] | 85% | 45% | 3 |
+| `reasoning_carries` | +0.674 | [+0.68, +0.68] | 98% | 97% | 3 |
+| `assumption_attack` | +0.626 | [+0.42, +0.82] | 68% | 55% | 4 |
+| `committal` | +0.548 | [+0.29, +0.75] | 85% | 78% | 3 |
+| `specificity` | +0.521 | [+0.16, +0.88] | 78% | 17% | 4 |
+| `falsifiability` | +0.491 | [+0.10, +0.77] | 82% | 75% | 3 |
+| `substance` | +0.456 | [+0.25, +0.61] | 75% | 73% | 3 |
+| `foreclosure` | **-0.017** | [-0.06, +0.00] | 96% | 94% | 2 |
 
 The two orderings invert. `foreclosure` is second-best by percentage and last by alpha: the
 critics agree 96% of the time because 94% of its marks are the same mark, and corrected for
