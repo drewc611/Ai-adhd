@@ -1573,6 +1573,30 @@ The cost, read off the records rather than estimated: **A 452s, the shipped mode
     including the part the pre-registration did not anticipate: a total wipeout is a legitimate
     result the fixture's own checks were not written to receive.
 
+    **E12 settled trap-sweep agreement and left scoring agreement untested; that gap closed
+    2026-10-06, and it did not go the way the hypothesis would have predicted.** D41's missing
+    instruction was the most economical explanation for item 4's finding because it could explain
+    both halves of the instability at once — the critic dispatched without its own sweep
+    instruction could plausibly score inconsistently for the same reason it swept inconsistently.
+    Nobody had actually scored the same pack twice under a properly dispatched critic to check.
+    `evals/recorded/001-seed3-e12-1`'s own branch artifacts were handed to a fresh critic, dispatched
+    the same way E12's were: `critic/pass-a.rater2.yaml` and `pass-b.rater2.yaml` carry the result.
+    Pass A: 63% exact agreement, 85% within one point, the ranking inverted (`ACTOR_CENSUS` led the
+    first critic, `DOOR_KEEPER` led the second) — worse than the pre-E12 pooled figure, not better.
+    Pass B's trap sweep: 32 of 40 (branch, trap) records agree, better than scoring but well short of
+    E12's own 39 of 40, and the disagreement concentrates almost entirely on T1 — the first critic
+    fired it on all five branches, the second on one. `adhd learn --agreement-all` now pools 8 runs
+    and 345 cells at 79% exact, 98% within one (previously 7 runs, 305 cells, 81%/100%); `docs/WRITEUP.md`'s
+    "the eighth run" paragraph and `README.md`'s Status section carry the updated figures.
+
+    So D41's fix explains why item 4's *trap-sweep* pair disagreed on everything and E12's pair
+    disagreed on nothing — that causal story holds, confirmed twice now. It does not explain why
+    *scoring* still disagrees this much once dispatch is correct. Whatever is producing 63% exact
+    score agreement between two properly-instructed critics on the same five artifacts is a property
+    of the rubric's application, not of which agent type got spawned. This is the direct evidence
+    backlog 5 and 27 were measuring before any of them controlled for dispatch quality, and it is
+    worse than what they found, not better.
+
 103. **The isolation checks are a list of doors somebody thought of** (design, owner's call).
     D42 and D43 were each found by reading the host's documentation rather than by any check in this
     repository, and each was a channel into an isolated agent that the D4 tool check did not cover:

@@ -1,0 +1,48 @@
+problem_hash: sha256:7e664e715f0b6fb0f409965455dc0e635d68e89b73f8ad68ba977bb7b1f2d394
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "The position is one sentence telling the reader to set one blanket conservative value now, with no hedge returning the choice to them." }
+    falsifiability: { score: 3, evidence: "The falsifier is a cheap first-week log check for a >1% timeout-would-have-succeeded rate, which would directly force splitting the blanket number." }
+    specificity: { score: 1, evidence: "Beyond naming connect/read/write/pool as the things not being split, the reasoning is generic 'ship a bound first, refine later' advice that would survive almost any config-tuning question." }
+    assumption_attack: { score: 1, evidence: "It names the assumption that precision is needed now but only asserts, rather than tests, that the data to justify splitting doesn't yet exist." }
+    reasoning_carries: { score: 3, evidence: "No citation or authority is invoked anywhere; the argument runs entirely on cost-of-waiting-for-data logic." }
+    actor_coverage: { score: 2, evidence: "The missing actor (downstream owner publishing an SLA) is given a concrete action, but the recommended blanket-value position does not actually depend on that SLA appearing." }
+    reversibility: { score: 1, evidence: "It gestures at 'precision is a distinct, later problem' once evidence appears but never frames the choice explicitly as cheap-now vs. expensive-later." }
+    substance: { score: 2, evidence: "Stripped of framing it is still a real claim -- pick one number now, split later on evidence -- though the 'discomfort' framing did some of the persuasive work." }
+  B:
+    committal: { score: 2, evidence: "The position sentence bundles two mandates (size from pool budget; never ship without retry/circuit-breaker) rather than a single isolated action." }
+    falsifiability: { score: 2, evidence: "The falsifier requires standing up a sustained load test holding downstream latency above the timeout, which is observable and relevant but not cheap." }
+    specificity: { score: 2, evidence: "The reasoning is built around pool exhaustion, retry storms, and blast radius specific to a client-protects-itself timeout design, not generic timeout advice." }
+    assumption_attack: { score: 3, evidence: "It explicitly rejects the assumption that timeouts should be sized from downstream latency and the recommended sizing-from-own-capacity position follows directly from that rejection." }
+    reasoning_carries: { score: 3, evidence: "The argument runs purely on who pays which cost when (on-call, downstream team, end users) with no external authority cited." }
+    actor_coverage: { score: 2, evidence: "The downstream team is named with a concrete action (publish SLO, add load shedding), though the core sizing position doesn't strictly require them to act." }
+    reversibility: { score: 0, evidence: "There is no distinction drawn anywhere between cheap/reversible and expensive/committed moves, only a cost-and-payer analysis." }
+    substance: { score: 2, evidence: "Flattened, the claim is 'size to your own capacity and always pair timeouts with a retry/circuit-breaker policy,' a real operational claim though the 'bill arrives later' framing adds rhetorical weight." }
+  C:
+    committal: { score: 3, evidence: "One sentence commits to defining the failure-handling policy before setting any number, with no escape hatch back to picking a number directly." }
+    falsifiability: { score: 2, evidence: "The falsifier depends on existing incident/postmortem logs showing clean degradation without any policy, which is observable in principle but contingent on history that may not exist, making it an expensive check." }
+    specificity: { score: 2, evidence: "The reasoning is organized around deadline propagation across a call chain and upstream-budget consumption, details tied specifically to multi-hop HTTP call scenarios." }
+    assumption_attack: { score: 3, evidence: "It names the load-bearing assumption directly ('a timeout is a single tunable value you can guess in isolation') and the derive-don't-pick-first position follows from rejecting it." }
+    reasoning_carries: { score: 3, evidence: "The four-step argument about budgets and incentives needs no external authority to stand." }
+    actor_coverage: { score: 1, evidence: "The on-call/SRE owner is named with an action (publish an SLA) but that actor's action is not actually load-bearing for the policy-before-number position." }
+    reversibility: { score: 0, evidence: "Nothing in the reasoning distinguishes cheap reversible config moves from expensive committed ones." }
+    substance: { score: 2, evidence: "Flattened, 'decide your retry/deadline policy before picking a timeout number' is a real and still-useful claim, though the 'who benefits from skipping this' framing adds some persuasive gloss." }
+  D:
+    committal: { score: 2, evidence: "The position is a single long sentence but carries a conditional escape hatch ('only freeze... after a canary run confirms it'), softening a single flat directive." }
+    falsifiability: { score: 3, evidence: "The falsifier -- a canary rollout showing retry-rate spikes or reconciliation turning up duplicate charges -- is cheap, specific, and would directly indict the chosen values before they are frozen anywhere." }
+    specificity: { score: 3, evidence: "The reasoning is built entirely around this problem's particulars (idempotency, p50/p95/p99 pulls, canary paths, shared-library freezing) and would not transfer unchanged to a different config question." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that all timeout-related choices carry equal risk by splitting them into two-way vs. one-way doors, and the staged sequence of actions follows directly from that split." }
+    reasoning_carries: { score: 3, evidence: "The cost/detection-latency argument for each one-way door is self-contained and cites no external authority." }
+    actor_coverage: { score: 2, evidence: "The downstream owner is named with a concrete action (publish a latency SLA) but the measure-then-canary position already stands without that actor acting." }
+    reversibility: { score: 3, evidence: "The entire recommended sequence -- idempotency check, then data pull, then config-driven canary, then only later freezing -- is explicitly ordered by which moves are two-way doors and which are one-way." }
+    substance: { score: 3, evidence: "Flattened to 'measure latency, keep timeouts config-overridable, and don't freeze them into shared code until a canary confirms them,' the claim stands on its own as genuine practical guidance." }
+  E:
+    committal: { score: 2, evidence: "The position sentence pairs two directives (generous client fallback plus per-call-site deadlines) rather than a single isolated instruction." }
+    falsifiability: { score: 3, evidence: "The falsifier -- checking whether existing call sites already share one latency budget -- is cheap to inspect and would directly undercut the per-call-deadline position if true." }
+    specificity: { score: 2, evidence: "The reasoning leans on concrete call-site examples (user-facing lookup vs. background batch job sharing one client) that are specific to how HTTP clients get reused across a codebase." }
+    assumption_attack: { score: 3, evidence: "It explicitly rejects the premise that the client's static config is 'the whole story' and the shift to caller-supplied deadlines follows from naming the caller as the fastest, cheapest actor." }
+    reasoning_carries: { score: 3, evidence: "The six-actor breakdown and cost/speed comparison between caller-level and client-level changes needs no outside authority to hold." }
+    actor_coverage: { score: 3, evidence: "The caller is named with a concrete, zero-coordination action (attach a per-call deadline), and the entire position is built on that actor being the one who sets the real timeout." }
+    reversibility: { score: 1, evidence: "It compares the caller's zero-deploy local change against re-tuning a shared client as faster and cheaper, which gestures at cost-of-change without framing it as reversible vs. committed." }
+    substance: { score: 2, evidence: "Flattened, 'give the client a loose fallback and let each call site set its own deadline' is a standard, still-useful claim, though the actor-census framing did some work to make it land." }

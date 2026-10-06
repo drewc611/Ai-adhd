@@ -391,7 +391,10 @@ test("the recorded corpus rollup reads every second scoring on disk", () => {
   assert.ok(r.runs.length >= 5, `expected at least 5 runs with a second scoring, got ${r.runs.length}`);
   assert.ok(r.cells >= 225);
   assert.ok(r.exact > 0.7, `pooled exact agreement was ${r.exact}`);
-  assert.equal(r.within_one, 1, "no cell in the corpus disagreed by more than one point");
+  // Held at 1 (no cell disagreed by more than one point) until the E12-recheck second scoring
+  // of 001-seed3-e12-1: four of its five specificity cells disagreed by two full points, the
+  // widest split anywhere in the pooled corpus. See docs/WRITEUP.md's "the eighth run" paragraph.
+  assert.ok(r.within_one > 0.97 && r.within_one < 0.99, `within-one moved to ${r.within_one}, update the comment and this bound`);
   const artifacts = r.runs.reduce((s, x) => s + x.report.artifacts, 0);
   const retired = new Set(cfg.rubric.dimensions.filter((d) => d.retired_in !== undefined).map((d) => d.id));
   assert.ok(
@@ -406,11 +409,13 @@ test("the recorded corpus rollup reads every second scoring on disk", () => {
   // critics agree on most. They agree because almost every artifact gets a 3.
   const best = r.by_dimension.slice(-2).map((d) => d.dimension);
   assert.deepEqual(new Set(best), new Set(["foreclosure", "reasoning_carries"]));
-  // The two heaviest-disagreement dimensions are the two that ask what the artifact actually
-  // said. `specificity` is the highest weighted dimension in the rubric and `substance` is the
-  // one E11's second critic moved most; which of the two sits at the bottom has changed with the
-  // corpus and is not worth pinning, but both being there is.
-  assert.deepEqual(new Set(r.by_dimension.slice(0, 2).map((d) => d.dimension)), new Set(["substance", "specificity"]));
+  // The heaviest-disagreement dimension is the one that asks what the artifact actually said:
+  // `specificity`, the highest weighted dimension in the rubric, sits at the bottom in every
+  // pooled corpus so far. Its partner at the bottom has moved once already (`substance` to
+  // `assumption_attack`, when the E12-recheck second scoring of 001-seed3-e12-1 disagreed on
+  // both by two and one point respectively) and is not worth pinning on its own; `specificity`
+  // being there is.
+  assert.ok(new Set(r.by_dimension.slice(0, 2).map((d) => d.dimension)).has("specificity"), "specificity should be among the two worst-agreement dimensions");
   // Two runs in the corpus would have sent a different position to deepen. This is the finding
   // the tool exists to catch, and it is recorded rather than smoothed over. `001-seed3-repeat` is
   // the D40 exact tie: the rubric did not separate that cluster, so a second critic broke it the

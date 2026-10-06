@@ -4214,3 +4214,56 @@ real tracked file against a snapshot taken before the call rather than asserting
 has no recorded run) are kept — `011`, the other fixture with no recorded run, already carries the
 same shape, so this is the existing convention rather than new state, and reverting it would only
 mean the next real update rewrites it right back.
+
+## D55. A second properly-dispatched critic on an E12 pack: scoring did not stabilise
+
+**Decision:** Dispatch one fresh `adhd-critic` over `001-seed3-e12-1`'s five already-recorded
+branch artifacts, to test whether D41's fix — the missing critic instruction that explained why
+item 4's trap sweep disagreed completely and E12's agreed almost completely — also explains the
+separate, still-unresolved finding that two critics rank the same pack differently every time.
+Resolved 2026-10-06, real spend (~79,000 tokens: 19,756 pass A, 59,635 pass B).
+
+E12 answered one question and left a different one open. It showed the trap sweep reproduces once
+the critic agent's own instructions are actually in force: 39 of 40 (branch, trap) records agreed
+between two sessions. It never tested whether the same fix stabilises *scoring* — the pass A
+numbers that decide which survivor ships — because both of its own runs pruned every branch and
+had nothing to rank. The missing-instruction story was the most economical explanation for item 4's
+instability specifically because it could explain a scoring failure and a sweep failure with one
+cause. Nobody had checked whether it actually does.
+
+**It does not.** Handing `001-seed3-e12-1`'s pass-A brief to a second, identically-dispatched
+critic produced 63% exact agreement, 85% within one point, and an inverted ranking — `ACTOR_CENSUS`
+led the original critic's scoring, `DOOR_KEEPER` led the second's. That is worse than the 81%
+pooled figure the pre-E12 corpus already carried, not better. The trap sweep on the same two
+artifact sets agreed on 32 of 40 cells: better than scoring, but well short of E12's own 39 of 40,
+and the gap concentrates on one detector — the first critic fired T1 on all five branches, the
+second fired it on one. Clustering also disagreed: the first critic grouped three frames into one
+cluster, the second grouped two and left the third as its own singleton.
+
+**What this does and does not settle.** It settles that dispatch quality was not the hidden
+variable behind the scoring instability, the way it was for the sweep. Whatever makes two
+correctly-instructed critics assign different numbers to the same reasoning is a property of the
+rubric's application — how a human or model reader converts "tests the load bearing assumption"
+into a 2 versus a 3 — not a missing system prompt. It does not settle why `specificity`, the most
+heavily weighted dimension, is the one dimension both this comparison and the pooled corpus-wide
+figures agree is worst: four of its five cells here differed by two full points, the widest split
+recorded anywhere in the corpus. That is a question about the rubric's own wording, not about
+dispatch, and nothing here answers it.
+
+**What changed, concretely.** `evals/recorded/001-seed3-e12-1/critic/pass-a.rater2.yaml` and
+`pass-b.rater2.yaml` are new, following the existing `pass-a.rater2.yaml` convention
+`src/learn.ts`'s `SECOND_SCORING` constant and `src/viewer.ts`'s rater-counting regex already
+expect — no new mechanism was built. `adhd learn --agreement-all` now pools 8 runs and 345 cells at
+79%/98% (was 7 runs, 305 cells, 81%/100%); `test/learn.test.ts`'s corpus rollup test is updated to
+the real recomputed values, with its `within_one` assertion loosened from an exact-1 pin to a bound
+with the cause named in a comment, and its worst-two-dimensions assertion narrowed to the one
+dimension (`specificity`) that has held across both corpus states rather than the pair that no
+longer does. `docs/WRITEUP.md` gained "the eighth run" paragraph; `docs/BACKLOG.md` item 102 gained
+the follow-up; `README.md`'s Status section cites the updated figures. No existing recorded run's
+own `pass-a.yaml` or `pass-b.yaml` — the scoring that actually shipped a representative — was
+touched; this adds a second opinion beside the first, exactly as the existing tooling expects.
+
+This was not pre-registered in `docs/EXPERIMENTS.md` before running, unlike E12 itself. The
+question was posed and answered in the same conversation that found it worth asking, which is a
+real deviation from this repository's own stated practice of fixing readings before a run; it is
+recorded here rather than left silent about that.

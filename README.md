@@ -12,7 +12,7 @@
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-536-2ea44f" alt="536 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-255-2ea44f" alt="255 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D54%20resolved-0969da" alt="D1 through D54 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D55%20resolved-0969da" alt="D1 through D55 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -189,7 +189,7 @@ Nothing under `src/` calls a model. Nothing under `analysis/` does either, and n
 ## Status
 
 Library, CLI, MCP server and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D54 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+`CLAUDE.md`. D1 through D55 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 Nineteen runs are recorded, fifteen of them real dispatches across five fixtures (001 through
 004, and 014's wide path at n=7); four of those five fixtures also carry a linear chain-of-thought
@@ -226,9 +226,12 @@ flattering.** Three results decide how to read everything else:
   byte-identical briefs: branch positions came back nearly verbatim from separate context
   windows, and the critic fired T7 twice on one run and nothing at all on the other. The half
   that prunes is the unstable half.
-- **Two critics scoring one pack rank it differently every time.** 81% exact agreement over
-  305 cells and seven double-scored packs; in two of them the shipped recommendation changed
-  with the critic.
+- **Two critics scoring one pack rank it differently every time.** 79% exact agreement over
+  345 cells and eight double-scored packs; in two of them the shipped recommendation changed
+  with the critic. The eighth pack was scored by a critic properly dispatched under D41's fix —
+  the one that made trap-sweep agreement hold at 39/40 — specifically to test whether that fix
+  also stabilised scoring. It did not: 63% exact agreement on that pack alone, the ranking
+  inverted, and the trap sweep itself still only agreed on 32 of 40 cells.
 - **The pass A noise floor is 0.10**, and no contested decision in the corpus clears it by
   more than a rounding error. A margin smaller than that is the session and the critic, not
   the reasoning.

@@ -21,7 +21,7 @@ def corpus():
 
 
 def test_the_loader_reproduces_the_number_the_typescript_reports(corpus):
-    """81% exact over 305 cells, 100% within one point.
+    """79% exact over 345 cells, 98% within one point.
 
     The repository computes that in `src/learn.ts`. Reproducing it in Python from the same files
     is what makes everything else here trustworthy: a loader that quietly dropped a rater or
@@ -33,9 +33,11 @@ def test_the_loader_reproduces_the_number_the_typescript_reports(corpus):
         if rater in (1, 2)
     }
     s = summarise(pair_only, 3)
-    assert s["pairs"] == 305
-    assert round(s["percent_agreement"], 2) == 0.81
-    assert s["within_one"] == 1.0
+    assert s["pairs"] == 345
+    assert round(s["percent_agreement"], 2) == 0.79
+    # Held at 1.0 until the E12-recheck second scoring of 001-seed3-e12-1: four of its five
+    # specificity cells disagreed by two full points. See docs/WRITEUP.md's "the eighth run".
+    assert round(s["within_one"], 2) == 0.98
 
 
 def test_frame_ids_are_forwarded_so_a_rename_is_not_a_tenth_frame(corpus):
@@ -157,7 +159,7 @@ def test_the_signal_model_is_grouped_by_run_and_never_scored_in_sample(corpus):
 
 def test_bootstrap_resamples_runs_and_reports_when_it_cannot(corpus):
     multi = corpus.multi_rated_runs()
-    assert len(multi) == 7
+    assert len(multi) == 8
 
     def alpha_over(runs):
         keep = set(runs)
