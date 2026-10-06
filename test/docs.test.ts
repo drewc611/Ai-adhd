@@ -451,8 +451,15 @@ test("the writeup's numbers are the numbers the corpus has now", () => {
   const recorded = readdirSync(join(cfg.root, "evals", "recorded")).filter((d) => statSync(join(cfg.root, "evals", "recorded", d)).isDirectory());
   const scored = recorded.filter((d) => existsSync(join(cfg.root, "evals", "recorded", d, "score.json")));
   const word = (n: number) => ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"][n] ?? String(n);
+  const capitalised = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   assert.match(doc, new RegExp(`# What ${word(recorded.length)} runs show`), `the title should say ${recorded.length}`);
   assert.ok(doc.includes(`${word(scored.length)} with a \`score.json\``), `${scored.length} runs carry a score.json`);
+  // The title bumping its count is not enough on its own: the Method section restates the total
+  // in its own sentence, capitalised because it opens the paragraph, and that restatement drifted
+  // silently once already (the title said nineteen while Method still said eighteen) because
+  // nothing checked it independently.
+  assert.ok(doc.includes(`${capitalised(word(recorded.length))} recorded runs over five fixtures`), `the Method section's run count has drifted: should say ${recorded.length}`);
+  assert.ok(doc.includes(`Three of the ${word(recorded.length)}`), `the Method section's "Three of the ${word(recorded.length)}" phrase has drifted`);
 
   // The test count it quotes for the mechanics claim.
   const tests = readdirSync(join(cfg.root, "test")).filter((f) => f.endsWith(".test.ts"))

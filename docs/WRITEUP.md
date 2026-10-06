@@ -31,8 +31,8 @@ in-context divergence technique is built on exactly that (D2).
 
 ## Method
 
-Eighteen recorded runs over five fixtures, each fixture carrying `must_surface` assertions written
-before the run and, on four of the five, a linear chain-of-thought control. Three of the eighteen
+Nineteen recorded runs over five fixtures, each fixture carrying `must_surface` assertions written
+before the run and, on four of the five, a linear chain-of-thought control. Three of the nineteen
 are same-fixture, same-seed, same-brief reruns of `001-seed3`: the deliberate replicate that measured
 the noise floor, and the E12 pair that put the critic's own instructions genuinely in force for the
 first time. Two are fixture 014 at seven branches, the widest path the router can produce.
