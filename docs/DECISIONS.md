@@ -4173,3 +4173,44 @@ PR #37 closed out the corpus at zero. Same shape as that PR: a transitive depend
 audit fix` within the existing semver range with no change to `package.json`'s declared
 dependency list. Carried in this change rather than filed separately because it was found as a
 side effect of the same `npm ci` this work needed and fixing it cost one command.
+
+## D54. `regressionGate`'s `--update` always wrote the real baseline, sandbox or not
+
+**Decision:** `regressionGate` gains an optional `baselinePath`, defaulting to the same
+`cfg.root`-relative path it always used, so a caller that supplies its own `fixturesDir` and
+`recordedDir` can also supply where `--update` writes. Resolved 2026-10-06.
+
+Found while adding `evals/fixtures/015-retry-field-default.yaml` (backlog 19) and running the
+suite to check it: `evals/assertion-baseline.json`, a file this repository tracks, came back
+modified by `npm test` alone, with no `--gate --update` ever typed. `regressionGate`'s
+`baselinePath` was `join(cfg.root, "evals", "assertion-baseline.json")` unconditionally — the real
+file — even when the function's `fixturesDir`/`recordedDir` pointed at a sandbox. `test/fixtures.test.ts`'s
+`"--update rewrites the baseline and says why the file exists"` calls `regressionGate(cfg, {
+fixturesDir: s.fixtures, recordedDir: s.recorded, update: true })` against a sandbox and then
+asserts the real file is byte-identical before and after, commented "the sandbox is unmodified, so
+the rewrite is a no-op on content." That comment was never actually true in general — it held only
+because the real baseline happened to already match what the real fixtures and recorded
+directories would produce whenever the test ran. Adding a fixture with no recorded run changes
+that: `sandbox()` copies the live `evals/fixtures` directory, so the new fixture's assertion keys
+appeared in the sandbox's computed state, the write still landed on the real path, and the real
+file picked up six new empty-array entries nobody asked it to.
+
+**What makes this worth a decision rather than a one-line fix.** The property under test —
+`--update` changes only the file it is told to change — was never actually checked; the test
+checked a coincidence and called it a guarantee. That is exactly the failure mode `docs/WRITEUP.md`
+exists to catch when it is a frame's claim, and it is no less real when it is a test's. A test
+suite that can silently rewrite a repository's own tracked evidence file, contingent on what the
+fixture directory happens to contain at the moment it runs, is the kind of thing this repository's
+own `adhd eval --gate` was built to make impossible for the corpus it watches — it had simply never
+watched itself.
+
+**What changed.** `src/fixtures.ts`'s `regressionGate` takes `opts.baselinePath` and uses it in
+place of the hardcoded path when given. The CLI (`adhd eval --gate --update`) and the MCP tool
+pass no such option, so their behavior is unchanged. `test/fixtures.test.ts`'s `sandbox()` now
+returns a `baseline` path inside its own temp directory alongside `fixtures` and `recorded`, and
+the update test passes it explicitly, asserts `g.baselinePath` is that sandbox path, and checks the
+real tracked file against a snapshot taken before the call rather than asserting a coincidence.
+`evals/assertion-baseline.json`'s own six new entries for fixture 015 (all empty arrays, since it
+has no recorded run) are kept — `011`, the other fixture with no recorded run, already carries the
+same shape, so this is the existing convention rather than new state, and reverting it would only
+mean the next real update rewrites it right back.
