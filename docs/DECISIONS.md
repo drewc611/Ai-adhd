@@ -4120,3 +4120,56 @@ inter-rater and weight-sensitivity corpora this run did not touch stayed exactly
 distinct-value counts were unaffected. `test/contract-prose.test.ts`'s folded/plain/quoted counts
 moved from 78/106/11/117 files/plain/quoted/folded to 84/106/11/135, all six new branch artifacts
 folded, none plain — the D37 contract held.
+
+## D53. Refit `tokens_per_branch_estimate` and its phase shape against the fuller corpus
+
+**Decision:** `tokens_per_branch_estimate` moves from **51,000 to 58,000**, and the critique and
+deepen proportions it scales move from **0.61/0.43 to 0.42/0.40**. A five-branch preview now reads
+**527,800** against the worst run on record, **519,482**. Resolved 2026-10-06.
+
+D32 fit both numbers on the five-run corpus available at the time: diverge 49%, critique 30%,
+deepen 21%, and a `tpb` of 51,000 chosen so the total at n=5 just cleared the worst run then
+recorded, 519,482. `adhd cost` now reports a phase split over thirteen runs rather than five —
+diverge 55%, critique 23%, deepen 22% — and the corpus's n=5 maximum has not moved, it is still
+519,482.
+
+**The two numbers had to move together, not separately.** Refitting only the shape (23/55 and
+22/55 in place of 30/49 and 21/49) while leaving `tpb` at 51,000 drops the n=5 total to 463,641 —
+under the worst run on record by more than 10%, which is exactly the failure D32 existed to end,
+reintroduced by updating half of a fitted pair and leaving the other half stale. `tpb` had to be
+re-derived against the same bar D32 used: the smallest round thousand whose total at n=5 still
+clears 519,482 under the new shape. That is 58,000 — 57,000 totals 518,700 and falls 782 tokens
+short; 58,000 totals 527,800, a 1.6% margin over the worst run on record, closer to the kind of
+clearance D32 itself left (520,200 against 519,482 was a 0.14% margin, which is why one more
+run arriving at the old maximum, rather than past it, was already enough to ask whether the figure
+needed revisiting again).
+
+**Why now rather than waiting for a run to breach the quote.** The quote was never actually
+breached — `adhd os` would not have warned on its own. What changed is the corpus `adhd cost`
+fits the shape against: five runs with a phase breakdown became thirteen, and the shape moved
+enough (30/49 to 23/55 is a real shift, not noise inside the five-run sample) that leaving `tpb`
+fixed while the shape underneath it drifted would have let the gate's safety margin erode
+silently, the same way the pre-D32 estimate eroded silently until `adhd cost` was built to show it.
+`adhd cost` and `adhd compile`'s own self-check (the message `the gate quotes N today ... against a
+worst recorded run of M`) both still read as healthy before this change, which is the point: a
+0.14% margin is technically "never exceeded" right up until the run that exceeds it, and nothing
+forced a recheck until this session's work went looking.
+
+**What changed, concretely.** `config/routing.yaml`'s `tokens_per_branch_estimate` and its
+comment; `src/compile.ts`'s two ratio constants and their derivation comment; `src/cost.ts`'s
+duplicate of the same formula, used only for `adhd cost`'s self-check line. `test/cost.test.ts`'s
+phase-share assertions moved from 0.49/0.30/0.21 to 0.55/0.23/0.22, at the same ±0.02 tolerance.
+No recorded run's own `plan.json` or `cost.json` was touched — each still reports the figure it was
+actually quoted, under whichever config was live at the time, which is the property
+`test/cost.test.ts` names directly: "a recorded estimate is what that run was actually quoted and
+never changes." A run recorded under this decision will be the first to read 527,800 or 738,920;
+every run recorded so far still reads 156,000, 520,200, 624,240 or 728,280, exactly as it did
+before.
+
+**Unrelated, found while rebuilding to run `adhd cost`:** `npm ci` surfaced one new critical
+`npm audit` finding, `proxy-addr` (IP spoofing via IPv4-mapped IPv6 trust subnet), disclosed after
+PR #37 closed out the corpus at zero. Same shape as that PR: a transitive dependency of
+`@modelcontextprotocol/sdk`'s own `express` dependency, not a direct dependency, fixed by `npm
+audit fix` within the existing semver range with no change to `package.json`'s declared
+dependency list. Carried in this change rather than filed separately because it was found as a
+side effect of the same `npm ci` this work needed and fixing it cost one command.

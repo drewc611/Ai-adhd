@@ -533,6 +533,16 @@ yet enough to know whether they work.
     measured split now. `adhd cost` prices the current config beside the historical ratio, because the
     recorded estimate is what each run was quoted and that number never changes.
 
+    **Refit as D53, 2026-10-06.** D32's shape was measured on five runs with a phase breakdown;
+    `adhd cost` now has thirteen, and the split moved from 30/49 and 21/49 to 23/55 and 22/55 —
+    enough to matter, not noise inside the smaller sample. Plugging the new split into the old
+    51,000 would have dropped the n=5 quote to 463,641, under the worst run on record by more than
+    10%: the exact failure this item was opened to end, reintroduced by updating the shape without
+    re-deriving the figure it scales. `tokens_per_branch_estimate` moves again, 51,000 -> **58,000**,
+    the smallest round thousand whose total at n=5 (527,800) still clears 519,482 under the new
+    shape. D32's own margin had been 0.14%; this closes with 1.6%, closer to what "never exceeded"
+    should mean rather than "not yet exceeded."
+
 42. ~~**TTY colour and progress** for `adhd os` while a run advances.~~
     **Already built and found open by the audit below. `src/tty.ts` carries the colour table, a
     `Progress` line that redraws in place and one line per change when piped, and `stateColour` so a

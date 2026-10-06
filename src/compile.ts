@@ -115,22 +115,31 @@ export function compile(cfg: Config, problem: string, decision: Decision, opts: 
   const artifactDir = opts.artifactDir ?? "branches";
 
   // D32: the estimate is the observed maximum, and its shape is the measured one.
+  // D53: both numbers were refitted once the corpus doubled, because leaving the shape stale
+  // while the data moved under it would have under-quoted the gate it exists to make honest.
   //
   // `tokens_per_branch_estimate` is the diverge cost of one branch. The other two phases are
-  // proportions of it taken from `adhd cost`, which reports 49% diverge, 30% critique and 21%
-  // deepen over the five runs that record a phase breakdown. The old model used `tpb * n` for the
-  // critic and `tpb * ceil(n / 2)` for deepen, giving 38/38/23 — it over-weighted the critic by a
-  // third and under-weighted diverge, so the preview was wrong in shape as well as in size.
+  // proportions of it taken from `adhd cost`, which reported 49% diverge, 30% critique and 21%
+  // deepen over the five runs that carried a phase breakdown at D32, and now reports 55%, 23% and
+  // 22% over the thirteen that do. The old model used `tpb * n` for the critic and `tpb *
+  // ceil(n / 2)` for deepen, giving 38/38/23 — it over-weighted the critic by a third and
+  // under-weighted diverge, so the preview was wrong in shape as well as in size.
   //
-  // The size was wrong by 2.6x to 3.3x across seven runs, always low. A consent gate that quotes a
-  // third of the spend is not an estimate, it is a misrepresentation, and the choice between mean
-  // and maximum is not a statistical one: a user who consented to 156,000 tokens and spent 519,482
-  // was misled, and being misled upward costs them nothing. So the figure is set from the worst run
-  // observed rather than the average one, and the preview says "up to" for the same reason.
+  // Refitting the shape alone, with the old 51,000, would have quoted 463,641 for a five-branch
+  // run against a worst run on record of 519,482 — an under-quote, the exact failure D32 existed
+  // to end. So `tpb` moved too, re-derived from the new shape against the same worst-run bar: 58,000
+  // is the smallest round thousand whose total at n=5 (527,800) still clears 519,482.
+  //
+  // The size was wrong by 2.6x to 3.3x across seven runs, always low, before D32. A consent gate
+  // that quotes a third of the spend is not an estimate, it is a misrepresentation, and the choice
+  // between mean and maximum is not a statistical one: a user who consented to 156,000 tokens and
+  // spent 519,482 was misled, and being misled upward costs them nothing. So the figure is set from
+  // the worst run observed rather than the average one, and the preview says "up to" for the same
+  // reason.
   const tpb = cfg.routing.defaults.tokens_per_branch_estimate;
   const tokens_branches = tpb * n;
-  const tokens_critic = Math.round(tokens_branches * 0.61); // 30/49, measured
-  const tokens_deepen = Math.round(tokens_branches * 0.43); // 21/49, measured
+  const tokens_critic = Math.round(tokens_branches * 0.42); // 23/55, measured
+  const tokens_deepen = Math.round(tokens_branches * 0.40); // 22/55, measured
 
   const briefs: CompiledBrief[] = frames.map((f) => ({ frame: f.id, text: renderBranchBrief(cfg, problem, hash, f) }));
   const isolation = briefs.flatMap((b) => checkBriefIsolation(b.text, b.frame, cfg.frames.frames, { problem }));

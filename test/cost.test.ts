@@ -212,17 +212,18 @@ test("the D5 gate never quotes less than the worst run on record", () => {
 });
 
 test("the estimate's shape matches the measured phase split, not an invented one", () => {
-  // `adhd cost` reports 49% diverge, 30% critique, 21% deepen. The old model used tpb*n for the
-  // critic and tpb*ceil(n/2) for deepen, which is 38/38/23 — it over-weighted the critic by a third.
-  // A total that is right with components that are wrong tells a user the wrong thing about which
-  // phase to stop before.
+  // `adhd cost` reported 49% diverge, 30% critique, 21% deepen at D32 (five runs with a phase
+  // breakdown) and reports 55%, 23%, 22% now (thirteen) — D53 refit the model to the later split.
+  // The old pre-D32 model used tpb*n for the critic and tpb*ceil(n/2) for deepen, 38/38/23, which
+  // over-weighted the critic by a third. A total that is right with components that are wrong
+  // tells a user the wrong thing about which phase to stop before.
   const c = compile(cfg, "What timeouts should I set on this HTTP client?", { problem_class: "design_decision" }, { seed: 1 });
   if (c.kind !== "plan") throw new Error("expected a plan");
   const e = c.plan.estimate;
   const share = (part: number) => part / e.tokens_total;
-  assert.ok(Math.abs(share(e.tokens_branches) - 0.49) < 0.02, `diverge share is ${share(e.tokens_branches).toFixed(2)}, measured 0.49`);
-  assert.ok(Math.abs(share(e.tokens_critic) - 0.30) < 0.02, `critique share is ${share(e.tokens_critic).toFixed(2)}, measured 0.30`);
-  assert.ok(Math.abs(share(e.tokens_deepen) - 0.21) < 0.02, `deepen share is ${share(e.tokens_deepen).toFixed(2)}, measured 0.21`);
+  assert.ok(Math.abs(share(e.tokens_branches) - 0.55) < 0.02, `diverge share is ${share(e.tokens_branches).toFixed(2)}, measured 0.55`);
+  assert.ok(Math.abs(share(e.tokens_critic) - 0.23) < 0.02, `critique share is ${share(e.tokens_critic).toFixed(2)}, measured 0.23`);
+  assert.ok(Math.abs(share(e.tokens_deepen) - 0.22) < 0.02, `deepen share is ${share(e.tokens_deepen).toFixed(2)}, measured 0.22`);
 });
 
 test("the preview says up to, because the figure is a ceiling and not an average", () => {

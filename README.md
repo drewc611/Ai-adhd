@@ -12,7 +12,7 @@
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-536-2ea44f" alt="536 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-255-2ea44f" alt="255 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D52%20resolved-0969da" alt="D1 through D52 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D53%20resolved-0969da" alt="D1 through D53 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -189,19 +189,22 @@ Nothing under `src/` calls a model. Nothing under `analysis/` does either, and n
 ## Status
 
 Library, CLI, MCP server and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D52 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+`CLAUDE.md`. D1 through D53 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 Nineteen runs are recorded, fifteen of them real dispatches across five fixtures (001 through
 004, and 014's wide path at n=7); four of those five fixtures also carry a linear chain-of-thought
 negative control that must fail, and three further fixtures decline outright, asserting that
 routing refuses a class rather than spending on it.
 
-**Recently verified, not just built.** D49 through D52 ([`docs/DECISIONS.md`](docs/DECISIONS.md))
-widened the corpus fetcher to two new sources and shipped a fourteenth frame, `NEGATIVE_SPACE`
-([backlog 23](docs/BACKLOG.md)) — and the first live dispatch of the widened fetcher caught a real
-bug a dry read missed: `rust-lang/rfcs`'s default branch is `main`, not the `master` the code
-assumed, found by the actual scheduled workflow 404ing and fixed the same day. `npm audit` reports
-zero vulnerabilities (two moderate transitive findings resolved, [PR #37](https://github.com/drewc611/Ai-adhd/pull/37)),
+**Recently verified, not just built.** D49 through D53 ([`docs/DECISIONS.md`](docs/DECISIONS.md))
+widened the corpus fetcher to two new sources, shipped a fourteenth frame, `NEGATIVE_SPACE`
+([backlog 23](docs/BACKLOG.md)), and refit the D5 token estimate against the fuller corpus — and
+the first live dispatch of the widened fetcher caught a real bug a dry read missed: `rust-lang/rfcs`'s
+default branch is `main`, not the `master` the code assumed, found by the actual scheduled workflow
+404ing and fixed the same day. `npm audit` reports zero vulnerabilities (three transitive findings
+resolved across [PR #37](https://github.com/drewc611/Ai-adhd/pull/37) and D53, each within the
+existing semver range of a dependency `@modelcontextprotocol/sdk` pulls in, never a change to this
+repository's own four declared direct dependencies),
 and every pinned GitHub Action is off the version CI itself flagged as running a deprecated Node.
 
 The SuperAgent (`adhd super`) ran its first `deep` mission with live subagents in this
