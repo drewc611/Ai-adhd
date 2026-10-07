@@ -29,11 +29,11 @@ many of those matches chance explains. Krippendorff's alpha does. Over the same 
 | dimension | alpha | 95% interval | % exact | ceiling | distinct values |
 |---|---|---|---|---|---|
 | `reversibility` | **+0.876** | [+0.81, +0.95] | 78% | 19% | 4 |
-| `actor_coverage` | +0.679 | [+0.53, +0.80] | 85% | 45% | 3 |
+| `actor_coverage` | +0.679 | [+0.53, +0.80] | 85% | 44% | 3 |
 | `reasoning_carries` | +0.674 | [+0.68, +0.68] | 98% | 97% | 3 |
 | `assumption_attack` | +0.626 | [+0.42, +0.82] | 68% | 55% | 4 |
 | `committal` | +0.548 | [+0.29, +0.75] | 85% | 78% | 3 |
-| `specificity` | +0.521 | [+0.16, +0.88] | 78% | 17% | 4 |
+| `specificity` | +0.521 | [+0.16, +0.88] | 78% | 19% | 4 |
 | `falsifiability` | +0.491 | [+0.10, +0.77] | 82% | 75% | 3 |
 | `substance` | +0.456 | [+0.25, +0.61] | 75% | 73% | 3 |
 | `foreclosure` | **-0.017** | [-0.06, +0.00] | 96% | 94% | 2 |
