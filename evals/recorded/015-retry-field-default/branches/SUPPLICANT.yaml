@@ -1,0 +1,52 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+frame: SUPPLICANT
+position: >-
+  Name it max_retries and default it to a small finite number that caps the
+  whole retry window at about a day, so a stuck delivery stops and shows up
+  as "failed" instead of silently retrying forever.
+reasoning: |
+  1. The user stood up this webhook because they wanted to know the instant
+  something happened on the other side of the system — an order placed, a
+  payment settled, a status flipped — without having to poll for it. Retry
+  policy was never something they were thinking about; they just wanted the
+  event to land.
+  2. What they can see, at the moment it matters, is a delivery log or status
+  panel: a list of attempts, timestamps, maybe a status code and a "next
+  attempt" time. What they can do is read that panel, fix whatever is wrong
+  on their end, or pause/disable the webhook. They cannot see or touch the
+  backoff loop itself; they only see its outward signs.
+  3. Indefinite retrying makes them give up in one of two ways. Either their
+  endpoint gets pounded for days after a short outage, filling their own
+  logs and alerts until they kill the webhook to make it stop, or they stare
+  at a delivery sitting in "pending" with no way to know if it will ever
+  resolve, so they stop trusting the integration and build their own polling
+  workaround around it instead. Either path means the system loses the one
+  channel it built to serve them — they walk away from the feature, not
+  just the failed delivery.
+  4. If they knew it was possible, what they'd actually ask for is a
+  retry policy that stops within a timeframe they can reason about in plain
+  language — "give it about a day, then tell me plainly it failed" — not an
+  open-ended promise that something might still be quietly retrying next
+  week with no visible end.
+forecloses:
+  - >-
+    Defaulting max_retries to unlimited, or to a sentinel like 0 meaning
+    "retry forever," which just relabels today's indefinite behavior under a
+    new field name.
+  - >-
+    Defaulting to a very low count (such as 3) that would exhaust itself and
+    mark a delivery failed before a routine few-hour outage or deploy window
+    has even finished.
+falsifier: >-
+  Take an endpoint that was down for roughly twenty hours during a deploy
+  and then came back up: if deliveries queued during that outage are still
+  retrying and succeed once the endpoint returns, the default is in a
+  reasonable range; if those deliveries were already marked failed well
+  before the endpoint came back, the default is too low and this position
+  is wrong.
+missing_actor: >-
+  The webhook receiver's own on-call or integration owner, who could set a
+  per-endpoint override for max_retries based on how long their typical
+  incidents actually last, instead of everyone living under one shared
+  global default.
+confidence: medium

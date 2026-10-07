@@ -1,0 +1,78 @@
+problem_hash: sha256:b8153a917720624ba348dcfee51b0d3f23d943c750d10a70f599b93d7793783c
+pass: B
+clusters:
+  - id: single_boolean_field
+    action: "Add one boolean column to the ticket table, defaulted to false, that the overdue-SLA alert-queue query reads directly to decide inclusion, differing only in the exact string chosen for the name."
+    members: [CARETAKER, NEGATIVE_SPACE, MINIMALIST]
+    singleton: false
+    strongest_objection: null
+  - id: audited_suppression_record
+    action: "Replace the planned boolean column with a separate suppression-record table (ticket_id, suppressed_by, reason, created_at, expires_at) that the alert-queue query joins against instead of reading a flag off the ticket."
+    members: [FRAME_BREAKER]
+    singleton: true
+    strongest_objection: null
+  - id: customer_facing_status
+    action: "Default the field to false and add a customer-visible status line on the ticket page stating whether it is being tracked for an overdue alert, instead of keeping the flag backend-only."
+    members: [SUPPLICANT]
+    singleton: true
+    strongest_objection: null
+traps:
+  CARETAKER:
+    T1: { fired: false, evidence: "The argument's force depends on a concrete second consumer (SLA compliance reporting or a finance rollup) misreading this exact suppression flag as an SLA-exemption fact, a scenario tied to this queue's specifics rather than a domain-free naming rule." }
+    T2: { fired: true, evidence: "The branch works entirely inside the premise that a boolean field is the right mechanism and only contests what to call it, never questioning whether a flat flag can hold the suppression decision at all." }
+    T3: { fired: false, evidence: "The four-part reasoning about reuse, load-bearing names, and cost runs on inferred consequences alone, with no citation or authority present to strip out." }
+    T4: { fired: false, evidence: "It resolves the one decision asked (the name) and explicitly forecloses two further decisions (no reuse for exemption semantics, no treating suppression and non-breach as the same fact), leaving scope appropriately bounded." }
+    T5: { fired: false, evidence: "The position opens with an explicit imperative, 'Name the field narrowly after the mechanism it controls,' which is a direct do-X sentence." }
+    T6: { fired: true, evidence: "The only actor named is the downstream reporting/billing owner; the support agent or on-call operator who would actually set this flag day to day is never identified as an actor at all." }
+    T7: { fired: false, evidence: "It explicitly weighs a scoped name's cheap future replaceability against an already-reused generic name's expensive unwind, using that asymmetry to justify deciding narrowly now." }
+    T8: { fired: false, evidence: "Flattened to 'name the field for what it does, not for the business concept it touches, so misuse is visible at the call site,' the claim still stands as a real naming rule." }
+  NEGATIVE_SPACE:
+    T1: { fired: false, evidence: "The reasoning is anchored in on-call agents and SLA-reporting consumers currently trusting raw queue membership as an unmediated breach signal for this specific queue, a detail the argument cannot drop without losing its motivating harm." }
+    T2: { fired: true, evidence: "It accepts that a boolean override field is the right shape and spends its effort distinguishing what that boolean should mean, never asking whether a flag is the right representation for a reviewable decision." }
+    T3: { fired: false, evidence: "The three-step inference about readers, drift, and audit ambiguity needs no external authority and none is cited." }
+    T4: { fired: true, evidence: "It names the field but also declares that shipping a bare boolean without a setter/timestamp is foreclosed, yet never specifies how that audit need is to be satisfied, leaving a newly introduced decision unresolved." }
+    T5: { fired: false, evidence: "The position is a single imperative sentence, 'Name the field sla_alert_suppressed ... so it reads as an explicit human override,' a clear do-X instruction." }
+    T6: { fired: true, evidence: "Only the SLA compliance/metrics reporting owner is named as an actor; the agent or operator who would actually flip this flag on a ticket is never identified." }
+    T7: { fired: true, evidence: "Nothing in the reasoning distinguishes a cheap, reversible naming choice from the more expensive audit-trail commitment it says the naming should 'imply,' so cost-of-being-wrong is never staged." }
+    T8: { fired: false, evidence: "Flattened to 'call the override field an explicit suppression flag, not a synonym for breach status,' the claim remains a concrete, checkable naming rule." }
+  MINIMALIST:
+    T1: { fired: false, evidence: "The falsifier and the core justification both hinge on the concrete query shape 'WHERE NOT excluded_from_sla_alerts' and the existing exclusion backlog for this queue, a detail the minimalism stance is built around rather than independent of." }
+    T2: { fired: true, evidence: "It treats the boolean-field framing as correct by construction ('the question only asked for a field that controls visibility in one queue') and never tests whether a flag is adequate to the decision being modeled." }
+    T3: { fired: false, evidence: "The YAGNI-style argument about blocked implementation and deferred complexity needs no authority and cites none." }
+    T4: { fired: false, evidence: "It names the field, explicitly stops there, and states the exact future trigger that would reopen the decision, leaving no decision ambiguously half-resolved." }
+    T5: { fired: false, evidence: "The position is an explicit imperative, 'Name the field excluded_from_sla_alerts, default false, and stop there,' with a direct do-X verb." }
+    T6: { fired: false, evidence: "It names the support agent or team lead who will flip the flag and gives them a concrete action (ask for a visible labeled control), covering the operator actor the question itself omits." }
+    T7: { fired: false, evidence: "The whole structure is staged explicitly: ship the cheap boolean now, escalate to a reason-coded or audited field only once a second differing exclusion case actually appears." }
+    T8: { fired: false, evidence: "Flattened to 'name it plainly and don't build more than the question asked for,' it remains a real, actionable scoping call." }
+  FRAME_BREAKER:
+    T1: { fired: false, evidence: "The motivating scenario is a postmortem specifically asking 'why didn't we get paged' about a missed overdue-SLA alert, a detail the argument needs to make the audit-vs-boolean stakes concrete." }
+    T2: { fired: false, evidence: "It explicitly states the load-bearing assumption -- that queue membership is a static property a single boolean can correctly hold -- and rejects it, replacing the field with an audited record." }
+    T3: { fired: false, evidence: "The governance argument about write-once-read-never fields and accountability runs on inference alone, with no citation to remove." }
+    T4: { fired: false, evidence: "It forces a full concrete decision set (table shape, join rewrite, what fields the audit record must carry) that matches the scope of the governance problem it says this really is." }
+    T5: { fired: false, evidence: "The position opens with an explicit imperative, 'Drop the plan for a bare boolean column and instead add an audited suppression record,' a direct do-X instruction." }
+    T6: { fired: false, evidence: "It names the SLA policy owner or support team lead as the actor who should approve and review suppression records, and separately names support leads and agents as the ones currently muting tickets unaccountably." }
+    T7: { fired: true, evidence: "The position commits straight to the more expensive audited-table design without ever weighing it against shipping the cheap boolean first and upgrading only if misuse actually appears, unlike the staged alternatives this run produced." }
+    T8: { fired: false, evidence: "Flattened to 'track suppression as a logged, owned decision instead of a bare flag,' the claim is still a substantive, checkable engineering recommendation." }
+  SUPPLICANT:
+    T1: { fired: false, evidence: "The argument's stake is specifically the ticket's eligibility for the overdue alert and the customer's inability to see that exact mechanism, a detail load-bearing to the harm described even though the patience narrative generalizes." }
+    T2: { fired: true, evidence: "It keeps the field defaulting to false and never questions whether a boolean is the right mechanism, instead relocating the whole argument to who can see it, leaving the field's shape unexamined." }
+    T3: { fired: false, evidence: "The four-step narrative about user patience and escalation channels runs on inferred behavior alone, with no authority cited." }
+    T4: { fired: true, evidence: "The one decision the question actually asked -- what to call the field -- is never resolved; the position never proposes a name at all, leaving the reader to still make that call." }
+    T5: { fired: false, evidence: "The position is a single imperative sentence, 'Default the field to false ... and show its true state on the customer's own ticket page,' a direct do-X instruction." }
+    T6: { fired: false, evidence: "It names the support agent or triage lead who will actually set the flag and gives them a concrete action (silencing an already-handled ticket), alongside foregrounding the customer as a stakeholder the question omitted." }
+    T7: { fired: true, evidence: "Building a customer-facing status surface is treated as equivalent in weight to defaulting a flag to false, with no distinction drawn between the cheap schema change and the costlier, harder-to-unwind UI commitment." }
+    T8: { fired: false, evidence: "Flattened to 'let customers see whether their ticket is being tracked for an overdue alert,' the claim is still a real product recommendation, though it answers a different question than the one posed." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "One branch explicitly named and rejected the assumption that a static boolean can correctly represent queue-suppression as a one-time fact, proposing an audited record instead, so the run as a whole did not leave the frame unattacked." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every branch populated missing_actor with a specific named party (a reporting/billing owner, a support agent or team lead, or an SLA policy owner), so none left the field null." }
+lint_verdicts:
+  - { frame: CARETAKER, trap: T2, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch never tests whether a boolean is the right mechanism, only what to call it." }
+  - { frame: CARETAKER, trap: T6, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch's missing_actor covers only the reporting/billing owner and omits the operator who actually sets the flag." }
+  - { frame: NEGATIVE_SPACE, trap: T2, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch accepts the boolean-field premise and only disputes what the boolean should mean." }
+  - { frame: NEGATIVE_SPACE, trap: T6, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch names only the reporting owner as an actor and never the agent who would flip the flag." }
+  - { frame: NEGATIVE_SPACE, trap: T7, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch never distinguishes the cheap naming choice from the costlier audit-trail obligation it says the name should imply." }
+  - { frame: MINIMALIST, trap: T2, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch treats the boolean-field framing as given and never questions whether a flag is the right representation." }
+  - { frame: SUPPLICANT, trap: T2, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch leaves the boolean's shape and meaning completely unexamined while relocating the question to visibility." }
+  - { frame: SUPPLICANT, trap: T4, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch never actually names the field, which was the one decision the question asked for." }
+  - { frame: SUPPLICANT, trap: T7, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch treats building a customer-facing status feature as no more costly or harder to reverse than defaulting a column to false." }
+  - { frame: FRAME_BREAKER, trap: T7, lint_said: false, critic_says: true, evidence: "The lint recorded no finding, but the branch commits straight to the more expensive audited-table design without weighing a cheaper staged alternative." }

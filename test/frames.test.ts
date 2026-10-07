@@ -318,11 +318,13 @@ test("the retirement policy's stated standing matches what the tooling reports",
   assert.match(doc, /through the pruned block/);
 
   // The never-pruned set, named as a D6 worry rather than a retirement criterion. Which frames are
-  // in it is the corpus's business and changes as runs land — MECHANIC left it at eleven runs — so
-  // the guard is that the doc names whichever they are, not that they are a particular three.
+  // in it is the corpus's business and changes as runs land — MECHANIC left it at eleven runs,
+  // `CARETAKER` left it at sixteen (D56) — so the guard is that the doc names whichever they are,
+  // not that they are a particular three. The set reaching zero is itself a fact worth the doc
+  // stating plainly, not a reason to stop checking it.
   const neverPruned = stats.frames.filter((f) => f.runs >= 2 && f.pruned === 0).map((f) => f.frame).sort();
-  assert.ok(neverPruned.length > 0, "no frame is never-pruned, so this asserts nothing");
-  for (const f of neverPruned) assert.match(doc, new RegExp(`\`${f}\``), `${f} is never pruned and the doc does not mention it`);
+  if (neverPruned.length === 0) assert.match(doc, /no frame is (currently )?never-pruned/i, "the never-pruned set emptied out and the doc does not say so");
+  else for (const f of neverPruned) assert.match(doc, new RegExp(`\`${f}\``), `${f} is never pruned and the doc does not mention it`);
 
   // Criterion 4 rests on which traps have never fired, and that set shrank when T3 fired in E1b.
   const neverFired = stats.traps.filter((t) => t.fired === 0).map((t) => t.trap).sort();

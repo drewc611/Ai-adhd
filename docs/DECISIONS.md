@@ -4267,3 +4267,110 @@ This was not pre-registered in `docs/EXPERIMENTS.md` before running, unlike E12 
 question was posed and answered in the same conversation that found it worth asking, which is a
 real deviation from this repository's own stated practice of fixing readings before a run; it is
 recorded here rather than left silent about that.
+
+## D56. `015-retry-field-default`'s real dispatch: a clean, tied singleton still loses to a cluster
+
+**Decision:** Dispatch `evals/fixtures/015-retry-field-default.yaml` for real, the half of backlog
+19 the fixture's own commit deliberately left undone. Resolved 2026-10-07, real spend (~527,800
+tokens estimated; five branches, one critic session covering both passes, two deepen subagents).
+Recorded as `evals/recorded/015-retry-field-default/`.
+
+**The fixture passes.** All four `must_surface` assertions matched, neither `must_not` assertion
+fired, and `pruned_min: 1` held (three of five pruned). `adhd eval` reports `PASS`.
+
+**NEGATIVE_SPACE did not win.** It survived pass B as a clean, zero-trap singleton — `preserve_
+unlimited_default`, alone in its own cluster — with pass A 0.952, second only to FRAME_BREAKER's
+0.976 and clear of PARTICULARIST (0.833), CARETAKER (0.690), and SUPPLICANT (0.524). Nothing about
+its artifact was weaker than the frame the fixture names in its own `why`: it named all four
+readers of today's absence, forced both the field name and the default closed, and distinguished
+the reversible unlimited default from the irreversible finite one, naming every concrete thing a
+NEGATIVE_SPACE position is supposed to name. None of that made it the shipped recommendation.
+
+**Why it still lost.** `src/synth.ts`'s renderer picks a cluster's representative over a singleton
+regardless of score closeness: `bound_with_mandatory_exhaustion_signal` (FRAME_BREAKER, corroborated
+by pruned CARETAKER) shipped as the bolded recommendation, and NEGATIVE_SPACE was relegated to
+"Live singletons (unverified)" alongside CARETAKER's lower-scoring, trap-cleared member. A margin of
+0.024 pass-A points between the winning cluster's representative and the losing singleton was not
+close enough to change which one rendered as the recommendation, because score was never the
+variable the renderer branches on — cluster membership is. This is the same convention that gave
+`004-negative-space-probe` no recommendation at all under scatter; here, with no scatter and two
+clean survivors, it is visible as a tie-break rule instead: *corroborated beats singleton, full
+stop, independent of score.*
+
+**What this does and does not settle.** It settles backlog 19's open empirical question for
+NEGATIVE_SPACE, honestly, in the negative: a fixture built from the ground up for this frame to
+obviously win did not make it win the rendered recommendation, on this one real dispatch. It does
+not settle whether the renderer's corroborated-over-singleton rule is wrong — a position with no
+one else independently landing on it is weaker evidence than one two frames reached separately, and
+rewarding corroboration over raw score is a defensible design choice, not an obvious bug. What it
+does surface concretely: the rule has no score-margin exception, so a singleton that is one of the
+two cleanest survivors in the run, ahead of every pruned branch and within 0.024 of the eventual
+winner, ships exactly as deep in the pruned-adjacent section as a singleton that barely survived at
+all. Whether that is the right trade for this repository to make is unresolved and is not decided
+here; a fixture or a renderer change that tests it directly is future work, not claimed as done by
+this entry.
+
+**What changed, concretely.** `evals/recorded/015-retry-field-default/` is new — `problem.txt`,
+`plan.json`, `decision.json`, `score.json`, `synthesis.md`, and the `branches/`, `briefs/`,
+`critic/`, and `deepen/` directories, copied verbatim from the real run, plus `cost.json` and
+`expected.json` written for this entry. `docs/BACKLOG.md` item 19 is updated with this run's result.
+No existing recorded run or fixture assertion was touched.
+
+## D57. `016-sla-boolean-name`'s real dispatch: `false_means` reverses, the run still fails
+
+**Decision:** Dispatch `evals/fixtures/016-sla-boolean-name.yaml` for real, backlog 17's third
+attempt and the half D56 deliberately left undone. Resolved 2026-10-07, real spend (~527,800
+tokens estimated; five branches, one critic session covering both passes, no deepen — every branch
+pruned). Recorded as `evals/recorded/016-sla-boolean-name/`.
+
+**`false_means` reverses.** Two prior real dispatches of `004-flag-name.yaml` (D47's
+`004-frame-breaker-probe`, D52's `004-negative-space-probe`) matched its `false_means` assertion
+zero times across three runs and sixteen branch artifacts. This run's own `false_means` assertion
+— written from the description, never touching 004's regex, before this fixture had ever been
+dispatched — matched the run overall and three of its five branches: `CARETAKER`, `NEGATIVE_SPACE`,
+and `SUPPLICANT` each independently surfaced that the field's false value has to cover several
+genuinely different ticket states, in their own words, with no detector tuning aimed at any of
+them. `who_reads` matched all five branches; `not_the_boolean` matched one, `FRAME_BREAKER`, the
+branch that rejected the single-boolean premise outright. `adhd eval --audit` shows the reversal
+side by side: `004/false_means` real 0/3, branch 0/16; `016/false_means` real 1/1, branch 3/5.
+
+**The fixture still fails, for a reason that has nothing to do with `false_means`.** Every one of
+the five branches drew at least one fired trap — `CARETAKER` (T2, T6), `NEGATIVE_SPACE` (T2, T4,
+T6, T7), `MINIMALIST` (T2), `FRAME_BREAKER` (T7 alone), `SUPPLICANT` (T2, T4, T7) — so the run
+produced zero survivors and no recommendation at all. `must_not/never_names_it` requires the
+recommendation to commit to a name or an explicit rejection of a single boolean; there is no
+recommendation to check it against, so it fails mechanically. `FRAME_BREAKER` is the one case worth
+dwelling on: it is the only branch that named and rejected the load-bearing assumption (queue
+membership as a static fact a boolean can hold), matching `not_the_boolean` and clearing run-level
+T2 for the whole run — and it was pruned anyway, on T7, for committing straight to an audited
+suppression table without weighing it against shipping the cheap boolean first and upgrading only
+if misuse actually appears, the staged move three of its siblings used instead. Correctly attacking
+the assumption did not exempt it from a different, independent mechanical failure.
+
+**A real authoring mistake, caught and fixed before this entry, not after.** The fixture's `prompt`
+field was first written as a quoted plain scalar with no trailing newline; the problem text actually
+fed to the real compiler (extracted from the fixture via a one-off script) carried a trailing
+newline a `print()` call added, so the two hashed differently — `adhd eval` caught it immediately
+as a `problem_hash` mismatch, exactly the failure mode `problem_hash` exists to catch. Every branch,
+and both critic passes, echoed the same hash as each other throughout the run, so nothing drifted
+*within* it; the mismatch was between the fixture file and the run, not between branches. Rewriting
+the `prompt` field as a block literal (`prompt: |`, matching `015-retry-field-default.yaml`'s own
+convention) reproduces the run's actual hash exactly. The run was not re-dispatched: the content
+shown to every branch was byte-identical either way, differing only in a trailing newline no
+reasoning process could react to, and discarding real spend over a formatting bug in the fixture
+file — not in what was dispatched — would have been real tokens spent to fix a typo.
+
+**What this does and does not settle.** It settles that `false_means` is a reachable question for
+a mechanical detector to catch — the regex was never the obstacle in principle, a fresh fixture in
+a fresh domain surfaced it on the first real dispatch, at a 3-of-5 branch rate neither prior attempt
+came close to. It does not settle backlog 17 outright: the fixture's own `must_not` assertion still
+fails, for the unrelated, structural reason that this particular run pruned every branch. Whether a
+second dispatch of this same fixture (a different seed, or the same seed on a different day) would
+produce at least one trap-free survivor who actually names the field is still open, and is not
+claimed as answered here.
+
+**What changed, concretely.** `evals/fixtures/016-sla-boolean-name.yaml` is new, along with
+`evals/recorded/016-sla-boolean-name/` — `problem.txt`, `plan.json`, `decision.json`, `score.json`,
+`synthesis.md`, `cost.json`, `expected.json`, and the `branches/`, `briefs/`, and `critic/`
+directories (no `deepen/`: nothing survived to deepen). `docs/BACKLOG.md` item 17 is updated with
+this run's result. `004-flag-name.yaml`'s own `false_means` pattern was not touched.

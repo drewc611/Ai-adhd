@@ -1,0 +1,70 @@
+problem_hash: sha256:b8153a917720624ba348dcfee51b0d3f23d943c750d10a70f599b93d7793783c
+frame: CARETAKER
+position: >-
+  Name the field narrowly after the mechanism it controls, e.g.
+  `suppress_overdue_alert`, not after the business concept it touches,
+  e.g. `sla_exempt` or `is_exempt`.
+reasoning: |
+  1. What changed that the original decision did not anticipate: a second
+  consumer showed up. Someone building SLA compliance reporting, or a
+  dashboard, or a finance rollup, found a boolean sitting on the ticket
+  that looked exactly like what they needed, and started reading it as
+  "this ticket doesn't count against SLA" rather than "this ticket is
+  hidden from the overdue-alert queue." Those are different claims. The
+  alert team wanted to stop paging on noise; the reporting consumer now
+  silently drops real breaches from the compliance number. Nobody planned
+  this; the field's name was just generic enough to invite it.
+
+  2. What is now load bearing: the column's name and its boolean shape.
+  Every place that filters the alert queue already does
+  `WHERE <field> = false`, and if the name reads as a general SLA
+  statement rather than an alert-queue statement, other code has started
+  trusting that same reading. I cannot change what the field *means*
+  without touching every reader, and I cannot tell, just from the schema,
+  which readers think it means "hide from this queue" versus "doesn't
+  count toward SLA" versus "SLA doesn't apply." The boolean also carries
+  no reason, no actor, no timestamp — so for every row already set true,
+  I cannot recover why, only that it is true.
+
+  3. What I would pay to have had a different choice: I would gladly pay
+  the one-time cost of a scoped, boring name up front — a slightly longer
+  identifier, maybe pushback in review for being "too specific" — to avoid
+  what it costs now: finding every reader of the field across services,
+  dashboards, and SQL views; classifying each as "actually means alert
+  suppression" versus "accidentally means SLA exemption"; splitting the
+  field into two if the misuse is real; and reconstructing, ticket by
+  ticket, which historical `true` rows were set for the alert reason versus
+  some other reason inferred from comments, because the field itself never
+  recorded that. A precise name would not have prevented reuse outright,
+  but it would have made the wrong reuse visibly wrong at the call site
+  instead of silently plausible.
+
+  4. What to decide now versus leave open: decide the name today, and make
+  it say exactly and only what the field does — suppress this one alert
+  queue, nothing about SLA truth. Leave undecided whether more alert
+  queues or more suppression reasons will ever exist; do not build a
+  reason-code enum, an audit trail, or a generic "exemption" abstraction
+  speculatively. That generality is exactly what let the field get
+  misread in the first place. A flag that can only mean one thing is
+  cheap to replace later with something richer; a flag that already means
+  several things to several teams is not.
+forecloses:
+  - >-
+    Reusing this single field later as a general SLA-exemption or
+    SLA-compliance signal for reporting, billing, or metrics without
+    adding a new, separately named field for that purpose.
+  - >-
+    Treating "hidden from the overdue-alert queue" and "SLA does not
+    apply to this ticket" as the same fact anywhere in the system.
+falsifier: >-
+  Grep every current read-site of the field across the codebase, SQL
+  views, and BI dashboards; if every single one of them is inside the
+  overdue-alert queue's own filter logic and nothing else has ever
+  queried it, the scoping concern was unfounded and a generic name would
+  have cost nothing.
+missing_actor: >-
+  Whoever owns SLA compliance reporting or billing metrics downstream of
+  ticket data: they can start querying this field to compute "percentage
+  of tickets meeting SLA" without the alert team's knowledge, which is
+  the exact misuse a mechanism-scoped name is meant to make visibly wrong.
+confidence: medium

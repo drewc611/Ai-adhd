@@ -1,0 +1,35 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+frame: FRAME_BREAKER
+verdict: defend
+response: |
+  The objection is right that strict sequencing -- full dead-letter storage, per-delivery
+  status, and subscriber alerting built and shipped before any retry bound exists -- is
+  the wrong shape, because it turns a live, already-costly harm into a hostage of an
+  open-ended infrastructure project. I concede that part outright: "build the whole
+  exhaustion path first, attach the bound only once it works" is not defensible when a
+  bounded default can ship this week and the richer system cannot.
+  But the objection's own proposed compromise -- "a conservative, clearly-labeled capped
+  default... alongside a simple internal log line" -- does not actually eliminate the
+  thing my position is protecting. It satisfies it in miniature. The load-bearing claim
+  was never "block on building subscriber-facing alerting." It was "do not let a retry
+  count be the only trace that a delivery died." A log line keyed by delivery ID, written
+  at exhaustion, in the same PR as max_retries, is exactly the minimal exhaustion record
+  I was asking for -- it just isn't the full dead-letter/status/alert system I described,
+  and it doesn't need to be before the bound ships. So the objection overturns the
+  sequencing I argued for, not the requirement that some durable, queryable trace of
+  "this payload died here" exist at the moment the count is enforced. A max_retries field
+  that enforces a cap into a void -- no row, no log, nothing durable -- still reproduces
+  the failure mode I flagged: a config default masquerading as a solved problem, now with
+  a harder-to-notice silent drop instead of an indefinite hammer. That residual claim
+  survives the objection; the "build it all first" claim does not.
+revised_position: >-
+  Ship a bounded max_retries default and a minimal durable exhaustion record (one row or
+  log line per delivery ID, written when retries are exhausted) together in the same
+  change, and build richer subscriber-facing status/alerting in parallel rather than as a
+  blocking prerequisite to the bound.
+revised_falsifier: >-
+  Check whether the PR introducing max_retries also writes a durable, queryable record
+  (not just a counter decrement) at the moment a delivery is abandoned; if it does, the
+  concern this position raises is already satisfied regardless of how far behind the
+  subscriber-facing alerting work lags.
+confidence: low

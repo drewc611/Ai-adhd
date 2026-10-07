@@ -1,0 +1,191 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "CARETAKER",
+      "status": "pruned",
+      "cluster": "single_boolean_field",
+      "pass_a": 0.8809523809523809,
+      "fired": [
+        {
+          "trap": "T2",
+          "evidence": "The branch works entirely inside the premise that a boolean field is the right mechanism and only contests what to call it, never questioning whether a flat flag can hold the suppression decision at all."
+        },
+        {
+          "trap": "T6",
+          "evidence": "The only actor named is the downstream reporting/billing owner; the support agent or on-call operator who would actually set this flag day to day is never identified as an actor at all."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name the field narrowly after the mechanism it controls, e.g. `suppress_overdue_alert`, not after the business concept it touches, e.g. `sla_exempt` or `is_exempt`.",
+      "forecloses": [
+        "Reusing this single field later as a general SLA-exemption or SLA-compliance signal for reporting, billing, or metrics without adding a new, separately named field for that purpose.",
+        "Treating \"hidden from the overdue-alert queue\" and \"SLA does not apply to this ticket\" as the same fact anywhere in the system."
+      ],
+      "falsifier": "Grep every current read-site of the field across the codebase, SQL views, and BI dashboards; if every single one of them is inside the overdue-alert queue's own filter logic and nothing else has ever queried it, the scoping concern was unfounded and a generic name would have cost nothing.",
+      "missing_actor": "Whoever owns SLA compliance reporting or billing metrics downstream of ticket data: they can start querying this field to compute \"percentage of tickets meeting SLA\" without the alert team's knowledge, which is the exact misuse a mechanism-scoped name is meant to make visibly wrong."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "pruned",
+      "cluster": "audited_suppression_record",
+      "pass_a": 0.7380952380952381,
+      "fired": [
+        {
+          "trap": "T7",
+          "evidence": "The position commits straight to the more expensive audited-table design without ever weighing it against shipping the cheap boolean first and upgrading only if misuse actually appears, unlike the staged alternatives this run produced."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Drop the plan for a bare boolean column and instead add an audited suppression record (ticket_id, suppressed_by, reason, created_at, expires_at) that the alert-queue query joins against, so exclusion from the overdue-SLA queue is a logged event, not a silent flag.",
+      "forecloses": [
+        "Shipping a single boolean field on the ticket table as the mechanism for queue exclusion, however it is named.",
+        "Letting anyone toggle exclusion without recording a reason, an owner, or an expiry for that decision."
+      ],
+      "falsifier": "If a review of past suppression-like flags in this system shows every instance was independently traceable after the fact to a documented reason and owner without any extra audit table, that would show the plain boolean was never the risk and this position is wrong.",
+      "missing_actor": "The SLA policy owner or support team lead, who is never named in the request but who should be the one who approves and periodically reviews every active suppression record, not the engineer naming the column."
+    },
+    {
+      "frame": "NEGATIVE_SPACE",
+      "status": "pruned",
+      "cluster": "single_boolean_field",
+      "pass_a": 0.7380952380952381,
+      "fired": [
+        {
+          "trap": "T2",
+          "evidence": "It accepts that a boolean override field is the right shape and spends its effort distinguishing what that boolean should mean, never asking whether a flag is the right representation for a reviewable decision."
+        },
+        {
+          "trap": "T4",
+          "evidence": "It names the field but also declares that shipping a bare boolean without a setter/timestamp is foreclosed, yet never specifies how that audit need is to be satisfied, leaving a newly introduced decision unresolved."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Only the SLA compliance/metrics reporting owner is named as an actor; the agent or operator who would actually flip this flag on a ticket is never identified."
+        },
+        {
+          "trap": "T7",
+          "evidence": "Nothing in the reasoning distinguishes a cheap, reversible naming choice from the more expensive audit-trail commitment it says the naming should 'imply,' so cost-of-being-wrong is never staged."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name the field `sla_alert_suppressed` (default false) so it reads as an explicit human override of alert-queue visibility, not as a second definition of SLA-breach status.",
+      "forecloses": [
+        "Naming the field as a restatement of breach status itself, e.g. `is_overdue` or `overdue_override`, which would let a suppressed-but-still-breached ticket be mistaken for a non-breached one by any consumer that reads the field name literally.",
+        "Shipping the field as a bare boolean with no logged setter/timestamp, since the name `..._suppressed` commits the team to treating every true value as a decision that needs an owner and a reason, not a cosmetic toggle."
+      ],
+      "falsifier": "Check whether any downstream system or human process currently treats \"present in the overdue-SLA queue\" as equivalent to \"is SLA-breached\" (compliance reports, escalation triggers, audits). If none do — if every consumer already reads the raw due-date field independently and the queue is purely a disposable notification convenience — then the suppression distinction carries no real cost and a simpler visibility-only name is fine.",
+      "missing_actor": "The owner of SLA compliance/metrics reporting, who was not named in the brief; they can specify, before this field ships, whether their reports key off queue membership or off the raw due-date field, so the new flag doesn't silently undercount breaches in their numbers."
+    },
+    {
+      "frame": "MINIMALIST",
+      "status": "pruned",
+      "cluster": "single_boolean_field",
+      "pass_a": 0.7857142857142857,
+      "fired": [
+        {
+          "trap": "T2",
+          "evidence": "It treats the boolean-field framing as correct by construction ('the question only asked for a field that controls visibility in one queue') and never tests whether a flag is adequate to the decision being modeled."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name the field excluded_from_sla_alerts, default false, and stop there.",
+      "forecloses": [
+        "Modeling exclusion as an enum or status field with multiple reason codes now, before a second reason has actually appeared.",
+        "Adding an audit log or \"excluded_by/excluded_reason\" metadata alongside the flag as part of this change."
+      ],
+      "falsifier": "Look at the current backlog of tickets someone already wants excluded: if two of them need to be excluded for visibly different reasons that should be handled differently downstream (e.g. one should still count toward a separate compliance report and one should not), a single undifferentiated boolean is already wrong and the name should carry a reason, not just a state.",
+      "missing_actor": "The support agent or team lead who will actually flip this flag on a ticket; the problem names only \"the alert queue\" as the consumer, not the person producing the signal, who can ask for a visible, labeled control (not just a hidden database column) before the field ships."
+    },
+    {
+      "frame": "SUPPLICANT",
+      "status": "pruned",
+      "cluster": "customer_facing_status",
+      "pass_a": 0.6190476190476191,
+      "fired": [
+        {
+          "trap": "T2",
+          "evidence": "It keeps the field defaulting to false and never questions whether a boolean is the right mechanism, instead relocating the whole argument to who can see it, leaving the field's shape unexamined."
+        },
+        {
+          "trap": "T4",
+          "evidence": "The one decision the question actually asked -- what to call the field -- is never resolved; the position never proposes a name at all, leaving the reader to still make that call."
+        },
+        {
+          "trap": "T7",
+          "evidence": "Building a customer-facing status surface is treated as equivalent in weight to defaulting a flag to false, with no distinction drawn between the cheap schema change and the costlier, harder-to-unwind UI commitment."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Default the field to false on every ticket and show its true state on the customer's own ticket page as plain language (\"this ticket is being tracked for an overdue alert\" / \"it is not\"), instead of building it as a backend-only flag no one outside the queue can see.",
+      "forecloses": [
+        "naming and implementing the field as a purely internal, backend-only flag with no customer-facing surface at all",
+        "letting any ticket default to excluded from the overdue-alert queue without a visible, explained reason shown to the person who filed it"
+      ],
+      "falsifier": "Pull ticket histories and check whether customers who waited past a deadline ever asked \"will this get escalated\" or \"is anyone tracking this,\" versus only ever asking \"any update yet.\" If no one asks the first kind of question, the demand for visible exemption status is invented, not real, and the position is wrong.",
+      "missing_actor": "the support agent or triage lead who will actually set this field per ticket when managing their own queue; they can flip it to silence an alert on a ticket they've already handled another way, and the brief never names them even though they are the one who touches the field, not the customer and not whoever names it."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "single_boolean_field",
+      "action": "Add one boolean column to the ticket table, defaulted to false, that the overdue-SLA alert-queue query reads directly to decide inclusion, differing only in the exact string chosen for the name.",
+      "members": [
+        "CARETAKER",
+        "NEGATIVE_SPACE",
+        "MINIMALIST"
+      ],
+      "survivors": [],
+      "singleton": false,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "audited_suppression_record",
+      "action": "Replace the planned boolean column with a separate suppression-record table (ticket_id, suppressed_by, reason, created_at, expires_at) that the alert-queue query joins against instead of reading a flag off the ticket.",
+      "members": [
+        "FRAME_BREAKER"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "customer_facing_status",
+      "action": "Default the field to false and add a customer-visible status line on the ticket page stating whether it is being tracked for an overdue alert, instead of keeping the flag backend-only.",
+      "members": [
+        "SUPPLICANT"
+      ],
+      "survivors": [],
+      "singleton": true,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "One branch explicitly named and rejected the assumption that a static boolean can correctly represent queue-suppression as a one-time fact, proposing an audited record instead, so the run as a whole did not leave the frame unattacked."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every branch populated missing_actor with a specific named party (a reporting/billing owner, a support agent or team lead, or an SLA policy owner), so none left the field null."
+    },
+    "notes": [
+      "every branch was pruned. Nothing to deepen."
+    ]
+  },
+  "proceed": false,
+  "rubric_version": 1
+}

@@ -1,0 +1,48 @@
+problem_hash: sha256:b8153a917720624ba348dcfee51b0d3f23d943c750d10a70f599b93d7793783c
+frame: MINIMALIST
+position: >-
+  Name the field excluded_from_sla_alerts, default false, and stop there.
+reasoning: |
+  1. The pain is not naming theory, it's that someone is blocked mid-implementation:
+  they need one identifier to put in a migration and a query filter today. The
+  question is phrased as if it needs a design decision, but it's really a one-line
+  unblock.
+  2. The smallest intervention is to name the field for the effect it has on the
+  queue, not for an abstract state. "excluded_from_sla_alerts" says exactly what
+  the alert-queue query should check (WHERE NOT excluded_from_sla_alerts), reads
+  correctly in both polarities, and needs no accompanying enum, UI copy, or
+  documentation to be correctly used by the next engineer who greps for it.
+  Defaulting it false means every existing ticket keeps current behavior with no
+  backfill decision required.
+  3. It deliberately leaves unfixed: why a ticket gets excluded, who is allowed to
+  set the flag, whether there's an audit trail of the toggle, and whether "excluded"
+  might someday need to mean several different things (snoozed vs. false-positive
+  vs. out-of-scope). None of that was asked. A single boolean cannot distinguish
+  reasons, and that's fine, because the question only asked for a field that
+  controls visibility in one queue, not a taxonomy of exclusion reasons.
+  4. The larger fix (a reason-coded status field, or a reviewable exclusion log)
+  becomes necessary the moment a second, differently-behaving boolean gets proposed
+  for the same queue, or someone asks "excluded for how long" or "excluded by whom."
+  You'll know because the request will stop being "add a field" and start being
+  "why did this ticket silently vanish from the queue" — a support/trust question,
+  not a schema question. Until that question is actually asked, one unexplained
+  boolean is cheaper and sufficient.
+forecloses:
+  - >-
+    Modeling exclusion as an enum or status field with multiple reason codes now,
+    before a second reason has actually appeared.
+  - >-
+    Adding an audit log or "excluded_by/excluded_reason" metadata alongside the
+    flag as part of this change.
+falsifier: >-
+  Look at the current backlog of tickets someone already wants excluded: if two
+  of them need to be excluded for visibly different reasons that should be handled
+  differently downstream (e.g. one should still count toward a separate compliance
+  report and one should not), a single undifferentiated boolean is already wrong
+  and the name should carry a reason, not just a state.
+missing_actor: >-
+  The support agent or team lead who will actually flip this flag on a ticket; the
+  problem names only "the alert queue" as the consumer, not the person producing
+  the signal, who can ask for a visible, labeled control (not just a hidden
+  database column) before the field ships.
+confidence: medium

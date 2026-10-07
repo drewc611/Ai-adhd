@@ -1,0 +1,59 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+frame: NEGATIVE_SPACE
+position: >-
+  Add `max_retries` but default it to unlimited (e.g. 0 or null meaning "no cap"), not to any
+  finite number, so the field's default preserves today's infinite-retry behavior exactly and
+  bounded retries become an explicit opt-in rather than a silent, inherited policy.
+reasoning: |
+  1. What the current absence asserts, and to whom: today there is no field, but the behavior
+  is not ambiguous in code — the retry worker loops with capped exponential backoff and no
+  termination condition, which means "absence of a limit" already means, operationally,
+  "retry forever." The readers of that meaning are: (a) the retry scheduler/worker itself,
+  whose loop has no exit; (b) the operator/on-call team, for whom unbounded retries on a
+  persistently-failing endpoint mean unbounded queue growth and no natural "give up and alert"
+  point; (c) the receiving webhook endpoint's owner, who can be down for days and still have
+  every event eventually delivered, because nothing on the sender's side ever stops trying;
+  (d) a human reading the config schema, who sees no field and may misread it as "retries
+  aren't configurable here" (not applicable) rather than "retries are deliberately infinite"
+  (the true, if undocumented, design). That last reading is the one ambiguity absence creates;
+  the code's own behavior is unambiguous.
+
+  2. What changes the moment the field is filled: the retry worker gains an exit condition —
+  after N attempts it stops and (presumably) dead-letters or alerts. Operators get a bounded
+  queue and a clear failure signal, which is the whole point of adding the field. But any
+  consumer who was implicitly relying on "my endpoint can be down arbitrarily long and the
+  event still arrives eventually" loses that guarantee the instant a finite default ships —
+  and loses it without having asked for the change, because they never set the field at all.
+
+  3. Does this collapse a distinguishable state, and who loses it: yes, if the default is a
+  finite number. Today, "no field" encodes one specific, deliberate design (infinite retry
+  with capped backoff). If max_retries defaults to, say, 10, then "never configured" and
+  "explicitly configured to 10" become the same observable state — a future engineer reading a
+  config with max_retries absent (or even max_retries: 10 after a migration) can no longer
+  tell whether that bound was a deliberate choice or just whatever the code shipped with. The
+  parties who lose the distinction are existing integrations that depended on indefinite
+  delivery attempts, and future maintainers who lose the ability to tell "someone decided 10"
+  from "nobody decided anything." Defaulting to unlimited avoids this: "unset" and "explicitly
+  infinite" stay the same state they always were, and only an explicit finite value becomes a
+  new, legibly deliberate choice. This satisfies the field's purpose too — operators who want
+  bounded retries now have a documented knob — without silently reassigning behavior to people
+  who never touched the config.
+forecloses:
+  - >-
+    Shipping a finite default (e.g. 10) as the out-of-the-box behavior for all existing and new
+    webhook configs on upgrade.
+  - >-
+    An automatic migration that backfills a specific finite max_retries onto pre-existing
+    configs that never mentioned retries at all.
+falsifier: >-
+  If docs, support tickets, or an existing SLA already describe webhook retries as bounded (not
+  infinite) today, then the absence never carried an "infinite retry" meaning in the first
+  place, and a finite default would simply be making an already-understood limit explicit
+  rather than silently imposing a new one.
+missing_actor: >-
+  The receiving endpoint's own team cannot set this field — it lives in the sender's delivery
+  config — but they are the party most exposed to whichever default is chosen; they could be
+  given an explicit per-delivery attempt-count header or a documented max-retry-window
+  guarantee so they can detect and act on exhausted retries from their side rather than
+  discovering the cutoff only when an event silently never arrives.
+confidence: medium

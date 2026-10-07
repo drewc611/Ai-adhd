@@ -1,0 +1,48 @@
+problem_hash: sha256:b8153a917720624ba348dcfee51b0d3f23d943c750d10a70f599b93d7793783c
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "The position is one sentence, 'Name the field sla_alert_suppressed...', with no hedge returning the choice to the reader." }
+    falsifiability: { score: 2, evidence: "The falsifier requires auditing every downstream system/human process that might treat queue membership as breach status, which is observable and relevant but not cheap." }
+    specificity: { score: 2, evidence: "The reasoning is built around specific readers of this exact queue (the alert job, on-call agents, compliance reporting), so it bends around the problem's details even though the underlying override-vs-status principle is general." }
+    assumption_attack: { score: 2, evidence: "It names the assumption that queue membership is purely objective SLA math and traces what breaks when that is no longer true, but does not run an actual test of it beyond the proposed falsifier." }
+    reasoning_carries: { score: 3, evidence: "No citations or authorities appear anywhere; the argument is self-contained inference about readers and naming." }
+    actor_coverage: { score: 2, evidence: "The missing_actor (SLA compliance/reporting owner) is given a concrete action (specify what their reports key off of) but the position does not hinge on that actor acting." }
+    reversibility: { score: 0, evidence: "Nothing in the reasoning distinguishes a cheap, reversible naming step from a more committed one." }
+    substance: { score: 3, evidence: "Flattened, the claim 'name the override field so it cannot be mistaken for breach status' is still a real, actionable naming rule independent of its framing." }
+  B:
+    committal: { score: 3, evidence: "'Name the field excluded_from_sla_alerts, default false, and stop there' is one sentence with an explicit stopping point and no escape hatch." }
+    falsifiability: { score: 3, evidence: "The falsifier -- check the existing backlog for tickets needing differently-handled exclusion reasons -- is cheap, specific, and would directly overturn the single-boolean recommendation if true." }
+    specificity: { score: 1, evidence: "The reasoning ('someone is blocked mid-implementation,' 'smallest intervention') is a generic minimal-change argument that would read the same for almost any single-field naming request." }
+    assumption_attack: { score: 2, evidence: "It names and probes the assumption that this requires a design decision rather than a one-line unblock, using the falsifier to test whether a plain boolean is already inadequate, without actually running that test." }
+    reasoning_carries: { score: 3, evidence: "The argument is pure cost/benefit reasoning about scope with no appeal to any authority." }
+    actor_coverage: { score: 2, evidence: "The missing_actor (the agent/lead who flips the flag) is given a concrete action (ask for a visible control) but the chosen name does not depend on that actor's response." }
+    reversibility: { score: 3, evidence: "The whole position is sequenced as 'ship the cheap boolean now, build the reason-coded/audited version only once a second differing case actually appears,' explicitly ordering cheap versus costlier moves." }
+    substance: { score: 3, evidence: "Stripped of framing, 'name it excluded_from_sla_alerts and don't over-build it yet' remains a concrete, useful recommendation." }
+  C:
+    committal: { score: 3, evidence: "The position is one sentence ('Name the field narrowly after the mechanism... not after the business concept...') with a concrete example and no hedge." }
+    falsifiability: { score: 3, evidence: "The falsifier -- grep every read-site of the field across code, views, and dashboards -- is cheap, specific, and would directly refute the scoping concern if everything is confined to the alert queue." }
+    specificity: { score: 2, evidence: "The scenario (a reporting/finance consumer misreading the flag as SLA-exemption) is built from this problem's specifics even though the general 'narrow name prevents reuse drift' principle would transfer elsewhere." }
+    assumption_attack: { score: 2, evidence: "It identifies the assumption that a generic name is harmless and proposes a grep-based test of whether reuse has actually happened, but the artifact itself does not report running that test." }
+    reasoning_carries: { score: 3, evidence: "No external authority is invoked; the chain runs entirely on hypothesized consumer behavior and naming consequences." }
+    actor_coverage: { score: 3, evidence: "The missing_actor (owner of SLA compliance/billing reporting) is named with a concrete action (could start querying the field unannounced), and the entire rationale for a narrow name depends on guarding against exactly that actor." }
+    reversibility: { score: 3, evidence: "The position explicitly argues a narrowly-scoped flag is cheap to replace later while a broadly-reused one is not, and builds the naming decision on that asymmetry." }
+    substance: { score: 3, evidence: "Flattened, 'name the field for its mechanism, not the broader business concept, so misuse is visible' remains a substantive naming-discipline claim." }
+  D:
+    committal: { score: 3, evidence: "The position is one (compound) sentence directing two concrete actions -- default false and surface status to the customer -- with no hedge." }
+    falsifiability: { score: 2, evidence: "The falsifier (check whether customers in ticket histories ever ask about tracking versus just 'any update') is observable and relevant but requires manual historical review, not a cheap check." }
+    specificity: { score: 1, evidence: "The reasoning is a generic account of customer patience and escalation behavior that would read the same for almost any internal flag hidden from a customer, with little tied to the SLA/ticket specifics beyond labels." }
+    assumption_attack: { score: 2, evidence: "It names and leans on the assumption that this is purely a backend naming question by introducing the customer as a stakeholder, proposing a test of whether that stake is real, without the artifact reporting the test's result." }
+    reasoning_carries: { score: 3, evidence: "The narrative about user patience and escalation behavior relies on no cited authority, only inferred cause and effect." }
+    actor_coverage: { score: 2, evidence: "The missing_actor (the agent/triage lead who sets the flag) is given a concrete action (flip it to silence an already-handled ticket) but the main position centers on the customer, not this actor." }
+    reversibility: { score: 0, evidence: "There is no distinction drawn between cheap/reversible and costly/committed moves anywhere in the reasoning." }
+    substance: { score: 2, evidence: "Flattened to 'expose SLA-tracking status to the customer instead of keeping it backend-only,' it is a real product claim, but it answers a different question than the one asked, so the framing did real work to make it responsive." }
+  E:
+    committal: { score: 3, evidence: "The position is one sentence, 'Drop the plan for a bare boolean column and instead add an audited suppression record...', with a specific concrete schema and no hedge." }
+    falsifiability: { score: 2, evidence: "The falsifier requires auditing past suppression-like flags system-wide for traceability, which is observable and would undercut the audit-table requirement, but it is not a cheap check." }
+    specificity: { score: 1, evidence: "The core argument -- a boolean cannot hold a time-varying, accountable decision, so build an audit record -- is a general schema-design principle that would transfer unchanged to almost any suppression/override feature." }
+    assumption_attack: { score: 3, evidence: "It explicitly states the load-bearing assumption ('queue membership is a static property... a single boolean can correctly hold'), and the recommended audit-record schema follows directly from that assumption being treated as false." }
+    reasoning_carries: { score: 3, evidence: "The reasoning about write-once-read-never fields and postmortems invokes no external authority at all." }
+    actor_coverage: { score: 3, evidence: "The missing_actor (SLA policy owner/support lead) is named with a concrete action (approve and periodically review suppression records), and the proposed audit mechanism depends on that actor existing to review it." }
+    reversibility: { score: 0, evidence: "The position argues for committing to the more complex audited-record design upfront rather than staging a cheap move first, so no cheap-versus-expensive sequencing is used." }
+    substance: { score: 3, evidence: "Flattened, 'replace the boolean with a logged, owned, reviewable suppression record' remains the same concrete claim independent of its narrative framing." }

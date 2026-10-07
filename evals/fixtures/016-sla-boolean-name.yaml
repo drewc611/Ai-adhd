@@ -1,0 +1,116 @@
+# Backlog 17's third attempt, and the first that does not touch `004-flag-name.yaml`'s own
+# `false_means` assertion. D47 and D52 each produced real reasoning (FRAME_BREAKER's probe, then
+# NEGATIVE_SPACE's general case) that a human reader calls a clear pass on the underlying
+# question, and the detector's seven patterns matched neither. Widening those seven patterns now
+# would be exactly the move `evals/fixtures/004-flag-name.yaml`'s own comment and E3 forbid: a
+# pattern fitted to the two specific runs that just missed it, after having read them, which would
+# not generalise. So `004-flag-name.yaml` is left untouched, still honestly recorded as failing.
+#
+# This is a different fixture, a different domain (support tickets, not feature flags, so neither
+# branch has 004's own vocabulary to reuse), and a different `false_means` detector, written below
+# from the assertion's own description before this fixture has ever been dispatched. There is
+# nothing yet to curve-fit to: no run of this fixture exists, so no widening-after-seeing-failure
+# is possible here in the way it already happened to 004's.
+id: "016"
+name: sla-boolean-name
+problem_class: naming
+seed: 1
+prompt: |
+  We're adding a boolean field to each support ticket that will control whether it shows up in the overdue-SLA alert queue. What should we call the field?
+
+why: |
+  The linear answer picks something like `is_overdue` or `needs_alert`, notes it should be
+  computed rather than hand-set, maybe says to keep it consistent with other boolean field names
+  in the schema, and stops. That answer is available without reading the question: it would be
+  identical for any boolean gating any alert.
+
+  What the question actually turns on is that this field is being asked to do two jobs at once:
+  describe something true about the ticket, and gate a downstream alert. Whatever it is named,
+  its false value is forced to mean every ticket that should not alert, for whatever reason —
+  and "should not alert" is not one reason. A ticket on hold pending the customer's reply, a
+  ticket closed as a duplicate or won't-fix, a ticket just created and not yet triaged, and a
+  ticket already resolved and confirmed are four different operational states that all want
+  false, for four different reasons, and a name chosen to read well for one of them (most
+  naturally "resolved" or "overdue") will mislead about the other three the moment someone reads
+  it without already knowing the ticket's history.
+
+  None of that is reachable by asking which name reads best. The assertions below are what a run
+  must surface to have read the question rather than the genre.
+
+must_surface:
+  - id: false_means
+    trap: T2
+    description: >
+      The answer says that the field's false value has to cover several genuinely different
+      ticket states rather than one, or directly attacks the assumption that a single boolean
+      name can carry that distinction.
+    any_of:
+      - "collapses?"
+      - "conflat(e|es|ing)"
+      - "flatten(s|ing)?"
+      - "lump(s|ing)? (them )?together"
+      - "(does not|doesn't|can'?t|cannot) (tell|say|specify|distinguish|differentiate)"
+      - "(several|multiple|many) different (reasons|states|situations|cases)"
+      - "one (boolean|bit|flag|field) (can'?t|cannot|doesn't) (capture|hold|represent|distinguish)"
+      - "false for (very )?different reasons"
+      - "(the )?name (alone )?(doesn't|does not|can'?t|cannot) (guarantee|carry|establish|tell you)"
+      - "indistinguishable from"
+      - "erases? the distinction"
+      - "loses? the distinction"
+  - id: who_reads
+    trap: T6
+    description: Someone other than the person naming the field is named as reading or acting on it.
+    any_of:
+      - "\\bon[- ]?call"
+      - "pager"
+      - "(the )?(agent|rep|support (team|engineer))"
+      - "whoever (reads|triages|responds to)"
+      - "(the )?customer"
+      - "(next|future|another) (engineer|developer|person)"
+  - id: not_the_boolean
+    trap: T2
+    description: A branch rejects the premise that one boolean field is the right mechanism here.
+    any_of:
+      - "(isn't|is not) (really )?a (naming|boolean) (question|problem)"
+      - "not (a|one) boolean"
+      - "wrong question"
+      - "real (decision|question|problem) is"
+      - "should (this|it) be (a|one) (boolean|field) at all"
+      - "needs? (a|an) (enum|status|state) (field|column)? ?(instead|rather than)"
+  - id: trap_named
+    description: At least one trap id with detector output appears in the pruned block.
+    scope: pruned
+    any_of:
+      - "T[1-8]"
+
+must_not:
+  - id: convention_list
+    trap: T4
+    description: The recommendation is not a list of naming conventions handed back to the reader.
+    check: max_list_items_without_imperative
+    scope: recommendation
+    max_items: 4
+  - id: no_verdict
+    trap: T5
+    description: The recommendation tells the reader what to do.
+    check: must_be_imperative
+    scope: recommendation
+  - id: never_names_it
+    description: >
+      The recommendation either commits to a name (or an explicit rejection of a single boolean)
+      or states the rule the name must satisfy. A naming answer that only supplies a way of
+      thinking has not answered.
+    check: must_match
+    scope: recommendation
+    any_of:
+      - "[a-z][a-z0-9]*_[a-z0-9_]+"
+      - "(name|call) it "
+      - "the (name|field) (must|should|has to)"
+      - "encode[sd]? (the|a) "
+      - "(an|use an?) enum"
+      - "(a|use a) status (field|column)"
+
+expect:
+  pruned_min: 1
+  monoculture: false
+  scatter: false

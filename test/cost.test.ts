@@ -100,24 +100,46 @@ test("every run quoted under the old estimate over-ran it, and the first run quo
   assert.ok(mean > 2, `mean ratio over the pre-D32 runs is ${mean.toFixed(2)}, no longer the under-quote this pins`);
 
   // Post-D32 the quote scales with n, so there is one figure per branch count rather than one
-  // figure. n=5 is 520,200 and n=7 is 728,280; both are `tokens_per_branch_estimate` times the
-  // same phase model, so a new n adds a value here rather than breaking the claim.
+  // figure — but D53 refit `tokens_per_branch_estimate` again (58,000 in place of 51,000, with the
+  // phase shape moved too), so a recorded estimate now has two possible generations at any given n:
+  // D32's formula (tpb 51,000, critic/deepen 0.61/0.43 of the branch total), still carried by every
+  // run recorded before D53 — 520,200 at n=5, 624,240 at n=6 (`004-negative-space-probe`, the one
+  // run at that branch count), 728,280 at n=7 — and D53's own formula (tpb 58,000, 0.42/0.40),
+  // first read by `015-retry-field-default` at 527,800 (n=5). Both are "the recalibrated estimate";
+  // computing each generation's total from its own formula, rather than an allow-list of totals
+  // seen so far, is what keeps this from needing a new line of pinned figures every time a run at
+  // a new n arrives.
   assert.ok(recalibrated.length >= 1, "no run has been quoted under the recalibrated estimate yet");
-  const quotes = new Map<number, number>();
-  for (const x of recalibrated) {
-    assert.ok(x.n !== null, `${x.run} has a recalibrated estimate and no branch count`);
-    const seen = quotes.get(x.n!);
-    if (seen === undefined) quotes.set(x.n!, x.estimate!);
-    else assert.equal(x.estimate, seen, `two runs at n=${x.n} were quoted different figures`);
-    assert.ok(x.ratio! <= 1, `${x.run} over-ran the recalibrated gate at ${x.ratio!.toFixed(1)}x, so D32 is not yet enough`);
+  const quoteFor = (tpb: number, critic: number, deepen: number, n: number) => {
+    const branches = tpb * n;
+    return branches + Math.round(branches * critic) + Math.round(branches * deepen);
+  };
+  const d32 = recalibrated.filter((x) => x.n !== null && x.estimate === quoteFor(51000, 0.61, 0.43, x.n));
+  const d53 = recalibrated.filter((x) => x.n !== null && x.estimate === quoteFor(58000, 0.42, 0.40, x.n));
+  assert.equal(
+    d32.length + d53.length,
+    recalibrated.length,
+    "a recalibrated run quoted a figure that belongs to neither D32 nor D53's phase model",
+  );
+  for (const generation of [d32, d53]) {
+    const quotes = new Map<number, number>();
+    for (const x of generation) {
+      assert.ok(x.n !== null, `${x.run} has a recalibrated estimate and no branch count`);
+      const seen = quotes.get(x.n!);
+      if (seen === undefined) quotes.set(x.n!, x.estimate!);
+      else assert.equal(x.estimate, seen, `two runs at n=${x.n} were quoted different figures within the same generation`);
+      assert.ok(x.ratio! <= 1, `${x.run} over-ran its own generation's gate at ${x.ratio!.toFixed(1)}x`);
+    }
   }
-  assert.equal(quotes.get(5), 520200, "the n=5 quote moved");
+  assert.ok(d32.some((x) => x.n === 5 && x.estimate === 520200), "D32's n=5 quote moved");
+  assert.ok(d53.some((x) => x.n === 5 && x.estimate === 527800), "D53's n=5 quote moved");
   // The wide path's first two runs came in at 0.8x, which is the same shape as n=5's 0.9x rather
   // than a new regime, so `tokens_per_branch_estimate` holds across branch counts and not just at
   // the one it was fitted on. `001-seed3-repeat` reads 0.5x and is not evidence either way: its
   // five diverge tasks ran in the foreground and the harness reported no count for them, which its
   // own cost.json says.
-  if (quotes.has(7)) assert.equal(quotes.get(7), 728280, "the n=7 quote moved");
+  if (d32.some((x) => x.n === 7)) assert.ok(d32.some((x) => x.n === 7 && x.estimate === 728280), "D32's n=7 quote moved");
+  if (d53.some((x) => x.n === 7)) assert.ok(d53.some((x) => x.n === 7 && x.estimate === 738920), "D53's n=7 quote moved");
 });
 
 // ---- kernel journal statistics -------------------------------------------------------------

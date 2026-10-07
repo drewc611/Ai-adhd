@@ -78,7 +78,7 @@ A retired frame is not dispatched and does not count towards `n`. `adhd frames` 
 separate heading. Its recorded runs stay exactly as they are: they are the evidence for the
 retirement, and rewriting them would destroy the argument.
 
-## Current standing, as of 15 runs
+## Current standing, as of 17 runs
 
 `adhd frames --health` counts every criterion below over the recorded corpus. Read it before
 this section rather than after: the table is a snapshot and the command is the current state.
@@ -86,7 +86,13 @@ The table exists because a reader needs the argument, not because it is the sour
 a test fails if the command puts a frame at two criteria and this table does not name it, which
 is how `NIGHT_OPERATOR` got its row.
 
-**No frame meets the bar. `LEVY` did, briefly, and E12 is why it no longer does.** At eleven
+**One frame meets the bar: `SUPPLICANT`, crossing the five-run floor at this corpus's sixteenth
+run.** `015-retry-field-default` (D56) is its fifth dispatch, pruned on T1/T2/T6/T7 the same as
+every appearance before it, so criteria 2 and 3 both hold at the floor for the first time:
+pruned in 5 of 5 draws, held the recommendation in 0 of 5. **Watch, do not act** — this is exactly
+the frame "The exemption that matters most" above was written for, and nothing in this run's own
+pruned block changes that argument. `LEVY` also briefly met the bar, and E12 is why it no longer
+does. At eleven
 runs `LEVY` sat at two criteria: it co-clustered with `ACTOR_CENSUS` in 4 of 6 shared draws
 (67%, over the 60% threshold) and had held the recommendation in 0 of 6 draws. Backlog 102's pair
 (`001-seed3-e12-1`, `-e12-2`) are draws of `001-seed3` under backlog 99's own rule — same fixture,
@@ -140,18 +146,25 @@ The counts are draws, with runs beside them where the two differ. Ten draws over
 | `PARTICULARIST`, `SABOTEUR` | 6, 5 | clear. `SABOTEUR` was one half of a flagged orthogonality pair before E12; no longer. |
 | `SUPPLICANT`, `PRIOR_ART` | 2 each | pruned in every appearance. `SUPPLICANT` is exempt under the section above. `PRIOR_ART` is not yet examined and is under the floor. |
 | `MECHANIC`, `NIGHT_OPERATOR` | 4, 3 | criterion 3 alone. Under the floor. `NIGHT_OPERATOR` was at two criteria at nine runs and dropped to one when it survived at `014-seed1`, which is the floor doing its job. |
-| `CARETAKER` | 2 | never pruned in any appearance. Not a retirement criterion, and the opposite worry, which belongs in D6. |
+| `CARETAKER` | 2 | clear. No longer never-pruned — `015-retry-field-default` pruned it once (T1, T2) and `016-sla-boolean-name` pruned it again (T2, T6) — so it drops the D6 worry it used to carry here, the same way `DOOR_KEEPER` dropped it at E12. `015` was the run that ended the worry: it was the last frame carrying it, so **no frame is currently never-pruned**, a state that has held since. |
 | `FIRST_PRINCIPLES` | 0 | never dispatched across ten draws; criterion 5's count has not started. Reachable since D35 as a `strategy` primary at n=6, and it is an `enumerate_options` **alternate**, so the two wide-path runs did not reach it either. |
 
-Seven frames now sit at or past the five-run floor. None meets two criteria.
+Nine frames now sit at or past the five-run floor. One, `SUPPLICANT`, meets two criteria — see
+above; the rest are clear or sit at one.
 
-**`NEGATIVE_SPACE` (D51, backlog 23) is at two criteria after its first dispatch, and one run is
-not evidence.** `004-negative-space-probe` pruned it (T4, T7) and it did not hold the recommendation
-— criteria 2 and 3, both met, both on a sample of one. `adhd frames --health` reports it correctly:
-"2 met, under the 5-run floor." Named here so the tooling and this document agree, exactly the
-drift this section exists to catch, not because there is anything to watch yet. `MECHANIC` and
+**`NEGATIVE_SPACE` (D51, backlog 23) dropped back to one criterion at its second dispatch, which
+is the floor doing its job rather than a finding, and its third left that unchanged.** Its first
+run, `004-negative-space-probe`, pruned it (T4, T7) and it did not hold the recommendation —
+criteria 2 and 3, both met, both on a sample of one, as this section said at the time. Its second,
+`015-retry-field-default` (D56, built for it to win backlog 19), fired zero traps: it survived pass
+B clean with the run's second-highest pass-A score, so criterion 2 no longer held (pruned in only 1
+of 2 draws). Its third, `016-sla-boolean-name` (D57, backlog 17's third attempt), pruned it again
+(T2, T4, T6, T7) — one of five branches that drew a fired trap in a run where every branch did — so
+criterion 2 stays unmet at 2 of 3 draws, and only criterion 3 remains (held the recommendation in 0
+of 3). `adhd frames --health` reports it correctly: "1 met, a pattern, not a case." `MECHANIC` and
 `NIGHT_OPERATOR`'s row above is the reminder of how fast a single additional run can move this:
-`NIGHT_OPERATOR` was at two criteria at nine runs and one more dispatch dropped it to one.
+`NIGHT_OPERATOR` was at two criteria at nine runs and one more dispatch dropped it to one;
+`NEGATIVE_SPACE` did the same at two runs instead of nine, and a third run has not moved it back.
 
 **A separate naming problem, found by the same runs, and now fixed.** `adhd frames --collisions`
 found that `LEDGER` and `SUCCESSOR` were ordinary English nouns and both appeared as nouns in

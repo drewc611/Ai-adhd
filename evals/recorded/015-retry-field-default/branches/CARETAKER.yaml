@@ -1,0 +1,56 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+frame: CARETAKER
+position: >-
+  Ship `max_retries` with a bounded default (around 10 attempts) that always pairs with a
+  mandatory terminal-failure dead-letter notification, so exhausting retries is observable
+  and never a silent drop.
+reasoning: |
+  1. What changed: the volume and variety of endpoints grew, and with it the number of ways
+  an endpoint becomes permanently dead (decommissioned service, rotated secret, stale URL).
+  Under unlimited retries this was ugly but visible: stuck deliveries sat in backoff metrics
+  forever, so someone eventually noticed. The unanticipated shift isn't a specific failure
+  mode, it's a structural one: bounding retry count turns "stuck and visible" into "tried and
+  silently gone" the moment nothing is built to announce exhaustion. Nobody designed for the
+  moment the counter hits zero.
+
+  2. What's load bearing: the default value itself, because most configs inherited it
+  implicitly and were never revisited, so changing it now either does nothing (if the value
+  was snapshotted into stored config at creation) or changes behavior for every integration
+  at once (if read live) — there is no safe middle path left. Equally load bearing is the
+  absence of any exhaustion signal: support workflows and customer reconciliation habits have
+  already grown around "notice the gap manually," so adding a signal now is a contract and
+  schema change, not a config tweak.
+
+  3. What it costs to undo: today's maintainer has to add a new dead-letter event type,
+  retrofit alerting, and coordinate a breaking contract change across every client that reads
+  this config — and still cannot recover the deliveries that already failed silently before
+  instrumentation existed. They also absorb the trust cost of explaining, after the fact, why
+  integrations went quiet with no warning. That is the real price of buying "failure is always
+  observable" two years late instead of on day one.
+
+  4. Decide now: the field exists, is finite (so backoff cost is bounded), and exhaustion
+  always emits a terminal-failure signal — that pairing is structural and should not be
+  optional or deferred. Leave undecided: the exact default number and whether it is globally
+  fixed or overridable per endpoint or tier. That's a tunable knob; it can be revised later
+  without breaking anyone precisely because the observability guarantee was made load bearing
+  from the start instead of being treated as a later nice-to-have.
+forecloses:
+  - >-
+    Shipping max_retries as a bare numeric cap with silent drop-on-exhaustion and no
+    notification path.
+  - >-
+    Deferring dead-letter or terminal-failure notification to a separate, later project after
+    the field already ships.
+  - >-
+    Keeping retries unlimited by default as a way to avoid ever building an exhaustion signal.
+falsifier: >-
+  Check whether any production incident in the two years since launch involved a customer
+  discovering missing webhook data only by noticing it themselves, with no system-generated
+  alert; if no such incident exists despite the field shipping without dead-lettering, the
+  mandatory notification requirement was an unneeded cost.
+missing_actor: >-
+  The webhook receiver (the customer's integration owner), who is never given a way to
+  subscribe to a terminal-failure signal or query delivery status themselves; they could
+  register their own alert on exhaustion instead of the platform guessing what threshold
+  matters to them.
+confidence: medium

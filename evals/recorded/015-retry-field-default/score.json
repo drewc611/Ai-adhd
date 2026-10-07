@@ -1,0 +1,179 @@
+{
+  "n": 5,
+  "frames": [
+    {
+      "frame": "PARTICULARIST",
+      "status": "pruned",
+      "cluster": "bound_to_one_day_window",
+      "pass_a": 0.8333333333333334,
+      "fired": [
+        {
+          "trap": "T4",
+          "evidence": "The position defers the actual choice of which name/default applies to the reader's own determination of customer-visibility, so the answer doesn't itself force that decision closed."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Decide the name and default by whether the field is customer-visible: if webhook-receiving customers can see or set it, call it `max_retry_duration` and default it to a wall-clock window (e.g. 24h) independent of the backoff curve; if it is an internal-only knob, call it `max_retries` and default it to a count calibrated against the five-minute plateau (roughly 288, one day's worth of five-minute-spaced attempts) so the cap preserves today's de facto tolerance window instead of silently shrinking it.",
+      "forecloses": [
+        "Shipping a small default like 3-5 retries borrowed from generic HTTP-client retry conventions, since that converts today's indefinite-retry tolerance into a sub-half-hour failure window with no stated intent to do so.",
+        "Committing to the literal name `max_retries` for every case, since that name silently couples an external customer's retry contract to the current five-minute backoff cap and breaks if that cap is ever retuned.",
+        "Treating this as a single global constant, since \"config\" implies it may be set per webhook endpoint/customer rather than once for the whole system."
+      ],
+      "falsifier": "Look at the existing webhook delivery config schema for other fields such as `timeout_seconds` or the webhook secret: if none of today's knobs are exposed to the customer who owns the receiving endpoint (i.e. the whole config object is internal-only), the customer-visibility branch is moot and a single count-based `max_retries` sized to the five-minute cap is the entire answer, which would falsify the need for my two-branch position.",
+      "missing_actor": "The webhook-receiving customer's own on-call/dev team: once retries stop being indefinite, they can act by wiring up a dead-letter or final-failure notification endpoint so they learn a delivery permanently failed instead of silently losing data after max_retries is exhausted."
+    },
+    {
+      "frame": "NEGATIVE_SPACE",
+      "status": "survivor",
+      "cluster": "preserve_unlimited_default",
+      "pass_a": 0.9523809523809523,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Add `max_retries` but default it to unlimited (e.g. 0 or null meaning \"no cap\"), not to any finite number, so the field's default preserves today's infinite-retry behavior exactly and bounded retries become an explicit opt-in rather than a silent, inherited policy.",
+      "forecloses": [
+        "Shipping a finite default (e.g. 10) as the out-of-the-box behavior for all existing and new webhook configs on upgrade.",
+        "An automatic migration that backfills a specific finite max_retries onto pre-existing configs that never mentioned retries at all."
+      ],
+      "falsifier": "If docs, support tickets, or an existing SLA already describe webhook retries as bounded (not infinite) today, then the absence never carried an \"infinite retry\" meaning in the first place, and a finite default would simply be making an already-understood limit explicit rather than silently imposing a new one.",
+      "missing_actor": "The receiving endpoint's own team cannot set this field — it lives in the sender's delivery config — but they are the party most exposed to whichever default is chosen; they could be given an explicit per-delivery attempt-count header or a documented max-retry-window guarantee so they can detect and act on exhausted retries from their side rather than discovering the cutoff only when an event silently never arrives."
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "status": "survivor",
+      "cluster": "bound_with_mandatory_exhaustion_signal",
+      "pass_a": 0.9761904761904762,
+      "fired": [],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Do not ship a bare max_retries integer; first build the dead-letter/exhaustion path (where a permanently-failing delivery's payload goes and who gets told), then bound retries against that path rather than picking a count in isolation.",
+      "forecloses": [
+        "Shipping a standalone max_retries field (any name, any default) with no corresponding dead-letter record or subscriber-visible failure signal",
+        "Treating \"what number should the default be\" as the decision that matters most in this change"
+      ],
+      "falsifier": "Check whether failed deliveries already produce a subscriber-visible alert or a durable dead-letter record today, independent of this field; if they do, the exhaustion-path gap this position targets doesn't exist and a bare max_retries default is in fact sufficient.",
+      "missing_actor": "The webhook subscriber whose endpoint is down — give them a delivery-status API or a failure notification so they can detect and fix their own dead endpoint instead of silently losing data once retries are exhausted."
+    },
+    {
+      "frame": "SUPPLICANT",
+      "status": "pruned",
+      "cluster": "bound_to_one_day_window",
+      "pass_a": 0.5238095238095238,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The core argument is a generic user-psychology narrative about wanting instant delivery and not thinking about retry policy, which would survive unchanged if the five-minute cap, the indefinite-retry detail, or the webhook-specific framing were deleted."
+        },
+        {
+          "trap": "T2",
+          "evidence": "It never questions whether a finite count field is the right fix at all; it accepts the name/default framing wholesale and only argues about the number."
+        },
+        {
+          "trap": "T6",
+          "evidence": "Every actor discussed is the external webhook receiver; no sending-side operator, on-call, or maintainer is named anywhere, unlike the other branches which all name an internal actor too."
+        },
+        {
+          "trap": "T7",
+          "evidence": "Nothing in the reasoning distinguishes a cheap, easily-revised default choice from an expensive, hard-to-undo one; the 'about a day' figure is simply asserted as the right target."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Name it max_retries and default it to a small finite number that caps the whole retry window at about a day, so a stuck delivery stops and shows up as \"failed\" instead of silently retrying forever.",
+      "forecloses": [
+        "Defaulting max_retries to unlimited, or to a sentinel like 0 meaning \"retry forever,\" which just relabels today's indefinite behavior under a new field name.",
+        "Defaulting to a very low count (such as 3) that would exhaust itself and mark a delivery failed before a routine few-hour outage or deploy window has even finished."
+      ],
+      "falsifier": "Take an endpoint that was down for roughly twenty hours during a deploy and then came back up: if deliveries queued during that outage are still retrying and succeed once the endpoint returns, the default is in a reasonable range; if those deliveries were already marked failed well before the endpoint came back, the default is too low and this position is wrong.",
+      "missing_actor": "The webhook receiver's own on-call or integration owner, who could set a per-endpoint override for max_retries based on how long their typical incidents actually last, instead of everyone living under one shared global default."
+    },
+    {
+      "frame": "CARETAKER",
+      "status": "pruned",
+      "cluster": "bound_with_mandatory_exhaustion_signal",
+      "pass_a": 0.6904761904761905,
+      "fired": [
+        {
+          "trap": "T1",
+          "evidence": "The reasoning leans on an invented 'two years since launch, endpoint variety grew' backstory rather than the prompt's own five-minute-cap or indefinite-retry details, and would read the same for almost any 'add a default to an existing field' scenario."
+        },
+        {
+          "trap": "T2",
+          "evidence": "It names that the default and the missing exhaustion signal were both left unexamined but never actually tests that claim against an observation; it layers a notification requirement on top of the 'ship a max_retries field' frame rather than contesting the frame itself."
+        }
+      ],
+      "violations": [],
+      "lint_disagreements": [],
+      "position": "Ship `max_retries` with a bounded default (around 10 attempts) that always pairs with a mandatory terminal-failure dead-letter notification, so exhausting retries is observable and never a silent drop.",
+      "forecloses": [
+        "Shipping max_retries as a bare numeric cap with silent drop-on-exhaustion and no notification path.",
+        "Deferring dead-letter or terminal-failure notification to a separate, later project after the field already ships.",
+        "Keeping retries unlimited by default as a way to avoid ever building an exhaustion signal."
+      ],
+      "falsifier": "Check whether any production incident in the two years since launch involved a customer discovering missing webhook data only by noticing it themselves, with no system-generated alert; if no such incident exists despite the field shipping without dead-lettering, the mandatory notification requirement was an unneeded cost.",
+      "missing_actor": "The webhook receiver (the customer's integration owner), who is never given a way to subscribe to a terminal-failure signal or query delivery status themselves; they could register their own alert on exhaustion instead of the platform guessing what threshold matters to them."
+    }
+  ],
+  "clusters": [
+    {
+      "id": "bound_to_one_day_window",
+      "action": "Ship a finite max_retries (or equivalent time-bound) default sized to roughly a day's worth of retrying, so a stuck delivery stops and is marked failed within about 24 hours, without building any new exhaustion-notification mechanism.",
+      "members": [
+        "SUPPLICANT",
+        "PARTICULARIST"
+      ],
+      "survivors": [],
+      "singleton": false,
+      "strongest_objection": null,
+      "representative": null,
+      "mean_pass_a": null
+    },
+    {
+      "id": "bound_with_mandatory_exhaustion_signal",
+      "action": "Bound retries to a finite number and guarantee that exhausting them always produces a dead-letter record or notification, treating the observability pairing as non-negotiable alongside or before the numeric cap.",
+      "members": [
+        "FRAME_BREAKER",
+        "CARETAKER"
+      ],
+      "survivors": [
+        "FRAME_BREAKER"
+      ],
+      "singleton": false,
+      "strongest_objection": "The strongest objection is that deferring any bound on retries until a full dead-letter record, per-delivery status, and subscriber-alerting path is designed and built turns a problem that is already live and already costly -- endpoints being hammered indefinitely -- into a problem that waits on an open-ended infrastructure project with no committed scope or deadline; nothing stops a conservative, clearly-labeled capped default from shipping immediately alongside a simple internal log line, while the richer subscriber-facing exhaustion signal is built in parallel, so treating the two as strictly sequential risks leaving the actual indefinite-retry harm unaddressed for exactly as long as it takes to agree on and build the 'real' fix, which is itself a schedule with no natural end.",
+      "representative": "FRAME_BREAKER",
+      "mean_pass_a": 0.9761904761904762
+    },
+    {
+      "id": "preserve_unlimited_default",
+      "action": "Add the max_retries field but set its default to unlimited or null so existing and new integrations keep retrying forever until someone explicitly opts into a finite bound.",
+      "members": [
+        "NEGATIVE_SPACE"
+      ],
+      "survivors": [
+        "NEGATIVE_SPACE"
+      ],
+      "singleton": true,
+      "strongest_objection": "The strongest objection is that defaulting the brand-new field to unlimited guarantees zero behavioral change for the overwhelming majority of configs, since a newly introduced field's default is exactly the value almost everyone will carry forward without ever touching it, so the operational problem that motivated adding this field in the first place -- endpoints being retried against indefinitely -- continues by default for essentially every integration, and preserving the legibility of 'someone decided versus nobody decided' is a weak trade against leaving the actual production pain completely unresolved out of the box.",
+      "representative": "NEGATIVE_SPACE",
+      "mean_pass_a": 0.9523809523809523
+    }
+  ],
+  "run_level": {
+    "monoculture": false,
+    "scatter": false,
+    "t2_no_branch_attacked_assumption": {
+      "fired": false,
+      "evidence": "PARTICULARIST, NEGATIVE_SPACE, and FRAME_BREAKER each explicitly contest a load-bearing assumption of the question (the right unit, whether absence is ambiguous, and whether a count field is the substantive fix), so the run as a whole did not leave the frame unexamined."
+    },
+    "t6_all_missing_actor_null": {
+      "fired": false,
+      "evidence": "Every branch supplies a non-null missing_actor with a concrete action, ranging from the webhook receiver's on-call team to the retry worker/operator set named in NEGATIVE_SPACE's reasoning."
+    },
+    "notes": [
+      "singleton NEGATIVE_SPACE escalated to deepen, flagged unverified"
+    ]
+  },
+  "proceed": true,
+  "rubric_version": 1
+}

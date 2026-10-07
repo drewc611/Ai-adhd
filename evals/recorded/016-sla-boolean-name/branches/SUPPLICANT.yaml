@@ -1,0 +1,54 @@
+problem_hash: sha256:b8153a917720624ba348dcfee51b0d3f23d943c750d10a70f599b93d7793783c
+frame: SUPPLICANT
+position: >-
+  Default the field to false on every ticket and show its true state on the
+  customer's own ticket page as plain language ("this ticket is being
+  tracked for an overdue alert" / "it is not"), instead of building it as a
+  backend-only flag no one outside the queue can see.
+reasoning: |
+  1. The user filed a ticket expecting their problem fixed inside some time
+  they consider reasonable. The field in question decides whether their
+  specific ticket will ever trigger an overdue alert at all. That is the
+  user's whole stake in this naming question, even though no one asked them.
+
+  2. At the moment it matters, all they can see is their ticket's status
+  line and how long it has sat there. All they can do is reply, escalate
+  through whatever channel exists, or wait. They cannot see a boolean field.
+  They cannot see a queue. They have no way to know whether their ticket is
+  even eligible to be flagged overdue, or whether someone quietly excluded
+  it from that check.
+
+  3. They give up when the silence outlasts their patience with no visible
+  sign anyone is watching the clock on their case. When they give up they
+  stop replying, open a duplicate ticket, escalate outside the system
+  (social media, a different department, a chargeback), or leave. Every one
+  of those responses adds noise to the exact queue this field is meant to
+  keep clean, and the automation this field feeds becomes less trustworthy
+  because the tickets it should have caught already walked out the door.
+
+  4. If they knew it was possible, they would ask for one simple guarantee:
+  that nothing about their ticket's overdue status is being decided
+  invisibly. They don't care what the field is called internally. They care
+  whether they can look at their own ticket and know if it's being watched
+  against a deadline, or if someone turned that watching off without
+  telling them.
+forecloses:
+  - >-
+    naming and implementing the field as a purely internal, backend-only
+    flag with no customer-facing surface at all
+  - >-
+    letting any ticket default to excluded from the overdue-alert queue
+    without a visible, explained reason shown to the person who filed it
+falsifier: >-
+  Pull ticket histories and check whether customers who waited past a
+  deadline ever asked "will this get escalated" or "is anyone tracking
+  this," versus only ever asking "any update yet." If no one asks the first
+  kind of question, the demand for visible exemption status is invented,
+  not real, and the position is wrong.
+missing_actor: >-
+  the support agent or triage lead who will actually set this field per
+  ticket when managing their own queue; they can flip it to silence an alert
+  on a ticket they've already handled another way, and the brief never
+  names them even though they are the one who touches the field, not the
+  customer and not whoever names it.
+confidence: medium

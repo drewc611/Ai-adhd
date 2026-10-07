@@ -157,11 +157,42 @@
       "014-seed1",
       "014-seed14"
     ],
-    "015/absence_today": [],
-    "015/default_changes_behavior": [],
-    "015/naming_bikeshed_only": [],
-    "015/no_verdict": [],
-    "015/trap_named": [],
-    "015/who_relies": []
+    "015/absence_today": [
+      "015-retry-field-default"
+    ],
+    "015/default_changes_behavior": [
+      "015-retry-field-default"
+    ],
+    "015/naming_bikeshed_only": [
+      "015-retry-field-default"
+    ],
+    "015/no_verdict": [
+      "015-retry-field-default"
+    ],
+    "015/trap_named": [
+      "015-retry-field-default"
+    ],
+    "015/who_relies": [
+      "015-retry-field-default"
+    ],
+    "016/convention_list": [
+      "016-sla-boolean-name"
+    ],
+    "016/false_means": [
+      "016-sla-boolean-name"
+    ],
+    "016/never_names_it": [],
+    "016/no_verdict": [
+      "016-sla-boolean-name"
+    ],
+    "016/not_the_boolean": [
+      "016-sla-boolean-name"
+    ],
+    "016/trap_named": [
+      "016-sla-boolean-name"
+    ],
+    "016/who_reads": [
+      "016-sla-boolean-name"
+    ]
   }
 }
