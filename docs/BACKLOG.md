@@ -227,6 +227,20 @@ yet enough to know whether they work.
     possibility being flagged, it is what the evidence shows. A third real dispatch under the
     current detector would very likely fail the same way for the same reason, which is worth
     saying before anyone spends on it again.
+
+    **The third attempt, 2026-10-07: a new fixture rather than a widened regex.** `004-flag-name.yaml`'s
+    `false_means` pattern is left untouched on purpose — both near-misses have now been read in
+    detail, so any change to that specific regex today would be exactly the widening-after-seeing-
+    failure E3 forbids, whatever words it used. `evals/fixtures/016-sla-boolean-name.yaml` is a
+    different fixture instead: a different domain (an SLA-alert boolean on a support ticket, not a
+    feature flag, so neither branch can reuse 004's own vocabulary), asking the same underlying
+    question (what must the field's false value cover, across several genuinely different ticket
+    states), with its own `false_means` assertion written from the description before this fixture
+    has ever been dispatched — there is no run of it yet to curve-fit to. Seed 1 is verified against
+    the real compiler to draw both `FRAME_BREAKER` and `NEGATIVE_SPACE` into the five-branch
+    selection, the two frames that produced the near-misses on 004. `adhd lint` is clean. The run
+    itself is real spend and needs its own D5 confirmation, same as fixture 015's own precedent —
+    not run as part of writing the fixture.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**
