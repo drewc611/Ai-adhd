@@ -228,19 +228,33 @@ yet enough to know whether they work.
     current detector would very likely fail the same way for the same reason, which is worth
     saying before anyone spends on it again.
 
-    **The third attempt, 2026-10-07: a new fixture rather than a widened regex.** `004-flag-name.yaml`'s
-    `false_means` pattern is left untouched on purpose — both near-misses have now been read in
-    detail, so any change to that specific regex today would be exactly the widening-after-seeing-
-    failure E3 forbids, whatever words it used. `evals/fixtures/016-sla-boolean-name.yaml` is a
-    different fixture instead: a different domain (an SLA-alert boolean on a support ticket, not a
-    feature flag, so neither branch can reuse 004's own vocabulary), asking the same underlying
-    question (what must the field's false value cover, across several genuinely different ticket
-    states), with its own `false_means` assertion written from the description before this fixture
-    has ever been dispatched — there is no run of it yet to curve-fit to. Seed 1 is verified against
-    the real compiler to draw both `FRAME_BREAKER` and `NEGATIVE_SPACE` into the five-branch
-    selection, the two frames that produced the near-misses on 004. `adhd lint` is clean. The run
-    itself is real spend and needs its own D5 confirmation, same as fixture 015's own precedent —
-    not run as part of writing the fixture.
+    **The third attempt, run for real 2026-10-07: `false_means` reverses, the run still fails for
+    an unrelated reason.** `004-flag-name.yaml`'s `false_means` pattern was left untouched on
+    purpose — both near-misses had been read in detail, so any change to that specific regex would
+    have been exactly the widening-after-seeing-failure E3 forbids. `evals/fixtures/016-sla-boolean-
+    name.yaml` asked the same underlying question in a different domain instead (an SLA-alert
+    boolean on a support ticket, not a feature flag), with its own `false_means` assertion written
+    from the description before this fixture had ever been dispatched, and seed 1 drew both
+    `FRAME_BREAKER` and `NEGATIVE_SPACE` into the five-branch selection.
+
+    Recorded as `evals/recorded/016-sla-boolean-name/`. `adhd eval --audit` shows the reversal:
+    `004/false_means` matched zero of three real runs and zero of sixteen branches across two prior
+    attempts; `016/false_means` matched this run and three of its five branches (`CARETAKER`,
+    `NEGATIVE_SPACE`, `SUPPLICANT`), each surfacing in its own words that the field's false value has
+    to cover several genuinely different ticket states. `who_reads` matched all five branches;
+    `not_the_boolean` matched `FRAME_BREAKER`, the one branch that named and rejected the
+    load-bearing boolean-field assumption outright, clearing run-level T2 for the whole run.
+
+    `adhd eval` still reports `FAIL` — every one of the five branches drew at least one fired trap,
+    so the run produced zero survivors and no recommendation, and `must_not/never_names_it` has
+    nothing to check a "no recommendation" sentinel against. `FRAME_BREAKER` itself was pruned on
+    T7: it committed straight to an audited suppression table without weighing it against shipping
+    the cheap boolean first, the staged move three of its siblings used instead. See D57 for the
+    full account, including a fixture-authoring mistake (a `prompt` field written without the
+    trailing newline the real dispatch actually used, caught immediately by a `problem_hash`
+    mismatch and fixed without re-dispatching, since the two differed only in that one byte). This
+    item is not closed: `false_means` is now a demonstrated, reachable pattern, but no run of this
+    fixture has yet produced a survivor that actually names the field.
 18. ~~**Frame retirement policy.** Written rule for when a frame leaves the library, with the
     evidence bar stated. Currently there is no way for the library to shrink.~~
    **Built as `docs/RETIREMENT.md`, with the exemption that matters most: a frame pruned every time and still producing the question nobody else asked is doing its job.**

@@ -1,11 +1,11 @@
-# What twenty runs show
+# What twenty-one runs show
 
 A short account of what this repository has actually established, written so the negative results
 are as easy to find as the rest. Every number below comes from a command in this checkout and is
 pinned by a test; the commands are named so you can rerun them.
 
-Backlog item 49 asked for this at five runs. There are twenty now, sixteen with a `score.json`,
-and the extra fifteen did not change the shape of the answer — with six exceptions, all named where
+Backlog item 49 asked for this at five runs. There are twenty-one now, seventeen with a `score.json`,
+and the extra sixteen did not change the shape of the answer — with seven exceptions, all named where
 they belong. Two are from `001-seed3`: the first contested decision the rubric actually separates, and
 the first run to come in under the token estimate it was quoted. The third is its replicate at the
 same seed with byte-identical briefs, and it is the most uncomfortable number here: the critic pruned
@@ -19,7 +19,11 @@ unstable sweep. The sixth is `015-retry-field-default`, backlog 19's real dispat
 `NEGATIVE_SPACE`: a fixture built from the ground up for the frame to obviously win, on which it
 survived clean with the run's second-highest score and still lost the shipped recommendation to a
 corroborated cluster, because the renderer's tie-break runs on cluster membership with no
-score-margin exception. See D56.
+score-margin exception. See D56. The seventh is `016-sla-boolean-name`, backlog 17's third attempt
+at the `false_means` question: a fresh fixture in a fresh domain reversed two prior real near-misses
+outright (three of five branches surfaced it, against zero of sixteen across the two prior
+dispatches combined), and the run still failed its own fixture for an unrelated, structural reason —
+every branch drew a fired trap, so nothing survived to recommend a name at all. See D57.
 
 ## The claim
 
@@ -35,8 +39,8 @@ in-context divergence technique is built on exactly that (D2).
 
 ## Method
 
-Twenty recorded runs over six fixtures, each fixture carrying `must_surface` assertions written
-before the run and, on four of the six, a linear chain-of-thought control. Three of the twenty
+Twenty-one recorded runs over seven fixtures, each fixture carrying `must_surface` assertions written
+before the run and, on four of the seven, a linear chain-of-thought control. Three of the twenty-one
 are same-fixture, same-seed, same-brief reruns of `001-seed3`: the deliberate replicate that measured
 the noise floor, and the E12 pair that put the critic's own instructions genuinely in force for the
 first time. Two are fixture 014 at seven branches, the widest path the router can produce.

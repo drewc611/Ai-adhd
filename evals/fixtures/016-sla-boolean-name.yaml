@@ -15,7 +15,8 @@ id: "016"
 name: sla-boolean-name
 problem_class: naming
 seed: 1
-prompt: "We're adding a boolean field to each support ticket that will control whether it shows up in the overdue-SLA alert queue. What should we call the field?"
+prompt: |
+  We're adding a boolean field to each support ticket that will control whether it shows up in the overdue-SLA alert queue. What should we call the field?
 
 why: |
   The linear answer picks something like `is_overdue` or `needs_alert`, notes it should be

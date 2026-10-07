@@ -1,0 +1,50 @@
+problem_hash: sha256:b8153a917720624ba348dcfee51b0d3f23d943c750d10a70f599b93d7793783c
+frame: NEGATIVE_SPACE
+position: >-
+  Name the field `sla_alert_suppressed` (default false) so it reads as an explicit human
+  override of alert-queue visibility, not as a second definition of SLA-breach status.
+reasoning: |
+  1. Today there is no per-ticket override field. That absence asserts: inclusion in the
+  overdue-SLA alert queue is purely a function of objective SLA math (due timestamp vs now,
+  status not closed) — no ticket is editorially exempt. Three readers rely on that: the
+  alert-queue job itself, which computes membership only from timestamps/status; on-call
+  support agents, who treat "appears in the queue" as an unmediated signal of real breach with
+  no hidden human layer; and SLA compliance/reporting consumers, who treat queue membership as
+  a trustworthy proxy for the true count of breaches, because nothing today can suppress a
+  ticket that is actually overdue.
+  2. The moment this boolean exists and gets set true on some ticket, those readers' behavior
+  changes without them necessarily knowing it. Agents will see fewer tickets than actually
+  breached and may assume "not in queue" still means "not breached" — it no longer does.
+  Compliance reporting that currently trusts queue membership as the breach list must now
+  cross-reference the real due-date field against this flag to recover the true breach count,
+  because the queue is no longer a complete list of breaches, only of alerted breaches.
+  3. Yes, if implemented as a plain boolean defaulting to false, "nobody ever considered
+  suppressing this ticket" and "someone reviewed it and deliberately chose to keep it visible"
+  both read as false. The party that loses this distinction is whoever later audits overrides
+  or investigates a missed alert ("why wasn't this breach surfaced") — they cannot tell a
+  default from an affirmed decision without an accompanying setter/timestamp, which the naming
+  should imply is needed rather than paper over. Naming the field as if it restates breach
+  status (e.g. `is_overdue`, `overdue_override`) would make this worse: it would hand a second,
+  mutable, human-editable channel the same name-space as the objective SLA computation, so a
+  consumer could mistake "suppressed" for "not breached," destroying the distinction between
+  actual SLA state and alert visibility rather than just renaming it.
+forecloses:
+  - >-
+    Naming the field as a restatement of breach status itself, e.g. `is_overdue` or
+    `overdue_override`, which would let a suppressed-but-still-breached ticket be mistaken for
+    a non-breached one by any consumer that reads the field name literally.
+  - >-
+    Shipping the field as a bare boolean with no logged setter/timestamp, since the name
+    `..._suppressed` commits the team to treating every true value as a decision that needs an
+    owner and a reason, not a cosmetic toggle.
+falsifier: >-
+  Check whether any downstream system or human process currently treats "present in the
+  overdue-SLA queue" as equivalent to "is SLA-breached" (compliance reports, escalation
+  triggers, audits). If none do — if every consumer already reads the raw due-date field
+  independently and the queue is purely a disposable notification convenience — then the
+  suppression distinction carries no real cost and a simpler visibility-only name is fine.
+missing_actor: >-
+  The owner of SLA compliance/metrics reporting, who was not named in the brief; they can
+  specify, before this field ships, whether their reports key off queue membership or off the
+  raw due-date field, so the new flag doesn't silently undercount breaches in their numbers.
+confidence: medium

@@ -12,7 +12,7 @@
   <a href="docs/DECISIONS.md#d2-what-the-library-does-given-it-cannot-call-a-model"><img src="https://img.shields.io/badge/inference%20client-none-8957e5" alt="no inference client"></a>
   <a href="test/"><img src="https://img.shields.io/badge/tests-536-2ea44f" alt="536 TypeScript tests"></a>
   <a href="analysis/tests/"><img src="https://img.shields.io/badge/python%20tests-255-2ea44f" alt="255 Python tests"></a>
-  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D56%20resolved-0969da" alt="D1 through D56 resolved"></a>
+  <a href="docs/DECISIONS.md"><img src="https://img.shields.io/badge/decisions-D1--D57%20resolved-0969da" alt="D1 through D57 resolved"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D20-5fa04e" alt="Node >= 20"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT licence"></a>
 </p>
@@ -189,7 +189,7 @@ Nothing under `src/` calls a model. Nothing under `analysis/` does either, and n
 ## Status
 
 Library, CLI, MCP server and plugin are implemented and tested against the contracts in
-`CLAUDE.md`. D1 through D56 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+`CLAUDE.md`. D1 through D57 are resolved in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 Nineteen runs are recorded, fifteen of them real dispatches across five fixtures (001 through
 004, and 014's wide path at n=7); four of those five fixtures also carry a linear chain-of-thought

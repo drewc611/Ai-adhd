@@ -1,0 +1,55 @@
+problem_hash: sha256:b8153a917720624ba348dcfee51b0d3f23d943c750d10a70f599b93d7793783c
+frame: FRAME_BREAKER
+position: >-
+  Drop the plan for a bare boolean column and instead add an audited
+  suppression record (ticket_id, suppressed_by, reason, created_at,
+  expires_at) that the alert-queue query joins against, so exclusion from
+  the overdue-SLA queue is a logged event, not a silent flag.
+reasoning: |
+  1. The load-bearing assumption is that queue membership is a static
+  property of a ticket that a single boolean can correctly hold — that
+  "should this appear in the overdue-SLA alert queue" is the kind of thing
+  you set once and store, rather than a time-varying judgment about who
+  decided to suppress it, when, and why. The question skips straight to
+  "what do we call the field" as if the field's existence and shape were
+  already settled.
+  2. A boolean like `excluded_from_sla_alerts` asserts that the un-flagged,
+  default state needs no explanation and that the flagged state is a simple
+  fact. But a flag that suppresses alerting is a write-once, read-never
+  field in practice: someone sets it during triage and nobody looks at it
+  again until a ticket breaches SLA silently and a postmortem asks "why
+  didn't we get paged." Nobody reads a boolean column during an incident;
+  they read logs, audit trails, and dashboards. The field would exist
+  precisely where no one looks.
+  3. The assumption benefits whoever wants to ship the alerting feature
+  fast with a one-column migration, and separately benefits whoever wants a
+  quiet, untracked way to mute specific tickets — support leads silencing
+  noisy false positives, or an agent hiding a ticket they don't want
+  escalated — because an unexamined boolean carries no reason, no owner,
+  and no expiry, so it can't be challenged.
+  4. If the assumption is false, this isn't a naming problem at all. It's a
+  governance problem: how is suppression from an SLA alert queue decided,
+  who is accountable for it, and how is it reviewed and reversed. The real
+  object isn't a column name, it's an auditable decision record.
+  5. The first concrete action is to replace the schema change with a small
+  suppression table (or event log) keyed by ticket_id, carrying who
+  suppressed it, why, when, and optionally until when, and to rewrite the
+  overdue-SLA queue query to exclude tickets with an active, unexpired
+  suppression record rather than reading a column off the ticket itself.
+forecloses:
+  - >-
+    Shipping a single boolean field on the ticket table as the mechanism
+    for queue exclusion, however it is named.
+  - >-
+    Letting anyone toggle exclusion without recording a reason, an owner,
+    or an expiry for that decision.
+falsifier: >-
+  If a review of past suppression-like flags in this system shows every
+  instance was independently traceable after the fact to a documented
+  reason and owner without any extra audit table, that would show the
+  plain boolean was never the risk and this position is wrong.
+missing_actor: >-
+  The SLA policy owner or support team lead, who is never named in the
+  request but who should be the one who approves and periodically reviews
+  every active suppression record, not the engineer naming the column.
+confidence: medium

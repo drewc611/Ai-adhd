@@ -1,0 +1,13 @@
+{
+  "tokens": 527800,
+  "wall": "812s since compile (reported by the synth phase; driven by hand via `adhd run --phase`, so there is no kernel-tracked calendar time and the token figure is the compiler's own estimate, not summed real usage)",
+  "reported_tasks": 6,
+  "of_tasks": 6,
+  "by_phase": {
+    "diverge": 290000,
+    "critique_a": 60900,
+    "critique_b": 60900,
+    "deepen": 0
+  },
+  "note": "Estimate from plan.json, as printed by synthesis.md's own cost table. Real subagent usage was available for one of the six tasks during the run (pass A+B critic session: 58,812 tokens combined) but not retained for the five branch dispatches across their own notifications, so this file reports the compiler's estimate throughout rather than mixing partial real figures with estimated ones. No deepen phase ran: every branch was pruned."
+}
