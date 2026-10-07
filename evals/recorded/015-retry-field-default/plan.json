@@ -1,0 +1,64 @@
+{
+  "run_id": "20261007035716-234e19",
+  "created_at": "2026-10-07T03:57:16.532Z",
+  "problem_hash": "sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401",
+  "problem_class": "naming",
+  "seed": 15,
+  "n": 5,
+  "allow_wide": false,
+  "rubric_version": 1,
+  "overlay": null,
+  "estimate": {
+    "tokens_branches": 290000,
+    "tokens_critic": 121800,
+    "tokens_deepen": 116000,
+    "tokens_total": 527800
+  },
+  "branches": [
+    {
+      "frame": "PARTICULARIST",
+      "axis": "particulars",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:1bc75aeeae264f16",
+      "brief_path": "briefs/PARTICULARIST.md",
+      "artifact_path": "branches/PARTICULARIST.yaml"
+    },
+    {
+      "frame": "NEGATIVE_SPACE",
+      "axis": "absence",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:a2f63130ccdaed76",
+      "brief_path": "briefs/NEGATIVE_SPACE.md",
+      "artifact_path": "branches/NEGATIVE_SPACE.yaml"
+    },
+    {
+      "frame": "FRAME_BREAKER",
+      "axis": "frame_validity",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:0a3e9c06c72325e6",
+      "brief_path": "briefs/FRAME_BREAKER.md",
+      "artifact_path": "branches/FRAME_BREAKER.yaml"
+    },
+    {
+      "frame": "SUPPLICANT",
+      "axis": "actors",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:5fec40245e0137de",
+      "brief_path": "briefs/SUPPLICANT.md",
+      "artifact_path": "branches/SUPPLICANT.yaml"
+    },
+    {
+      "frame": "CARETAKER",
+      "axis": "operation",
+      "agent": "adhd-branch",
+      "tools": [],
+      "frame_hash": "sha256:8d483803f30154e6",
+      "brief_path": "briefs/CARETAKER.md",
+      "artifact_path": "branches/CARETAKER.yaml"
+    }
+  ]
+}

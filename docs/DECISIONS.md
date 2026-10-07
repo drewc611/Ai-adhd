@@ -4267,3 +4267,51 @@ This was not pre-registered in `docs/EXPERIMENTS.md` before running, unlike E12 
 question was posed and answered in the same conversation that found it worth asking, which is a
 real deviation from this repository's own stated practice of fixing readings before a run; it is
 recorded here rather than left silent about that.
+
+## D56. `015-retry-field-default`'s real dispatch: a clean, tied singleton still loses to a cluster
+
+**Decision:** Dispatch `evals/fixtures/015-retry-field-default.yaml` for real, the half of backlog
+19 the fixture's own commit deliberately left undone. Resolved 2026-10-07, real spend (~527,800
+tokens estimated; five branches, one critic session covering both passes, two deepen subagents).
+Recorded as `evals/recorded/015-retry-field-default/`.
+
+**The fixture passes.** All four `must_surface` assertions matched, neither `must_not` assertion
+fired, and `pruned_min: 1` held (three of five pruned). `adhd eval` reports `PASS`.
+
+**NEGATIVE_SPACE did not win.** It survived pass B as a clean, zero-trap singleton — `preserve_
+unlimited_default`, alone in its own cluster — with pass A 0.952, second only to FRAME_BREAKER's
+0.976 and clear of PARTICULARIST (0.833), CARETAKER (0.690), and SUPPLICANT (0.524). Nothing about
+its artifact was weaker than the frame the fixture names in its own `why`: it named all four
+readers of today's absence, forced both the field name and the default closed, and distinguished
+the reversible unlimited default from the irreversible finite one, naming every concrete thing a
+NEGATIVE_SPACE position is supposed to name. None of that made it the shipped recommendation.
+
+**Why it still lost.** `src/synth.ts`'s renderer picks a cluster's representative over a singleton
+regardless of score closeness: `bound_with_mandatory_exhaustion_signal` (FRAME_BREAKER, corroborated
+by pruned CARETAKER) shipped as the bolded recommendation, and NEGATIVE_SPACE was relegated to
+"Live singletons (unverified)" alongside CARETAKER's lower-scoring, trap-cleared member. A margin of
+0.024 pass-A points between the winning cluster's representative and the losing singleton was not
+close enough to change which one rendered as the recommendation, because score was never the
+variable the renderer branches on — cluster membership is. This is the same convention that gave
+`004-negative-space-probe` no recommendation at all under scatter; here, with no scatter and two
+clean survivors, it is visible as a tie-break rule instead: *corroborated beats singleton, full
+stop, independent of score.*
+
+**What this does and does not settle.** It settles backlog 19's open empirical question for
+NEGATIVE_SPACE, honestly, in the negative: a fixture built from the ground up for this frame to
+obviously win did not make it win the rendered recommendation, on this one real dispatch. It does
+not settle whether the renderer's corroborated-over-singleton rule is wrong — a position with no
+one else independently landing on it is weaker evidence than one two frames reached separately, and
+rewarding corroboration over raw score is a defensible design choice, not an obvious bug. What it
+does surface concretely: the rule has no score-margin exception, so a singleton that is one of the
+two cleanest survivors in the run, ahead of every pruned branch and within 0.024 of the eventual
+winner, ships exactly as deep in the pruned-adjacent section as a singleton that barely survived at
+all. Whether that is the right trade for this repository to make is unresolved and is not decided
+here; a fixture or a renderer change that tests it directly is future work, not claimed as done by
+this entry.
+
+**What changed, concretely.** `evals/recorded/015-retry-field-default/` is new — `problem.txt`,
+`plan.json`, `decision.json`, `score.json`, `synthesis.md`, and the `branches/`, `briefs/`,
+`critic/`, and `deepen/` directories, copied verbatim from the real run, plus `cost.json` and
+`expected.json` written for this entry. `docs/BACKLOG.md` item 19 is updated with this run's result.
+No existing recorded run or fixture assertion was touched.

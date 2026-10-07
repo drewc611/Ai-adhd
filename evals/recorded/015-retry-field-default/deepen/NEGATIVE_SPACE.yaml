@@ -1,0 +1,38 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+frame: NEGATIVE_SPACE
+verdict: defend
+response: |
+  The objection is right that an unlimited default leaves the unbounded-queue-growth pain
+  unresolved for every config that never touches the field, since defaults are exactly what
+  inertia carries forward. But it only weighs one side of the ledger: the cost of leaving the
+  stated pain unresolved for the silent majority. It does not engage the asymmetry the position
+  already raised — that a finite default does not merely "fix" that pain, it silently converts
+  "never configured" into "bounded," and for webhook delivery that conversion is not neutral.
+  It introduces a new, irreversible failure mode — events permanently dropped after N attempts —
+  for every existing integration that upgrades without ever touching the config, with no alert,
+  no opt-in, and no way for a future engineer to tell whether the cutoff was chosen or inherited.
+  The pain left unresolved under an unlimited default (queue growth, delayed operator visibility)
+  is recoverable and observable in infra metrics; the pain introduced by a finite default (a
+  downstream consumer silently never receiving an event it was relying on) is neither recoverable
+  nor visible until someone notices a missing delivery, possibly much later. The objection treats
+  "leave it unresolved" and "resolve it silently for everyone" as the only two options and scores
+  the trade purely on whether the operational metric improves out of the box; it never asks
+  whether fixing it via an unannounced default flip is an acceptable way to fix it, given the
+  price is data loss rather than resource waste. If the pain is urgent enough to need remediation
+  without waiting on operators to opt in, the right lever is a visible one — a startup warning or
+  metric when backoff is already capped and no max_retries is set, a changelog push driving
+  adoption — not a silent default that improves the metric by trading it for a quieter, worse
+  failure. The objection sharpens the case that the field needs to drive real adoption; it does
+  not survive as a reason to make the unconfigured default finite.
+revised_position: >-
+  Add `max_retries` defaulting to unlimited, but pair the release with a non-default signal (a
+  warning log or metric emitted whenever backoff is capped with no max_retries set) so the
+  operational pain motivating the field becomes visible and actionable without silently handing
+  every unconfigured deployment a new, undetectable data-loss behavior.
+revised_falsifier: >-
+  If the maintainers' actual goal in adding this field is to immediately curb an active incident
+  of unbounded retry queues or endpoint hammering across all existing deployments — rather than to
+  offer an opt-in capability for future configs — then an unlimited default fails that goal
+  outright, and the field should ship with a finite default even at the cost of the legibility and
+  no-silent-change properties this position relies on.
+confidence: medium

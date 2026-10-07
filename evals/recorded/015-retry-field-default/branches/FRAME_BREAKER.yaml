@@ -1,0 +1,52 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+frame: FRAME_BREAKER
+position: >-
+  Do not ship a bare max_retries integer; first build the dead-letter/exhaustion
+  path (where a permanently-failing delivery's payload goes and who gets told),
+  then bound retries against that path rather than picking a count in isolation.
+reasoning: |
+  1. The load-bearing assumption is that the fix to "we retry forever" is a count
+  field — that the right unit to bound is number of attempts, and that choosing
+  its name and default is the substantive design work. This skips past the actual
+  open question: what happens to the webhook payload and to the subscriber's
+  awareness once retries stop. Exponential backoff capped at five minutes means
+  by attempt 20 you're already days in; the count is a proxy for "how long do we
+  keep hammering a dead endpoint," and proxies are not the thing.
+  2. Naming a field max_retries asserts that the system now self-limits and the
+  problem is solved. What it does not name is the exhaustion behavior: does the
+  payload get dropped silently, queued, or surfaced? A retry-count default lives
+  in a config file nobody reads during an incident; it is read by the retry loop,
+  not by a human. The thing that actually needs to be "read" — a webhook endpoint
+  that has been dead for six hours — needs to surface as a dead-letter entry, a
+  dashboard, or an alert to the subscriber, not as a number in a YAML default.
+  3. The team shipping this benefits from leaving it unexamined: a single int
+  field is a small, mergeable PR that looks like "infinite retry problem solved,"
+  while building dead-letter storage, status visibility, or subscriber alerting
+  is real work that can be deferred indefinitely. It also quietly shifts blame —
+  once there's a documented default, a dropped delivery after N attempts reads as
+  "config did its job" rather than as an incident anyone has to own.
+  4. If the assumption is false, this was never a naming/defaulting question. It
+  is a failure-handling and observability question: what is the terminal state
+  of a delivery that will never succeed, and who is responsible for noticing.
+  5. First concrete action: before writing max_retries at all, define and build
+  the exhaustion path — a dead-letter record per delivery ID plus a status the
+  subscriber can query or be alerted on — and only then attach a retry bound
+  (preferably time-based, e.g., stop retrying an endpoint dead for 24h) to that
+  already-working exhaustion path.
+forecloses:
+  - >-
+    Shipping a standalone max_retries field (any name, any default) with no
+    corresponding dead-letter record or subscriber-visible failure signal
+  - >-
+    Treating "what number should the default be" as the decision that matters
+    most in this change
+falsifier: >-
+  Check whether failed deliveries already produce a subscriber-visible alert or
+  a durable dead-letter record today, independent of this field; if they do, the
+  exhaustion-path gap this position targets doesn't exist and a bare max_retries
+  default is in fact sufficient.
+missing_actor: >-
+  The webhook subscriber whose endpoint is down — give them a delivery-status
+  API or a failure notification so they can detect and fix their own dead
+  endpoint instead of silently losing data once retries are exhausted.
+confidence: medium

@@ -236,8 +236,9 @@ yet enough to know whether they work.
     appeared to name no actor.~~
    **Done. `SUPPLICANT` and `SUCCESSOR`, picked mechanically: every candidate was matched against all 39 recorded artifacts, all synthesis files and all fixtures, and only names appearing nowhere in the corpus were eligible. `config/frames.yaml` carries `former_ids` so the five runs that wrote the old ids still resolve; the runs themselves are not rewritten. D6 has the reasoning.**
 19. **Per-frame fixtures.** One fixture per frame that the frame should obviously win, as a
-    unit test for the frame's own stance. **Still open. Scope moved from twelve to thirteen
-    fixtures when D51 added `NEGATIVE_SPACE`; one frame still cannot have one.**
+    unit test for the frame's own stance. **Still open for `NEGATIVE_SPACE`: run, honestly
+    negative. Scope moved from twelve to thirteen fixtures when D51 added it; one frame still
+    cannot have a fixture it has actually won.**
 
     **D52 is not this item, and is not claimed as it.** `004-negative-space-probe` gave
     `NEGATIVE_SPACE` its first real dispatch, but through fixture 004 — a naming fixture built for
@@ -246,16 +247,25 @@ yet enough to know whether they work.
     item still wants a fixture built around a problem where the absence of something is
     load-bearing, run, and won.
 
-    **The fixture half is built, 2026-10-06, not this item's other half.** `evals/fixtures/015-retry-field-default.yaml`:
-    a webhook config field (`max_retries`) that does not exist yet, where the system already
-    retries indefinitely in its absence and a finite default would silently change that for every
-    existing integration. Seed 15 is verified against the real compiler, not assumed, to draw
-    `NEGATIVE_SPACE` into the naming class's five-branch default. `adhd lint` is clean — the first
-    draft matched its own prompt on `nothing (limits|configures|caps)` and was tightened to
-    `nothing (currently|today) (limits|configures|caps)`, the same quoting hazard items 012 and 013
-    hit. `adhd eval` reports it as awaiting a run, same as fixtures 011 and 014's own precedent. The
-    run itself — the half that would actually show whether NEGATIVE_SPACE wins it — is real spend
-    and needs its own D5 confirmation; not run as part of writing the fixture.
+    **The fixture was built 2026-10-06; it was run for real 2026-10-07, and the frame did not
+    win.** `evals/fixtures/015-retry-field-default.yaml`: a webhook config field (`max_retries`)
+    that does not exist yet, where the system already retries indefinitely in its absence and a
+    finite default would silently change that for every existing integration. Seed 15 is verified
+    against the real compiler, not assumed, to draw `NEGATIVE_SPACE` into the naming class's
+    five-branch default. `adhd lint` is clean — the first draft matched its own prompt on
+    `nothing (limits|configures|caps)` and was tightened to `nothing (currently|today)
+    (limits|configures|caps)`, the same quoting hazard items 012 and 013 hit.
+
+    **The run.** Recorded as `evals/recorded/015-retry-field-default/`. `adhd eval` reports
+    `PASS` — all four `must_surface` assertions matched and neither `must_not` assertion fired —
+    but that is a weaker claim than "the frame won." `NEGATIVE_SPACE` survived pass B as a clean,
+    zero-trap singleton with the second-highest pass-A score in the run (0.952, behind only
+    FRAME_BREAKER's 0.976), ahead of every pruned branch. It still did not ship as the
+    recommendation: `src/synth.ts` picks a cluster's representative over a singleton regardless of
+    score closeness, and the margin here was 0.024. See D56 for the full account. This item stays
+    open for `NEGATIVE_SPACE` specifically — not because the frame reasoned badly, but because the
+    renderer's corroborated-over-singleton tie-break has no score-margin exception, and a fixture
+    built from the ground up for this one frame cannot by itself overturn that rule.
 
     **Built first, because it had to be: `adhd frames --reach`.** `--stats` and `--axes` count what
     recorded runs did, and a frame missing from both is either unlucky or unreachable. They cannot

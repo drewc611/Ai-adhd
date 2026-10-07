@@ -157,11 +157,23 @@
       "014-seed1",
       "014-seed14"
     ],
-    "015/absence_today": [],
-    "015/default_changes_behavior": [],
-    "015/naming_bikeshed_only": [],
-    "015/no_verdict": [],
-    "015/trap_named": [],
-    "015/who_relies": []
+    "015/absence_today": [
+      "015-retry-field-default"
+    ],
+    "015/default_changes_behavior": [
+      "015-retry-field-default"
+    ],
+    "015/naming_bikeshed_only": [
+      "015-retry-field-default"
+    ],
+    "015/no_verdict": [
+      "015-retry-field-default"
+    ],
+    "015/trap_named": [
+      "015-retry-field-default"
+    ],
+    "015/who_relies": [
+      "015-retry-field-default"
+    ]
   }
 }

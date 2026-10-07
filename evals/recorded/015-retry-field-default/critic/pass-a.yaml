@@ -1,0 +1,48 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+pass: A
+scores:
+  A:
+    committal: { score: 3, evidence: "One semicolon-joined sentence commands a concrete sequence (do not ship the int; build the exhaustion path, then bound against it) with no hedge." }
+    falsifiability: { score: 3, evidence: "The falsifier (check whether failed deliveries already surface via alert or dead-letter record) is cheap to check and would directly concede a bare default is sufficient." }
+    specificity: { score: 3, evidence: "The argument is built on the five-minute backoff cap and 'attempt 20 is days in' arithmetic, not a generic retry-field point." }
+    assumption_attack: { score: 3, evidence: "It names and tests the assumption that a count is the right unit to bound, and the position (build exhaustion path first) follows from rejecting it." }
+    reasoning_carries: { score: 3, evidence: "The whole chain (proxy reasoning, incentive argument, exhaustion-path need) runs with no citation or appeal to authority." }
+    actor_coverage: { score: 3, evidence: "The missing subscriber is given a concrete action (query/alert on dead-letter status) and the whole position exists to serve that actor." }
+    reversibility: { score: 2, evidence: "It contrasts the cheap-looking mergeable int PR against the real, deferrable dead-letter work to order which must be built first." }
+    substance: { score: 3, evidence: "Flattened, 'build failure-visibility before adding a bare retry count' is still a real engineering claim, not just an angle." }
+  B:
+    committal: { score: 3, evidence: "One sentence names the field, gives a concrete default window, and states the effect, with no hedge." }
+    falsifiability: { score: 2, evidence: "Observing a real 20-hour-outage cohort of deliveries is relevant to the position but requires waiting on or constructing a live incident, not a cheap check." }
+    specificity: { score: 1, evidence: "The reasoning is mostly a generic user-psychology narrative about wanting instant delivery, not tied to the backoff-cap arithmetic the way other artifacts are." }
+    assumption_attack: { score: 0, evidence: "It accepts the name/default framing of the question wholesale and never tests an alternative framing of the problem." }
+    reasoning_carries: { score: 3, evidence: "The narrative about user behavior and trust stands on its own with no cited authority." }
+    actor_coverage: { score: 2, evidence: "The receiver's on-call/integration owner is named with an action (set a per-endpoint override), though the core position doesn't hinge on it." }
+    reversibility: { score: 0, evidence: "No cheap-versus-expensive or reversible-versus-committed distinction appears anywhere in the reasoning." }
+    substance: { score: 2, evidence: "Flattened to 'bound retries to about a day so failures surface,' it is a reasonable claim, but the user-story framing is doing persuasive work." }
+  C:
+    committal: { score: 1, evidence: "The position is two parallel name/default answers gated on a condition (customer-visible or not) the reader must first determine, functioning like a hedge back to the reader." }
+    falsifiability: { score: 3, evidence: "The falsifier (check whether any existing config field is customer-visible) is cheap and would collapse the whole two-branch structure to one answer." }
+    specificity: { score: 3, evidence: "The 288-attempt derivation from the five-minute plateau and the 'config' wording are load-bearing and specific to this exact problem text." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that a single literal-count field suffices via the visibility branch, and the name/unit answer changes depending on the result." }
+    reasoning_carries: { score: 3, evidence: "The derivation and branch logic are self-contained with no outside authority invoked." }
+    actor_coverage: { score: 2, evidence: "The receiving customer's team is named with an action (wire up a dead-letter notification), but it's a secondary note rather than load-bearing to the naming decision." }
+    reversibility: { score: 1, evidence: "It flags that binding the name to the current backoff cap could break later if the cap is retuned, but doesn't use that to sequence recommendations." }
+    substance: { score: 3, evidence: "Flattened, 'the field's name and unit should track whether it is externally visible' is a real claim independent of its framing." }
+  D:
+    committal: { score: 3, evidence: "One sentence commits to shipping max_retries with a default that is mandatorily paired with a notification path, no escape hatch." }
+    falsifiability: { score: 2, evidence: "The falsifier requires combing two years of incident history for a specific failure mode, which is observable and relevant but costly to actually check." }
+    specificity: { score: 1, evidence: "The reasoning leans on an invented 'two years since launch, endpoint variety grew' narrative rather than the problem's own five-minute-cap or indefinite-retry specifics." }
+    assumption_attack: { score: 1, evidence: "It names the load-bearing assumption (that the default and missing signal were both left unexamined) but never tests it against an observation inside the artifact." }
+    reasoning_carries: { score: 3, evidence: "The chain about structural versus tunable decisions holds with no cited authority." }
+    actor_coverage: { score: 2, evidence: "The webhook receiver is named with an action (subscribe to a terminal-failure signal), offered as an alternative rather than load-bearing to the core recommendation." }
+    reversibility: { score: 3, evidence: "It explicitly separates what to decide now (the hard-to-undo observability guarantee) from what to leave as a revisable tunable (the exact default count), and sequences the position on that split." }
+    substance: { score: 3, evidence: "Flattened, 'cap retries and always notify on exhaustion' remains a substantive claim, not just an angle." }
+  E:
+    committal: { score: 3, evidence: "One sentence commits to defaulting to unlimited/null with no hedge, stating the reason as a single clear move." }
+    falsifiability: { score: 3, evidence: "The falsifier (check docs/SLA for an already-documented bounded-retry policy) is a cheap search that would directly overturn the position." }
+    specificity: { score: 3, evidence: "The reasoning is built directly on 'no field today but capped-backoff code already means infinite retry operationally,' a detail unique to this problem." }
+    assumption_attack: { score: 3, evidence: "It tests the assumption that absence of a field is ambiguous against the alternative that absence already encodes a deliberate infinite-retry policy, and the default-to-unlimited position follows from that test." }
+    reasoning_carries: { score: 3, evidence: "The argument about which states collapse and who loses them is self-contained with no cited authority." }
+    actor_coverage: { score: 2, evidence: "The receiving endpoint's team is named with a suggested action (an attempt-count header or documented window), but it's a side suggestion, not load-bearing to the default choice itself." }
+    reversibility: { score: 2, evidence: "It frames defaulting to unlimited as preserving the reversible status quo against a finite default that forces an unrequested, hard-to-undo change on every integration, and uses that to justify the choice." }
+    substance: { score: 3, evidence: "Flattened, 'default to unlimited so nothing changes until someone explicitly opts in' is still the same real claim, not just an angle." }

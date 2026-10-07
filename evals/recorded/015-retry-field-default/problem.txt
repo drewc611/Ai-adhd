@@ -1,0 +1,4 @@
+We're adding a `max_retries` field to our outbound webhook delivery config. Today there is no
+such field at all: nothing limits how many times we retry a failing delivery, so we keep retrying
+with exponential backoff capped at five minutes between attempts, indefinitely. What should we
+call the new field, and what should it default to?

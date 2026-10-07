@@ -1,0 +1,72 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+frame: PARTICULARIST
+position: >-
+  Decide the name and default by whether the field is customer-visible: if
+  webhook-receiving customers can see or set it, call it `max_retry_duration`
+  and default it to a wall-clock window (e.g. 24h) independent of the backoff
+  curve; if it is an internal-only knob, call it `max_retries` and default it
+  to a count calibrated against the five-minute plateau (roughly 288, one
+  day's worth of five-minute-spaced attempts) so the cap preserves today's
+  de facto tolerance window instead of silently shrinking it.
+reasoning: |
+  1. The three most specific details here are: (a) the backoff is exponential
+  but capped at five minutes between attempts, so steady-state cadence after
+  ramp-up is fixed and predictable; (b) there is currently no limit at all —
+  this is a cold start, not a change to an existing cap, so there is no
+  existing customer expectation of "N retries," only an expectation of
+  "retries keep happening for a long time"; (c) the field lives in an
+  "outbound webhook delivery config," and the prompt already calls it
+  `max_retries` in its own setup sentence while asking what to call it —
+  meaning the prompt does not say who reads or writes that config object
+  (an internal ops team tuning infra, or the external developer who owns the
+  receiving endpoint).
+
+  2. Detail (c) is the one that changes the answer, because it decides the
+  unit, not just the number. If the config is internal-only, a literal
+  attempt-count field is fine and "max_retries" already matches the existing
+  mental model of the system (discrete delivery attempts). If the config is
+  exposed to the webhook-receiving customer, binding their contract to a raw
+  attempt count ties it to an implementation detail — the five-minute cap —
+  that the team is free to change later (tighten it to two minutes, say) and
+  silently shrink every customer's effective retry window without touching
+  the number they configured. In that branch the field should be named and
+  measured in time (`max_retry_duration` / `retry_for_seconds`), not count,
+  so the backoff curve can change without breaking anyone's stated intent.
+
+  3. The thirty-second answer any competent practitioner gives is "call it
+  max_retries, default to 5" — the number reflexively used for ordinary HTTP
+  client retries. Detail (a) and (b) together make that wrong here: because
+  steady-state cadence plateaus at five minutes and today's behavior is
+  indefinite retrying, a default of 5 attempts would exhaust itself in well
+  under half an hour of elapsed time. That is a drastic, silent reduction
+  from "we will keep trying indefinitely" to "we give up before a short
+  outage on the receiver's end even finishes," which is the opposite of what
+  adding a *default* to previously-unbounded behavior should do without an
+  explicit decision to accept that regression.
+forecloses:
+  - >-
+    Shipping a small default like 3-5 retries borrowed from generic
+    HTTP-client retry conventions, since that converts today's
+    indefinite-retry tolerance into a sub-half-hour failure window with no
+    stated intent to do so.
+  - >-
+    Committing to the literal name `max_retries` for every case, since that
+    name silently couples an external customer's retry contract to the
+    current five-minute backoff cap and breaks if that cap is ever retuned.
+  - >-
+    Treating this as a single global constant, since "config" implies it
+    may be set per webhook endpoint/customer rather than once for the whole
+    system.
+falsifier: >-
+  Look at the existing webhook delivery config schema for other fields such
+  as `timeout_seconds` or the webhook secret: if none of today's knobs are
+  exposed to the customer who owns the receiving endpoint (i.e. the whole
+  config object is internal-only), the customer-visibility branch is moot and
+  a single count-based `max_retries` sized to the five-minute cap is the
+  entire answer, which would falsify the need for my two-branch position.
+missing_actor: >-
+  The webhook-receiving customer's own on-call/dev team: once retries stop
+  being indefinite, they can act by wiring up a dead-letter or
+  final-failure notification endpoint so they learn a delivery permanently
+  failed instead of silently losing data after max_retries is exhausted.
+confidence: low

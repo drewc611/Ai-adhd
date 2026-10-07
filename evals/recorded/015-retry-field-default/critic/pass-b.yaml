@@ -1,0 +1,75 @@
+problem_hash: sha256:234e19164082f82c79247218a6e707b249bdafce7c2450f566edabb5d1b99401
+pass: B
+clusters:
+  - id: bound_to_one_day_window
+    action: "Ship a finite max_retries (or equivalent time-bound) default sized to roughly a day's worth of retrying, so a stuck delivery stops and is marked failed within about 24 hours, without building any new exhaustion-notification mechanism."
+    members: [SUPPLICANT, PARTICULARIST]
+    singleton: false
+    strongest_objection: null
+  - id: bound_with_mandatory_exhaustion_signal
+    action: "Bound retries to a finite number and guarantee that exhausting them always produces a dead-letter record or notification, treating the observability pairing as non-negotiable alongside or before the numeric cap."
+    members: [FRAME_BREAKER, CARETAKER]
+    singleton: false
+    strongest_objection: "The strongest objection is that deferring any bound on retries until a full dead-letter record, per-delivery status, and subscriber-alerting path is designed and built turns a problem that is already live and already costly -- endpoints being hammered indefinitely -- into a problem that waits on an open-ended infrastructure project with no committed scope or deadline; nothing stops a conservative, clearly-labeled capped default from shipping immediately alongside a simple internal log line, while the richer subscriber-facing exhaustion signal is built in parallel, so treating the two as strictly sequential risks leaving the actual indefinite-retry harm unaddressed for exactly as long as it takes to agree on and build the 'real' fix, which is itself a schedule with no natural end."
+  - id: preserve_unlimited_default
+    action: "Add the max_retries field but set its default to unlimited or null so existing and new integrations keep retrying forever until someone explicitly opts into a finite bound."
+    members: [NEGATIVE_SPACE]
+    singleton: true
+    strongest_objection: "The strongest objection is that defaulting the brand-new field to unlimited guarantees zero behavioral change for the overwhelming majority of configs, since a newly introduced field's default is exactly the value almost everyone will carry forward without ever touching it, so the operational problem that motivated adding this field in the first place -- endpoints being retried against indefinitely -- continues by default for essentially every integration, and preserving the legibility of 'someone decided versus nobody decided' is a weak trade against leaving the actual production pain completely unresolved out of the box."
+traps:
+  PARTICULARIST:
+    T1: { fired: false, evidence: "The 288-count default is explicitly derived from the five-minute backoff plateau and the 'no existing limit' detail, and the name split depends on the 'config' wording, so removing those details removes the entire derivation." }
+    T2: { fired: false, evidence: "It tests whether a single literal attempt-count name/unit is adequate by splitting on customer-visibility, rejecting the frame's implicit assumption that one scalar field suffices." }
+    T3: { fired: false, evidence: "The unit-coupling argument and the 288 arithmetic stand with zero appeal to outside authority." }
+    T4: { fired: true, evidence: "The position defers the actual choice of which name/default applies to the reader's own determination of customer-visibility, so the answer doesn't itself force that decision closed." }
+    T5: { fired: false, evidence: "The position opens with an imperative, 'Decide the name and default by whether the field is customer-visible,' which is a direct do-X instruction." }
+    T6: { fired: false, evidence: "The reasoning explicitly contrasts 'an internal ops team tuning infra' against 'the external developer who owns the receiving endpoint,' naming both internal and external actors." }
+    T7: { fired: false, evidence: "It explicitly warns that binding an external customer's contract to the five-minute cap is an expensive, hard-to-undo coupling if the cap is later retuned, distinguishing that from the internal-only count which is cheap to adjust." }
+    T8: { fired: false, evidence: "Flattened to 'name and size the field differently depending on whether a customer can see it,' it remains a substantive point about unit-coupling, not just an angle." }
+  NEGATIVE_SPACE:
+    T1: { fired: false, evidence: "The entire argument turns on 'no field today but backoff-capped code already means operationally infinite,' which disappears if that detail is removed." }
+    T2: { fired: false, evidence: "It directly tests the assumption that the absence of a field is ambiguous, arguing the absence already encodes a deliberate infinite-retry design, and the default-to-unlimited position follows from that test." }
+    T3: { fired: false, evidence: "The argument about which states collapse and who loses the distinction is self-contained, with no citation needed to make it hold." }
+    T4: { fired: false, evidence: "It forces two closed decisions outright: the field name is max_retries and the default is explicitly unlimited/null, leaving nothing about the core question open." }
+    T5: { fired: false, evidence: "'Add max_retries but default it to unlimited' is a direct do-X sentence." }
+    T6: { fired: false, evidence: "It explicitly enumerates four distinct readers of the current behavior: the retry worker, the operator/on-call team, the receiving endpoint's owner, and a human reading the schema." }
+    T7: { fired: false, evidence: "It frames the unlimited default as the reversible, non-committal choice that avoids forcing an unrequested, hard-to-undo change onto every existing integration, versus a finite default which commits everyone at once." }
+    T8: { fired: false, evidence: "Flattened to 'keep the default at unlimited so nothing changes until someone opts in,' it is still a real, debatable engineering claim." }
+  FRAME_BREAKER:
+    T1: { fired: false, evidence: "The 'by attempt 20 you're already days in' arithmetic is derived directly from the five-minute backoff cap, so deleting that detail removes the argument's central number." }
+    T2: { fired: false, evidence: "It states outright that 'the load-bearing assumption is that the fix... is a count field' and argues the real question is exhaustion-handling, directly contesting the question's framing." }
+    T3: { fired: false, evidence: "The proxy-versus-the-thing argument and the incentive analysis of why the team would skip this work hold with no outside authority cited." }
+    T4: { fired: false, evidence: "It forces concrete build requirements (a dead-letter record per delivery ID, a subscriber-queryable or alertable status) before any bound is attached, closing several structural decisions." }
+    T5: { fired: false, evidence: "'First build the dead-letter/exhaustion path... then bound retries' is an explicit do-X, do-Y sequence." }
+    T6: { fired: false, evidence: "It names both the webhook subscriber (missing_actor) and 'the team shipping this' as an internal actor with an incentive to leave the gap unexamined." }
+    T7: { fired: false, evidence: "It explicitly contrasts the cheap, mergeable int-field PR against the real, deferrable dead-letter infrastructure work, using that cost asymmetry to justify building the expensive piece first." }
+    T8: { fired: false, evidence: "Flattened to 'build failure-visibility before adding a bare retry count,' it remains a substantive claim about priorities, not just a rhetorical angle." }
+  SUPPLICANT:
+    T1: { fired: true, evidence: "The core argument is a generic user-psychology narrative about wanting instant delivery and not thinking about retry policy, which would survive unchanged if the five-minute cap, the indefinite-retry detail, or the webhook-specific framing were deleted." }
+    T2: { fired: true, evidence: "It never questions whether a finite count field is the right fix at all; it accepts the name/default framing wholesale and only argues about the number." }
+    T3: { fired: false, evidence: "The narrative about what the user can see and how they lose trust holds with no citation." }
+    T4: { fired: false, evidence: "It closes two decisions outright: the name is max_retries and the default targets roughly a one-day window." }
+    T5: { fired: false, evidence: "'Name it max_retries and default it to a small finite number' is a direct do-X sentence." }
+    T6: { fired: true, evidence: "Every actor discussed is the external webhook receiver; no sending-side operator, on-call, or maintainer is named anywhere, unlike the other branches which all name an internal actor too." }
+    T7: { fired: true, evidence: "Nothing in the reasoning distinguishes a cheap, easily-revised default choice from an expensive, hard-to-undo one; the 'about a day' figure is simply asserted as the right target." }
+    T8: { fired: false, evidence: "Flattened to 'bound retries to about a day so failures surface,' it is still a reasonable, substantive claim, though the user-story framing supplies some of its force." }
+  CARETAKER:
+    T1: { fired: true, evidence: "The reasoning leans on an invented 'two years since launch, endpoint variety grew' backstory rather than the prompt's own five-minute-cap or indefinite-retry details, and would read the same for almost any 'add a default to an existing field' scenario." }
+    T2: { fired: true, evidence: "It names that the default and the missing exhaustion signal were both left unexamined but never actually tests that claim against an observation; it layers a notification requirement on top of the 'ship a max_retries field' frame rather than contesting the frame itself." }
+    T3: { fired: false, evidence: "The argument about what's load-bearing, what it costs to undo, and what to decide now versus later holds with no outside citation." }
+    T4: { fired: false, evidence: "It forces two closed decisions: the field is finite, and exhaustion must always emit a terminal-failure signal, while explicitly and deliberately flagging the exact default number as the one thing left open." }
+    T5: { fired: false, evidence: "'Ship max_retries with a bounded default... that always pairs with a mandatory terminal-failure dead-letter notification' is a direct do-X sentence." }
+    T6: { fired: false, evidence: "It names the webhook receiver/customer's integration owner as missing_actor and separately discusses 'today's maintainer' as the internal actor who bears the retrofit cost." }
+    T7: { fired: false, evidence: "It explicitly separates the hard-to-undo observability guarantee, decided now, from the tunable default number and per-endpoint override, left for later revision, and sequences the recommendation on that split." }
+    T8: { fired: false, evidence: "Flattened to 'cap retries and always notify on exhaustion,' it remains a substantive claim independent of its framing." }
+run_level:
+  T2_no_branch_attacked_assumption: { fired: false, evidence: "PARTICULARIST, NEGATIVE_SPACE, and FRAME_BREAKER each explicitly contest a load-bearing assumption of the question (the right unit, whether absence is ambiguous, and whether a count field is the substantive fix), so the run as a whole did not leave the frame unexamined." }
+  T6_all_missing_actor_null: { fired: false, evidence: "Every branch supplies a non-null missing_actor with a concrete action, ranging from the webhook receiver's on-call team to the retry worker/operator set named in NEGATIVE_SPACE's reasoning." }
+lint_verdicts:
+  - { frame: SUPPLICANT, trap: T1, lint_said: false, critic_says: true, evidence: "The lint recorded no firing anywhere, but this branch's reasoning is a generic user-psychology narrative that survives deletion of the prompt's specific backoff/indefinite-retry details." }
+  - { frame: SUPPLICANT, trap: T2, lint_said: false, critic_says: true, evidence: "The lint recorded no firing anywhere, but this branch never questions the name/default framing at all, unlike three of its peers." }
+  - { frame: SUPPLICANT, trap: T6, lint_said: false, critic_says: true, evidence: "The lint recorded no firing anywhere, but this branch names only the external receiver and never any sending-side operator or maintainer actor." }
+  - { frame: SUPPLICANT, trap: T7, lint_said: false, critic_says: true, evidence: "The lint recorded no firing anywhere, but this branch never distinguishes a cheap reversible default choice from an expensive committed one." }
+  - { frame: CARETAKER, trap: T1, lint_said: false, critic_says: true, evidence: "The lint recorded no firing anywhere, but this branch's load-bearing narrative (two years since launch, endpoint variety grew) is invented context not drawn from the prompt's own specifics." }
+  - { frame: CARETAKER, trap: T2, lint_said: false, critic_says: true, evidence: "The lint recorded no firing anywhere, but this branch names an assumption about defaults and signals without ever testing it against an observation inside its own reasoning." }
+  - { frame: PARTICULARIST, trap: T4, lint_said: false, critic_says: true, evidence: "The lint recorded no firing anywhere, but this branch's conditional structure defers the actual name/default choice to the reader's own visibility check rather than closing it." }
